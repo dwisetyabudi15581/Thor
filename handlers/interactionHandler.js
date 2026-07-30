@@ -195,7 +195,7 @@ module.exports = async (interaction) => {
             await interaction.deferReply({ flags: MessageFlags.Ephemeral }).catch(()=>{});
 
             const productValue = interaction.customId.split(':')[1];
-            const keyValue = interaction.components[0].fields[0].value.trim();
+            const keyValue = interaction.components[0]?.components?.[0]?.value?.trim() || '';
 
             // Parse topic
             const topic = interaction.channel.topic || '';
@@ -748,7 +748,11 @@ async function handleEmbedBuilderModal(interaction) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral }).catch(() => {});
 
     const d = session.data;
-    const getFieldValue = (idx) => interaction.components[idx]?.fields[0]?.value?.trim() || '';
+    // Discord.js v14: ModalSubmitInteraction.components adalah array of ActionRowModalData.
+    // Setiap ActionRowModalData punya .components (bukan .fields!) — array TextInputModalData.
+    // Tiap TextInputModalData punya .value (string).
+    // Pakai ?. di seluruh chain supaya gak throw kalau index gak ada.
+    const getFieldValue = (idx) => interaction.components[idx]?.components?.[0]?.value?.trim() || '';
 
     // === TITLE ===
     if (modalType === 'emb_modal_title') {
