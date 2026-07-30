@@ -1,6 +1,6 @@
-# 🤖 MLBB Community Bot v3.0
+# 🤖 MLBB Community Bot v3.3
 
-Bot Discord untuk setup server Mobile Legends community — dengan **model key-driven VIP** (MAX EXTEND) dan **self-role fleksibel**.
+Bot Discord untuk setup server Mobile Legends community — dengan **model key-driven VIP** (MAX EXTEND), **self-role fleksibel**, dan berbagai fitur engagement (giveaway, poll, temp voice, dll).
 
 ## ✨ Fitur
 
@@ -56,6 +56,25 @@ Untuk kirim pengumuman / embed custom ke channel:
   - Live preview update real-time setiap edit
   - Tombol Preview (ephemeral), Send (modal input channel), Cancel
   - Session hilang kalau bot restart (acceptable untuk UX builder)
+
+### 🛠️ v3.2 — Audit, Backup, Giveaway, Scheduled Ann, Warn, Stats, Poll
+- **Audit Log**: catat semua admin action ke channel khusus (`/set-channel audit-log`)
+- **Backup System**: auto-backup JSON files tiap 24 jam + manual (`/backup-now`, `/backup-list`, `/restore-backup`)
+- **Giveaway**: `/giveaway create` with join/leave buttons, auto-end, reroll
+- **Scheduled Announcements**: one-shot atau recurring (daily/weekly/monthly)
+- **Warn System**: `/warn` dengan auto-action (3=mute 1h, 5=mute 1d, 7=kick)
+- **Stats & Leaderboard**: tracking pesan, pembelian VIP, total belanja, giveaway wins
+- **Poll**: live bar chart, single/multiple choice
+
+### 🎤 Temp Voice (v3.3 baru)
+Member bikin voice room sendiri otomatis dengan kontrol penuh:
+
+- Admin setup **hub channel** via `/setup-tempvoice` (optional: category, default name, default limit)
+- Member join hub → otomatis dibuatkan voice room baru, member jadi **owner**
+- Owner bisa: rename, set user limit, lock/unlock, transfer ownership, kick member
+- Member lain bisa **claim** room kalau owner sudah leave tapi room masih aktif
+- Room otomatis dihapus saat kosong (auto cleanup)
+- Placeholder nama: `{username}` `{tag}` — mis. `"{username}'s Room"`
 
 ## 🚀 Cara Install
 
@@ -215,7 +234,7 @@ Saat `scheduleRoleRemoval` dipanggil (via Set Key atau `/set-key`):
 
 ```
 Thor-pro/
-├── index.js                          # Entry point + scheduler
+├── index.js                          # Entry point + scheduler + voice state handler
 ├── package.json
 ├── .env.example
 ├── .gitignore
@@ -233,10 +252,36 @@ Thor-pro/
     ├── roleScheduler.js              # Schedule role removal (MAX EXTEND)
     ├── selfRoleManager.js            # CRUD selfRoles.json
     ├── selfRolePanelBuilder.js       # Render panel embed + components
-    └── ticketManager.js              # Create/close ticket + invoice
+    ├── ticketManager.js              # Create/close ticket + invoice
+    ├── auditLog.js                   # Kirim audit log ke channel
+    ├── backupManager.js              # Auto + manual backup JSON files
+    ├── giveawayManager.js            # CRUD giveaways.json
+    ├── scheduledAnnouncements.js     # CRUD scheduledAnns.json
+    ├── warnManager.js                # CRUD warns.json
+    ├── statsManager.js               # CRUD stats.json
+    ├── pollManager.js                # CRUD polls.json
+    └── tempVoice.js                  # CRUD tempVoice.json
 ```
 
 ## 🔄 Changelog
+
+### v3.3 (temp voice)
+- **NEW**: `/setup-tempvoice` — setup hub channel + optional category, default name, default limit
+- **NEW**: `/tempvoice rename|limit|lock|unlock|transfer|kick|claim|info` — owner controls
+- Auto-create voice room saat member join hub channel
+- Auto-delete room saat kosong
+- Auto-cleanup orphan sessions saat bot start
+- Added `GuildVoiceStates` intent
+- `/tempvoice` command public (member biasa bisa pakai untuk kelola room miliknya)
+
+### v3.2 (audit, backup, giveaway, scheduled ann, warn, stats, poll)
+- **NEW**: Audit Log channel (`/set-channel audit-log`) — log semua admin action
+- **NEW**: Backup System (`/backup-now`, `/backup-list`, `/restore-backup`) + auto-backup tiap 24 jam
+- **NEW**: Giveaway (`/giveaway create/list/end/reroll`) dengan join/leave buttons + auto-end
+- **NEW**: Scheduled Announcements (`/announce-schedule`, `/announce-list`, `/announce-cancel`) — one-shot & recurring
+- **NEW**: Warn System (`/warn`, `/warn-list`, `/warn-remove`, `/warn-clear`) dengan auto-action (3→mute 1h, 5→mute 1d, 7→kick)
+- **NEW**: Stats & Leaderboard (`/stats`, `/leaderboard`, `/my-stats`) — tracking messages, purchases, giveaways
+- **NEW**: Poll (`/poll create/list/close`) dengan live bar chart, single/multiple choice
 
 ### v3.1 (announce + embed builder)
 - **NEW**: `/announce` — quick announce 1 command ke channel manapun
