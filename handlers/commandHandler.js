@@ -6,6 +6,7 @@ const { addKey, getActiveKeysByUserAndRole, findAllByUser, formatKeysForUser, re
 const { scheduleRoleRemoval, removeActiveByUserAndRole, findAllByUser: findAllSchedulesByUser, removeAllByUser: removeAllSchedulesByUser, getRemainingDays } = require('../utils/roleScheduler');
 const { createPanel, addRoleToPanel, removeRoleFromPanel, getPanel, getPanelsByGuild, deletePanel, setMessageId } = require('../utils/selfRoleManager');
 const { buildPanelEmbed, buildPanelComponents } = require('../utils/selfRolePanelBuilder');
+const { createSession, buildEmbed } = require('../utils/embedBuilderSessions');
 
 module.exports = async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
@@ -87,6 +88,12 @@ module.exports = async (interaction) => {
                     '• `/selfrole-remove panel_id:@role`',
                     '• `/selfrole-list` — lihat semua panel',
                     '• `/selfrole-delete panel_id:` — hapus panel'
+                ].join('\n'), inline: false },
+                { name: '📢 Announce & Embed Builder', value: [
+                    '• `/announce channel:#ch title:... description:... color? image? thumbnail? mention?` — quick announce',
+                    '• `/embed-builder` — interactive builder (live preview, edit bagian per bagian)',
+                    '💡 `/embed-builder` cocok untuk embed kompleks (multi-field, footer, author, image)',
+                    '💡 `/announce` cocok untuk pengumuman simple 1-embed'
                 ].join('\n'), inline: false },
                 { name: '🧨 Reset Total', value: [
                     '• `/reset-config` — ⚠️ **hapus SEMUA setting** (tidak bisa di-undo!)'
@@ -772,5 +779,138 @@ module.exports = async (interaction) => {
 
         deletePanel(panelId);
         return interaction.editReply({ content: `✅ Panel \`${panelId}\` (${panel.title}) berhasil dihapus.` });
+    }
+
+    // ====================================================
+    // === /announce — QUICK ANNOUNCE (1 command, 1 embed) ===
+    // ====================================================
+    if (interaction.commandName === 'announce') {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+        const channel = interaction.options.getChannel('channel');
+        const title = interaction.options.getString('title');
+        const description = interaction.options.getString('description');
+        const colorStr = interaction.options.getString('color');
+        const image = interaction.options.getString('image');
+        const thumbnail = interaction.options.getString('thumbnail');
+        const mention = interaction.options.getString('mention');
+
+        // Parse color
+        let color = 0x5865F2; // default blurple
+        if (colorStr) {
+            const { parseColor } = require('../utils/embedBuilderSessions');
+            const parsed = parseColor(colorStr);
+            if (parsed === null) {
+                return interaction.editReply({ content: `❌ Color tidak valid: \`${colorStr}\`. Pakai format hex 6 digit, mis. \`#FF0000\` atau \`FF0000\`.` });
+            }
+            color = parsed;
+        }
+
+        // Validate URLs
+        if (image && !/^https?:\/\//i.test(image)) {
+            return interaction.editReply({ content: '❌ Image URL harus mulai dengan `http://` atau `https://`' });
+        }
+        if (thumbnail && !/^https?:\/\//i.test(thumbnail)) {
+            return interaction.editReply({ content: '❌ Thumbnail URL harus mulai dengan `http://` atau `https://`' });
+        }
+
+        // Build embed
+        const embed = new EmbedBuilder()
+            .setTitle(title)
+            .setDescription(description)
+            .setColor(color)
+            .setFooter({
+                text: `Diumumkan oleh ${interaction.user.tag}`,
+                iconURL: interaction.user.displayAvatarURL({ dynamic: true })
+            })
+            .setTimestamp();
+        if (image) embed.setImage(image);
+        if (thumbnail) embed.setThumbnail(thumbnail);
+
+        // Resolve target channel
+        const targetChannel = interaction.guild.channels.cache.get(channel.id);
+        if (!targetChannel) {
+            return interaction.editReply({ content: '❌ Channel tidak ditemukan.' });
+        }
+
+        // Build content (mention)
+        let content = undefined;
+        if (mention) {
+            const m = mention.trim().toLowerCase();
+            if (m === 'everyone' || m === '@everyone') {
+                content = '@everyone';
+            } else if (m === 'here' || m === '@here') {
+                content = '@here';
+            } else {
+                // mention bisa berupa <@&role_id> atau <@user_id> atau text biasa
+                content = mention;
+            }
+        }
+
+        try {
+            await targetChannel.send({ content, embeds: [embed] });
+            return interaction.editReply({
+                content: `✅ Announce terkirim ke ${targetChannel}!\n\n📋 **Preview:**`,
+                embeds: [embed]
+            });
+        } catch (err) {
+            return interaction.editReply({ content: `❌ Gagal kirim ke ${targetChannel}: ${err.message}` });
+        }
+    }
+
+    // ====================================================
+    // === /embed-builder — INTERACTIVE BUILDER ===
+    // ====================================================
+    if (interaction.commandName === 'embed-builder') {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+        // Buat session baru
+        const session = createSession(interaction.user.id, interaction.channel.id);
+
+        // Build initial embed (default state)
+        const previewEmbed = buildEmbed(session);
+
+        // Komponen: 1 select menu + 1 row dengan 3 buttons
+        const selectRow = new ActionRowBuilder().addComponents(
+            new StringSelectMenuBuilder()
+                .setCustomId(`emb_edit:${session.id}`)
+                .setPlaceholder('✏️ Pilih bagian embed yang ingin diedit...')
+                .addOptions([
+                    { label: 'Title',                 value: 'title',             emoji: '✏️', description: 'Judul embed (maks 256 char)' },
+                    { label: 'Description',           value: 'description',       emoji: '📝', description: 'Isi utama embed (maks 4000 char)' },
+                    { label: 'Color',                 value: 'color',             emoji: '🎨', description: 'Warna hex (mis. #FF0000)' },
+                    { label: 'Image',                 value: 'image',             emoji: '🖼️', description: 'URL gambar besar' },
+                    { label: 'Thumbnail',             value: 'thumbnail',         emoji: '🖼️', description: 'URL gambar kecil (pojok kanan atas)' },
+                    { label: 'Footer',                value: 'footer',            emoji: '👣', description: 'Teks & icon di bawah embed' },
+                    { label: 'Author',                value: 'author',            emoji: '👤', description: 'Teks & icon di atas embed' },
+                    { label: 'Add Field (normal)',    value: 'add_field',         emoji: '➕', description: 'Tambah field (full width)' },
+                    { label: 'Add Field (inline)',    value: 'add_field_inline',  emoji: '➕', description: 'Tambah field (sejajar samping)' },
+                    { label: 'Remove Last Field',     value: 'remove_field',      emoji: '❌', description: 'Hapus field terakhir' },
+                    { label: 'Clear All Fields',      value: 'clear_fields',      emoji: '🧹', description: 'Hapus SEMUA field' },
+                    { label: 'Toggle Timestamp',      value: 'toggle_timestamp',  emoji: '🕒', description: 'Show/hide timestamp' }
+                ])
+        );
+
+        const actionRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId(`emb_preview:${session.id}`).setLabel('Preview').setEmoji('👁️').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId(`emb_send:${session.id}`).setLabel('Send').setEmoji('📤').setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId(`emb_cancel:${session.id}`).setLabel('Cancel').setEmoji('🗑️').setStyle(ButtonStyle.Danger)
+        );
+
+        // Kirim draft message
+        const draftMsg = await interaction.channel.send({
+            content: `🛠️ **Embed Builder Draft** — dimulai oleh <@${interaction.user.id}>\n` +
+                `Preview real-time di bawah. Klik dropdown untuk edit bagian, atau tombol untuk preview/send/cancel.\n` +
+                `🆔 Session: \`${session.id}\``,
+            embeds: [previewEmbed],
+            components: [selectRow, actionRow]
+        });
+
+        // Simpan messageId ke session
+        session.messageId = draftMsg.id;
+
+        return interaction.editReply({
+            content: `✅ Embed builder dimulai!\n📍 Draft: ${draftMsg}\n\n💡 Klik dropdown di draft untuk edit bagian embed. Setelah selesai, klik **📤 Send** untuk kirim ke channel target.`
+        });
     }
 };

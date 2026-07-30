@@ -43,6 +43,20 @@ Member bisa ambil & lepas role sendiri tanpa minta ke admin:
 - Panel message auto-update saat admin add/remove role
 - Member klik → toggle role → reply ephemeral (cuma yang klik yang lihat)
 
+### 📢 Announce & Embed Builder (v3.1 baru)
+Untuk kirim pengumuman / embed custom ke channel:
+
+- **`/announce`** — quick announce 1 command
+  - Channel target + title + description (wajib)
+  - Color hex, image, thumbnail, mention (opsional)
+  - Mention support: `@everyone`, `@here`, `<@&role_id>`, atau text biasa
+- **`/embed-builder`** — interactive builder dengan **live preview**
+  - Edit bagian per bagian via dropdown + modal
+  - Bagian yang bisa diedit: Title, Description, Color, Image, Thumbnail, Footer, Author, Fields (≤25), Timestamp
+  - Live preview update real-time setiap edit
+  - Tombol Preview (ephemeral), Send (modal input channel), Cancel
+  - Session hilang kalau bot restart (acceptable untuk UX builder)
+
 ## 🚀 Cara Install
 
 1. Extract folder ini
@@ -109,6 +123,18 @@ Member bisa ambil & lepas role sendiri tanpa minta ke admin:
 - `/selfrole-remove panel_id:@role` — hapus role dari panel
 - `/selfrole-list` — lihat semua panel self-role di guild
 - `/selfrole-delete panel_id:` — hapus panel (pesan + config)
+
+### 📢 Announce & Embed Builder
+- `/announce channel:#ch title:... description:... color? image? thumbnail? mention?` — quick announce (1 command, 1 embed)
+  - `color`: hex 6 digit, mis. `#FF0000` atau `FF0000` (default: blurple)
+  - `image` / `thumbnail`: URL gambar (harus `http://` atau `https://`)
+  - `mention`: `@everyone`, `@here`, `<@&role_id>`, atau text biasa
+- `/embed-builder` — interactive builder dengan live preview
+  - Bot kirim draft embed + dropdown + 3 tombol (Preview / Send / Cancel)
+  - Klik dropdown → pilih bagian (Title / Description / Color / Image / Thumbnail / Footer / Author / Add Field / Remove Field / Clear Fields / Toggle Timestamp)
+  - Modal terbuka → isi → submit → embed auto-update (live preview)
+  - Klik **Send** → modal input channel → kirim embed ke channel → draft dihapus
+  - Klik **Cancel** → hapus draft tanpa kirim
 
 ### Lihat Konfigurasi
 - `/config-show` — lihat semua setting saat ini
@@ -200,7 +226,8 @@ Thor-pro/
 │   └── memberHandler.js              # Welcome/goodbye handler
 └── utils/
     ├── configManager.js              # CRUD config.json
-    ├── embedBuilder.js               # Embed helper
+    ├── embedBuilder.js               # Embed helper (untuk command lama)
+    ├── embedBuilderSessions.js       # Session manager untuk /embed-builder (in-memory)
     ├── permissions.js                # isAdmin check
     ├── keyManager.js                 # CRUD keys.json (key-driven model)
     ├── roleScheduler.js              # Schedule role removal (MAX EXTEND)
@@ -210,6 +237,13 @@ Thor-pro/
 ```
 
 ## 🔄 Changelog
+
+### v3.1 (announce + embed builder)
+- **NEW**: `/announce` — quick announce 1 command ke channel manapun
+- **NEW**: `/embed-builder` — interactive builder dengan live preview
+  - Edit Title, Description, Color, Image, Thumbnail, Footer, Author, Fields, Timestamp
+  - Dropdown + modal workflow, real-time preview
+  - Send ke channel manapun via modal input
 
 ### v3.0 (key-driven + self-role)
 - **NEW**: Model key-driven VIP dengan MAX EXTEND logic

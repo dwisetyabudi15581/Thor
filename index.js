@@ -440,6 +440,27 @@ function getCommands() {
             options: [
                 { type: 3, name: 'panel_id', description: 'Panel ID yang akan dihapus', required: true }
             ]
+        },
+
+        // === ANNOUNCE & EMBED BUILDER ===
+        {
+            name: 'announce',
+            description: 'Quick announce — kirim embed ke channel (1 command, 1 embed)',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
+            options: [
+                { type: 7, name: 'channel', description: 'Channel tujuan announce', required: true },
+                { type: 3, name: 'title', description: 'Judul announce', required: true },
+                { type: 3, name: 'description', description: 'Isi announce (support newline \\n)', required: true },
+                { type: 3, name: 'color', description: 'Warna hex (mis. #FF0000). Default: blurple', required: false },
+                { type: 3, name: 'image', description: 'URL gambar besar (opsional)', required: false },
+                { type: 3, name: 'thumbnail', description: 'URL gambar kecil pojok (opsional)', required: false },
+                { type: 3, name: 'mention', description: 'Mention: @everyone, @here, atau <@&role_id>', required: false }
+            ]
+        },
+        {
+            name: 'embed-builder',
+            description: 'Interactive embed builder dengan live preview (untuk embed kompleks)',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild
         }
     ];
 }

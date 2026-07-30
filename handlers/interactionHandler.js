@@ -13,6 +13,7 @@ const {
 const { scheduleRoleRemoval } = require('../utils/roleScheduler');
 const { getPanelByMessage, getPanel } = require('../utils/selfRoleManager');
 const { buildPanelEmbed, buildPanelComponents } = require('../utils/selfRolePanelBuilder');
+const { getSession, deleteSession, buildEmbed: buildSessionEmbed, parseColor } = require('../utils/embedBuilderSessions');
 
 module.exports = async (interaction) => {
     if (interaction.replied || interaction.deferred) {
@@ -314,6 +315,84 @@ module.exports = async (interaction) => {
             return handleSelfRoleSelect(interaction);
         }
 
+        // ====================================================
+        // === EMBED BUILDER: SELECT MENU (pilih bagian edit) ===
+        // ====================================================
+        if (interaction.isStringSelectMenu() && interaction.customId.startsWith('emb_edit:')) {
+            return handleEmbedBuilderEdit(interaction);
+        }
+
+        // ====================================================
+        // === EMBED BUILDER: BUTTONS (preview/send/cancel) ===
+        // ====================================================
+        if (interaction.isButton() && interaction.customId.startsWith('emb_preview:')) {
+            const sessionId = interaction.customId.split(':')[1];
+            const session = getSession(sessionId);
+            if (!session) {
+                return interaction.reply({ content: '❌ Session builder sudah tidak ada (mungkin bot restart).', flags: MessageFlags.Ephemeral });
+            }
+            const embed = buildSessionEmbed(session);
+            return interaction.reply({ content: '👁️ **Preview:**', embeds: [embed], flags: MessageFlags.Ephemeral });
+        }
+
+        if (interaction.isButton() && interaction.customId.startsWith('emb_send:')) {
+            const sessionId = interaction.customId.split(':')[1];
+            const session = getSession(sessionId);
+            if (!session) {
+                return interaction.reply({ content: '❌ Session builder sudah tidak ada.', flags: MessageFlags.Ephemeral });
+            }
+            if (session.ownerId !== interaction.user.id) {
+                return interaction.reply({ content: '❌ Hanya pembuat yang bisa kirim draft ini.', flags: MessageFlags.Ephemeral });
+            }
+            if (!session.data.title && !session.data.description) {
+                return interaction.reply({ content: '❌ Embed minimal harus punya **Title** atau **Description** sebelum dikirim.', flags: MessageFlags.Ephemeral });
+            }
+            // Buka modal untuk input channel target
+            const modal = new ModalBuilder()
+                .setCustomId(`emb_modal_send:${sessionId}`)
+                .setTitle('Kirim Embed ke Channel');
+            modal.addComponents(
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId('channel')
+                        .setLabel('Channel target (#mention atau ID)')
+                        .setStyle(TextInputStyle.Short)
+                        .setRequired(true)
+                        .setPlaceholder('#announcements atau 123456789012345678')
+                        .setMaxLength(100)
+                )
+            );
+            return interaction.showModal(modal);
+        }
+
+        if (interaction.isButton() && interaction.customId.startsWith('emb_cancel:')) {
+            const sessionId = interaction.customId.split(':')[1];
+            const session = getSession(sessionId);
+            if (!session) {
+                return interaction.reply({ content: '❌ Session builder sudah tidak ada.', flags: MessageFlags.Ephemeral });
+            }
+            if (session.ownerId !== interaction.user.id) {
+                return interaction.reply({ content: '❌ Hanya pembuat yang bisa cancel draft ini.', flags: MessageFlags.Ephemeral });
+            }
+            // Hapus draft message
+            try {
+                const channel = interaction.guild.channels.cache.get(session.channelId);
+                if (channel) {
+                    const msg = await channel.messages.fetch(session.messageId).catch(() => null);
+                    if (msg) await msg.delete();
+                }
+            } catch (_) {}
+            deleteSession(sessionId);
+            return interaction.reply({ content: '🗑️ Builder dibatalkan, draft dihapus.', flags: MessageFlags.Ephemeral });
+        }
+
+        // ====================================================
+        // === EMBED BUILDER: MODAL SUBMITS ===
+        // ====================================================
+        if (interaction.isModalSubmit() && interaction.customId.startsWith('emb_modal_')) {
+            return handleEmbedBuilderModal(interaction);
+        }
+
     } catch (err) {
         console.error('Interaction Handler Error:', err);
         if (interaction.isRepliable() && !interaction.replied && !interaction.deferred) {
@@ -431,5 +510,386 @@ async function handleSelfRoleSelect(interaction) {
         }
     } catch (err) {
         console.warn('Gagal update select menu setelah pilih:', err.message);
+    }
+}
+
+// ====================================================
+// === HELPER: EMBED BUILDER — SELECT MENU (edit bagian) ===
+// ====================================================
+async function handleEmbedBuilderEdit(interaction) {
+    const sessionId = interaction.customId.split(':')[1];
+    const session = getSession(sessionId);
+    if (!session) {
+        return interaction.reply({ content: '❌ Session builder sudah tidak ada (mungkin bot restart).', flags: MessageFlags.Ephemeral });
+    }
+    if (session.ownerId !== interaction.user.id) {
+        return interaction.reply({ content: '❌ Hanya pembuat yang bisa edit draft ini.', flags: MessageFlags.Ephemeral });
+    }
+
+    const action = interaction.values[0];
+    const d = session.data;
+
+    // === TITLE ===
+    if (action === 'title') {
+        const modal = new ModalBuilder()
+            .setCustomId(`emb_modal_title:${sessionId}`)
+            .setTitle('Edit Title');
+        modal.addComponents(new ActionRowBuilder().addComponents(
+            new TextInputBuilder()
+                .setCustomId('value')
+                .setLabel('Title (maks 256 char, kosongkan untuk hapus)')
+                .setStyle(TextInputStyle.Short)
+                .setRequired(false)
+                .setMaxLength(256)
+                .setValue(d.title || '')
+        ));
+        return interaction.showModal(modal);
+    }
+
+    // === DESCRIPTION ===
+    if (action === 'description') {
+        const modal = new ModalBuilder()
+            .setCustomId(`emb_modal_desc:${sessionId}`)
+            .setTitle('Edit Description');
+        modal.addComponents(new ActionRowBuilder().addComponents(
+            new TextInputBuilder()
+                .setCustomId('value')
+                .setLabel('Description (maks 4000 char, kosongkan untuk hapus)')
+                .setStyle(TextInputStyle.Paragraph)
+                .setRequired(false)
+                .setMaxLength(4000)
+                .setValue(d.description || '')
+        ));
+        return interaction.showModal(modal);
+    }
+
+    // === COLOR ===
+    if (action === 'color') {
+        const modal = new ModalBuilder()
+            .setCustomId(`emb_modal_color:${sessionId}`)
+            .setTitle('Set Color');
+        const currentHex = d.color !== null && d.color !== undefined
+            ? '#' + d.color.toString(16).padStart(6, '0').toUpperCase()
+            : '';
+        modal.addComponents(new ActionRowBuilder().addComponents(
+            new TextInputBuilder()
+                .setCustomId('value')
+                .setLabel('Color hex (mis. #FF0000 atau FF0000)')
+                .setStyle(TextInputStyle.Short)
+                .setRequired(false)
+                .setMaxLength(7)
+                .setPlaceholder('#FF0000')
+                .setValue(currentHex)
+        ));
+        return interaction.showModal(modal);
+    }
+
+    // === IMAGE ===
+    if (action === 'image') {
+        const modal = new ModalBuilder()
+            .setCustomId(`emb_modal_image:${sessionId}`)
+            .setTitle('Set Image');
+        modal.addComponents(new ActionRowBuilder().addComponents(
+            new TextInputBuilder()
+                .setCustomId('value')
+                .setLabel('Image URL (https://..., kosongkan untuk hapus)')
+                .setStyle(TextInputStyle.Short)
+                .setRequired(false)
+                .setValue(d.image?.url || '')
+        ));
+        return interaction.showModal(modal);
+    }
+
+    // === THUMBNAIL ===
+    if (action === 'thumbnail') {
+        const modal = new ModalBuilder()
+            .setCustomId(`emb_modal_thumbnail:${sessionId}`)
+            .setTitle('Set Thumbnail');
+        modal.addComponents(new ActionRowBuilder().addComponents(
+            new TextInputBuilder()
+                .setCustomId('value')
+                .setLabel('Thumbnail URL (https://..., kosongkan untuk hapus)')
+                .setStyle(TextInputStyle.Short)
+                .setRequired(false)
+                .setValue(d.thumbnail?.url || '')
+        ));
+        return interaction.showModal(modal);
+    }
+
+    // === FOOTER ===
+    if (action === 'footer') {
+        const modal = new ModalBuilder()
+            .setCustomId(`emb_modal_footer:${sessionId}`)
+            .setTitle('Set Footer');
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(
+                new TextInputBuilder()
+                    .setCustomId('text')
+                    .setLabel('Footer text (maks 2000 char)')
+                    .setStyle(TextInputStyle.Paragraph)
+                    .setRequired(false)
+                    .setMaxLength(2000)
+                    .setValue(d.footer?.text || '')
+            ),
+            new ActionRowBuilder().addComponents(
+                new TextInputBuilder()
+                    .setCustomId('iconurl')
+                    .setLabel('Footer icon URL (opsional)')
+                    .setStyle(TextInputStyle.Short)
+                    .setRequired(false)
+                    .setValue(d.footer?.iconURL || '')
+            )
+        );
+        return interaction.showModal(modal);
+    }
+
+    // === AUTHOR ===
+    if (action === 'author') {
+        const modal = new ModalBuilder()
+            .setCustomId(`emb_modal_author:${sessionId}`)
+            .setTitle('Set Author');
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(
+                new TextInputBuilder()
+                    .setCustomId('name')
+                    .setLabel('Author name (maks 256 char)')
+                    .setStyle(TextInputStyle.Short)
+                    .setRequired(false)
+                    .setMaxLength(256)
+                    .setValue(d.author?.name || '')
+            ),
+            new ActionRowBuilder().addComponents(
+                new TextInputBuilder()
+                    .setCustomId('iconurl')
+                    .setLabel('Author icon URL (opsional)')
+                    .setStyle(TextInputStyle.Short)
+                    .setRequired(false)
+                    .setValue(d.author?.iconURL || '')
+            )
+        );
+        return interaction.showModal(modal);
+    }
+
+    // === ADD FIELD (normal / inline) ===
+    if (action === 'add_field' || action === 'add_field_inline') {
+        if (d.fields.length >= 25) {
+            return interaction.reply({ content: '❌ Maksimal 25 field (batas Discord). Hapus field lama dulu.', flags: MessageFlags.Ephemeral });
+        }
+        const inline = action === 'add_field_inline';
+        const modal = new ModalBuilder()
+            .setCustomId(`emb_modal_field:${sessionId}:${inline ? '1' : '0'}`)
+            .setTitle(`Add Field (${inline ? 'inline' : 'normal'})`);
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(
+                new TextInputBuilder()
+                    .setCustomId('name')
+                    .setLabel('Field name (maks 256 char)')
+                    .setStyle(TextInputStyle.Short)
+                    .setRequired(true)
+                    .setMaxLength(256)
+            ),
+            new ActionRowBuilder().addComponents(
+                new TextInputBuilder()
+                    .setCustomId('value')
+                    .setLabel('Field value (maks 1024 char)')
+                    .setStyle(TextInputStyle.Paragraph)
+                    .setRequired(true)
+                    .setMaxLength(1024)
+            )
+        );
+        return interaction.showModal(modal);
+    }
+
+    // === REMOVE LAST FIELD ===
+    if (action === 'remove_field') {
+        if (d.fields.length === 0) {
+            return interaction.reply({ content: '❌ Belum ada field untuk dihapus.', flags: MessageFlags.Ephemeral });
+        }
+        d.fields.pop();
+        await refreshEmbedDraft(interaction, session);
+        return interaction.reply({ content: '✅ Field terakhir dihapus.', flags: MessageFlags.Ephemeral });
+    }
+
+    // === CLEAR ALL FIELDS ===
+    if (action === 'clear_fields') {
+        if (d.fields.length === 0) {
+            return interaction.reply({ content: '❌ Tidak ada field untuk dihapus.', flags: MessageFlags.Ephemeral });
+        }
+        const count = d.fields.length;
+        d.fields = [];
+        await refreshEmbedDraft(interaction, session);
+        return interaction.reply({ content: `✅ ${count} field dihapus.`, flags: MessageFlags.Ephemeral });
+    }
+
+    // === TOGGLE TIMESTAMP ===
+    if (action === 'toggle_timestamp') {
+        d.timestamp = !d.timestamp;
+        await refreshEmbedDraft(interaction, session);
+        return interaction.reply({ content: `✅ Timestamp ${d.timestamp ? 'DINYALAKAN' : 'DIMATIKAN'}.`, flags: MessageFlags.Ephemeral });
+    }
+}
+
+// ====================================================
+// === HELPER: EMBED BUILDER — MODAL SUBMIT ===
+// ====================================================
+async function handleEmbedBuilderModal(interaction) {
+    const parts = interaction.customId.split(':');
+    const modalType = parts[0];
+    const sessionId = parts[1];
+    const session = getSession(sessionId);
+
+    if (!session) {
+        return interaction.reply({ content: '❌ Session builder sudah tidak ada.', flags: MessageFlags.Ephemeral });
+    }
+    if (session.ownerId !== interaction.user.id) {
+        return interaction.reply({ content: '❌ Hanya pembuat yang bisa edit draft ini.', flags: MessageFlags.Ephemeral });
+    }
+
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral }).catch(() => {});
+
+    const d = session.data;
+    const getFieldValue = (idx) => interaction.components[idx]?.fields[0]?.value?.trim() || '';
+
+    // === TITLE ===
+    if (modalType === 'emb_modal_title') {
+        d.title = getFieldValue(0) || null;
+    }
+
+    // === DESCRIPTION ===
+    else if (modalType === 'emb_modal_desc') {
+        d.description = getFieldValue(0) || null;
+    }
+
+    // === COLOR ===
+    else if (modalType === 'emb_modal_color') {
+        const val = getFieldValue(0);
+        if (!val) {
+            d.color = 0x5865F2; // reset ke default
+        } else {
+            const parsed = parseColor(val);
+            if (parsed === null) {
+                return interaction.editReply({ content: `❌ Color tidak valid: \`${val}\`. Pakai format hex 6 digit, mis. \`#FF0000\`.` });
+            }
+            d.color = parsed;
+        }
+    }
+
+    // === IMAGE ===
+    else if (modalType === 'emb_modal_image') {
+        const val = getFieldValue(0);
+        if (val && !/^https?:\/\//i.test(val)) {
+            return interaction.editReply({ content: '❌ Image URL harus mulai dengan `http://` atau `https://`' });
+        }
+        d.image = val ? { url: val } : null;
+    }
+
+    // === THUMBNAIL ===
+    else if (modalType === 'emb_modal_thumbnail') {
+        const val = getFieldValue(0);
+        if (val && !/^https?:\/\//i.test(val)) {
+            return interaction.editReply({ content: '❌ Thumbnail URL harus mulai dengan `http://` atau `https://`' });
+        }
+        d.thumbnail = val ? { url: val } : null;
+    }
+
+    // === FOOTER ===
+    else if (modalType === 'emb_modal_footer') {
+        const text = getFieldValue(0);
+        const iconURL = getFieldValue(1);
+        if (!text) {
+            d.footer = null;
+        } else {
+            d.footer = { text };
+            if (iconURL && /^https?:\/\//i.test(iconURL)) {
+                d.footer.iconURL = iconURL;
+            }
+        }
+    }
+
+    // === AUTHOR ===
+    else if (modalType === 'emb_modal_author') {
+        const name = getFieldValue(0);
+        const iconURL = getFieldValue(1);
+        if (!name) {
+            d.author = null;
+        } else {
+            d.author = { name };
+            if (iconURL && /^https?:\/\//i.test(iconURL)) {
+                d.author.iconURL = iconURL;
+            }
+        }
+    }
+
+    // === ADD FIELD ===
+    else if (modalType === 'emb_modal_field') {
+        const inline = parts[2] === '1';
+        const name = getFieldValue(0);
+        const value = getFieldValue(1);
+        if (!name || !value) {
+            return interaction.editReply({ content: '❌ Field name dan value wajib diisi.' });
+        }
+        if (d.fields.length >= 25) {
+            return interaction.editReply({ content: '❌ Maksimal 25 field (batas Discord).' });
+        }
+        d.fields.push({ name, value, inline });
+    }
+
+    // === SEND TO CHANNEL ===
+    else if (modalType === 'emb_modal_send') {
+        const channelInput = getFieldValue(0);
+        let targetChannel = null;
+
+        // Parse: <#123> or 123 or #name
+        const mentionMatch = channelInput.match(/^<#(\d+)>$/);
+        if (mentionMatch) {
+            targetChannel = interaction.guild.channels.cache.get(mentionMatch[1]);
+        } else if (/^\d+$/.test(channelInput)) {
+            targetChannel = interaction.guild.channels.cache.get(channelInput);
+        } else {
+            const name = channelInput.replace(/^#/, '');
+            targetChannel = interaction.guild.channels.cache.find(c => c.name === name);
+        }
+
+        if (!targetChannel) {
+            return interaction.editReply({ content: `❌ Channel tidak ditemukan: \`${channelInput}\`. Pakai #mention atau channel ID.` });
+        }
+
+        const embed = buildSessionEmbed(session);
+        try {
+            await targetChannel.send({ embeds: [embed] });
+        } catch (err) {
+            return interaction.editReply({ content: `❌ Gagal kirim ke ${targetChannel}: ${err.message}` });
+        }
+
+        // Hapus draft message
+        try {
+            const channel = interaction.guild.channels.cache.get(session.channelId);
+            if (channel) {
+                const msg = await channel.messages.fetch(session.messageId).catch(() => null);
+                if (msg) await msg.delete();
+            }
+        } catch (_) {}
+        deleteSession(sessionId);
+        return interaction.editReply({ content: `✅ Embed terkirim ke ${targetChannel}! Draft dihapus.` });
+    }
+
+    // Refresh draft dengan embed terbaru
+    await refreshEmbedDraft(interaction, session);
+    return interaction.editReply({ content: '✅ Embed diupdate.' });
+}
+
+// ====================================================
+// === HELPER: REFRESH EMBED BUILDER DRAFT MESSAGE ===
+// ====================================================
+async function refreshEmbedDraft(interaction, session) {
+    try {
+        const channel = interaction.guild.channels.cache.get(session.channelId);
+        if (!channel) return;
+        const msg = await channel.messages.fetch(session.messageId).catch(() => null);
+        if (!msg) return;
+        const embed = buildSessionEmbed(session);
+        await msg.edit({ embeds: [embed] });
+    } catch (err) {
+        console.warn('Gagal refresh embed draft:', err.message);
     }
 }

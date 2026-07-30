@@ -1,7 +1,7 @@
 {
   "name": "mlbb-community-bot",
-  "version": "3.0.0",
-  "description": "Bot setup server Mobile Legends Community - Welcome/Goodbye, Verify, Ticket, Invoice, Key-driven VIP, Self-Role, fully configurable from Discord",
+  "version": "3.1.0",
+  "description": "Bot setup server Mobile Legends Community - Welcome/Goodbye, Verify, Ticket, Invoice, Key-driven VIP, Self-Role, Announce & Embed Builder, fully configurable from Discord",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
