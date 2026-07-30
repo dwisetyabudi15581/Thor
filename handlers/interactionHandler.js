@@ -537,7 +537,7 @@ async function handleEmbedBuilderEdit(interaction) {
         modal.addComponents(new ActionRowBuilder().addComponents(
             new TextInputBuilder()
                 .setCustomId('value')
-                .setLabel('Title (maks 256 char, kosongkan untuk hapus)')
+                .setLabel('Title (kosongkan untuk hapus)')
                 .setStyle(TextInputStyle.Short)
                 .setRequired(false)
                 .setMaxLength(256)
@@ -554,7 +554,7 @@ async function handleEmbedBuilderEdit(interaction) {
         modal.addComponents(new ActionRowBuilder().addComponents(
             new TextInputBuilder()
                 .setCustomId('value')
-                .setLabel('Description (maks 4000 char, kosongkan untuk hapus)')
+                .setLabel('Description (kosongkan untuk hapus)')
                 .setStyle(TextInputStyle.Paragraph)
                 .setRequired(false)
                 .setMaxLength(4000)
@@ -592,7 +592,7 @@ async function handleEmbedBuilderEdit(interaction) {
         modal.addComponents(new ActionRowBuilder().addComponents(
             new TextInputBuilder()
                 .setCustomId('value')
-                .setLabel('Image URL (https://..., kosongkan untuk hapus)')
+                .setLabel('Image URL (kosongkan untuk hapus)')
                 .setStyle(TextInputStyle.Short)
                 .setRequired(false)
                 .setValue(d.image?.url || '')
@@ -608,7 +608,7 @@ async function handleEmbedBuilderEdit(interaction) {
         modal.addComponents(new ActionRowBuilder().addComponents(
             new TextInputBuilder()
                 .setCustomId('value')
-                .setLabel('Thumbnail URL (https://..., kosongkan untuk hapus)')
+                .setLabel('Thumbnail URL (kosongkan untuk hapus)')
                 .setStyle(TextInputStyle.Short)
                 .setRequired(false)
                 .setValue(d.thumbnail?.url || '')
