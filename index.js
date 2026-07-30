@@ -16,6 +16,10 @@ const interactionHandler = require('./handlers/interactionHandler');
 const { onMemberAdd, onMemberRemove } = require('./handlers/memberHandler');
 const { getExpired, removeEntry, getAllActive, updateExpireAt } = require('./utils/roleScheduler');
 const { removeExpiredKeys, getActiveKeysByUserAndRole, hasPermanentKey, getMaxExpireAtByUserAndRole } = require('./utils/keyManager');
+const { startAutoBackup } = require('./utils/backupManager');
+const { getEnding: getEndingGiveaways, end: endGiveaway, pickWinners: pickGiveawayWinners } = require('./utils/giveawayManager');
+const { getPending: getPendingAnns, markSent: markAnnSent } = require('./utils/scheduledAnnouncements');
+const { incrementMessages: trackMessage, recordJoin: trackJoin, recordPurchase: trackPurchase, recordGiveawayWin: trackGiveawayWin, parsePrice: parsePriceNum } = require('./utils/statsManager');
 
 // === ERROR HANDLER GLOBAL ===
 process.on('unhandledRejection', (reason) => {
@@ -88,6 +92,9 @@ client.once(Events.ClientReady, async (c) => {
             console.log(`📋 ${active.length} auto-role terjadwal aktif.`);
         }
 
+        // === 3. Start AUTO-BACKUP (saat start + tiap 24 jam) ===
+        startAutoBackup(client);
+
         // Cek setiap 1 menit
         setInterval(async () => {
             // 1. Bersihkan key expired
@@ -99,6 +106,16 @@ client.once(Events.ClientReady, async (c) => {
             const expiredNow = getExpired();
             for (const entry of expiredNow) {
                 await processExpiredRole(client, entry);
+            }
+            // 3. Auto-end giveaways yang sudah waktunya
+            const endingGws = getEndingGiveaways();
+            for (const gw of endingGws) {
+                await processGiveawayEnd(client, gw);
+            }
+            // 4. Auto-send scheduled announcements yang sudah waktunya
+            const pendingAnns = getPendingAnns();
+            for (const ann of pendingAnns) {
+                await processScheduledAnnouncement(client, ann);
             }
         }, 60 * 1000);
     } catch (err) {
@@ -211,13 +228,14 @@ function getCommands() {
         // === SET CHANNEL ===
         {
             name: 'set-channel',
-            description: 'Atur channel (invoice / welcome / goodbye)',
+            description: 'Atur channel (invoice / welcome / goodbye / audit-log)',
             defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
             options: [
                 { type: 3, name: 'tipe', description: 'Pilih tipe channel', required: true, choices: [
                     { name: 'Invoice', value: 'invoice' },
                     { name: 'Welcome', value: 'welcome' },
-                    { name: 'Goodbye', value: 'goodbye' }
+                    { name: 'Goodbye', value: 'goodbye' },
+                    { name: 'Audit Log (catat admin action)', value: 'audit-log' }
                 ]},
                 { type: 7, name: 'channel', description: 'Channel text yang dipakai', required: true }
             ]
@@ -474,6 +492,180 @@ function getCommands() {
             options: [
                 { type: 3, name: 'session_id', description: 'Session ID (lihat di /embed-list)', required: true }
             ]
+        },
+
+        // === BACKUP SYSTEM ===
+        {
+            name: 'backup-now',
+            description: 'Buat backup manual sekarang (config, keys, scheduledRoles, selfRoles, dll)',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild
+        },
+        {
+            name: 'backup-list',
+            description: 'Lihat semua backup yang tersimpan (maks 7 terbaru)',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild
+        },
+        {
+            name: 'restore-backup',
+            description: 'Restore backup berdasarkan nama (auto-buat safety backup sebelum restore)',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
+            options: [
+                { type: 3, name: 'name', description: 'Nama folder backup (lihat /backup-list, format: YYYY-MM-DD_HH-mm-ss)', required: true }
+            ]
+        },
+
+        // === GIVEAWAY SYSTEM ===
+        {
+            name: 'giveaway',
+            description: 'Kelola giveaway komunitas (create, list, end, reroll)',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
+            options: [
+                {
+                    type: 1, name: 'create', description: 'Buat giveaway baru', required: false,
+                    options: [
+                        { type: 7, name: 'channel', description: 'Channel untuk giveaway', required: true },
+                        { type: 3, name: 'prize', description: 'Hadiah (mis. VIP 30 Hari)', required: true },
+                        { type: 4, name: 'winners', description: 'Jumlah pemenang (1-20, default 1)', required: false },
+                        { type: 4, name: 'duration', description: 'Durasi dalam menit (min 1)', required: true },
+                        { type: 8, name: 'required_role', description: 'Role yang wajib dimiliki peserta (opsional)', required: false }
+                    ]
+                },
+                {
+                    type: 1, name: 'list', description: 'Lihat semua giveaway di guild ini', required: false
+                },
+                {
+                    type: 1, name: 'end', description: 'Akhiri giveaway lebih awal + pick winners', required: false,
+                    options: [
+                        { type: 3, name: 'id', description: 'Giveaway ID (lihat /giveaway list)', required: true }
+                    ]
+                },
+                {
+                    type: 1, name: 'reroll', description: 'Reroll winner giveaway yang sudah berakhir', required: false,
+                    options: [
+                        { type: 3, name: 'id', description: 'Giveaway ID (lihat /giveaway list)', required: true }
+                    ]
+                }
+            ]
+        },
+
+        // === SCHEDULED ANNOUNCEMENTS ===
+        {
+            name: 'announce-schedule',
+            description: 'Jadwalkan announce ke channel pada waktu tertentu (one-shot atau recurring)',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
+            options: [
+                { type: 7, name: 'channel', description: 'Channel tujuan', required: true },
+                { type: 3, name: 'title', description: 'Judul announce', required: true },
+                { type: 3, name: 'description', description: 'Isi announce (support \\n untuk newline)', required: true },
+                { type: 3, name: 'at', description: 'Waktu kirim. Format: "30m", "2h", "1d", atau "2026-01-15 20:00"', required: true },
+                { type: 3, name: 'color', description: 'Warna hex (mis. #FF0000). Default: blurple', required: false },
+                { type: 3, name: 'image', description: 'URL gambar besar (opsional)', required: false },
+                { type: 3, name: 'thumbnail', description: 'URL gambar kecil pojok (opsional)', required: false },
+                { type: 3, name: 'mention', description: 'Mention: @everyone, @here, atau <@&role_id>', required: false },
+                { type: 3, name: 'recurring', description: 'Ulangi (opsional)', required: false, choices: [
+                    { name: 'Daily (tiap hari)', value: 'daily' },
+                    { name: 'Weekly (tiap minggu)', value: 'weekly' },
+                    { name: 'Monthly (tiap bulan)', value: 'monthly' }
+                ]}
+            ]
+        },
+        {
+            name: 'announce-list',
+            description: 'Lihat semua announce terjadwal yang pending',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild
+        },
+        {
+            name: 'announce-cancel',
+            description: 'Batalkan announce terjadwal berdasarkan ID',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
+            options: [
+                { type: 3, name: 'id', description: 'Announce ID (lihat di /announce-list)', required: true }
+            ]
+        },
+
+        // === WARN SYSTEM ===
+        {
+            name: 'warn',
+            description: 'Beri warning ke member (auto-action: 3=mute 1h, 5=mute 1d, 7=kick)',
+            defaultMemberPermissions: PermissionFlagsBits.ModerateMembers,
+            options: [
+                { type: 6, name: 'user', description: 'Member yang diwarn', required: true },
+                { type: 3, name: 'reason', description: 'Alasan warning', required: true }
+            ]
+        },
+        {
+            name: 'warn-list',
+            description: 'Lihat semua warning milik user',
+            defaultMemberPermissions: PermissionFlagsBits.ModerateMembers,
+            options: [
+                { type: 6, name: 'user', description: 'User yang ingin dicek', required: true }
+            ]
+        },
+        {
+            name: 'warn-remove',
+            description: 'Hapus 1 warning berdasarkan ID',
+            defaultMemberPermissions: PermissionFlagsBits.ModerateMembers,
+            options: [
+                { type: 6, name: 'user', description: 'User pemilik warning', required: true },
+                { type: 3, name: 'warn_id', description: 'Warn ID (lihat di /warn-list)', required: true }
+            ]
+        },
+        {
+            name: 'warn-clear',
+            description: 'Hapus SEMUA warning milik user',
+            defaultMemberPermissions: PermissionFlagsBits.ModerateMembers,
+            options: [
+                { type: 6, name: 'user', description: 'User yang ingin di-clear warn-nya', required: true }
+            ]
+        },
+
+        // === STATS & LEADERBOARD ===
+        {
+            name: 'stats',
+            description: 'Lihat statistik agregat server (admin only)',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild
+        },
+        {
+            name: 'leaderboard',
+            description: 'Lihat top 10 member (public — boleh dipakai member biasa)',
+            options: [
+                { type: 3, name: 'metric', description: 'Metric leaderboard', required: false, choices: [
+                    { name: '💬 Pesan Terbanyak', value: 'messages' },
+                    { name: '🛒 Top Buyer (transaksi)', value: 'vipPurchases' },
+                    { name: '💰 Top Spender (belanja)', value: 'totalSpent' },
+                    { name: '🎉 Top Winner (giveaway)', value: 'giveawaysWon' }
+                ]}
+            ]
+        },
+        {
+            name: 'my-stats',
+            description: 'Lihat statistik pribadi kamu (public — boleh dipakai member biasa)'
+        },
+
+        // === POLL SYSTEM ===
+        {
+            name: 'poll',
+            description: 'Kelola poll komunitas (create, list, close)',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
+            options: [
+                {
+                    type: 1, name: 'create', description: 'Buat poll baru (modal input untuk options)', required: false,
+                    options: [
+                        { type: 7, name: 'channel', description: 'Channel untuk poll', required: true },
+                        { type: 3, name: 'question', description: 'Pertanyaan poll', required: true },
+                        { type: 5, name: 'multiple', description: 'True = member boleh pilih banyak. Default false (single)', required: false }
+                    ]
+                },
+                {
+                    type: 1, name: 'list', description: 'Lihat semua poll di guild ini', required: false
+                },
+                {
+                    type: 1, name: 'close', description: 'Tutup poll + tampilkan hasil akhir', required: false,
+                    options: [
+                        { type: 3, name: 'id', description: 'Poll ID (lihat di /poll list)', required: true }
+                    ]
+                }
+            ]
         }
     ];
 }
@@ -510,5 +702,113 @@ client.on(Events.GuildMemberRemove, async (member) => {
         console.error('GuildMemberRemove Error:', err);
     }
 });
+
+// === MESSAGE TRACKING (untuk leaderboard stats) ===
+// Track tiap pesan user di guild (count saja, tidak simpan content).
+// Catatan: untuk dapat content pesan, butuh MessageContent intent (privileged).
+// Tracking count tetap jalan tanpa intent itu — hanya event messageCreate yang fired.
+client.on(Events.MessageCreate, async (message) => {
+    try {
+        if (message.author?.bot) return;
+        if (!message.guild) return; // DM
+        trackMessage(message.author.id);
+    } catch (_) {}
+});
+
+/**
+ * Proses giveaway yang sudah berakhir — pick winners + edit message + announce.
+ */
+async function processGiveawayEnd(client, gw) {
+    try {
+        const { EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
+        const guild = await client.guilds.fetch(gw.guildId).catch(() => null);
+        if (!guild) return;
+
+        const channel = guild.channels.cache.get(gw.channelId);
+        if (!channel) return;
+
+        // Pick winners
+        const winnerIds = pickGiveawayWinners(gw.participantIds, gw.winnersCount);
+        endGiveaway(gw.id, winnerIds);
+
+        // Edit message
+        const msg = await channel.messages.fetch(gw.messageId).catch(() => null);
+        const winnersStr = winnerIds.length > 0 ? winnerIds.map(id => `<@${id}>`).join(', ') : '_(tidak ada peserta)_';
+        if (msg) {
+            const embed = new EmbedBuilder()
+                .setTitle('🎉 GIVEAWAY BERAKHIR!')
+                .setDescription(
+                    `🎁 **Prize:** ${gw.prize}\n\n` +
+                    `🏆 **Pemenang:** ${winnersStr}\n` +
+                    `👥 **Peserta:** ${gw.participantIds.length}\n` +
+                    `⏰ **Berakhir:** <t:${Math.floor(gw.endsAt / 1000)}:R>\n\n` +
+                    (winnerIds.length > 0 ? '🎊 Selamat kepada pemenang! Host akan DM kalian untuk klaim hadiah.' : '_(Tidak ada peserta yang ikut)_')
+                )
+                .setColor(winnerIds.length > 0 ? 0x57F287 : 0x95A5A6)
+                .setFooter({ text: `Host: ${gw.hostTag} | ID: ${gw.id}` })
+                .setTimestamp();
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`gw_join:${gw.id}`).setLabel('🎉 Join (Ended)').setStyle(ButtonStyle.Success).setDisabled(true),
+                new ButtonBuilder().setCustomId(`gw_leave:${gw.id}`).setLabel('🚪 Leave (Ended)').setStyle(ButtonStyle.Secondary).setDisabled(true)
+            );
+            await msg.edit({ embeds: [embed], components: [row] }).catch(()=>{});
+        }
+
+        // Announce winners
+        if (winnerIds.length > 0) {
+            await channel.send({ content: `🎊 **GIVEAWAY WINNERS!** 🎊\n\nPrize: **${gw.prize}**\nPemenang: ${winnersStr}\n\nSelamat! 🎉` }).catch(()=>{});
+
+            // DM winners
+            for (const wid of winnerIds) {
+                const user = await client.users.fetch(wid).catch(() => null);
+                if (user) {
+                    await user.send(`🎊 **Selamat! Kamu menang giveaway!**\n\nPrize: **${gw.prize}**\nHost: ${gw.hostTag}\nServer: ${guild.name}\n\nHubungi host untuk klaim hadiahmu.`).catch(()=>{});
+                }
+                // Track giveaway win untuk leaderboard
+                try { trackGiveawayWin(wid); } catch (_) {}
+            }
+        } else {
+            await channel.send({ content: `📭 Giveaway **${gw.prize}** berakhir tanpa pemenang (tidak ada peserta).` }).catch(()=>{});
+        }
+
+        console.log(`🎉 Giveaway ${gw.id} (${gw.prize}) berakhir. Winners: ${winnerIds.length}`);
+    } catch (err) {
+        console.error('Error processGiveawayEnd:', err);
+    }
+}
+
+/**
+ * Proses scheduled announcement yang sudah waktunya dikirim.
+ */
+async function processScheduledAnnouncement(client, ann) {
+    try {
+        const { EmbedBuilder } = require('discord.js');
+        const guild = await client.guilds.fetch(ann.guildId).catch(() => null);
+        if (!guild) { markAnnSent(ann.id); return; }
+
+        const channel = guild.channels.cache.get(ann.channelId);
+        if (!channel) { markAnnSent(ann.id); return; }
+
+        const d = ann.data;
+        const embed = new EmbedBuilder()
+            .setTitle(d.title)
+            .setDescription(d.description.replace(/\\n/g, '\n'))
+            .setColor(d.color || 0x5865F2)
+            .setFooter({ text: `Dijadwalkan oleh ${d.authorTag}` })
+            .setTimestamp();
+        if (d.image) embed.setImage(d.image);
+        if (d.thumbnail) embed.setThumbnail(d.thumbnail);
+
+        await channel.send({
+            content: d.mention || null,
+            embeds: [embed]
+        }).catch(err => console.warn('Gagal kirim scheduled ann:', err.message));
+
+        markAnnSent(ann.id);
+        console.log(`📢 Scheduled announce ${ann.id} terkirim ke ${channel.name}.`);
+    } catch (err) {
+        console.error('Error processScheduledAnnouncement:', err);
+    }
+}
 
 client.login(process.env.DISCORD_TOKEN);

@@ -10,6 +10,12 @@ async function onMemberAdd(member) {
     const { guild, user } = member;
     const config = getConfig();
 
+    // Track join untuk stats
+    try {
+        const { recordJoin } = require('../utils/statsManager');
+        recordJoin(user.id);
+    } catch (_) {}
+
     // === 1. Beri role Unverified ===
     if (config.roles.unverified) {
         const unverifiedRole = guild.roles.cache.get(config.roles.unverified);

@@ -1,4 +1,4 @@
-const { PermissionFlagsBits, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder, MessageFlags, StringSelectMenuBuilder, ChannelType } = require('discord.js');
+const { PermissionFlagsBits, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder, MessageFlags, StringSelectMenuBuilder, ChannelType, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 const { getConfig, saveConfig, setField, DEFAULTS } = require('../utils/configManager');
 const { Embeds } = require('../utils/embedBuilder');
 const { isAdmin: checkIsAdmin } = require('../utils/permissions');
@@ -7,6 +7,13 @@ const { scheduleRoleRemoval, removeActiveByUserAndRole, findAllByUser: findAllSc
 const { createPanel, addRoleToPanel, removeRoleFromPanel, getPanel, getPanelsByGuild, deletePanel, setMessageId } = require('../utils/selfRoleManager');
 const { buildPanelEmbed, buildPanelComponents } = require('../utils/selfRolePanelBuilder');
 const { createSession, buildEmbed, getSessionsByUser, deleteSessionByOwner } = require('../utils/embedBuilderSessions');
+const { logAudit } = require('../utils/auditLog');
+const { createBackup, listBackups, restoreBackup, formatSize: formatBackupSize } = require('../utils/backupManager');
+const { create: createGiveaway, setMessageId: setGiveawayMessageId, getByGuild: getGiveawaysByGuild, get: getGiveaway, end: endGiveaway, reroll: rerollGiveaway, pickWinners, formatTimeLeft } = require('../utils/giveawayManager');
+const { create: createScheduledAnn, getByGuild: getScheduledAnnsByGuild, get: getScheduledAnn, markSent: markScheduledAnnSent, remove: removeScheduledAnn, parseTime: parseAnnTime, formatTimeLeft: formatAnnTimeLeft } = require('../utils/scheduledAnnouncements');
+const { addWarn, getWarns, getWarnCount, removeWarn, clearWarns, markActionTaken, DEFAULT_THRESHOLDS: WARN_THRESHOLDS } = require('../utils/warnManager');
+const { getStats: getUserStats, getTopUsers: getTopUsersStats, getServerStats: getServerStatsAll, parsePrice: parsePriceNum } = require('../utils/statsManager');
+const { create: createPoll, setMessageId: setPollMessageId, get: getPoll, getByGuild: getPollsByGuild, close: closePoll, getTotalVotes: getPollTotalVotes } = require('../utils/pollManager');
 
 module.exports = async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
@@ -18,7 +25,11 @@ module.exports = async (interaction) => {
     // Semua slash command di-restrict hanya untuk admin (ManageGuild permission
     // atau role Admin yang sudah di-set via /set-role admin).
     // Member biasa akan ditolak dengan pesan ephemeral.
-    if (!checkIsAdmin(interaction.member)) {
+    //
+    // EXCEPTION: command berikut boleh dipakai member biasa:
+    //   - /leaderboard, /my-stats (fitur engagement, bukan admin tool)
+    const PUBLIC_COMMANDS = ['leaderboard', 'my-stats'];
+    if (!checkIsAdmin(interaction.member) && !PUBLIC_COMMANDS.includes(interaction.commandName)) {
         return interaction.reply({
             content: '🚫 **Akses Ditolak.**\n\nSlash command hanya bisa dipakai oleh **Admin/Staff**.\n\nKalau kamu merasa ini salah, hubungi server admin.',
             flags: MessageFlags.Ephemeral
@@ -98,6 +109,49 @@ module.exports = async (interaction) => {
                     '💡 `/announce` cocok untuk pengumuman simple 1-embed',
                     '💡 Bisa bikin banyak embed builder sekaligus — tiap draft independen, pakai `/embed-list` untuk kelola'
                 ].join('\n'), inline: false },
+                { name: '💾 Backup System (auto + manual)', value: [
+                    '• `/backup-now` — buat backup manual sekarang',
+                    '• `/backup-list` — lihat semua backup tersimpan',
+                    '• `/restore-backup name:YYYY-MM-DD_HH-mm-ss` — restore (auto safety backup)',
+                    '💡 Auto-backup saat bot start + tiap 24 jam. Maks 7 backup terbaru disimpan.'
+                ].join('\n'), inline: false },
+                { name: '🎉 Giveaway System', value: [
+                    '• `/giveaway create channel:#ch prize:VIP 30 Hari winners:1 duration:60 required_role?:@VIP`',
+                    '• `/giveaway list` — lihat semua giveaway',
+                    '• `/giveaway end id:gw_xxx` — akhiri lebih awal + pick winner',
+                    '• `/giveaway reroll id:gw_xxx` — reroll winner',
+                    '💡 Member klik tombol 🎉 Join / 🚪 Leave di message giveaway'
+                ].join('\n'), inline: false },
+                { name: '⏰ Scheduled Announcements', value: [
+                    '• `/announce-schedule channel:#ch title:... description:... at:30m recurring?:daily`',
+                    '• `/announce-list` — lihat semua pending',
+                    '• `/announce-cancel id:sa_xxx` — batalkan',
+                    '💡 Format `at`: "30m", "2h", "1d", atau "2026-01-15 20:00"',
+                    '💡 Recurring: daily / weekly / monthly (auto-bikin cycle baru)'
+                ].join('\n'), inline: false },
+                { name: '⚠️ Warn System (auto-action)', value: [
+                    '• `/warn user:@user reason:Spam` — beri warning',
+                    '• `/warn-list user:@user` — lihat history warning',
+                    '• `/warn-remove user:@user warn_id:warn_xxx` — hapus 1 warn',
+                    '• `/warn-clear user:@user` — hapus SEMUA warn',
+                    '💡 Threshold: 3 warn=mute 1h, 5 warn=mute 1d, 7 warn=kick'
+                ].join('\n'), inline: false },
+                { name: '📊 Stats & Leaderboard', value: [
+                    '• `/stats` — statistik agregat server (admin)',
+                    '• `/leaderboard metric:messages|vipPurchases|totalSpent|giveawaysWon` — top 10 (public)',
+                    '• `/my-stats` — statistik pribadi (public)',
+                    '💡 Tracking: pesan, pembelian VIP, total belanja, menang giveaway'
+                ].join('\n'), inline: false },
+                { name: '📊 Poll System', value: [
+                    '• `/poll create channel:#ch question:Event weekend ini? multiple?:false`',
+                    '• `/poll list` — lihat semua poll',
+                    '• `/poll close id:poll_xxx` — tutup poll + tampilkan hasil akhir',
+                    '💡 Member klik tombol option untuk vote (toggle). Live bar chart otomatis.'
+                ].join('\n'), inline: false },
+                { name: '🔧 Audit Log (otomatis)', value: [
+                    '• Set `/set-channel audit-log #channel` dulu',
+                    '💡 Bot otomatis catat: add/remove produk, set role/channel, set-key, giveaway, dll'
+                ].join('\n'), inline: false },
                 { name: '🧨 Reset Total', value: [
                     '• `/reset-config` — ⚠️ **hapus SEMUA setting** (tidak bisa di-undo!)'
                 ].join('\n'), inline: false },
@@ -176,6 +230,7 @@ module.exports = async (interaction) => {
         const tipe = interaction.options.getString('tipe');
         const role = interaction.options.getRole('role');
         setField(`roles.${tipe}`, role.id);
+        await logAudit(interaction.client, { action: 'SET_ROLE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Role **${tipe}** diatur ke ${role.name} (\`${role.id}\`)`, guildId: interaction.guild.id });
         return interaction.editReply({ content: `✅ Role **${tipe}** diatur ke ${role} (\`${role.id}\`)` });
     }
 
@@ -185,6 +240,7 @@ module.exports = async (interaction) => {
         const tipe = interaction.options.getString('tipe');
         const channel = interaction.options.getChannel('channel');
         setField(`channels.${tipe}`, channel.id);
+        await logAudit(interaction.client, { action: 'SET_CHANNEL', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Channel **${tipe}** diatur ke #${channel.name} (\`${channel.id}\`)`, guildId: interaction.guild.id });
         return interaction.editReply({ content: `✅ Channel **${tipe}** diatur ke ${channel} (\`${channel.id}\`)` });
     }
 
@@ -223,6 +279,7 @@ module.exports = async (interaction) => {
         saveConfig(config);
 
         const durationInfo = duration ? ` (durasi: ${duration})` : ' (tanpa duration)';
+        await logAudit(interaction.client, { action: 'ADD_PRODUCT', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Tambah produk: **${label}** (\`${value}\`) — ${price}${durationInfo}`, guildId: interaction.guild.id });
         return interaction.editReply({ content: `✅ Produk ditambahkan: **${label}** — ${price}${durationInfo}` });
     }
 
@@ -234,6 +291,7 @@ module.exports = async (interaction) => {
         if (idx === -1) return interaction.editReply({ content: `❌ Produk \`${value}\` tidak ditemukan.` });
         const [removed] = config.products.splice(idx, 1);
         saveConfig(config);
+        await logAudit(interaction.client, { action: 'REMOVE_PRODUCT', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Hapus produk: **${removed.label}** (\`${removed.value}\`) — ${removed.price}`, guildId: interaction.guild.id });
         return interaction.editReply({ content: `✅ Produk dihapus: **${removed.label}**` });
     }
 
@@ -1056,4 +1114,575 @@ module.exports = async (interaction) => {
             content: `🗑️ Session \`${sessionId}\` dibatalkan.` + (draftDeleted ? ' Pesan draft juga dihapus.' : ' (Pesan draft sudah tidak ditemukan.)')
         });
     }
+
+    // ====================================================
+    // === BACKUP — /backup-now, /backup-list, /restore-backup ===
+    // ====================================================
+    if (interaction.commandName === 'backup-now') {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        const result = createBackup();
+        await logAudit(interaction.client, { action: 'BACKUP_NOW', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Backup manual: \`${result.backupName}\` (${result.filesCopied} files, ${formatBackupSize(result.totalSize)})`, guildId: interaction.guild.id });
+        return interaction.editReply({
+            content: `💾 **Backup berhasil dibuat!**\n\n` +
+                `📁 Nama: \`${result.backupName}\`\n` +
+                `📦 File disalin: **${result.filesCopied}**\n` +
+                `📊 Ukuran total: **${formatBackupSize(result.totalSize)}**\n` +
+                (result.errors.length > 0 ? `⚠️ Error: \`\`\`\n${result.errors.join('\n')}\n\`\`\`` : '') +
+                `\n💡 Auto-backup berjalan tiap 24 jam + saat bot start. Maks 7 backup terbaru disimpan.`
+        });
+    }
+
+    if (interaction.commandName === 'backup-list') {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        const backups = listBackups();
+        if (backups.length === 0) {
+            return interaction.editReply({ content: '📭 Belum ada backup. Backup otomatis dibuat saat bot start.' });
+        }
+        const lines = backups.map((b, i) => {
+            const ageMs = Date.now() - b.mtime.getTime();
+            const ageMin = Math.floor(ageMs / 60000);
+            const ageStr = ageMin < 60 ? `${ageMin}m lalu` : ageMin < 1440 ? `${Math.floor(ageMin / 60)}h lalu` : `${Math.floor(ageMin / 1440)}h lalu`;
+            return `\`${i + 1}.\` 📁 \`${b.name}\`\n   📦 ${b.fileCount} file | 📊 ${formatBackupSize(b.size)} | ⏰ ${ageStr}`;
+        }).join('\n\n');
+        const embed = new EmbedBuilder()
+            .setTitle('💾 DAFTAR BACKUP')
+            .setDescription(`Total **${backups.length}** backup tersimpan (maks 7, auto-clean yang lama).\n\n${lines}\n\n💡 Restore pakai: \`/restore-backup name:<nama-folder>\``)
+            .setColor(0x57F287)
+            .setFooter({ text: interaction.client.user.username, iconURL: interaction.client.user.displayAvatarURL({ dynamic: true }) })
+            .setTimestamp();
+        return interaction.editReply({ embeds: [embed] });
+    }
+
+    if (interaction.commandName === 'restore-backup') {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        const name = interaction.options.getString('name');
+        const result = restoreBackup(name);
+        if (!result.ok) {
+            return interaction.editReply({ content: `❌ Gagal restore: ${result.errors[0]}\n\nPakai \`/backup-list\` untuk lihat daftar backup yang valid.` });
+        }
+        await logAudit(interaction.client, { action: 'RESTORE_BACKUP', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Restore backup \`${name}\` (${result.filesRestored} files). Pre-restore backup: \`${result.preRestoreName}\``, guildId: interaction.guild.id });
+        return interaction.editReply({
+            content: `♻️ **Restore berhasil!**\n\n` +
+                `📁 Dari: \`${name}\`\n` +
+                `📦 File dipulihkan: **${result.filesRestored}**\n` +
+                `💾 Backup sebelum restore: \`${result.preRestoreName}\` (safety net)\n\n` +
+                `⚠️ **RESTART bot sekarang** supaya data baru ke-load.\n\`\`\`bash\nnpm start\n\`\`\`\n` +
+                (result.errors.length > 0 ? `⚠️ Error: \`\`\`\n${result.errors.join('\n')}\n\`\`\`` : '')
+        });
+    }
+
+    // ====================================================
+    // === GIVEAWAY — /giveaway create/list/end/reroll ===
+    // ====================================================
+    if (interaction.commandName === 'giveaway') {
+        const sub = interaction.options.getSubcommand();
+
+        // --- /giveaway create ---
+        if (sub === 'create') {
+            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+            const channel = interaction.options.getChannel('channel');
+            const prize = interaction.options.getString('prize');
+            const winners = interaction.options.getInteger('winners') || 1;
+            const durationMin = interaction.options.getInteger('duration');
+            const requiredRole = interaction.options.getRole('required_role');
+
+            if (durationMin < 1) {
+                return interaction.editReply({ content: '❌ Durasi minimal 1 menit.' });
+            }
+            if (winners < 1 || winners > 20) {
+                return interaction.editReply({ content: '❌ Jumlah pemenang harus 1-20.' });
+            }
+
+            const endsAt = Date.now() + durationMin * 60000;
+            const gw = createGiveaway({
+                guildId: interaction.guild.id,
+                channelId: channel.id,
+                prize,
+                winnersCount: winners,
+                endsAt,
+                hostId: interaction.user.id,
+                hostTag: interaction.user.tag,
+                requiredRoleId: requiredRole?.id || null
+            });
+
+            // Build giveaway embed
+            const embed = new EmbedBuilder()
+                .setTitle('🎉 GIVEAWAY!')
+                .setDescription(
+                    `🎁 **Prize:** ${prize}\n\n` +
+                    `👥 **Pemenang:** ${winners}\n` +
+                    `⏰ **Berakhir:** <t:${Math.floor(endsAt / 1000)}:R> (<t:${Math.floor(endsAt / 1000)}:F>)\n` +
+                    `🎟️ **Peserta:** 0\n` +
+                    (requiredRole ? `🔐 **Syarat:** Punya role ${requiredRole}\n` : '') +
+                    `\n👇 Klik tombol **🎉 Join** di bawah untuk ikut!`
+                )
+                .setColor(0xF1C40F)
+                .setFooter({ text: `Host: ${interaction.user.tag} | ID: ${gw.id}` })
+                .setTimestamp();
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId(`gw_join:${gw.id}`).setLabel('🎉 Join').setStyle(ButtonStyle.Success),
+                new ButtonBuilder().setCustomId(`gw_leave:${gw.id}`).setLabel('🚪 Leave').setStyle(ButtonStyle.Secondary)
+            );
+            const msg = await channel.send({ embeds: [embed], components: [row], content: '@everyone 🎉 **GIVEAWAY BARU!**' }).catch(err => null);
+            if (!msg) {
+                return interaction.editReply({ content: `❌ Gagal kirim giveaway ke ${channel}. Cek permission bot.` });
+            }
+            setGiveawayMessageId(gw.id, msg.id);
+            await logAudit(interaction.client, { action: 'GIVEAWAY_CREATE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Buat giveaway **${prize}** (${winners} pemenang, ${durationMin}m) di ${channel}`, guildId: interaction.guild.id });
+            return interaction.editReply({ content: `✅ Giveaway dibuat di ${channel}!\n🆔 \`${gw.id}\`\n⏰ Berakhir <t:${Math.floor(endsAt / 1000)}:R>` });
+        }
+
+        // --- /giveaway list ---
+        if (sub === 'list') {
+            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+            const all = getGiveawaysByGuild(interaction.guild.id);
+            if (all.length === 0) {
+                return interaction.editReply({ content: '📭 Belum ada giveaway di guild ini.' });
+            }
+            const lines = all.map(g => {
+                const status = g.ended ? '✅ Selesai' : (g.endsAt <= Date.now() ? '⏳ Proses' : '🟢 Aktif');
+                const winnersStr = g.ended && g.winnerIds.length > 0 ? g.winnerIds.map(id => `<@${id}>`).join(', ') : '—';
+                return `• **${g.prize}** — ${status}\n  🆔 \`${g.id}\` | 👥 ${g.participantIds.length} peserta | 🏆 ${winnersStr}\n  📍 <#${g.channelId}> | ⏰ <t:${Math.floor(g.endsAt / 1000)}:R>`;
+            }).join('\n\n');
+            const embed = new EmbedBuilder()
+                .setTitle('🎉 DAFTAR GIVEAWAY')
+                .setDescription(lines)
+                .setColor(0xF1C40F)
+                .setFooter({ text: interaction.client.user.username, iconURL: interaction.client.user.displayAvatarURL({ dynamic: true }) })
+                .setTimestamp();
+            return interaction.editReply({ embeds: [embed] });
+        }
+
+        // --- /giveaway end ---
+        if (sub === 'end') {
+            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+            const id = interaction.options.getString('id');
+            const gw = getGiveaway(id);
+            if (!gw) return interaction.editReply({ content: `❌ Giveaway \`${id}\` tidak ditemukan.` });
+            if (gw.ended) return interaction.editReply({ content: `❌ Giveaway sudah berakhir.` });
+            if (gw.guildId !== interaction.guild.id) return interaction.editReply({ content: '❌ Giveaway ini bukan dari guild ini.' });
+
+            // Pick winners
+            const winnerIds = pickWinners(gw.participantIds, gw.winnersCount);
+            endGiveaway(id, winnerIds);
+            await logAudit(interaction.client, { action: 'GIVEAWAY_END', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `End giveaway \`${id}\` (${gw.prize}). Winners: ${winnerIds.length > 0 ? winnerIds.map(w => `<@${w}>`).join(', ') : 'tidak ada peserta'}`, guildId: interaction.guild.id });
+            return interaction.editReply({ content: `✅ Giveaway **${gw.prize}** diakhiri!\n🏆 Winners: ${winnerIds.length > 0 ? winnerIds.map(w => `<@${w}>`).join(', ') : '_(tidak ada peserta)_'}` });
+        }
+
+        // --- /giveaway reroll ---
+        if (sub === 'reroll') {
+            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+            const id = interaction.options.getString('id');
+            const gw = getGiveaway(id);
+            if (!gw) return interaction.editReply({ content: `❌ Giveaway \`${id}\` tidak ditemukan.` });
+            if (!gw.ended) return interaction.editReply({ content: `❌ Giveaway belum berakhir. End dulu pakai \`/giveaway end\`.` });
+            const result = rerollGiveaway(id);
+            if (!result || !result.winnerId) return interaction.editReply({ content: '❌ Tidak ada peserta untuk di-reroll.' });
+            await logAudit(interaction.client, { action: 'GIVEAWAY_REROLL', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Reroll giveaway \`${id}\` → new winner: <@${result.winnerId}>`, guildId: interaction.guild.id });
+            return interaction.editReply({ content: `🎲 **Reroll!** Winner baru: <@${result.winnerId}>` });
+        }
+    }
+
+    // ====================================================
+    // === SCHEDULED ANNOUNCEMENTS — /announce-schedule, /announce-list, /announce-cancel ===
+    // ====================================================
+    if (interaction.commandName === 'announce-schedule') {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        const channel = interaction.options.getChannel('channel');
+        const title = interaction.options.getString('title');
+        const description = interaction.options.getString('description');
+        const at = interaction.options.getString('at');
+        const color = interaction.options.getString('color');
+        const image = interaction.options.getString('image');
+        const thumbnail = interaction.options.getString('thumbnail');
+        const mention = interaction.options.getString('mention');
+        const recurring = interaction.options.getString('recurring') || null;
+
+        // Parse time
+        const sendAt = parseAnnTime(at);
+        if (!sendAt) {
+            return interaction.editReply({
+                content: '❌ Format waktu tidak valid.\n\nFormat yang didukung:\n• Relative: `30m`, `2h`, `1d`\n• Absolute: `2026-01-15 20:00` (WITA, format YYYY-MM-DD HH:MM)'
+            });
+        }
+        if (sendAt <= Date.now()) {
+            return interaction.editReply({ content: '❌ Waktu yang dimasukkan sudah lewat. Pakai waktu di masa depan.' });
+        }
+
+        // Parse color
+        let colorNum = 0x5865F2;
+        if (color) {
+            const { parseColor } = require('../utils/embedBuilderSessions');
+            const parsed = parseColor(color);
+            if (parsed === null) {
+                return interaction.editReply({ content: `❌ Color tidak valid: \`${color}\`. Pakai format hex 6 digit, mis. \`#FF0000\` atau \`FF0000\`.` });
+            }
+            colorNum = parsed;
+        }
+
+        // Validate URLs
+        if (image && !/^https?:\/\//.test(image)) {
+            return interaction.editReply({ content: '❌ Image URL harus mulai dengan `http://` atau `https://`' });
+        }
+        if (thumbnail && !/^https?:\/\//.test(thumbnail)) {
+            return interaction.editReply({ content: '❌ Thumbnail URL harus mulai dengan `http://` atau `https://`' });
+        }
+
+        const entry = createScheduledAnn({
+            guildId: interaction.guild.id,
+            channelId: channel.id,
+            sendAt,
+            title,
+            description,
+            color: colorNum,
+            image,
+            thumbnail,
+            mention,
+            authorId: interaction.user.id,
+            authorTag: interaction.user.tag,
+            recurring
+        });
+
+        await logAudit(interaction.client, { action: 'ANNOUNCE_SCHEDULE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Schedule announce ke ${channel} pada <t:${Math.floor(sendAt / 1000)}:F>${recurring ? ` (recurring: ${recurring})` : ''} — Title: "${title}"`, guildId: interaction.guild.id });
+
+        return interaction.editReply({
+            content: `✅ **Announce dijadwalkan!**\n\n` +
+                `📍 Channel: ${channel}\n` +
+                `⏰ Kirim pada: <t:${Math.floor(sendAt / 1000)}:F> (<t:${Math.floor(sendAt / 1000)}:R>)\n` +
+                (recurring ? `🔄 Recurring: **${recurring}**\n` : '') +
+                `📝 Title: ${title}\n` +
+                `🆔 ID: \`${entry.id}\`\n\n` +
+                `💡 Cek dengan \`/announce-list\`, batalkan dengan \`/announce-cancel id:${entry.id}\``
+        });
+    }
+
+    if (interaction.commandName === 'announce-list') {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        const entries = getScheduledAnnsByGuild(interaction.guild.id);
+        const pending = entries.filter(e => !e.sent);
+        if (pending.length === 0) {
+            return interaction.editReply({ content: '📭 Tidak ada announce terjadwal yang pending. Pakai `/announce-schedule` untuk bikin.' });
+        }
+        const lines = pending.map(e => {
+            const timeLeft = e.sendAt - Date.now();
+            return `• 📝 **${e.data.title}**\n  🆔 \`${e.id}\`\n  📍 <#${e.channelId}> | ⏰ <t:${Math.floor(e.sendAt / 1000)}:F> (<t:${Math.floor(e.sendAt / 1000)}:R>)\n  ${e.recurring ? `🔄 Recurring: ${e.recurring}\n  ` : ''}👤 Oleh: ${e.data.authorTag}`;
+        }).join('\n\n');
+        const embed = new EmbedBuilder()
+            .setTitle('⏰ ANNOUNCE TERJADWAL')
+            .setDescription(`Total **${pending.length}** announce pending.\n\n${lines}`)
+            .setColor(0x5865F2)
+            .setFooter({ text: interaction.client.user.username, iconURL: interaction.client.user.displayAvatarURL({ dynamic: true }) })
+            .setTimestamp();
+        return interaction.editReply({ embeds: [embed] });
+    }
+
+    if (interaction.commandName === 'announce-cancel') {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        const id = interaction.options.getString('id');
+        const entry = getScheduledAnn(id);
+        if (!entry) return interaction.editReply({ content: `❌ Announce ID \`${id}\` tidak ditemukan.` });
+        if (entry.sent) return interaction.editReply({ content: `❌ Announce sudah terkirim, tidak bisa dibatalkan.` });
+        if (entry.guildId !== interaction.guild.id) return interaction.editReply({ content: '❌ Announce ini bukan dari guild ini.' });
+        removeScheduledAnn(id);
+        await logAudit(interaction.client, { action: 'ANNOUNCE_CANCEL', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Cancel scheduled announce \`${id}\` (Title: "${entry.data.title}")`, guildId: interaction.guild.id });
+        return interaction.editReply({ content: `✅ Announce \`${id}\` (${entry.data.title}) dibatalkan.` });
+    }
+
+    // ====================================================
+    // === WARN SYSTEM — /warn, /warn-list, /warn-remove, /warn-clear ===
+    // ====================================================
+    if (interaction.commandName === 'warn') {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        const user = interaction.options.getUser('user');
+        const reason = interaction.options.getString('reason');
+
+        if (user.id === interaction.user.id) {
+            return interaction.editReply({ content: '❌ Tidak bisa warn diri sendiri.' });
+        }
+        if (user.bot) {
+            return interaction.editReply({ content: '❌ Tidak bisa warn bot.' });
+        }
+
+        const member = await interaction.guild.members.fetch(user.id).catch(() => null);
+        if (!member) {
+            return interaction.editReply({ content: `❌ User <@${user.id}> tidak ada di server.` });
+        }
+
+        // Cek hierarki: admin harus lebih tinggi dari target
+        if (member.roles.highest.position >= interaction.member.roles.highest.position) {
+            return interaction.editReply({ content: '❌ Kamu tidak bisa warn member dengan role setingkat/lebih tinggi dari kamu.' });
+        }
+
+        const result = addWarn(user.id, {
+            reason,
+            warnedBy: interaction.user.id,
+            warnedByTag: interaction.user.tag,
+            guildId: interaction.guild.id
+        });
+
+        await logAudit(interaction.client, { action: 'WARN_ADD', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Warn <@${user.id}> (${user.tag}) — Reason: "${reason}" — Total: ${result.count} warn`, guildId: interaction.guild.id });
+
+        // Eksekusi auto-action kalau perlu
+        let actionMsg = '';
+        if (result.actionToTake) {
+            try {
+                if (result.actionToTake === 'mute_1h' || result.actionToTake === 'mute_1d') {
+                    const durationMin = result.actionToTake === 'mute_1h' ? 60 : 1440;
+                    // Cari role mute (atau bikin timeout)
+                    await member.timeout(durationMin * 60 * 1000, `Auto-action: ${result.count} warnings`).catch(()=>{});
+                    actionMsg = `\n🔇 **Auto-action:** Timeout ${durationMin === 60 ? '1 jam' : '1 hari'} (${result.count} warnings)`;
+                    markActionTaken(user.id, result.warnEntry.id, result.actionToTake);
+                } else if (result.actionToTake === 'kick') {
+                    await member.kick(`Auto-action: ${result.count} warnings`).catch(()=>{});
+                    actionMsg = `\n👢 **Auto-action:** Kicked (${result.count} warnings)`;
+                    markActionTaken(user.id, result.warnEntry.id, result.actionToTake);
+                }
+            } catch (err) {
+                actionMsg = `\n⚠️ Auto-action gagal: ${err.message}`;
+            }
+        }
+
+        // DM user
+        try {
+            await user.send(`⚠️ **Kamu mendapat warning di ${interaction.guild.name}**\n\nReason: ${reason}\nTotal warnings: ${result.count}\n${result.actionToTake ? `Action: ${result.actionToTake}` : 'Belum ada auto-action (threshold: 3=mute 1h, 5=mute 1d, 7=kick)'}`);
+        } catch (_) {}
+
+        return interaction.editReply({
+            content: `⚠️ **<@${user.id}> telah diwarn.**\n\n` +
+                `📝 Reason: ${reason}\n` +
+                `📊 Total warnings: **${result.count}**\n` +
+                `👤 Oleh: ${interaction.user.tag}${actionMsg}`
+        });
+    }
+
+    if (interaction.commandName === 'warn-list') {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        const user = interaction.options.getUser('user');
+        const warns = getWarns(user.id);
+        if (warns.length === 0) {
+            return interaction.editReply({ content: `✅ <@${user.id}> tidak punya warning.` });
+        }
+        const lines = warns.map((w, i) => {
+            const date = new Date(w.createdAt);
+            return `\`${i + 1}.\` 🆔 \`${w.id}\`\n   📝 ${w.reason}\n   👤 Oleh: ${w.warnedByTag} | ⏰ <t:${Math.floor(w.createdAt / 1000)}:R>${w.actionTaken ? ` | ⚡ ${w.actionTaken}` : ''}`;
+        }).join('\n\n');
+        const embed = new EmbedBuilder()
+            .setTitle(`⚠️ WARN HISTORY — ${user.tag}`)
+            .setDescription(`Total **${warns.length}** warning.\n\n${lines}\n\n**Threshold:**\n• ${WARN_THRESHOLDS.mute1h} warn → mute 1 jam\n• ${WARN_THRESHOLDS.mute1d} warn → mute 1 hari\n• ${WARN_THRESHOLDS.kick} warn → kick`)
+            .setColor(warns.length >= WARN_THRESHOLDS.kick ? 0xED4245 : warns.length >= WARN_THRESHOLDS.mute1h ? 0xE67E22 : 0xFEE75C)
+            .setFooter({ text: `User ID: ${user.id}` })
+            .setTimestamp();
+        return interaction.editReply({ embeds: [embed] });
+    }
+
+    if (interaction.commandName === 'warn-remove') {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        const user = interaction.options.getUser('user');
+        const warnId = interaction.options.getString('warn_id');
+        const ok = removeWarn(user.id, warnId);
+        if (!ok) {
+            return interaction.editReply({ content: `❌ Warn ID \`${warnId}\` tidak ditemukan untuk user <@${user.id}>.` });
+        }
+        await logAudit(interaction.client, { action: 'WARN_REMOVE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Hapus warn \`${warnId}\` dari <@${user.id}>. Sisa: ${getWarnCount(user.id)} warn`, guildId: interaction.guild.id });
+        return interaction.editReply({ content: `✅ Warn \`${warnId}\` dihapus dari <@${user.id}>.\n📊 Sisa warnings: **${getWarnCount(user.id)}**` });
+    }
+
+    if (interaction.commandName === 'warn-clear') {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        const user = interaction.options.getUser('user');
+        const count = clearWarns(user.id);
+        if (count === 0) {
+            return interaction.editReply({ content: `ℹ️ <@${user.id}> memang tidak punya warning.` });
+        }
+        await logAudit(interaction.client, { action: 'WARN_REMOVE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Clear ALL warns (${count}) dari <@${user.id}>`, guildId: interaction.guild.id });
+        return interaction.editReply({ content: `✅ **${count}** warning dihapus dari <@${user.id}>.` });
+    }
+
+    // ====================================================
+    // === STATS & LEADERBOARD — /stats, /leaderboard, /my-stats ===
+    // ====================================================
+    if (interaction.commandName === 'stats') {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        const stats = getServerStatsAll();
+        const embed = new EmbedBuilder()
+            .setTitle('📊 STATISTIK SERVER')
+            .setDescription('Statistik agregat seluruh aktivitas member.')
+            .setColor(0x5865F2)
+            .addFields(
+                { name: '👥 Total Member Tracked', value: `${stats.totalUsers}`, inline: true },
+                { name: '💬 Total Pesan', value: `${stats.totalMessages.toLocaleString('id-ID')}`, inline: true },
+                { name: '🛒 Total Pembelian VIP', value: `${stats.totalPurchases}`, inline: true },
+                { name: '💰 Total Revenue', value: `Rp ${stats.totalRevenue.toLocaleString('id-ID')}`, inline: true },
+                { name: '🎉 Total Giveaway Won', value: `${stats.totalGiveawaysWon}`, inline: true },
+                { name: '📈 Avg Messages/User', value: stats.totalUsers > 0 ? `${Math.round(stats.totalMessages / stats.totalUsers)}` : '0', inline: true }
+            )
+            .setFooter({ text: 'Data dari stats.json — tracking dimulai sejak bot v3.2' })
+            .setTimestamp();
+        return interaction.editReply({ embeds: [embed] });
+    }
+
+    if (interaction.commandName === 'leaderboard') {
+        await interaction.deferReply();
+        const metric = interaction.options.getString('metric') || 'messages';
+        const top = getTopUsersStats(metric, 10);
+        if (top.length === 0) {
+            return interaction.editReply({ content: '📭 Belum ada data leaderboard untuk metric ini.' });
+        }
+
+        const metricLabels = {
+            messages: '💬 Pesan Terbanyak',
+            vipPurchases: '🛒 Top Buyer (jumlah transaksi)',
+            totalSpent: '💰 Top Spender (total belanja)',
+            giveawaysWon: '🎉 Top Winner (giveaway)'
+        };
+        const metricFormat = {
+            messages: (v) => `${v.toLocaleString('id-ID')} pesan`,
+            vipPurchases: (v) => `${v} transaksi`,
+            totalSpent: (v) => `Rp ${v.toLocaleString('id-ID')}`,
+            giveawaysWon: (v) => `${v} menang`
+        };
+
+        const medals = ['🥇', '🥈', '🥉'];
+        const lines = top.map((u, i) => {
+            const medal = medals[i] || `**${i + 1}.**`;
+            return `${medal} <@${u.userId}> — ${metricFormat[metric](u.value)}`;
+        }).join('\n');
+
+        const embed = new EmbedBuilder()
+            .setTitle(`🏆 LEADERBOARD — ${metricLabels[metric]}`)
+            .setDescription(`Top ${top.length} member berdasarkan **${metricLabels[metric]}**.\n\n${lines}`)
+            .setColor(0xF1C40F)
+            .setFooter({ text: 'Tracking sejak bot v3.2 | Update tiap aktivitas' })
+            .setTimestamp();
+        return interaction.editReply({ embeds: [embed] });
+    }
+
+    if (interaction.commandName === 'my-stats') {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        const stats = getUserStats(interaction.user.id);
+        const embed = new EmbedBuilder()
+            .setTitle(`📊 STATS — ${interaction.user.tag}`)
+            .setDescription('Statistik aktivitas kamu di server ini.')
+            .setColor(0x57F287)
+            .addFields(
+                { name: '💬 Pesan', value: `${stats.messages.toLocaleString('id-ID')}`, inline: true },
+                { name: '🛒 Pembelian VIP', value: `${stats.vipPurchases}`, inline: true },
+                { name: '💰 Total Belanja', value: `Rp ${stats.totalSpent.toLocaleString('id-ID')}`, inline: true },
+                { name: '🎉 Giveaway Won', value: `${stats.giveawaysWon}`, inline: true },
+                { name: '📅 Joined Tracking', value: stats.joinedAt ? `<t:${Math.floor(stats.joinedAt / 1000)}:R>` : 'belum tercatat', inline: true },
+                { name: '🕐 Pesan Terakhir', value: stats.lastMessageAt ? `<t:${Math.floor(stats.lastMessageAt / 1000)}:R>` : 'belum pernah', inline: true }
+            )
+            .setFooter({ text: 'Cek posisi di leaderboard pakai /leaderboard' })
+            .setTimestamp();
+        return interaction.editReply({ embeds: [embed] });
+    }
+
+    // ====================================================
+    // === POLL SYSTEM — /poll create/list/close ===
+    // ====================================================
+    if (interaction.commandName === 'poll') {
+        const sub = interaction.options.getSubcommand();
+
+        // --- /poll create ---
+        if (sub === 'create') {
+            const channel = interaction.options.getChannel('channel');
+            const question = interaction.options.getString('question');
+            const multiple = interaction.options.getBoolean('multiple') || false;
+
+            // Open modal untuk input options (satu field, dipisah newline)
+            const modal = new ModalBuilder()
+                .setCustomId(`poll_modal_create:${channel.id}:${multiple ? '1' : '0'}:${encodeURIComponent(question)}`)
+                .setTitle('Buat Poll — Input Options');
+            modal.addComponents(
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId('options')
+                        .setLabel('Options (1 per baris, min 2, maks 10)')
+                        .setStyle(TextInputStyle.Paragraph)
+                        .setRequired(true)
+                        .setPlaceholder('Rank Push\nCustom Room\nTurnamen\nOff')
+                        .setMaxLength(500)
+                )
+            );
+            return interaction.showModal(modal);
+        }
+
+        // --- /poll list ---
+        if (sub === 'list') {
+            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+            const polls = getPollsByGuild(interaction.guild.id);
+            if (polls.length === 0) {
+                return interaction.editReply({ content: '📭 Belum ada poll di guild ini.' });
+            }
+            const lines = polls.map(p => {
+                const status = p.closed ? '🔒 Closed' : '🟢 Active';
+                const total = getPollTotalVotes(p);
+                return `• ❓ **${p.question}** — ${status}\n  🆔 \`${p.id}\` | 👥 ${p.options.length} options | 🗳️ ${total} votes\n  📍 <#${p.channelId}> | ⏰ <t:${Math.floor(p.createdAt / 1000)}:R>`;
+            }).join('\n\n');
+            const embed = new EmbedBuilder()
+                .setTitle('📊 DAFTAR POLL')
+                .setDescription(`Total **${polls.length}** poll.\n\n${lines}`)
+                .setColor(0x5865F2)
+                .setFooter({ text: interaction.client.user.username, iconURL: interaction.client.user.displayAvatarURL({ dynamic: true }) })
+                .setTimestamp();
+            return interaction.editReply({ embeds: [embed] });
+        }
+
+        // --- /poll close ---
+        if (sub === 'close') {
+            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+            const id = interaction.options.getString('id');
+            const poll = getPoll(id);
+            if (!poll) return interaction.editReply({ content: `❌ Poll \`${id}\` tidak ditemukan.` });
+            if (poll.guildId !== interaction.guild.id) return interaction.editReply({ content: '❌ Poll ini bukan dari guild ini.' });
+            if (poll.closed) return interaction.editReply({ content: `❌ Poll sudah closed.` });
+            const updated = closePoll(id);
+            await updatePollMessage(interaction, updated);
+            await logAudit(interaction.client, { action: 'POLL_CLOSE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Close poll \`${id}\` ("${poll.question}")`, guildId: interaction.guild.id });
+            return interaction.editReply({ content: `✅ Poll **${poll.question}** ditutup! Lihat hasil di channel.` });
+        }
+    }
 };
+
+// ====================================================
+// === HELPER: UPDATE POLL MESSAGE (untuk close) ===
+// ====================================================
+async function updatePollMessage(interaction, poll) {
+    try {
+        const channel = interaction.guild.channels.cache.get(poll.channelId);
+        if (!channel) return;
+        const msg = await channel.messages.fetch(poll.messageId).catch(() => null);
+        if (!msg) return;
+
+        const total = getPollTotalVotes(poll);
+        const lines = poll.options.map((opt, i) => {
+            const pct = total > 0 ? Math.round((opt.votes.length / total) * 100) : 0;
+            const bar = '█'.repeat(Math.floor(pct / 10)).padEnd(10, '░');
+            return `${opt.emoji} **${opt.label}** — ${opt.votes.length} votes (${pct}%)\n\`${bar}\``;
+        }).join('\n\n');
+
+        const embed = new EmbedBuilder()
+            .setTitle(`📊 ${poll.question}`)
+            .setDescription(
+                `${lines}\n\n` +
+                `🗳️ Total votes: **${total}**\n` +
+                `🔒 Status: **Closed** <t:${Math.floor(poll.closedAt / 1000)}:R>`
+            )
+            .setColor(0x95A5A6)
+            .setFooter({ text: `Poll by ${poll.creatorTag} | Closed` })
+            .setTimestamp();
+
+        // Disable all buttons
+        const disabledRows = msg.components.map(row => {
+            const newRow = new ActionRowBuilder();
+            for (const comp of row.components) {
+                newRow.addComponents(ButtonBuilder.from(comp).setDisabled(true));
+            }
+            return newRow;
+        });
+
+        await msg.edit({ embeds: [embed], components: disabledRows });
+    } catch (err) {
+        console.warn('Gagal update poll message:', err.message);
+    }
+}

@@ -5,4 +5,10 @@ config.json
 scheduledRoles.json
 keys.json
 selfRoles.json
+giveaways.json
+warns.json
+polls.json
+scheduledAnnouncements.json
+stats.json
+backups/
 *.log

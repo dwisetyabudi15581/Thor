@@ -14,6 +14,9 @@ const { scheduleRoleRemoval } = require('../utils/roleScheduler');
 const { getPanelByMessage, getPanel } = require('../utils/selfRoleManager');
 const { buildPanelEmbed, buildPanelComponents } = require('../utils/selfRolePanelBuilder');
 const { getSession, deleteSession, buildEmbed: buildSessionEmbed, parseColor } = require('../utils/embedBuilderSessions');
+const { get: getGiveaway, addParticipant: gwAddParticipant, removeParticipant: gwRemoveParticipant, end: endGiveaway, pickWinners, formatTimeLeft } = require('../utils/giveawayManager');
+const { get: getPoll, vote: votePoll, getByMessage: getPollByMessage, getTotalVotes: getPollTotalVotes } = require('../utils/pollManager');
+const { create: createPoll, setMessageId: setPollMessageId } = require('../utils/pollManager');
 
 module.exports = async (interaction) => {
     if (interaction.replied || interaction.deferred) {
@@ -292,6 +295,12 @@ module.exports = async (interaction) => {
             // === 5. Kirim invoice ke channel invoice ===
             await sendInvoice(interaction.channel, userId, productName, price, interaction.user);
 
+            // === 5.5. Track purchase untuk stats/leaderboard ===
+            try {
+                const { recordPurchase, parsePrice } = require('../utils/statsManager');
+                recordPurchase(userId, parsePrice(price));
+            } catch (_) {}
+
             // === 6. Hapus channel tiket ===
             await interaction.channel.delete().catch(()=>{});
 
@@ -391,6 +400,27 @@ module.exports = async (interaction) => {
         // ====================================================
         if (interaction.isModalSubmit() && interaction.customId.startsWith('emb_modal_')) {
             return handleEmbedBuilderModal(interaction);
+        }
+
+        // ====================================================
+        // === GIVEAWAY: JOIN / LEAVE BUTTONS ===
+        // ====================================================
+        if (interaction.isButton() && (interaction.customId.startsWith('gw_join:') || interaction.customId.startsWith('gw_leave:'))) {
+            return handleGiveawayButton(interaction);
+        }
+
+        // ====================================================
+        // === POLL: VOTE BUTTONS ===
+        // ====================================================
+        if (interaction.isButton() && interaction.customId.startsWith('poll_vote:')) {
+            return handlePollButton(interaction);
+        }
+
+        // ====================================================
+        // === POLL: MODAL CREATE SUBMIT ===
+        // ====================================================
+        if (interaction.isModalSubmit() && interaction.customId.startsWith('poll_modal_create:')) {
+            return handlePollModalCreate(interaction);
         }
 
     } catch (err) {
@@ -895,5 +925,254 @@ async function refreshEmbedDraft(interaction, session) {
         await msg.edit({ embeds: [embed] });
     } catch (err) {
         console.warn('Gagal refresh embed draft:', err.message);
+    }
+}
+
+// ====================================================
+// === HELPER: GIVEAWAY JOIN / LEAVE BUTTON HANDLER ===
+// ====================================================
+async function handleGiveawayButton(interaction) {
+    try {
+        const [action, gwId] = interaction.customId.split(':');
+        const gw = getGiveaway(gwId);
+        if (!gw) {
+            return interaction.reply({ content: '❌ Giveaway tidak ditemukan (mungkin sudah dihapus).', flags: MessageFlags.Ephemeral });
+        }
+        if (gw.ended) {
+            return interaction.reply({ content: '❌ Giveaway sudah berakhir.', flags: MessageFlags.Ephemeral });
+        }
+        if (gw.guildId !== interaction.guild.id) {
+            return interaction.reply({ content: '❌ Giveaway ini bukan dari guild ini.', flags: MessageFlags.Ephemeral });
+        }
+
+        // Cek required role
+        if (gw.requiredRoleId) {
+            const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
+            if (!member || !member.roles.cache.has(gw.requiredRoleId)) {
+                const role = interaction.guild.roles.cache.get(gw.requiredRoleId);
+                return interaction.reply({ content: `❌ Kamu harus punya role ${role || '`' + gw.requiredRoleId + '`'} untuk ikut giveaway ini.`, flags: MessageFlags.Ephemeral });
+            }
+        }
+
+        // JOIN
+        if (action === 'gw_join') {
+            if (gw.participantIds.includes(interaction.user.id)) {
+                return interaction.reply({ content: 'ℹ️ Kamu sudah join giveaway ini.', flags: MessageFlags.Ephemeral });
+            }
+            const updated = gwAddParticipant(gwId, interaction.user.id);
+            await updateGiveawayMessage(interaction, updated);
+            return interaction.reply({ content: `✅ Kamu join giveaway **${gw.prize}**! 🎉\n👥 Total peserta: ${updated.participantIds.length}`, flags: MessageFlags.Ephemeral });
+        }
+
+        // LEAVE
+        if (action === 'gw_leave') {
+            if (!gw.participantIds.includes(interaction.user.id)) {
+                return interaction.reply({ content: 'ℹ️ Kamu belum join giveaway ini.', flags: MessageFlags.Ephemeral });
+            }
+            const updated = gwRemoveParticipant(gwId, interaction.user.id);
+            await updateGiveawayMessage(interaction, updated);
+            return interaction.reply({ content: `🚪 Kamu keluar dari giveaway **${gw.prize}**.`, flags: MessageFlags.Ephemeral });
+        }
+    } catch (err) {
+        console.error('Giveaway button error:', err);
+        if (interaction.isRepliable() && !interaction.replied) {
+            await interaction.reply({ content: '❌ Terjadi error.', flags: MessageFlags.Ephemeral }).catch(()=>{});
+        }
+    }
+}
+
+async function updateGiveawayMessage(interaction, gw) {
+    try {
+        const channel = interaction.guild.channels.cache.get(gw.channelId);
+        if (!channel) return;
+        const msg = await channel.messages.fetch(gw.messageId).catch(() => null);
+        if (!msg) return;
+
+        const timeLeft = gw.endsAt - Date.now();
+        const embed = new EmbedBuilder()
+            .setTitle('🎉 GIVEAWAY!')
+            .setDescription(
+                `🎁 **Prize:** ${gw.prize}\n\n` +
+                `👥 **Pemenang:** ${gw.winnersCount}\n` +
+                `⏰ **Berakhir:** <t:${Math.floor(gw.endsAt / 1000)}:R> (<t:${Math.floor(gw.endsAt / 1000)}:F>)\n` +
+                `🎟️ **Peserta:** ${gw.participantIds.length}\n` +
+                (gw.requiredRoleId ? `🔐 **Syarat:** <@&${gw.requiredRoleId}>\n` : '') +
+                `\n👇 Klik tombol **🎉 Join** di bawah untuk ikut!`
+            )
+            .setColor(timeLeft < 60000 ? 0xE67E22 : 0xF1C40F)
+            .setFooter({ text: `Host: ${gw.hostTag} | ID: ${gw.id}` })
+            .setTimestamp();
+        await msg.edit({ embeds: [embed] });
+    } catch (err) {
+        console.warn('Gagal update giveaway message:', err.message);
+    }
+}
+
+// ====================================================
+// === HELPER: POLL VOTE BUTTON HANDLER ===
+// ====================================================
+async function handlePollButton(interaction) {
+    try {
+        // customId: poll_vote:<pollId>:<optionIndex>
+        const parts = interaction.customId.split(':');
+        const pollId = parts[1];
+        const optionIndex = parseInt(parts[2]);
+        const poll = getPoll(pollId);
+        if (!poll) {
+            return interaction.reply({ content: '❌ Poll tidak ditemukan.', flags: MessageFlags.Ephemeral });
+        }
+        if (poll.closed) {
+            return interaction.reply({ content: '❌ Poll sudah ditutup.', flags: MessageFlags.Ephemeral });
+        }
+        const result = votePoll(pollId, interaction.user.id, optionIndex);
+        if (!result) {
+            return interaction.reply({ content: '❌ Gagal vote. Option mungkin tidak valid.', flags: MessageFlags.Ephemeral });
+        }
+        if (result.closed) {
+            return interaction.reply({ content: '❌ Poll sudah ditutup.', flags: MessageFlags.Ephemeral });
+        }
+        await updatePollVoteMessage(interaction, result);
+        const opt = result.options[optionIndex];
+        const voted = opt.votes.includes(interaction.user.id);
+        return interaction.reply({
+            content: voted
+                ? `✅ Vote tercatat untuk **${opt.label}**!`
+                : `🚪 Vote dibatalkan untuk **${opt.label}**.`,
+            flags: MessageFlags.Ephemeral
+        });
+    } catch (err) {
+        console.error('Poll button error:', err);
+        if (interaction.isRepliable() && !interaction.replied) {
+            await interaction.reply({ content: '❌ Terjadi error.', flags: MessageFlags.Ephemeral }).catch(()=>{});
+        }
+    }
+}
+
+async function updatePollVoteMessage(interaction, poll) {
+    try {
+        const channel = interaction.guild.channels.cache.get(poll.channelId);
+        if (!channel) return;
+        const msg = await channel.messages.fetch(poll.messageId).catch(() => null);
+        if (!msg) return;
+
+        const total = getPollTotalVotes(poll);
+        const lines = poll.options.map((opt, i) => {
+            const pct = total > 0 ? Math.round((opt.votes.length / total) * 100) : 0;
+            const bar = '█'.repeat(Math.floor(pct / 10)).padEnd(10, '░');
+            return `${opt.emoji} **${opt.label}** — ${opt.votes.length} votes (${pct}%)\n\`${bar}\``;
+        }).join('\n\n');
+
+        const embed = new EmbedBuilder()
+            .setTitle(`📊 ${poll.question}`)
+            .setDescription(
+                `${lines}\n\n` +
+                `🗳️ Total votes: **${total}**\n` +
+                `🔄 Mode: ${poll.multiple ? 'Multi-vote (boleh pilih banyak)' : 'Single-vote (pilih satu)'}\n` +
+                `⏰ Dibuat: <t:${Math.floor(poll.createdAt / 1000)}:R>\n\n` +
+                `👇 Klik tombol di bawah untuk vote (toggle)`
+            )
+            .setColor(0x5865F2)
+            .setFooter({ text: `Poll by ${poll.creatorTag} | ID: ${poll.id}` })
+            .setTimestamp();
+        await msg.edit({ embeds: [embed] });
+    } catch (err) {
+        console.warn('Gagal update poll message:', err.message);
+    }
+}
+
+// ====================================================
+// === HELPER: POLL MODAL CREATE (process input options) ===
+// ====================================================
+async function handlePollModalCreate(interaction) {
+    try {
+        // customId: poll_modal_create:<channelId>:<multiple>:<encoded question>
+        const parts = interaction.customId.split(':');
+        const channelId = parts[1];
+        const multiple = parts[2] === '1';
+        const question = decodeURIComponent(parts.slice(3).join(':'));
+
+        const optionsRaw = interaction.components[0]?.components?.[0]?.value?.trim() || '';
+        if (!optionsRaw) {
+            return interaction.reply({ content: '❌ Options tidak boleh kosong.', flags: MessageFlags.Ephemeral });
+        }
+
+        const optionLines = optionsRaw.split('\n').map(s => s.trim()).filter(s => s.length > 0);
+        if (optionLines.length < 2) {
+            return interaction.reply({ content: '❌ Minimal 2 options (1 per baris).', flags: MessageFlags.Ephemeral });
+        }
+        if (optionLines.length > 10) {
+            return interaction.reply({ content: '❌ Maksimal 10 options.', flags: MessageFlags.Ephemeral });
+        }
+
+        const options = optionLines.map((label, i) => ({
+            label: label.slice(0, 80),
+            emoji: `${i + 1}️⃣`
+        }));
+
+        const channel = interaction.guild.channels.cache.get(channelId);
+        if (!channel) {
+            return interaction.reply({ content: '❌ Channel tidak ditemukan.', flags: MessageFlags.Ephemeral });
+        }
+
+        // Create poll entry
+        const poll = createPoll({
+            guildId: interaction.guild.id,
+            channelId: channel.id,
+            question,
+            options,
+            multiple,
+            creatorId: interaction.user.id,
+            creatorTag: interaction.user.tag
+        });
+
+        // Build embed + buttons
+        const total = 0;
+        const lines = poll.options.map((opt, i) => {
+            const pct = 0;
+            const bar = '░'.repeat(10);
+            return `${opt.emoji} **${opt.label}** — 0 votes (0%)\n\`${bar}\``;
+        }).join('\n\n');
+
+        const embed = new EmbedBuilder()
+            .setTitle(`📊 ${question}`)
+            .setDescription(
+                `${lines}\n\n` +
+                `🗳️ Total votes: **0**\n` +
+                `🔄 Mode: ${multiple ? 'Multi-vote (boleh pilih banyak)' : 'Single-vote (pilih satu)'}\n` +
+                `⏰ Dibuat: <t:${Math.floor(poll.createdAt / 1000)}:R>\n\n` +
+                `👇 Klik tombol di bawah untuk vote (toggle)`
+            )
+            .setColor(0x5865F2)
+            .setFooter({ text: `Poll by ${interaction.user.tag} | ID: ${poll.id}` })
+            .setTimestamp();
+
+        // Build buttons — 5 per row (Discord limit), wrap to next row if more
+        const rows = [];
+        for (let i = 0; i < poll.options.length; i += 5) {
+            const row = new ActionRowBuilder();
+            for (let j = i; j < Math.min(i + 5, poll.options.length); j++) {
+                const opt = poll.options[j];
+                row.addComponents(
+                    new ButtonBuilder()
+                        .setCustomId(`poll_vote:${poll.id}:${j}`)
+                        .setLabel(opt.label.slice(0, 80))
+                        .setEmoji(opt.emoji)
+                        .setStyle(ButtonStyle.Primary)
+                );
+            }
+            rows.push(row);
+        }
+
+        const msg = await channel.send({ embeds: [embed], components: rows, content: `📊 **POLL BARU** oleh ${interaction.user}` }).catch(err => null);
+        if (!msg) {
+            return interaction.reply({ content: `❌ Gagal kirim poll ke ${channel}. Cek permission bot.`, flags: MessageFlags.Ephemeral });
+        }
+        setPollMessageId(poll.id, msg.id);
+        return interaction.reply({ content: `✅ Poll dibuat di ${channel}!\n🆔 \`${poll.id}\`\n💡 Tutup pakai \`/poll close id:${poll.id}\``, flags: MessageFlags.Ephemeral });
+    } catch (err) {
+        console.error('Poll modal create error:', err);
+        if (interaction.isRepliable() && !interaction.replied) {
+            await interaction.reply({ content: '❌ Terjadi error: ' + err.message, flags: MessageFlags.Ephemeral }).catch(()=>{});
+        }
     }
 }
