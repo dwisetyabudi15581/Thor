@@ -538,8 +538,8 @@ function getCommands() {
                     options: [
                         { type: 7, name: 'channel', description: 'Channel untuk giveaway', required: true },
                         { type: 3, name: 'prize', description: 'Hadiah (mis. VIP 30 Hari)', required: true },
-                        { type: 4, name: 'winners', description: 'Jumlah pemenang (1-20, default 1)', required: false },
                         { type: 4, name: 'duration', description: 'Durasi dalam menit (min 1)', required: true },
+                        { type: 4, name: 'winners', description: 'Jumlah pemenang (1-20, default 1)', required: false },
                         { type: 8, name: 'required_role', description: 'Role yang wajib dimiliki peserta (opsional)', required: false }
                     ]
                 },
