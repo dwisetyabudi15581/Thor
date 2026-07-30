@@ -1,0 +1,8 @@
+node_modules/
+.env
+.env.bak
+config.json
+scheduledRoles.json
+keys.json
+selfRoles.json
+*.log
