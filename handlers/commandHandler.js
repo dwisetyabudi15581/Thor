@@ -14,7 +14,6 @@ const { create: createScheduledAnn, getByGuild: getScheduledAnnsByGuild, get: ge
 const { addWarn, getWarns, getWarnCount, removeWarn, clearWarns, markActionTaken, DEFAULT_THRESHOLDS: WARN_THRESHOLDS } = require('../utils/warnManager');
 const { getStats: getUserStats, getTopUsers: getTopUsersStats, getServerStats: getServerStatsAll, parsePrice: parsePriceNum } = require('../utils/statsManager');
 const { create: createPoll, setMessageId: setPollMessageId, get: getPoll, getByGuild: getPollsByGuild, close: closePoll, getTotalVotes: getPollTotalVotes } = require('../utils/pollManager');
-const { getByGuild: getTempVoiceByGuild } = require('../utils/tempVoice');
 
 module.exports = async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
@@ -29,7 +28,6 @@ module.exports = async (interaction) => {
     //
     // EXCEPTION: command berikut boleh dipakai member biasa:
     //   - /leaderboard, /my-stats (fitur engagement, bukan admin tool)
-    //   (Temp Voice sekarang dikelola via panel tombol, bukan slash command)
     const PUBLIC_COMMANDS = ['leaderboard', 'my-stats'];
     if (!checkIsAdmin(interaction.member) && !PUBLIC_COMMANDS.includes(interaction.commandName)) {
         return interaction.reply({
@@ -149,15 +147,6 @@ module.exports = async (interaction) => {
                     '• `/poll list` — lihat semua poll',
                     '• `/poll close id:poll_xxx` — tutup poll + tampilkan hasil akhir',
                     '💡 Member klik tombol option untuk vote (toggle). Live bar chart otomatis.'
-                ].join('\n'), inline: false },
-                { name: '🎤 Temp Voice Channels', value: [
-                    '• `/tempvoice-panel` — 🎨 **buka panel admin** untuk setup (paling mudah!)',
-                    '• `/setup-tempvoice hub_channel:#voice category?:#cat default_name?:"{username}\'s Room" default_limit?:0` — alternatif via slash command',
-                    '• **Cara kerja:** Member join hub channel → otomatis dibuatkan voice room sendiri (dia jadi owner)',
-                    '• **Kelola room:** Member pakai tombol di **member control panel** (dideploy admin via tombol 📱 Deploy Panel)',
-                    '• Tombol member: 🏷️ Rename, 👥 Limit, 🔒 Lock, 🔓 Unlock, 👑 Transfer, 🦵 Kick, ✋ Claim, ℹ️ Info',
-                    '💡 Panel mendukung: enable/disable toggle, test create, deploy member panel, reset config',
-                    '💡 Room otomatis dihapus saat kosong'
                 ].join('\n'), inline: false },
                 { name: '🔧 Audit Log (otomatis)', value: [
                     '• Set `/set-channel audit-log #channel` dulu',
@@ -370,24 +359,6 @@ module.exports = async (interaction) => {
             ? `**${mySessions.length} session aktif** (milik kamu) — pakai \`/embed-list\` untuk lihat detail`
             : '_(tidak ada session aktif — pakai `/embed-builder` untuk mulai)_';
 
-        // --- Stats: Temp Voice (guild ini) ---
-        const tvConfig = config.tempVoice || {};
-        const tvSessions = getTempVoiceByGuild(interaction.guild.id);
-        const tvEnabled = tvConfig.hubChannelId ? (tvConfig.enabled !== false) : false;
-        const tvLines = tvConfig.hubChannelId
-            ? [
-                `• Status: ${tvEnabled ? '🟢 Enabled' : '🔴 Disabled'} ${!tvEnabled ? '_(pakai `/tempvoice-panel` untuk enable)_' : ''}`,
-                `• Hub channel: <#${tvConfig.hubChannelId}> (\`${tvConfig.hubChannelId}\`)`,
-                tvConfig.categoryId ? `• Category: <#${tvConfig.categoryId}> (\`${tvConfig.categoryId}\`)` : '• Category: _(default — same as hub)_',
-                `• Default name: \`${tvConfig.defaultName || "{username}'s Room"}\``,
-                `• Default limit: ${tvConfig.defaultLimit > 0 ? `${tvConfig.defaultLimit} user` : '_(tanpa limit)_'}`,
-                tvConfig.panelChannelId && tvConfig.panelMessageId
-                    ? `• Member panel: <#${tvConfig.panelChannelId}> ([pesan](https://discord.com/channels/${interaction.guild.id}/${tvConfig.panelChannelId}/${tvConfig.panelMessageId}))`
-                    : '• Member panel: _(belum dideploy — pakai `/tempvoice-panel` → 📱 Deploy Panel)_'
-            ]
-            : ['_(belum di-setup — pakai `/tempvoice-panel` atau `/setup-tempvoice`)_'];
-        const tvSummary = `${tvLines.join('\n')}\n• Aktif: **${tvSessions.length} room** terbuka saat ini`;
-
         // --- Products detail (dengan role + days mapping) ---
         const productLines = config.products.length > 0
             ? config.products.map(p => {
@@ -413,8 +384,7 @@ module.exports = async (interaction) => {
                 { name: '🔑 VIP Keys (Key-Driven Model)', value: keyLines.join('\n'), inline: false },
                 { name: '⏰ Scheduled Role Removals', value: schedLines.join('\n'), inline: false },
                 { name: `🎭 Self-Role Panels (${panels.length})`, value: panelSummary, inline: false },
-                { name: '🛠️ Embed Builder Sessions', value: sessionLine, inline: false },
-                { name: `🎤 Temp Voice (${tvSessions.length} room aktif)`, value: tvSummary, inline: false }
+                { name: '🛠️ Embed Builder Sessions', value: sessionLine, inline: false }
             );
         return interaction.editReply({ embeds: [embed] });
     }
@@ -1672,67 +1642,6 @@ module.exports = async (interaction) => {
             return interaction.editReply({ content: `✅ Poll **${poll.question}** ditutup! Lihat hasil di channel.` });
         }
     }
-
-    // ====================================================
-    // === TEMP VOICE — /setup-tempvoice, /tempvoice ===
-    // ====================================================
-    if (interaction.commandName === 'setup-tempvoice') {
-        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-
-        const hubChannel = interaction.options.getChannel('hub_channel');
-        const category = interaction.options.getChannel('category');
-        const defaultName = interaction.options.getString('default_name');
-        const defaultLimit = interaction.options.getInteger('default_limit');
-
-        // Validasi: hub_channel harus voice channel
-        if (hubChannel.type !== 2) { // ChannelType.GuildVoice
-            return interaction.editReply({ content: '❌ `hub_channel` harus berupa **voice channel** (bukan text/category).' });
-        }
-        // Validasi: category (kalau diisi) harus category channel
-        if (category && category.type !== 4) { // ChannelType.GuildCategory
-            return interaction.editReply({ content: '❌ `category` harus berupa **category channel** (bukan voice/text).' });
-        }
-        // Validasi: default_limit range
-        if (defaultLimit !== null && (defaultLimit < 0 || defaultLimit > 99)) {
-            return interaction.editReply({ content: '❌ `default_limit` harus di antara 0-99 (0 = tanpa limit).' });
-        }
-
-        const tvConfig = {
-            hubChannelId: hubChannel.id,
-            categoryId: category ? category.id : null,
-            defaultName: defaultName || "{username}'s Room",
-            defaultLimit: typeof defaultLimit === 'number' ? defaultLimit : 0
-        };
-
-        setField('tempVoice', tvConfig);
-        await logAudit(interaction.client, { action: 'SETUP_TEMPVOICE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Setup temp voice — Hub: <#${hubChannel.id}> | Category: ${category ? `<#${category.id}>` : '_(default)'} | Default name: \`${tvConfig.defaultName}\` | Limit: ${tvConfig.defaultLimit}`, guildId: interaction.guild.id });
-
-        return interaction.editReply({
-            content: `✅ **Temp Voice di-setup!**\n\n` +
-                `🎙️ Hub channel: ${hubChannel}\n` +
-                `📁 Category: ${category ? category : '_(default — same as hub)_'}\n` +
-                `🏷️ Default name: \`${tvConfig.defaultName}\`\n` +
-                `👥 Default limit: ${tvConfig.defaultLimit > 0 ? `${tvConfig.defaultLimit} user` : '_(tanpa limit)_'}\n\n` +
-                `💡 **Cara pakai:** Member tinggal join hub channel → otomatis dibikinkan voice room sendiri.`
-        });
-    }
-
-    // ====================================================
-    // === /tempvoice-panel — tampilkan panel setup interaktif ===
-    // ====================================================
-    if (interaction.commandName === 'tempvoice-panel') {
-        const { buildTempVoicePanel } = require('../utils/tempVoicePanel');
-        const tvSessions = getTempVoiceByGuild(interaction.guild.id);
-        const { embed, components } = buildTempVoicePanel(config, { activeRooms: tvSessions.length }, interaction.client);
-        await interaction.reply({ embeds: [embed], components });
-        return;
-    }
-
-    // ====================================================
-    // === /tempvoice REMOVED — diganti dengan member control panel ===
-    // === Member sekarang kelola room via tombol di text channel.  ===
-    // === Admin deploy panel via /tempvoice-panel → 📱 Deploy Panel ===
-    // ====================================================
 };
 
 // ====================================================

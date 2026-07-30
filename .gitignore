@@ -10,6 +10,5 @@ warns.json
 polls.json
 scheduledAnnouncements.json
 stats.json
-tempVoice.json
 backups/
 *.log

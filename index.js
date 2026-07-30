@@ -1,12 +1,11 @@
-const { Client, GatewayIntentBits, Partials, PermissionFlagsBits, Events, ChannelType } = require('discord.js');
+const { Client, GatewayIntentBits, Partials, PermissionFlagsBits, Events } = require('discord.js');
 require('dotenv').config();
 
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.GuildMembers,
-        GatewayIntentBits.GuildVoiceStates
+        GatewayIntentBits.GuildMembers
     ],
     partials: [Partials.Channel, Partials.Message, Partials.GuildMember, Partials.User]
 });
@@ -21,8 +20,6 @@ const { startAutoBackup } = require('./utils/backupManager');
 const { getEnding: getEndingGiveaways, end: endGiveaway, pickWinners: pickGiveawayWinners } = require('./utils/giveawayManager');
 const { getPending: getPendingAnns, markSent: markAnnSent } = require('./utils/scheduledAnnouncements');
 const { incrementMessages: trackMessage, recordJoin: trackJoin, recordPurchase: trackPurchase, recordGiveawayWin: trackGiveawayWin, parsePrice: parsePriceNum } = require('./utils/statsManager');
-const { addSession: addTempVoiceSession, removeSession: removeTempVoiceSession, getByChannel: getTempVoiceByChannel, cleanupOrphans: cleanupTempVoiceOrphans, createRoom: createTempVoiceRoom } = require('./utils/tempVoice');
-const { getConfig } = require('./utils/configManager');
 
 // === ERROR HANDLER GLOBAL ===
 process.on('unhandledRejection', (reason) => {
@@ -97,16 +94,6 @@ client.once(Events.ClientReady, async (c) => {
 
         // === 3. Start AUTO-BACKUP (saat start + tiap 24 jam) ===
         startAutoBackup(client);
-
-        // === 4. Cleanup Temp Voice orphans (channel yang kehapus saat bot offline) ===
-        const orphanRemoved = cleanupTempVoiceOrphans(client);
-        if (orphanRemoved > 0) {
-            console.log(`🧹 TempVoice: ${orphanRemoved} session orphan dibersihkan.`);
-        }
-        const tvList = require('./utils/tempVoice').load();
-        if (tvList.length > 0) {
-            console.log(`🎤 ${tvList.length} temp voice channel aktif terdaftar.`);
-        }
 
         // Cek setiap 1 menit
         setInterval(async () => {
@@ -679,24 +666,6 @@ function getCommands() {
                     ]
                 }
             ]
-        },
-
-        // === TEMP VOICE CHANNELS ===
-        {
-            name: 'setup-tempvoice',
-            description: 'Setup temp voice — member join hub channel → auto-bikin voice room sendiri',
-            defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
-            options: [
-                { type: 7, name: 'hub_channel', description: 'Voice channel yang jadi "trigger" (member join → bikin room)', required: true },
-                { type: 7, name: 'category', description: 'Category tempat room baru dibuat (opsional, default = same as hub)', required: false },
-                { type: 3, name: 'default_name', description: 'Nama default room. Placeholder: {username} {tag}. Default: "{username}\'s Room"', required: false },
-                { type: 4, name: 'default_limit', description: 'User limit default (0 = tanpa limit, maks 99). Default: 0', required: false }
-            ]
-        },
-        {
-            name: 'tempvoice-panel',
-            description: 'Buka panel interaktif untuk setup Temp Voice (alternatif /setup-tempvoice)',
-            defaultMemberPermissions: PermissionFlagsBits.ManageGuild
         }
     ];
 }
@@ -841,83 +810,5 @@ async function processScheduledAnnouncement(client, ann) {
         console.error('Error processScheduledAnnouncement:', err);
     }
 }
-
-// ====================================================
-// === TEMP VOICE — voiceStateUpdate event handler ===
-// ====================================================
-// Logic:
-//   - Member join HUB channel → bikin voice channel baru di category, pindahkan
-//     member ke channel baru tsb, set member sebagai owner.
-//   - Member leave temp voice channel → kalau channel kosong, hapus + remove session.
-//   - Member pindah antar temp voice channel → anggap leave dari channel lama.
-//   - Owner leave tapi channel masih ada member → session tetap (member lain bisa claim).
-//
-// Catatan: oldState dan newState mungkin punya channelId null (kalau disconnect total).
-client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
-    try {
-        // Abaikan bot
-        if (oldState.member?.user?.bot || newState.member?.user?.bot) return;
-
-        const guild = newState.guild || oldState.guild;
-        if (!guild) return;
-
-        const oldChId = oldState.channelId;
-        const newChId = newState.channelId;
-        const userId = newState.id;
-        const member = newState.member || oldState.member;
-        if (!member) return;
-
-        const config = getConfig();
-        const tvConfig = config.tempVoice || {};
-        const hubChannelId = tvConfig.hubChannelId;
-        const tvEnabled = tvConfig.enabled !== false; // default true kalau sudah di-setup
-
-        // === 1. Member JOIN HUB channel → bikin temp voice room baru ===
-        // (skip kalau system disabled)
-        if (tvEnabled && hubChannelId && newChId === hubChannelId && oldChId !== hubChannelId) {
-            await createTempVoiceRoom(client, guild, member, tvConfig);
-            return;
-        }
-
-        // === 2. Member LEAVE temp voice channel (either disconnect atau pindah channel lain) ===
-        if (oldChId && oldChId !== newChId) {
-            const session = getTempVoiceByChannel(oldChId);
-            if (session) {
-                const oldChannel = guild.channels.cache.get(oldChId);
-                if (!oldChannel) {
-                    // Channel sudah hilang — hapus session
-                    removeTempVoiceSession(oldChId);
-                    return;
-                }
-                // Hitung sisa member (exclude bot)
-                const remainingHumans = oldChannel.members.filter(m => !m.user.bot).size;
-                if (remainingHumans === 0) {
-                    // Channel kosong → hapus
-                    try {
-                        await oldChannel.delete('Temp voice empty — auto cleanup');
-                        console.log(`🗑️ TempVoice: channel ${oldChannel.name} dihapus (kosong).`);
-                    } catch (err) {
-                        // Mungkin sudah kehapus
-                    }
-                    removeTempVoiceSession(oldChId);
-                } else {
-                    // Channel masih ada member → keep session, biar member bisa claim
-                    // Kalau owner leave, beri notif di channel (kalau memungkinkan)
-                    if (session.ownerId === userId) {
-                        try {
-                            // Coba kirim pesan ke text chat terdekat? Voice channel tidak punya chat.
-                            // Skip — info bisa di-claim lewat /tempvoice info
-                        } catch (_) {}
-                    }
-                }
-            }
-        }
-    } catch (err) {
-        console.error('VoiceStateUpdate Error:', err);
-    }
-});
-
-// createTempVoiceRoom() sekarang di-import dari utils/tempVoice.js (createRoom)
-// supaya bisa dipakai ulang oleh panel setup (Test Create button).
 
 client.login(process.env.DISCORD_TOKEN);

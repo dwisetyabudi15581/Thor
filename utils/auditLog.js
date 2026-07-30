@@ -60,9 +60,7 @@ const ACTION_LABELS = {
     WARN_REMOVE: '✅ Hapus Warn',
     // Poll
     POLL_CREATE: '📊 Buat Poll',
-    POLL_CLOSE: '🔒 Tutup Poll',
-    // Temp Voice
-    SETUP_TEMPVOICE: '🎤 Setup Temp Voice'
+    POLL_CLOSE: '🔒 Tutup Poll'
 };
 
 /**

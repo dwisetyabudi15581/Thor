@@ -42,8 +42,7 @@ const FILES_TO_BACKUP = [
     'warns.json',
     'polls.json',
     'scheduledAnnouncements.json',
-    'stats.json',
-    'tempVoice.json'
+    'stats.json'
 ];
 
 const MAX_BACKUPS = 7;

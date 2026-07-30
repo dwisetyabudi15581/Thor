@@ -1,6 +1,6 @@
-# 🤖 MLBB Community Bot v3.3
+# 🤖 MLBB Community Bot v3.4
 
-Bot Discord untuk setup server Mobile Legends community — dengan **model key-driven VIP** (MAX EXTEND), **self-role fleksibel**, dan berbagai fitur engagement (giveaway, poll, temp voice, dll).
+Bot Discord untuk setup server Mobile Legends community — dengan **model key-driven VIP** (MAX EXTEND), **self-role fleksibel**, dan berbagai fitur engagement (giveaway, poll, dll).
 
 ## ✨ Fitur
 
@@ -65,16 +65,6 @@ Untuk kirim pengumuman / embed custom ke channel:
 - **Warn System**: `/warn` dengan auto-action (3=mute 1h, 5=mute 1d, 7=kick)
 - **Stats & Leaderboard**: tracking pesan, pembelian VIP, total belanja, giveaway wins
 - **Poll**: live bar chart, single/multiple choice
-
-### 🎤 Temp Voice (v3.3 baru)
-Member bikin voice room sendiri otomatis dengan kontrol penuh:
-
-- Admin setup **hub channel** via `/setup-tempvoice` (optional: category, default name, default limit)
-- Member join hub → otomatis dibuatkan voice room baru, member jadi **owner**
-- Owner bisa: rename, set user limit, lock/unlock, transfer ownership, kick member
-- Member lain bisa **claim** room kalau owner sudah leave tapi room masih aktif
-- Room otomatis dihapus saat kosong (auto cleanup)
-- Placeholder nama: `{username}` `{tag}` — mis. `"{username}'s Room"`
 
 ## 🚀 Cara Install
 
@@ -259,20 +249,17 @@ Thor-pro/
     ├── scheduledAnnouncements.js     # CRUD scheduledAnns.json
     ├── warnManager.js                # CRUD warns.json
     ├── statsManager.js               # CRUD stats.json
-    ├── pollManager.js                # CRUD polls.json
-    └── tempVoice.js                  # CRUD tempVoice.json
+    └── pollManager.js                # CRUD polls.json
 ```
 
 ## 🔄 Changelog
 
-### v3.3 (temp voice)
-- **NEW**: `/setup-tempvoice` — setup hub channel + optional category, default name, default limit
-- **NEW**: `/tempvoice rename|limit|lock|unlock|transfer|kick|claim|info` — owner controls
-- Auto-create voice room saat member join hub channel
-- Auto-delete room saat kosong
-- Auto-cleanup orphan sessions saat bot start
-- Added `GuildVoiceStates` intent
-- `/tempvoice` command public (member biasa bisa pakai untuk kelola room miliknya)
+### v3.4 — Temp Voice removed
+- **REMOVED**: Seluruh fitur Temp Voice (slash commands `/setup-tempvoice`, `/tempvoice-panel`, `/tempvoice`, panel tombol, voiceStateUpdate handler)
+- **REMOVED**: File `utils/tempVoice.js`, `utils/tempVoicePanel.js`, `utils/tempVoiceControlPanel.js`
+- **REMOVED**: `GuildVoiceStates` intent (tidak lagi dibutuhkan)
+- **REMOVED**: `tempVoice.json` dari daftar auto-backup & .gitignore
+- Pembersihan: hapus import yang tidak terpakai, ringkas entry guard interaction handler
 
 ### v3.2 (audit, backup, giveaway, scheduled ann, warn, stats, poll)
 - **NEW**: Audit Log channel (`/set-channel audit-log`) — log semua admin action
