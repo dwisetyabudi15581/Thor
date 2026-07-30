@@ -136,6 +136,37 @@ function getExpiredKeys(now = Date.now()) {
 }
 
 /**
+ * Ambil SEMUA key di keys.json (untuk keperluan stats/debug).
+ */
+function getAllKeys() {
+    return loadKeys();
+}
+
+/**
+ * Hitung statistik key buat /config-show.
+ * Returns: { total, active, expired, permanent }
+ *  - total: semua key di file
+ *  - active: expireAt > now ATAU permanen
+ *  - expired: expireAt <= now (akan dibersihkan scheduler)
+ *  - permanent: days=0 atau expireAt=null
+ */
+function getStats(now = Date.now()) {
+    const list = loadKeys();
+    let active = 0, expired = 0, permanent = 0;
+    for (const k of list) {
+        if (k.expireAt === null || k.days === 0) {
+            permanent++;
+            active++; // permanent selalu active
+        } else if (k.expireAt > now) {
+            active++;
+        } else {
+            expired++;
+        }
+    }
+    return { total: list.length, active, expired, permanent };
+}
+
+/**
  * Hapus SEMUA key yang sudah expired dari keys.json.
  * @returns {number} jumlah key yang dihapus
  */
@@ -212,6 +243,8 @@ module.exports = {
     hasPermanentKey,
     getMaxExpireAtByUserAndRole,
     getExpiredKeys,
+    getAllKeys,
+    getStats,
     removeExpiredKeys,
     removeAllKeysByUser,
     removeAllKeysByUserAndRole,

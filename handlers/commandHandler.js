@@ -2,8 +2,8 @@ const { PermissionFlagsBits, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRow
 const { getConfig, saveConfig, setField, DEFAULTS } = require('../utils/configManager');
 const { Embeds } = require('../utils/embedBuilder');
 const { isAdmin: checkIsAdmin } = require('../utils/permissions');
-const { addKey, getActiveKeysByUserAndRole, findAllByUser, formatKeysForUser, removeAllKeysByUser } = require('../utils/keyManager');
-const { scheduleRoleRemoval, removeActiveByUserAndRole, findAllByUser: findAllSchedulesByUser, removeAllByUser: removeAllSchedulesByUser, getRemainingDays } = require('../utils/roleScheduler');
+const { addKey, getActiveKeysByUserAndRole, findAllByUser, formatKeysForUser, removeAllKeysByUser, getStats: getKeyStats } = require('../utils/keyManager');
+const { scheduleRoleRemoval, removeActiveByUserAndRole, findAllByUser: findAllSchedulesByUser, removeAllByUser: removeAllSchedulesByUser, getRemainingDays, getAllActive: getAllScheduledActive } = require('../utils/roleScheduler');
 const { createPanel, addRoleToPanel, removeRoleFromPanel, getPanel, getPanelsByGuild, deletePanel, setMessageId } = require('../utils/selfRoleManager');
 const { buildPanelEmbed, buildPanelComponents } = require('../utils/selfRolePanelBuilder');
 const { createSession, buildEmbed, getSessionsByUser, deleteSessionByOwner } = require('../utils/embedBuilderSessions');
@@ -252,12 +252,65 @@ module.exports = async (interaction) => {
         return interaction.editReply({ embeds: [embed] });
     }
 
-    // === CONFIG SHOW ===
+    // === CONFIG SHOW (v3.1 — comprehensive view) ===
     if (interaction.commandName === 'config-show') {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const fmt = (id, type) => id ? `<${type}:${id}> (\`${id}\`)` : '❌ belum di-set';
-        const embed = embeds.info('⚙️ KONFIGURASI BOT', 'Berikut setting bot saat ini:')
+
+        // --- Stats: VIP Keys ---
+        const keyStats = getKeyStats();
+        const keyLines = [
+            `• Total key tersimpan: **${keyStats.total}**`,
+            `• Aktif: **${keyStats.active}**${keyStats.permanent > 0 ? ` (termasuk ${keyStats.permanent} permanen)` : ''}`,
+            keyStats.expired > 0
+                ? `• ⚠️ Expired (menunggu scheduler bersihkan): **${keyStats.expired}**`
+                : `• Expired: **0** ✅`
+        ];
+
+        // --- Stats: Scheduled Role Removals ---
+        const scheduled = getAllScheduledActive();
+        let nextDueStr = '—';
+        if (scheduled.length > 0) {
+            const next = scheduled.reduce((a, b) => (a.expireAt < b.expireAt ? a : b));
+            const msLeft = next.expireAt - Date.now();
+            if (msLeft > 0) {
+                const days = Math.floor(msLeft / 86400000);
+                const hours = Math.floor((msLeft % 86400000) / 3600000);
+                nextDueStr = days > 0 ? `${days}h ${hours}j lagi` : `${hours}j lagi`;
+            } else {
+                nextDueStr = 'akan dieksekusi loop berikutnya';
+            }
+        }
+        const schedLines = [
+            `• Total jadwal aktif: **${scheduled.length}**`,
+            `• Eksekusi berikutnya: **${nextDueStr}**`,
+            `• Loop scheduler: setiap 60 detik`
+        ];
+
+        // --- Stats: Self-Role Panels (guild ini) ---
+        const panels = getPanelsByGuild(interaction.guild.id);
+        const panelLines = panels.length > 0
+            ? panels.map(p => `  • **${p.title}** — ${p.type === 'button' ? '🔘 Button' : '📋 Select'} | ${p.exclusive ? '🔒 Eksklusif' : '✅ Multi'} | ${p.roles.length} role`).join('\n')
+            : '_(belum ada panel — pakai `/setup-selfrole`)_';
+        const panelSummary = `${panels.length} panel terdaftar di guild ini:\n${panelLines}`;
+
+        // --- Stats: Embed Builder Sessions (milik user ini) ---
+        const mySessions = getSessionsByUser(interaction.user.id);
+        const sessionLine = mySessions.length > 0
+            ? `**${mySessions.length} session aktif** (milik kamu) — pakai \`/embed-list\` untuk lihat detail`
+            : '_(tidak ada session aktif — pakai `/embed-builder` untuk mulai)_';
+
+        // --- Products detail (dengan role + days mapping) ---
+        const productLines = config.products.length > 0
+            ? config.products.map(p => {
+                const roleStr = p.roleId ? `<@&${p.roleId}>` : '❌ belum di-map';
+                const daysStr = p.days === 0 || !p.days ? '♾️ permanen' : `${p.days} hari`;
+                return `• **${p.label}** (\`${p.value}\`) — ${p.price}\n  → Role: ${roleStr} | Durasi: ${daysStr}`;
+            }).join('\n')
+            : '_(belum ada produk — pakai `/add-product`)_';
+
+        const embed = embeds.info('⚙️ KONFIGURASI BOT', 'Berikut setting bot saat ini (v3.1 — key-driven VIP + self-role + embed builder):')
             .addFields(
                 { name: '🎭 Roles', value: [
                     `• Verified: ${fmt(config.roles.verified, '@&')}`,
@@ -269,7 +322,11 @@ module.exports = async (interaction) => {
                     `• Goodbye: ${fmt(config.channels.goodbye, '#')}`,
                     `• Invoice: ${fmt(config.channels.invoice, '#')}`
                 ].join('\n'), inline: false },
-                { name: '📦 Produk', value: `${config.products.length} produk terdaftar. Pakai \`/list-products\` untuk lihat detail.`, inline: false }
+                { name: `📦 Produk (${config.products.length})`, value: productLines, inline: false },
+                { name: '🔑 VIP Keys (Key-Driven Model)', value: keyLines.join('\n'), inline: false },
+                { name: '⏰ Scheduled Role Removals', value: schedLines.join('\n'), inline: false },
+                { name: `🎭 Self-Role Panels (${panels.length})`, value: panelSummary, inline: false },
+                { name: '🛠️ Embed Builder Sessions', value: sessionLine, inline: false }
             );
         return interaction.editReply({ embeds: [embed] });
     }
