@@ -697,48 +697,6 @@ function getCommands() {
             name: 'tempvoice-panel',
             description: 'Buka panel interaktif untuk setup Temp Voice (alternatif /setup-tempvoice)',
             defaultMemberPermissions: PermissionFlagsBits.ManageGuild
-        },
-        {
-            name: 'tempvoice',
-            description: 'Kelola temp voice room kamu (rename, limit, lock, transfer, dll)',
-            options: [
-                {
-                    type: 1, name: 'rename', description: 'Ganti nama room kamu', required: false,
-                    options: [
-                        { type: 3, name: 'name', description: 'Nama baru (maks 100 char)', required: true }
-                    ]
-                },
-                {
-                    type: 1, name: 'limit', description: 'Set user limit (0 = tanpa limit, maks 99)', required: false,
-                    options: [
-                        { type: 4, name: 'limit', description: 'Jumlah maksimal user (0-99)', required: true }
-                    ]
-                },
-                {
-                    type: 1, name: 'lock', description: 'Kunci room — hanya owner yang bisa join', required: false
-                },
-                {
-                    type: 1, name: 'unlock', description: 'Buka kunci room — member bebas join lagi', required: false
-                },
-                {
-                    type: 1, name: 'transfer', description: 'Transfer ownership room ke member lain', required: false,
-                    options: [
-                        { type: 6, name: 'user', description: 'Member baru yang akan jadi owner', required: true }
-                    ]
-                },
-                {
-                    type: 1, name: 'kick', description: 'Keluarkan member dari room kamu', required: false,
-                    options: [
-                        { type: 6, name: 'user', description: 'Member yang akan di-kick dari voice', required: true }
-                    ]
-                },
-                {
-                    type: 1, name: 'claim', description: 'Klaim ownership room (kalau owner sudah leave tapi room masih aktif)', required: false
-                },
-                {
-                    type: 1, name: 'info', description: 'Lihat info room temp voice kamu saat ini', required: false
-                }
-            ]
         }
     ];
 }

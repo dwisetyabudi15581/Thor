@@ -78,6 +78,9 @@ function buildTempVoicePanel(config, tvStats = {}, client) {
     const limitLine = (typeof tv.defaultLimit === 'number' && tv.defaultLimit > 0)
         ? `${tv.defaultLimit} user`
         : '_(tanpa limit)_';
+    const panelLine = tv.panelChannelId && tv.panelMessageId
+        ? `<#${tv.panelChannelId}> ([pesan](https://discord.com/channels/${config?.guildId || '0'}/${tv.panelChannelId}/${tv.panelMessageId}))`
+        : '_(belum dideploy — klik 📱 Deploy Panel)_';
 
     // ----- Embed -----
     const embed = new EmbedBuilder()
@@ -95,7 +98,8 @@ function buildTempVoicePanel(config, tvStats = {}, client) {
             { name: '🏷️ Default Name', value: nameLine, inline: true },
             { name: '👥 Default Limit', value: limitLine, inline: true },
             { name: '📊 Active Rooms', value: `${tvStats.activeRooms || 0} room`, inline: true },
-            { name: '⚙️ Status', value: enabled ? '🟢 Enabled' : (isSetup ? '🔴 Disabled' : '⚪ Not Setup'), inline: true }
+            { name: '⚙️ Status', value: enabled ? '🟢 Enabled' : (isSetup ? '🔴 Disabled' : '⚪ Not Setup'), inline: true },
+            { name: '📱 Member Panel', value: panelLine, inline: false }
         )
         .addFields({
             name: '💡 Placeholder Default Name',
@@ -147,11 +151,21 @@ function buildTempVoicePanel(config, tvStats = {}, client) {
             .setStyle(ButtonStyle.Primary)
             .setDisabled(!isSetup || !enabled),
         new ButtonBuilder()
+            .setCustomId('tvp_btn_deploy')
+            .setLabel('Deploy Panel')
+            .setEmoji('📱')
+            .setStyle(ButtonStyle.Primary)
+            .setDisabled(!isSetup),
+        new ButtonBuilder()
             .setCustomId('tvp_btn_reset')
             .setLabel('Reset')
             .setEmoji('🗑️')
             .setStyle(ButtonStyle.Danger)
-            .setDisabled(!isSetup),
+            .setDisabled(!isSetup)
+    );
+
+    // ----- Row 3: Close -----
+    const row3 = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
             .setCustomId('tvp_btn_close')
             .setLabel('Close Panel')
@@ -159,7 +173,7 @@ function buildTempVoicePanel(config, tvStats = {}, client) {
             .setStyle(ButtonStyle.Secondary)
     );
 
-    return { embed, components: [row1, row2] };
+    return { embed, components: [row1, row2, row3] };
 }
 
 /**
@@ -236,9 +250,27 @@ function buildCategorySelectRow(panelMessageId) {
     return row;
 }
 
+/**
+ * Bangun ChannelSelectMenu untuk pilih text channel tujuan deploy member panel.
+ * Hanya menampilkan text channels (GuildText).
+ * @param {string} panelMessageId - ID pesan admin panel (untuk update balik setelah pilih)
+ */
+function buildDeployChannelSelectRow(panelMessageId) {
+    const row = new ActionRowBuilder().addComponents(
+        new ChannelSelectMenuBuilder()
+            .setCustomId(`tvp_sel_deploy:${panelMessageId}`)
+            .setPlaceholder('Pilih text channel tempat member panel akan dideploy...')
+            .setChannelTypes([ChannelType.GuildText])
+            .setMinValues(1)
+            .setMaxValues(1)
+    );
+    return row;
+}
+
 module.exports = {
     buildTempVoicePanel,
     buildResetConfirmPanel,
     buildHubChannelSelectRow,
-    buildCategorySelectRow
+    buildCategorySelectRow,
+    buildDeployChannelSelectRow
 };

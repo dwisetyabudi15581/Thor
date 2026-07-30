@@ -14,7 +14,7 @@ const { create: createScheduledAnn, getByGuild: getScheduledAnnsByGuild, get: ge
 const { addWarn, getWarns, getWarnCount, removeWarn, clearWarns, markActionTaken, DEFAULT_THRESHOLDS: WARN_THRESHOLDS } = require('../utils/warnManager');
 const { getStats: getUserStats, getTopUsers: getTopUsersStats, getServerStats: getServerStatsAll, parsePrice: parsePriceNum } = require('../utils/statsManager');
 const { create: createPoll, setMessageId: setPollMessageId, get: getPoll, getByGuild: getPollsByGuild, close: closePoll, getTotalVotes: getPollTotalVotes } = require('../utils/pollManager');
-const { addSession: addTempVoiceSession, removeSession: removeTempVoiceSession, getByChannel: getTempVoiceByChannel, getByGuild: getTempVoiceByGuild, getByOwner: getTempVoiceByOwner, updateSession: updateTempVoiceSession, transferOwnership: transferTempVoiceOwnership } = require('../utils/tempVoice');
+const { getByGuild: getTempVoiceByGuild } = require('../utils/tempVoice');
 
 module.exports = async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
@@ -29,8 +29,8 @@ module.exports = async (interaction) => {
     //
     // EXCEPTION: command berikut boleh dipakai member biasa:
     //   - /leaderboard, /my-stats (fitur engagement, bukan admin tool)
-    //   - /tempvoice (member kelola room voice miliknya — permission di-check di handler)
-    const PUBLIC_COMMANDS = ['leaderboard', 'my-stats', 'tempvoice'];
+    //   (Temp Voice sekarang dikelola via panel tombol, bukan slash command)
+    const PUBLIC_COMMANDS = ['leaderboard', 'my-stats'];
     if (!checkIsAdmin(interaction.member) && !PUBLIC_COMMANDS.includes(interaction.commandName)) {
         return interaction.reply({
             content: '🚫 **Akses Ditolak.**\n\nSlash command hanya bisa dipakai oleh **Admin/Staff**.\n\nKalau kamu merasa ini salah, hubungi server admin.',
@@ -151,17 +151,12 @@ module.exports = async (interaction) => {
                     '💡 Member klik tombol option untuk vote (toggle). Live bar chart otomatis.'
                 ].join('\n'), inline: false },
                 { name: '🎤 Temp Voice Channels', value: [
-                    '• `/tempvoice-panel` — 🎨 **buka panel interaktif** untuk setup (paling mudah!)',
+                    '• `/tempvoice-panel` — 🎨 **buka panel admin** untuk setup (paling mudah!)',
                     '• `/setup-tempvoice hub_channel:#voice category?:#cat default_name?:"{username}\'s Room" default_limit?:0` — alternatif via slash command',
-                    '• Member join hub → otomatis bikin voice room sendiri (owner = yang join)',
-                    '• `/tempvoice rename name:...` — ganti nama room (owner)',
-                    '• `/tempvoice limit limit:5` — set user limit (0 = tanpa limit)',
-                    '• `/tempvoice lock` / `unlock` — kunci/buka room (hanya owner yang bisa join)',
-                    '• `/tempvoice transfer user:@user` — pindah ownership',
-                    '• `/tempvoice kick user:@user` — kick member dari room',
-                    '• `/tempvoice claim` — klaim room yang owner-nya sudah leave',
-                    '• `/tempvoice info` — lihat info room saat ini',
-                    '💡 Panel mendukung: enable/disable toggle, test create, reset config',
+                    '• **Cara kerja:** Member join hub channel → otomatis dibuatkan voice room sendiri (dia jadi owner)',
+                    '• **Kelola room:** Member pakai tombol di **member control panel** (dideploy admin via tombol 📱 Deploy Panel)',
+                    '• Tombol member: 🏷️ Rename, 👥 Limit, 🔒 Lock, 🔓 Unlock, 👑 Transfer, 🦵 Kick, ✋ Claim, ℹ️ Info',
+                    '💡 Panel mendukung: enable/disable toggle, test create, deploy member panel, reset config',
                     '💡 Room otomatis dihapus saat kosong'
                 ].join('\n'), inline: false },
                 { name: '🔧 Audit Log (otomatis)', value: [
@@ -385,7 +380,10 @@ module.exports = async (interaction) => {
                 `• Hub channel: <#${tvConfig.hubChannelId}> (\`${tvConfig.hubChannelId}\`)`,
                 tvConfig.categoryId ? `• Category: <#${tvConfig.categoryId}> (\`${tvConfig.categoryId}\`)` : '• Category: _(default — same as hub)_',
                 `• Default name: \`${tvConfig.defaultName || "{username}'s Room"}\``,
-                `• Default limit: ${tvConfig.defaultLimit > 0 ? `${tvConfig.defaultLimit} user` : '_(tanpa limit)_'}`
+                `• Default limit: ${tvConfig.defaultLimit > 0 ? `${tvConfig.defaultLimit} user` : '_(tanpa limit)_'}`,
+                tvConfig.panelChannelId && tvConfig.panelMessageId
+                    ? `• Member panel: <#${tvConfig.panelChannelId}> ([pesan](https://discord.com/channels/${interaction.guild.id}/${tvConfig.panelChannelId}/${tvConfig.panelMessageId}))`
+                    : '• Member panel: _(belum dideploy — pakai `/tempvoice-panel` → 📱 Deploy Panel)_'
             ]
             : ['_(belum di-setup — pakai `/tempvoice-panel` atau `/setup-tempvoice`)_'];
         const tvSummary = `${tvLines.join('\n')}\n• Aktif: **${tvSessions.length} room** terbuka saat ini`;
@@ -1730,237 +1728,11 @@ module.exports = async (interaction) => {
         return;
     }
 
-    if (interaction.commandName === 'tempvoice') {
-        const sub = interaction.options.getSubcommand();
-
-        // === /tempvoice info — lihat info room saat ini (PUBLIC) ===
-        if (sub === 'info') {
-            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-
-            const voiceChannel = interaction.member.voice?.channel;
-            if (!voiceChannel) {
-                return interaction.editReply({ content: '❌ Kamu sedang tidak berada di voice channel manapun.' });
-            }
-
-            const session = getTempVoiceByChannel(voiceChannel.id);
-            if (!session) {
-                return interaction.editReply({ content: `❌ Channel **${voiceChannel.name}** bukan temp voice channel (tidak ada session).` });
-            }
-
-            const isOwner = session.ownerId === interaction.user.id;
-            const ageMs = Date.now() - session.createdAt;
-            const ageMin = Math.floor(ageMs / 60000);
-            const ageStr = ageMin < 60 ? `${ageMin} menit` : `${Math.floor(ageMin / 60)}h ${ageMin % 60}m`;
-            const memberCount = voiceChannel.members.filter(m => !m.user.bot).size;
-
-            const embed = new EmbedBuilder()
-                .setTitle(`🎤 Temp Voice Info — ${voiceChannel.name}`)
-                .setColor(isOwner ? 0x57F287 : 0x5865F2)
-                .addFields(
-                    { name: '👑 Owner', value: `<@${session.ownerId}>${isOwner ? ' *(kamu)*' : ''}`, inline: true },
-                    { name: '👥 Member', value: `${memberCount} user`, inline: true },
-                    { name: '🔒 Status', value: session.locked ? 'Terkunci' : 'Terbuka', inline: true },
-                    { name: '🕐 Dibuat', value: `${ageStr} lalu`, inline: true },
-                    { name: '🆔 Channel ID', value: `\`${session.channelId}\``, inline: true },
-                    { name: '📊 User Limit', value: voiceChannel.userLimit > 0 ? `${voiceChannel.userLimit}` : '_(tanpa limit)_', inline: true }
-                )
-                .setFooter({ text: isOwner ? 'Kamu owner — pakai /tempvoice rename/limit/lock/transfer/kick untuk kelola' : 'Bukan owner — pakai /tempvoice claim kalau owner sudah leave' })
-                .setTimestamp();
-            return interaction.editReply({ embeds: [embed] });
-        }
-
-        // === /tempvoice claim — klaim ownership room (PUBLIC, room harus owner-nya udah gaada) ===
-        if (sub === 'claim') {
-            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-
-            const voiceChannel = interaction.member.voice?.channel;
-            if (!voiceChannel) {
-                return interaction.editReply({ content: '❌ Kamu harus berada di temp voice room untuk claim.' });
-            }
-            const session = getTempVoiceByChannel(voiceChannel.id);
-            if (!session) {
-                return interaction.editReply({ content: '❌ Channel ini bukan temp voice channel.' });
-            }
-            if (session.ownerId === interaction.user.id) {
-                return interaction.editReply({ content: '❌ Kamu sudah owner room ini.' });
-            }
-            // Cek apakah owner masih ada di voice channel
-            const ownerStillHere = voiceChannel.members.has(session.ownerId);
-            if (ownerStillHere) {
-                return interaction.editReply({ content: `❌ Owner (<@${session.ownerId}>) masih ada di room. Tidak bisa di-claim.` });
-            }
-
-            // Update ownership + permission overwrites
-            try {
-                const { PermissionFlagsBits } = require('discord.js');
-                const overwrites = voiceChannel.permissionOverwrites;
-                // Hapus permission owner lama
-                try {
-                    if (overwrites.cache.has(session.ownerId)) {
-                        await overwrites.delete(session.ownerId, 'Claim temp voice — owner changed');
-                    }
-                } catch (_) {}
-                // Tambah permission owner baru
-                await voiceChannel.permissionOverwrites.edit(interaction.user.id, {
-                    ViewChannel: true,
-                    Connect: true,
-                    Speak: true,
-                    Stream: true,
-                    ManageChannels: true,
-                    MoveMembers: true,
-                    PrioritySpeaker: true,
-                    MuteMembers: true,
-                    DeafenMembers: true
-                }, { reason: 'Claim temp voice — new owner' });
-
-                transferTempVoiceOwnership(voiceChannel.id, interaction.user.id, interaction.user.tag);
-                return interaction.editReply({ content: `✅ **Ownership room di-claim!**\n\nRoom: **${voiceChannel.name}**\n👑 Owner baru: <@${interaction.user.id}>\n\n💡 Sekarang kamu bisa kelola room (rename, limit, lock, transfer, kick).` });
-            } catch (err) {
-                return interaction.editReply({ content: `❌ Gagal claim: ${err.message}` });
-            }
-        }
-
-        // === Untuk subcommand lain (rename, limit, lock, unlock, transfer, kick) ===
-        // Harus owner dari temp voice room
-        const voiceChannel = interaction.member.voice?.channel;
-        if (!voiceChannel) {
-            await interaction.reply({ content: '❌ Kamu harus berada di temp voice room milikmu untuk pakai command ini.', flags: MessageFlags.Ephemeral }).catch(()=>{});
-            return;
-        }
-        const session = getTempVoiceByChannel(voiceChannel.id);
-        if (!session) {
-            await interaction.reply({ content: '❌ Channel ini bukan temp voice channel.', flags: MessageFlags.Ephemeral }).catch(()=>{});
-            return;
-        }
-        if (session.ownerId !== interaction.user.id) {
-            await interaction.reply({ content: `❌ Kamu bukan owner room ini. Owner: <@${session.ownerId}>.\n\n💡 Pakai \`/tempvoice claim\` kalau owner sudah leave.`, flags: MessageFlags.Ephemeral }).catch(()=>{});
-            return;
-        }
-
-        // === /tempvoice rename ===
-        if (sub === 'rename') {
-            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-            const name = interaction.options.getString('name');
-            if (!name || name.length === 0 || name.length > 100) {
-                return interaction.editReply({ content: '❌ Nama harus 1-100 karakter.' });
-            }
-            try {
-                await voiceChannel.setName(name, `Temp voice rename by owner ${interaction.user.tag}`);
-                return interaction.editReply({ content: `✅ Nama room diubah ke: **${name}**` });
-            } catch (err) {
-                return interaction.editReply({ content: `❌ Gagal rename: ${err.message}` });
-            }
-        }
-
-        // === /tempvoice limit ===
-        if (sub === 'limit') {
-            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-            const limit = interaction.options.getInteger('limit');
-            if (limit < 0 || limit > 99) {
-                return interaction.editReply({ content: '❌ Limit harus 0-99 (0 = tanpa limit).' });
-            }
-            try {
-                await voiceChannel.setUserLimit(limit, `Temp voice limit by owner ${interaction.user.tag}`);
-                return interaction.editReply({ content: `✅ User limit diubah ke: ${limit > 0 ? `**${limit} user**` : '**tanpa limit**'}` });
-            } catch (err) {
-                return interaction.editReply({ content: `❌ Gagal set limit: ${err.message}` });
-            }
-        }
-
-        // === /tempvoice lock ===
-        if (sub === 'lock') {
-            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-            try {
-                const { PermissionFlagsBits } = require('discord.js');
-                // Deny Connect untuk @everyone, tapi owner tetap bisa
-                await voiceChannel.permissionOverwrites.edit(interaction.guild.id, {
-                    Connect: false
-                }, { reason: `Temp voice lock by owner ${interaction.user.tag}` });
-                updateTempVoiceSession(voiceChannel.id, { locked: true });
-                return interaction.editReply({ content: '🔒 **Room dikunci.** Member baru tidak bisa join sampai di-unlock.' });
-            } catch (err) {
-                return interaction.editReply({ content: `❌ Gagal lock: ${err.message}` });
-            }
-        }
-
-        // === /tempvoice unlock ===
-        if (sub === 'unlock') {
-            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-            try {
-                const { PermissionFlagsBits } = require('discord.js');
-                await voiceChannel.permissionOverwrites.edit(interaction.guild.id, {
-                    Connect: true
-                }, { reason: `Temp voice unlock by owner ${interaction.user.tag}` });
-                updateTempVoiceSession(voiceChannel.id, { locked: false });
-                return interaction.editReply({ content: '🔓 **Room dibuka.** Member bebas join lagi.' });
-            } catch (err) {
-                return interaction.editReply({ content: `❌ Gagal unlock: ${err.message}` });
-            }
-        }
-
-        // === /tempvoice transfer ===
-        if (sub === 'transfer') {
-            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-            const newOwner = interaction.options.getUser('user');
-            if (newOwner.id === interaction.user.id) {
-                return interaction.editReply({ content: '❌ Tidak bisa transfer ke diri sendiri.' });
-            }
-            if (newOwner.bot) {
-                return interaction.editReply({ content: '❌ Tidak bisa transfer ke bot.' });
-            }
-            // New owner harus ada di voice channel ini
-            const newOwnerMember = voiceChannel.members.get(newOwner.id);
-            if (!newOwnerMember) {
-                return interaction.editReply({ content: `❌ <@${newOwner.id}> tidak ada di room kamu. Minta dia join dulu.` });
-            }
-            try {
-                const { PermissionFlagsBits } = require('discord.js');
-                // Hapus permission owner lama
-                try {
-                    await voiceChannel.permissionOverwrites.delete(interaction.user.id, 'Transfer temp voice — old owner');
-                } catch (_) {}
-                // Tambah permission owner baru
-                await voiceChannel.permissionOverwrites.edit(newOwner.id, {
-                    ViewChannel: true,
-                    Connect: true,
-                    Speak: true,
-                    Stream: true,
-                    ManageChannels: true,
-                    MoveMembers: true,
-                    PrioritySpeaker: true,
-                    MuteMembers: true,
-                    DeafenMembers: true
-                }, { reason: `Transfer temp voice to ${newOwner.tag}` });
-
-                transferTempVoiceOwnership(voiceChannel.id, newOwner.id, newOwner.tag);
-                return interaction.editReply({ content: `✅ **Ownership ditransfer!**\n\n👑 Owner baru: <@${newOwner.id}>\n📍 Room: **${voiceChannel.name}**\n\n💡 Kamu tidak bisa lagi kelola room ini.` });
-            } catch (err) {
-                return interaction.editReply({ content: `❌ Gagal transfer: ${err.message}` });
-            }
-        }
-
-        // === /tempvoice kick ===
-        if (sub === 'kick') {
-            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-            const targetUser = interaction.options.getUser('user');
-            if (targetUser.id === interaction.user.id) {
-                return interaction.editReply({ content: '❌ Tidak bisa kick diri sendiri. Pakai disconnect manual.' });
-            }
-            if (targetUser.bot) {
-                return interaction.editReply({ content: '❌ Tidak bisa kick bot.' });
-            }
-            const targetMember = voiceChannel.members.get(targetUser.id);
-            if (!targetMember) {
-                return interaction.editReply({ content: `❌ <@${targetUser.id}> tidak ada di room kamu.` });
-            }
-            try {
-                await targetMember.voice.disconnect(`Kicked from temp voice by owner ${interaction.user.tag}`);
-                return interaction.editReply({ content: `👢 <@${targetUser.id}> dikick dari room **${voiceChannel.name}**.` });
-            } catch (err) {
-                return interaction.editReply({ content: `❌ Gagal kick: ${err.message}` });
-            }
-        }
-    }
+    // ====================================================
+    // === /tempvoice REMOVED — diganti dengan member control panel ===
+    // === Member sekarang kelola room via tombol di text channel.  ===
+    // === Admin deploy panel via /tempvoice-panel → 📱 Deploy Panel ===
+    // ====================================================
 };
 
 // ====================================================
