@@ -461,6 +461,19 @@ function getCommands() {
             name: 'embed-builder',
             description: 'Interactive embed builder dengan live preview (untuk embed kompleks)',
             defaultMemberPermissions: PermissionFlagsBits.ManageGuild
+        },
+        {
+            name: 'embed-list',
+            description: 'Lihat semua session embed builder aktif kamu (+ link ke draft message)',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild
+        },
+        {
+            name: 'embed-cancel',
+            description: 'Batalkan session embed builder berdasarkan ID (jika draft kehapus/bug)',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
+            options: [
+                { type: 3, name: 'session_id', description: 'Session ID (lihat di /embed-list)', required: true }
+            ]
         }
     ];
 }

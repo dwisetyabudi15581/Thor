@@ -152,11 +152,37 @@ function getStatusText(session) {
     return lines.join('\n');
 }
 
+/**
+ * List semua session milik user tertentu (diurutkan dari terbaru).
+ * Dipakai oleh /embed-list command.
+ */
+function getSessionsByUser(userId) {
+    const result = [];
+    for (const s of sessions.values()) {
+        if (s.ownerId === userId) result.push(s);
+    }
+    return result.sort((a, b) => b.createdAt - a.createdAt);
+}
+
+/**
+ * Hapus session milik user berdasarkan ID.
+ * Dipakai oleh /embed-cancel command (untuk session yang draft-nya sudah kehapus).
+ * Returns: session yang dihapus, atau null kalau tidak ada / bukan milik user.
+ */
+function deleteSessionByOwner(sessionId, userId) {
+    const s = sessions.get(sessionId);
+    if (!s || s.ownerId !== userId) return null;
+    sessions.delete(sessionId);
+    return s;
+}
+
 module.exports = {
     createSession,
     getSession,
     getSessionByMessage,
+    getSessionsByUser,
     deleteSession,
+    deleteSessionByOwner,
     buildEmbed,
     parseColor,
     getStatusText

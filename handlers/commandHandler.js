@@ -6,7 +6,7 @@ const { addKey, getActiveKeysByUserAndRole, findAllByUser, formatKeysForUser, re
 const { scheduleRoleRemoval, removeActiveByUserAndRole, findAllByUser: findAllSchedulesByUser, removeAllByUser: removeAllSchedulesByUser, getRemainingDays } = require('../utils/roleScheduler');
 const { createPanel, addRoleToPanel, removeRoleFromPanel, getPanel, getPanelsByGuild, deletePanel, setMessageId } = require('../utils/selfRoleManager');
 const { buildPanelEmbed, buildPanelComponents } = require('../utils/selfRolePanelBuilder');
-const { createSession, buildEmbed } = require('../utils/embedBuilderSessions');
+const { createSession, buildEmbed, getSessionsByUser, deleteSessionByOwner } = require('../utils/embedBuilderSessions');
 
 module.exports = async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
@@ -92,8 +92,11 @@ module.exports = async (interaction) => {
                 { name: '📢 Announce & Embed Builder', value: [
                     '• `/announce channel:#ch title:... description:... color? image? thumbnail? mention?` — quick announce',
                     '• `/embed-builder` — interactive builder (live preview, edit bagian per bagian)',
+                    '• `/embed-list` — lihat semua session embed builder aktif + link ke draft',
+                    '• `/embed-cancel session_id:emb_xxx` — batalkan session tertentu (kalau draft kehapus)',
                     '💡 `/embed-builder` cocok untuk embed kompleks (multi-field, footer, author, image)',
-                    '💡 `/announce` cocok untuk pengumuman simple 1-embed'
+                    '💡 `/announce` cocok untuk pengumuman simple 1-embed',
+                    '💡 Bisa bikin banyak embed builder sekaligus — tiap draft independen, pakai `/embed-list` untuk kelola'
                 ].join('\n'), inline: false },
                 { name: '🧨 Reset Total', value: [
                     '• `/reset-config` — ⚠️ **hapus SEMUA setting** (tidak bisa di-undo!)'
@@ -911,6 +914,89 @@ module.exports = async (interaction) => {
 
         return interaction.editReply({
             content: `✅ Embed builder dimulai!\n📍 Draft: ${draftMsg}\n\n💡 Klik dropdown di draft untuk edit bagian embed. Setelah selesai, klik **📤 Send** untuk kirim ke channel target.`
+        });
+    }
+
+    // ====================================================
+    // === /embed-list — LIST ACTIVE EMBED BUILDER SESSIONS ===
+    // ====================================================
+    if (interaction.commandName === 'embed-list') {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+        const userSessions = getSessionsByUser(interaction.user.id);
+        if (userSessions.length === 0) {
+            return interaction.editReply({
+                content: '📭 **Tidak ada session embed builder aktif untuk kamu.**\n\nPakai `/embed-builder` untuk membuat draft baru.'
+            });
+        }
+
+        const lines = userSessions.map(s => {
+            const d = s.data;
+            const summary = [];
+            if (d.title) summary.push('title');
+            if (d.description) summary.push('desc');
+            if (d.fields && d.fields.length > 0) summary.push(`${d.fields.length} field${d.fields.length > 1 ? 's' : ''}`);
+            if (d.image) summary.push('image');
+            if (d.thumbnail) summary.push('thumb');
+            if (d.footer && d.footer.text) summary.push('footer');
+            if (d.author && d.author.name) summary.push('author');
+            const summaryStr = summary.length > 0 ? summary.join(', ') : '*(kosong)*';
+
+            const ageMs = Date.now() - s.createdAt;
+            const ageMin = Math.floor(ageMs / 60000);
+            const ageStr = ageMin < 1 ? 'baru saja' : ageMin < 60 ? `${ageMin}m lalu` : `${Math.floor(ageMin / 60)}h ${ageMin % 60}m lalu`;
+
+            const link = s.messageId
+                ? `[🔗 buka draft](https://discord.com/channels/${interaction.guild.id}/${s.channelId}/${s.messageId})`
+                : '*(draft belum dibuat)*';
+            const channelStr = s.channelId ? `<#${s.channelId}>` : '???';
+
+            return `• 🆔 \`${s.id}\`\n  📍 ${channelStr} | ${link}\n  ⏰ Dibuat: ${ageStr} | 📝 ${summaryStr}`;
+        }).join('\n\n');
+
+        const embed = new EmbedBuilder()
+            .setTitle('🛠️ SESSION EMBED BUILDER AKTIF')
+            .setDescription(
+                `Kamu punya **${userSessions.length}** session aktif.\n\n` +
+                lines +
+                `\n\n💡 **Cara pakai:** Klik link **buka draft** untuk lompat ke pesan draft-nya, lalu pakai dropdown di situ untuk edit. Setiap draft independen — gak akan saling ganggu.`
+            )
+            .setColor(0x5865F2)
+            .setFooter({ text: interaction.client.user.username, iconURL: interaction.client.user.displayAvatarURL({ dynamic: true }) })
+            .setTimestamp();
+        return interaction.editReply({ embeds: [embed] });
+    }
+
+    // ====================================================
+    // === /embed-cancel — CANCEL EMBED BUILDER SESSION BY ID ===
+    // ====================================================
+    if (interaction.commandName === 'embed-cancel') {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+        const sessionId = interaction.options.getString('session_id');
+        const session = deleteSessionByOwner(sessionId, interaction.user.id);
+
+        if (!session) {
+            return interaction.editReply({
+                content: `❌ Session \`${sessionId}\` tidak ditemukan atau bukan milik kamu.\n\nPakai \`/embed-list\` untuk lihat session aktif.`
+            });
+        }
+
+        // Coba hapus draft message-nya juga kalau masih ada
+        let draftDeleted = false;
+        try {
+            const channel = interaction.guild.channels.cache.get(session.channelId);
+            if (channel && session.messageId) {
+                const msg = await channel.messages.fetch(session.messageId).catch(() => null);
+                if (msg) {
+                    await msg.delete();
+                    draftDeleted = true;
+                }
+            }
+        } catch (_) {}
+
+        return interaction.editReply({
+            content: `🗑️ Session \`${sessionId}\` dibatalkan.` + (draftDeleted ? ' Pesan draft juga dihapus.' : ' (Pesan draft sudah tidak ditemukan.)')
         });
     }
 };
