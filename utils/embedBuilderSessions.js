@@ -86,28 +86,49 @@ function parseColor(input) {
 
 /**
  * Build Discord EmbedBuilder dari session data.
+ *
+ * Catatan: Discord API mewajibkan embed punya minimal salah satu dari:
+ * title, description, fields, image, thumbnail, author, footer.
+ * Kalau session dalam state kosong (baru dibuat), kita pakai placeholder
+ * description supaya tidak kena error BASE_TYPE_REQUIRED.
  */
 function buildEmbed(session) {
     // Lazy require supaya file ini bisa di-load tanpa discord.js (untuk testing)
     const { EmbedBuilder } = require('discord.js');
     const d = session.data;
     const embed = new EmbedBuilder();
-    if (d.title) embed.setTitle(d.title);
-    if (d.description) embed.setDescription(d.description);
+
+    // Deteksi state kosong: tidak ada title, description, fields, image,
+    // thumbnail, author, footer. Kalau kosong, pakai placeholder.
+    const hasContent = d.title
+        || d.description
+        || (d.fields && d.fields.length > 0)
+        || d.image
+        || d.thumbnail
+        || (d.footer && d.footer.text)
+        || (d.author && d.author.name);
+
+    if (!hasContent) {
+        embed.setDescription('*(Belum ada konten — pakai dropdown di bawah untuk mulai mengedit embed.)*');
+    } else {
+        if (d.title) embed.setTitle(d.title);
+        if (d.description) embed.setDescription(d.description);
+        if (d.image) embed.setImage(d.image.url);
+        if (d.thumbnail) embed.setThumbnail(d.thumbnail.url);
+        if (d.footer && d.footer.text) {
+            const f = { text: d.footer.text };
+            if (d.footer.iconURL) f.iconURL = d.footer.iconURL;
+            embed.setFooter(f);
+        }
+        if (d.author && d.author.name) {
+            const a = { name: d.author.name };
+            if (d.author.iconURL) a.iconURL = d.author.iconURL;
+            embed.setAuthor(a);
+        }
+        if (d.fields && d.fields.length > 0) embed.addFields(d.fields);
+    }
+
     if (d.color !== null && d.color !== undefined) embed.setColor(d.color);
-    if (d.image) embed.setImage(d.image.url);
-    if (d.thumbnail) embed.setThumbnail(d.thumbnail.url);
-    if (d.footer && d.footer.text) {
-        const f = { text: d.footer.text };
-        if (d.footer.iconURL) f.iconURL = d.footer.iconURL;
-        embed.setFooter(f);
-    }
-    if (d.author && d.author.name) {
-        const a = { name: d.author.name };
-        if (d.author.iconURL) a.iconURL = d.author.iconURL;
-        embed.setAuthor(a);
-    }
-    if (d.fields && d.fields.length > 0) embed.addFields(d.fields);
     if (d.timestamp) embed.setTimestamp();
     return embed;
 }
