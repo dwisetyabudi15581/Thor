@@ -145,6 +145,108 @@ function cleanupOrphans(client) {
     return orphanIds.length;
 }
 
+/**
+ * Bikin temp voice room baru + pindahkan member ke room tsb.
+ * Dipakai oleh:
+ *   - voiceStateUpdate di index.js (saat member join hub)
+ *   - "Test Create" button di panel setup
+ *
+ * @param {Client} client - Discord client
+ * @param {Guild}   guild
+ * @param {GuildMember} member - member yang trigger (akan jadi owner)
+ * @param {Object}  tvConfig - { hubChannelId, categoryId, defaultName, defaultLimit }
+ * @returns {Promise<{ ok: boolean, channelId?: string, error?: string }>}
+ */
+async function createRoom(client, guild, member, tvConfig) {
+    const { ChannelType, PermissionFlagsBits } = require('discord.js');
+
+    try {
+        const categoryId = tvConfig.categoryId || null;
+        const defaultName = tvConfig.defaultName || "{username}'s Room";
+        const defaultLimit = typeof tvConfig.defaultLimit === 'number' ? tvConfig.defaultLimit : 0;
+
+        // Resolve nama
+        const roomName = defaultName
+            .replace(/\{username\}/g, member.user.username)
+            .replace(/\{tag\}/g, member.user.tag)
+            .slice(0, 100);
+
+        // Permission overwrites
+        const overwrites = [
+            {
+                id: guild.id,
+                allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect],
+                deny: []
+            },
+            {
+                id: member.id,
+                allow: [
+                    PermissionFlagsBits.ViewChannel,
+                    PermissionFlagsBits.Connect,
+                    PermissionFlagsBits.Speak,
+                    PermissionFlagsBits.Stream,
+                    PermissionFlagsBits.ManageChannels,
+                    PermissionFlagsBits.MoveMembers,
+                    PermissionFlagsBits.PrioritySpeaker,
+                    PermissionFlagsBits.MuteMembers,
+                    PermissionFlagsBits.DeafenMembers
+                ],
+                deny: []
+            },
+            {
+                id: client.user.id,
+                allow: [
+                    PermissionFlagsBits.ViewChannel,
+                    PermissionFlagsBits.Connect,
+                    PermissionFlagsBits.ManageChannels,
+                    PermissionFlagsBits.MoveMembers
+                ],
+                deny: []
+            }
+        ];
+
+        const newChannel = await guild.channels.create({
+            name: roomName,
+            type: ChannelType.GuildVoice,
+            parent: categoryId || undefined,
+            userLimit: defaultLimit > 0 && defaultLimit <= 99 ? defaultLimit : 0,
+            permissionOverwrites: overwrites,
+            reason: `Temp voice — created by ${member.user.tag}`
+        });
+
+        // Pindahkan member ke channel baru
+        try {
+            await member.voice.setChannel(newChannel);
+        } catch (err) {
+            try { await newChannel.delete('Failed to move member'); } catch (_) {}
+            console.warn('TempVoice: gagal move member ke channel baru:', err.message);
+            return { ok: false, error: 'Failed to move member: ' + err.message };
+        }
+
+        // Simpan session
+        addSession({
+            channelId: newChannel.id,
+            ownerId: member.id,
+            ownerTag: member.user.tag,
+            guildId: guild.id,
+            categoryId: categoryId,
+            originalName: roomName
+        });
+
+        console.log(`🎤 TempVoice: room "${roomName}" dibuat oleh ${member.user.tag}.`);
+        return { ok: true, channelId: newChannel.id };
+    } catch (err) {
+        console.error('Error createRoom (TempVoice):', err.message);
+        // Kalau gagal total, coba kick member dari hub supaya tidak nyangkut
+        try {
+            if (member.voice.channelId) {
+                await member.voice.disconnect('Temp voice creation failed');
+            }
+        } catch (_) {}
+        return { ok: false, error: err.message };
+    }
+}
+
 module.exports = {
     addSession,
     removeSession,
@@ -155,5 +257,6 @@ module.exports = {
     transferOwnership,
     cleanupOrphans,
     load,
-    save
+    save,
+    createRoom
 };

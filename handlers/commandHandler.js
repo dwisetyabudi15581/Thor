@@ -151,7 +151,8 @@ module.exports = async (interaction) => {
                     '💡 Member klik tombol option untuk vote (toggle). Live bar chart otomatis.'
                 ].join('\n'), inline: false },
                 { name: '🎤 Temp Voice Channels', value: [
-                    '• `/setup-tempvoice hub_channel:#voice category?:#cat default_name?:"{username}\'s Room" default_limit?:0`',
+                    '• `/tempvoice-panel` — 🎨 **buka panel interaktif** untuk setup (paling mudah!)',
+                    '• `/setup-tempvoice hub_channel:#voice category?:#cat default_name?:"{username}\'s Room" default_limit?:0` — alternatif via slash command',
                     '• Member join hub → otomatis bikin voice room sendiri (owner = yang join)',
                     '• `/tempvoice rename name:...` — ganti nama room (owner)',
                     '• `/tempvoice limit limit:5` — set user limit (0 = tanpa limit)',
@@ -160,6 +161,7 @@ module.exports = async (interaction) => {
                     '• `/tempvoice kick user:@user` — kick member dari room',
                     '• `/tempvoice claim` — klaim room yang owner-nya sudah leave',
                     '• `/tempvoice info` — lihat info room saat ini',
+                    '💡 Panel mendukung: enable/disable toggle, test create, reset config',
                     '💡 Room otomatis dihapus saat kosong'
                 ].join('\n'), inline: false },
                 { name: '🔧 Audit Log (otomatis)', value: [
@@ -376,14 +378,16 @@ module.exports = async (interaction) => {
         // --- Stats: Temp Voice (guild ini) ---
         const tvConfig = config.tempVoice || {};
         const tvSessions = getTempVoiceByGuild(interaction.guild.id);
+        const tvEnabled = tvConfig.hubChannelId ? (tvConfig.enabled !== false) : false;
         const tvLines = tvConfig.hubChannelId
             ? [
+                `• Status: ${tvEnabled ? '🟢 Enabled' : '🔴 Disabled'} ${!tvEnabled ? '_(pakai `/tempvoice-panel` untuk enable)_' : ''}`,
                 `• Hub channel: <#${tvConfig.hubChannelId}> (\`${tvConfig.hubChannelId}\`)`,
                 tvConfig.categoryId ? `• Category: <#${tvConfig.categoryId}> (\`${tvConfig.categoryId}\`)` : '• Category: _(default — same as hub)_',
                 `• Default name: \`${tvConfig.defaultName || "{username}'s Room"}\``,
                 `• Default limit: ${tvConfig.defaultLimit > 0 ? `${tvConfig.defaultLimit} user` : '_(tanpa limit)_'}`
             ]
-            : ['_(belum di-setup — pakai `/setup-tempvoice`)_'];
+            : ['_(belum di-setup — pakai `/tempvoice-panel` atau `/setup-tempvoice`)_'];
         const tvSummary = `${tvLines.join('\n')}\n• Aktif: **${tvSessions.length} room** terbuka saat ini`;
 
         // --- Products detail (dengan role + days mapping) ---
@@ -1713,6 +1717,17 @@ module.exports = async (interaction) => {
                 `👥 Default limit: ${tvConfig.defaultLimit > 0 ? `${tvConfig.defaultLimit} user` : '_(tanpa limit)_'}\n\n` +
                 `💡 **Cara pakai:** Member tinggal join hub channel → otomatis dibikinkan voice room sendiri.`
         });
+    }
+
+    // ====================================================
+    // === /tempvoice-panel — tampilkan panel setup interaktif ===
+    // ====================================================
+    if (interaction.commandName === 'tempvoice-panel') {
+        const { buildTempVoicePanel } = require('../utils/tempVoicePanel');
+        const tvSessions = getTempVoiceByGuild(interaction.guild.id);
+        const { embed, components } = buildTempVoicePanel(config, { activeRooms: tvSessions.length }, interaction.client);
+        await interaction.reply({ embeds: [embed], components });
+        return;
     }
 
     if (interaction.commandName === 'tempvoice') {

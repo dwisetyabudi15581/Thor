@@ -21,7 +21,7 @@ const { startAutoBackup } = require('./utils/backupManager');
 const { getEnding: getEndingGiveaways, end: endGiveaway, pickWinners: pickGiveawayWinners } = require('./utils/giveawayManager');
 const { getPending: getPendingAnns, markSent: markAnnSent } = require('./utils/scheduledAnnouncements');
 const { incrementMessages: trackMessage, recordJoin: trackJoin, recordPurchase: trackPurchase, recordGiveawayWin: trackGiveawayWin, parsePrice: parsePriceNum } = require('./utils/statsManager');
-const { addSession: addTempVoiceSession, removeSession: removeTempVoiceSession, getByChannel: getTempVoiceByChannel, cleanupOrphans: cleanupTempVoiceOrphans } = require('./utils/tempVoice');
+const { addSession: addTempVoiceSession, removeSession: removeTempVoiceSession, getByChannel: getTempVoiceByChannel, cleanupOrphans: cleanupTempVoiceOrphans, createRoom: createTempVoiceRoom } = require('./utils/tempVoice');
 const { getConfig } = require('./utils/configManager');
 
 // === ERROR HANDLER GLOBAL ===
@@ -694,6 +694,11 @@ function getCommands() {
             ]
         },
         {
+            name: 'tempvoice-panel',
+            description: 'Buka panel interaktif untuk setup Temp Voice (alternatif /setup-tempvoice)',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild
+        },
+        {
             name: 'tempvoice',
             description: 'Kelola temp voice room kamu (rename, limit, lock, transfer, dll)',
             options: [
@@ -907,9 +912,11 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
         const config = getConfig();
         const tvConfig = config.tempVoice || {};
         const hubChannelId = tvConfig.hubChannelId;
+        const tvEnabled = tvConfig.enabled !== false; // default true kalau sudah di-setup
 
         // === 1. Member JOIN HUB channel → bikin temp voice room baru ===
-        if (hubChannelId && newChId === hubChannelId && oldChId !== hubChannelId) {
+        // (skip kalau system disabled)
+        if (tvEnabled && hubChannelId && newChId === hubChannelId && oldChId !== hubChannelId) {
             await createTempVoiceRoom(client, guild, member, tvConfig);
             return;
         }
@@ -952,100 +959,7 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
     }
 });
 
-/**
- * Bikin temp voice room baru + pindahkan member ke room tsb.
- */
-async function createTempVoiceRoom(client, guild, member, tvConfig) {
-    try {
-        const { ChannelType, PermissionFlagsBits } = require('discord.js');
-
-        const categoryId = tvConfig.categoryId || null;
-        const defaultName = tvConfig.defaultName || "{username}'s Room";
-        const defaultLimit = typeof tvConfig.defaultLimit === 'number' ? tvConfig.defaultLimit : 0;
-
-        // Resolve nama
-        const roomName = defaultName
-            .replace(/\{username\}/g, member.user.username)
-            .replace(/\{tag\}/g, member.user.tag)
-            .slice(0, 100);
-
-        // Build permission overwrites:
-        // - Owner: full control (Connect, Speak, ManageChannels, MoveMembers)
-        // - @everyone: Connect (true kalau unlocked, false kalau locked) — default true
-        // - Bot: Connect + Manage
-        const overwrites = [
-            {
-                id: guild.id, // @everyone
-                allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect],
-                deny: []
-            },
-            {
-                id: member.id, // owner
-                allow: [
-                    PermissionFlagsBits.ViewChannel,
-                    PermissionFlagsBits.Connect,
-                    PermissionFlagsBits.Speak,
-                    PermissionFlagsBits.Stream,
-                    PermissionFlagsBits.ManageChannels,
-                    PermissionFlagsBits.MoveMembers,
-                    PermissionFlagsBits.PrioritySpeaker,
-                    PermissionFlagsBits.MuteMembers,
-                    PermissionFlagsBits.DeafenMembers
-                ],
-                deny: []
-            },
-            {
-                id: client.user.id, // bot
-                allow: [
-                    PermissionFlagsBits.ViewChannel,
-                    PermissionFlagsBits.Connect,
-                    PermissionFlagsBits.ManageChannels,
-                    PermissionFlagsBits.MoveMembers
-                ],
-                deny: []
-            }
-        ];
-
-        // Bikin channel baru
-        const newChannel = await guild.channels.create({
-            name: roomName,
-            type: ChannelType.GuildVoice,
-            parent: categoryId || undefined,
-            userLimit: defaultLimit > 0 && defaultLimit <= 99 ? defaultLimit : 0,
-            permissionOverwrites: overwrites,
-            reason: `Temp voice — created by ${member.user.tag}`
-        });
-
-        // Pindahkan member ke channel baru
-        try {
-            await member.voice.setChannel(newChannel);
-        } catch (err) {
-            // Kalau gagal move, hapus channel yang baru dibuat supaya tidak nyangkut
-            try { await newChannel.delete('Failed to move member'); } catch (_) {}
-            console.warn('TempVoice: gagal move member ke channel baru:', err.message);
-            return;
-        }
-
-        // Simpan session
-        addTempVoiceSession({
-            channelId: newChannel.id,
-            ownerId: member.id,
-            ownerTag: member.user.tag,
-            guildId: guild.id,
-            categoryId: categoryId,
-            originalName: roomName
-        });
-
-        console.log(`🎤 TempVoice: room "${roomName}" dibuat oleh ${member.user.tag}.`);
-    } catch (err) {
-        console.error('Error createTempVoiceRoom:', err.message);
-        // Kalau gagal total, coba kick member dari hub supaya tidak nyangkut
-        try {
-            if (member.voice.channelId) {
-                await member.voice.disconnect('Temp voice creation failed');
-            }
-        } catch (_) {}
-    }
-}
+// createTempVoiceRoom() sekarang di-import dari utils/tempVoice.js (createRoom)
+// supaya bisa dipakai ulang oleh panel setup (Test Create button).
 
 client.login(process.env.DISCORD_TOKEN);

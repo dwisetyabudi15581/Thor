@@ -1,10 +1,11 @@
 const {
     EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder,
     MessageFlags, StringSelectMenuBuilder, PermissionFlagsBits,
-    ModalBuilder, TextInputBuilder, TextInputStyle
+    ModalBuilder, TextInputBuilder, TextInputStyle,
+    ChannelSelectMenuBuilder, ChannelType
 } = require('discord.js');
 const { createTicket, closeTicket, sendInvoice } = require('../utils/ticketManager');
-const { getConfig } = require('../utils/configManager');
+const { getConfig, setField } = require('../utils/configManager');
 const { isAdmin: checkIsAdmin } = require('../utils/permissions');
 const {
     addKey, getActiveKeysByUserAndRole, hasPermanentKey,
@@ -17,13 +18,21 @@ const { getSession, deleteSession, buildEmbed: buildSessionEmbed, parseColor } =
 const { get: getGiveaway, addParticipant: gwAddParticipant, removeParticipant: gwRemoveParticipant, end: endGiveaway, pickWinners, formatTimeLeft } = require('../utils/giveawayManager');
 const { get: getPoll, vote: votePoll, getByMessage: getPollByMessage, getTotalVotes: getPollTotalVotes } = require('../utils/pollManager');
 const { create: createPoll, setMessageId: setPollMessageId } = require('../utils/pollManager');
+const {
+    buildTempVoicePanel,
+    buildResetConfirmPanel,
+    buildHubChannelSelectRow,
+    buildCategorySelectRow
+} = require('../utils/tempVoicePanel');
+const { getByGuild: getTempVoiceByGuild, addSession: addTempVoiceSession } = require('../utils/tempVoice');
+const { logAudit } = require('../utils/auditLog');
 
 module.exports = async (interaction) => {
     if (interaction.replied || interaction.deferred) {
         // Untuk modal submit, replied=false default; skip cuma untuk non-modal
         if (!interaction.isModalSubmit()) return;
     }
-    if (!interaction.isButton() && !interaction.isStringSelectMenu() && !interaction.isModalSubmit()) return;
+    if (!interaction.isButton() && !interaction.isStringSelectMenu() && !interaction.isModalSubmit() && !interaction.isChannelSelectMenu()) return;
 
     const config = getConfig();
 
@@ -421,6 +430,19 @@ module.exports = async (interaction) => {
         // ====================================================
         if (interaction.isModalSubmit() && interaction.customId.startsWith('poll_modal_create:')) {
             return handlePollModalCreate(interaction);
+        }
+
+        // ====================================================
+        // === TEMP VOICE PANEL — buttons, channel selects, modals ===
+        // ====================================================
+        // All custom IDs start with `tvp_` (Temp Voice Panel).
+        // Permission: Admin only (ManageGuild or admin role).
+        if (
+            (interaction.isButton() && interaction.customId.startsWith('tvp_')) ||
+            (interaction.isChannelSelectMenu() && interaction.customId.startsWith('tvp_')) ||
+            (interaction.isModalSubmit() && interaction.customId.startsWith('tvp_'))
+        ) {
+            return handleTempVoicePanel(interaction);
         }
 
     } catch (err) {
@@ -1174,5 +1196,373 @@ async function handlePollModalCreate(interaction) {
         if (interaction.isRepliable() && !interaction.replied) {
             await interaction.reply({ content: '❌ Terjadi error: ' + err.message, flags: MessageFlags.Ephemeral }).catch(()=>{});
         }
+    }
+}
+
+// ====================================================
+// === HELPER: TEMP VOICE PANEL ===
+// ====================================================
+// Handles all interactions with customId starting with `tvp_`:
+//   Buttons: tvp_btn_hub, tvp_btn_category, tvp_btn_name, tvp_btn_limit,
+//            tvp_btn_toggle, tvp_btn_test, tvp_btn_reset,
+//            tvp_btn_reset_yes, tvp_btn_reset_no, tvp_btn_close
+//   ChannelSelects: tvp_sel_hub, tvp_sel_category
+//   Modals: tvp_modal_name, tvp_modal_limit
+//
+// Permission: Admin only (ManageGuild or admin role).
+// Pattern: update config -> re-render panel message -> ephemeral feedback
+async function handleTempVoicePanel(interaction) {
+    const customId = interaction.customId;
+
+    // === Permission check ===
+    if (!checkIsAdmin(interaction.member)) {
+        return interaction.reply({
+            content: '🚫 Hanya admin yang bisa mengatur Temp Voice.',
+            flags: MessageFlags.Ephemeral
+        }).catch(() => {});
+    }
+
+    const config = getConfig();
+    const tv = config.tempVoice || {};
+
+    // ---------- BUTTON: Set Hub ----------
+    if (customId === 'tvp_btn_hub') {
+        await interaction.deferUpdate().catch(() => {});
+        const row = buildHubChannelSelectRow(interaction.message.id);
+        return interaction.followUp({
+            content: '🎙️ **Pilih Hub Channel** — voice channel yang jadi "trigger" (member join → auto-bikin room):',
+            components: [row],
+            flags: MessageFlags.Ephemeral
+        }).catch(() => {});
+    }
+
+    // ---------- BUTTON: Set Category ----------
+    if (customId === 'tvp_btn_category') {
+        await interaction.deferUpdate().catch(() => {});
+        const row = buildCategorySelectRow(interaction.message.id);
+        return interaction.followUp({
+            content: '📁 **Pilih Category** — tempat room baru akan dibuat (opsional, default = same as hub):',
+            components: [row],
+            flags: MessageFlags.Ephemeral
+        }).catch(() => {});
+    }
+
+    // ---------- BUTTON: Set Name ----------
+    if (customId === 'tvp_btn_name') {
+        const modal = new ModalBuilder()
+            .setCustomId('tvp_modal_name')
+            .setTitle('Set Default Name')
+            .addComponents(
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId('tvp_name_input')
+                        .setLabel('Default Name (placeholder: {username} {tag})')
+                        .setStyle(TextInputStyle.Short)
+                        .setPlaceholder("{username}'s Room")
+                        .setValue(tv.defaultName || "{username}'s Room")
+                        .setRequired(true)
+                        .setMaxLength(100)
+                )
+            );
+        return interaction.showModal(modal).catch(() => {});
+    }
+
+    // ---------- BUTTON: Set Limit ----------
+    if (customId === 'tvp_btn_limit') {
+        const currentLimit = (typeof tv.defaultLimit === 'number' && tv.defaultLimit > 0) ? String(tv.defaultLimit) : '0';
+        const modal = new ModalBuilder()
+            .setCustomId('tvp_modal_limit')
+            .setTitle('Set Default Limit')
+            .addComponents(
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId('tvp_limit_input')
+                        .setLabel('User Limit (0 = tanpa limit, maks 99)')
+                        .setStyle(TextInputStyle.Short)
+                        .setPlaceholder('0')
+                        .setValue(currentLimit)
+                        .setRequired(true)
+                        .setMaxLength(2)
+                )
+            );
+        return interaction.showModal(modal).catch(() => {});
+    }
+
+    // ---------- BUTTON: Toggle Enable/Disable ----------
+    if (customId === 'tvp_btn_toggle') {
+        await interaction.deferUpdate().catch(() => {});
+        // Re-fetch latest config to avoid clobbering concurrent admin changes
+        const freshTv = getConfig().tempVoice || {};
+        const currentEnabled = freshTv.enabled !== false;
+        const newEnabled = !currentEnabled;
+        setField('tempVoice', { ...freshTv, enabled: newEnabled });
+
+        const tvSessions = getTempVoiceByGuild(interaction.guild.id);
+        const { embed, components } = buildTempVoicePanel(getConfig(), { activeRooms: tvSessions.length }, interaction.client);
+        await interaction.editReply({ embeds: [embed], components }).catch(() => {});
+
+        await logAudit(interaction.client, {
+            action: 'SETUP_TEMPVOICE',
+            actorId: interaction.user.id,
+            actorTag: interaction.user.tag,
+            details: `Temp Voice ${newEnabled ? '**diaktifkan**' : '**dinonaktifkan**'} via panel.`,
+            guildId: interaction.guild.id
+        });
+        return interaction.followUp({
+            content: newEnabled
+                ? '✅ Temp Voice **diaktifkan**. Member sekarang bisa join hub untuk bikin room.'
+                : '🔴 Temp Voice **dinonaktifkan**. Member yang join hub tidak akan dapat room baru (room yang sudah ada tetap aktif sampai kosong).',
+            flags: MessageFlags.Ephemeral
+        }).catch(() => {});
+    }
+
+    // ---------- BUTTON: Test Create ----------
+    if (customId === 'tvp_btn_test') {
+        await interaction.deferUpdate().catch(() => {});
+
+        // Admin harus ada di voice channel
+        const memberVoice = interaction.member.voice?.channel;
+        if (!memberVoice) {
+            return interaction.followUp({
+                content: '❌ Kamu harus berada di **salah satu voice channel** untuk test (bot akan pindahkan kamu ke room baru).',
+                flags: MessageFlags.Ephemeral
+            }).catch(() => {});
+        }
+
+        // Jangan test kalau admin lagi di hub channel (itu udah auto-trigger)
+        if (memberVoice.id === tv.hubChannelId) {
+            return interaction.followUp({
+                content: 'ℹ️ Kamu sedang di hub channel — bot otomatis akan bikin room untukmu. Tinggal leave & join lagi aja.',
+                flags: MessageFlags.Ephemeral
+            }).catch(() => {});
+        }
+
+        const { createRoom } = require('../utils/tempVoice');
+        const result = await createRoom(interaction.client, interaction.guild, interaction.member, tv);
+        if (result.ok) {
+            await logAudit(interaction.client, {
+                action: 'SETUP_TEMPVOICE',
+                actorId: interaction.user.id,
+                actorTag: interaction.user.tag,
+                details: `Test create temp voice room via panel. Channel ID: \`${result.channelId}\``,
+                guildId: interaction.guild.id
+            });
+            return interaction.followUp({
+                content: `🧪 **Test berhasil!** Room baru dibuat: <#${result.channelId}>\nKamu sekarang owner — coba \`/tempvoice rename\`, \`/tempvoice limit\`, dll.`,
+                flags: MessageFlags.Ephemeral
+            }).catch(() => {});
+        }
+        return interaction.followUp({
+            content: `❌ Test gagal: ${result.error || 'unknown error'}\n\nPastikan bot punya permission **Create Channels** & **Move Members**.`,
+            flags: MessageFlags.Ephemeral
+        }).catch(() => {});
+    }
+
+    // ---------- BUTTON: Reset (tampilkan konfirmasi) ----------
+    if (customId === 'tvp_btn_reset') {
+        await interaction.deferUpdate().catch(() => {});
+        const { embed, components } = buildResetConfirmPanel(interaction.client);
+        return interaction.editReply({ embeds: [embed], components }).catch(() => {});
+    }
+
+    // ---------- BUTTON: Reset Confirm YES ----------
+    if (customId === 'tvp_btn_reset_yes') {
+        await interaction.deferUpdate().catch(() => {});
+        setField('tempVoice', {
+            hubChannelId: null,
+            categoryId: null,
+            defaultName: "{username}'s Room",
+            defaultLimit: 0,
+            enabled: false
+        });
+        const { embed, components } = buildTempVoicePanel(getConfig(), {}, interaction.client);
+        await interaction.editReply({ embeds: [embed], components }).catch(() => {});
+        await logAudit(interaction.client, {
+            action: 'SETUP_TEMPVOICE',
+            actorId: interaction.user.id,
+            actorTag: interaction.user.tag,
+            details: '❌ **RESET** config Temp Voice via panel. Hub/Category/Name/Limit dikosongkan, status=Disabled.',
+            guildId: interaction.guild.id
+        });
+        return interaction.followUp({
+            content: '🗑️ Config Temp Voice sudah di-reset. Pakai 🎙️ **Set Hub** untuk setup ulang.',
+            flags: MessageFlags.Ephemeral
+        }).catch(() => {});
+    }
+
+    // ---------- BUTTON: Reset Confirm NO ----------
+    if (customId === 'tvp_btn_reset_no') {
+        await interaction.deferUpdate().catch(() => {});
+        const tvSessions = getTempVoiceByGuild(interaction.guild.id);
+        const { embed, components } = buildTempVoicePanel(getConfig(), { activeRooms: tvSessions.length }, interaction.client);
+        return interaction.editReply({ embeds: [embed], components }).catch(() => {});
+    }
+
+    // ---------- BUTTON: Close Panel ----------
+    if (customId === 'tvp_btn_close') {
+        try {
+            await interaction.message.delete();
+        } catch (_) {
+            await interaction.deferUpdate().catch(() => {});
+        }
+        return interaction.reply({
+            content: '❌ Panel ditutup.',
+            flags: MessageFlags.Ephemeral
+        }).catch(() => {});
+    }
+
+    // ---------- CHANNEL SELECT: Hub ----------
+    // customId format: `tvp_sel_hub:<panelMessageId>`
+    if (customId.startsWith('tvp_sel_hub')) {
+        const parts = customId.split(':');
+        const panelMessageId = parts[1] || null;
+        const selectedChannelId = interaction.values?.[0];
+        if (!selectedChannelId) {
+            return interaction.reply({ content: '❌ Tidak ada channel dipilih.', flags: MessageFlags.Ephemeral });
+        }
+        const channel = interaction.guild.channels.cache.get(selectedChannelId);
+        if (!channel || channel.type !== ChannelType.GuildVoice) {
+            return interaction.reply({ content: '❌ Channel yang dipilih bukan voice channel.', flags: MessageFlags.Ephemeral });
+        }
+
+        // First-time setup: set enabled=true automatically
+        // Re-fetch latest config to avoid clobbering concurrent admin changes
+        const freshTvHub = getConfig().tempVoice || {};
+        const wasFirstSetup = !freshTvHub.hubChannelId;
+        const newTv = {
+            ...freshTvHub,
+            hubChannelId: selectedChannelId,
+            enabled: wasFirstSetup ? true : (freshTvHub.enabled !== false)
+        };
+        setField('tempVoice', newTv);
+
+        // Update ephemeral select-menu message → "done"
+        await interaction.update({
+            content: `✅ Hub Channel di-set ke <#${selectedChannelId}>.`,
+            components: []
+        }).catch(() => {});
+
+        // Update original panel message
+        if (panelMessageId) {
+            try {
+                const panelMsg = await interaction.channel.messages.fetch(panelMessageId);
+                if (panelMsg) {
+                    const tvSessions = getTempVoiceByGuild(interaction.guild.id);
+                    const { embed, components } = buildTempVoicePanel(getConfig(), { activeRooms: tvSessions.length }, interaction.client);
+                    await panelMsg.edit({ embeds: [embed], components });
+                }
+            } catch (_) {}
+        }
+
+        await logAudit(interaction.client, {
+            action: 'SETUP_TEMPVOICE',
+            actorId: interaction.user.id,
+            actorTag: interaction.user.tag,
+            details: `Set Hub Channel via panel: <#${selectedChannelId}> (\`${selectedChannelId}\`)${wasFirstSetup ? ' — system otomatis diaktifkan' : ''}`,
+            guildId: interaction.guild.id
+        });
+        return;
+    }
+
+    // ---------- CHANNEL SELECT: Category ----------
+    // customId format: `tvp_sel_category:<panelMessageId>`
+    if (customId.startsWith('tvp_sel_category')) {
+        const parts = customId.split(':');
+        const panelMessageId = parts[1] || null;
+        const selectedCategoryId = interaction.values?.[0];
+        if (!selectedCategoryId) {
+            return interaction.reply({ content: '❌ Tidak ada category dipilih.', flags: MessageFlags.Ephemeral });
+        }
+        const channel = interaction.guild.channels.cache.get(selectedCategoryId);
+        if (!channel || channel.type !== ChannelType.GuildCategory) {
+            return interaction.reply({ content: '❌ Channel yang dipilih bukan category.', flags: MessageFlags.Ephemeral });
+        }
+
+        // Re-fetch latest config to avoid clobbering concurrent admin changes
+        const freshTvCat = getConfig().tempVoice || {};
+        setField('tempVoice', { ...freshTvCat, categoryId: selectedCategoryId });
+
+        // Update ephemeral select-menu message → "done"
+        await interaction.update({
+            content: `✅ Category di-set ke <#${selectedCategoryId}>.`,
+            components: []
+        }).catch(() => {});
+
+        // Update original panel message
+        if (panelMessageId) {
+            try {
+                const panelMsg = await interaction.channel.messages.fetch(panelMessageId);
+                if (panelMsg) {
+                    const tvSessions = getTempVoiceByGuild(interaction.guild.id);
+                    const { embed, components } = buildTempVoicePanel(getConfig(), { activeRooms: tvSessions.length }, interaction.client);
+                    await panelMsg.edit({ embeds: [embed], components });
+                }
+            } catch (_) {}
+        }
+
+        await logAudit(interaction.client, {
+            action: 'SETUP_TEMPVOICE',
+            actorId: interaction.user.id,
+            actorTag: interaction.user.tag,
+            details: `Set Category via panel: <#${selectedCategoryId}> (\`${selectedCategoryId}\`)`,
+            guildId: interaction.guild.id
+        });
+        return;
+    }
+
+    // ---------- MODAL: Set Default Name ----------
+    if (customId === 'tvp_modal_name') {
+        const newName = interaction.components[0]?.components?.[0]?.value?.trim() || "{username}'s Room";
+        const safeName = newName.slice(0, 100);
+        // Re-fetch latest config to avoid clobbering concurrent admin changes
+        const freshTvName = getConfig().tempVoice || {};
+        setField('tempVoice', { ...freshTvName, defaultName: safeName });
+
+        const tvSessions = getTempVoiceByGuild(interaction.guild.id);
+        const { embed, components } = buildTempVoicePanel(getConfig(), { activeRooms: tvSessions.length }, interaction.client);
+        await interaction.update({ embeds: [embed], components }).catch(() => {});
+
+        await logAudit(interaction.client, {
+            action: 'SETUP_TEMPVOICE',
+            actorId: interaction.user.id,
+            actorTag: interaction.user.tag,
+            details: `Set Default Name via panel: \`${safeName}\``,
+            guildId: interaction.guild.id
+        });
+        return interaction.followUp({
+            content: `✅ Default Name di-set ke \`${safeName}\``,
+            flags: MessageFlags.Ephemeral
+        }).catch(() => {});
+    }
+
+    // ---------- MODAL: Set Default Limit ----------
+    if (customId === 'tvp_modal_limit') {
+        const raw = interaction.components[0]?.components?.[0]?.value?.trim() || '0';
+        const parsed = parseInt(raw, 10);
+        if (isNaN(parsed) || parsed < 0 || parsed > 99) {
+            return interaction.reply({
+                content: '❌ Limit harus angka 0-99 (0 = tanpa limit).',
+                flags: MessageFlags.Ephemeral
+            });
+        }
+        // Re-fetch latest config to avoid clobbering concurrent admin changes
+        const freshTvLimit = getConfig().tempVoice || {};
+        setField('tempVoice', { ...freshTvLimit, defaultLimit: parsed });
+
+        const tvSessions = getTempVoiceByGuild(interaction.guild.id);
+        const { embed, components } = buildTempVoicePanel(getConfig(), { activeRooms: tvSessions.length }, interaction.client);
+        await interaction.update({ embeds: [embed], components }).catch(() => {});
+
+        await logAudit(interaction.client, {
+            action: 'SETUP_TEMPVOICE',
+            actorId: interaction.user.id,
+            actorTag: interaction.user.tag,
+            details: `Set Default Limit via panel: ${parsed} ${parsed > 0 ? 'user' : '(tanpa limit)'}`,
+            guildId: interaction.guild.id
+        });
+        return interaction.followUp({
+            content: `✅ Default Limit di-set ke ${parsed > 0 ? `${parsed} user` : '_(tanpa limit)_'}`,
+            flags: MessageFlags.Ephemeral
+        }).catch(() => {});
     }
 }
