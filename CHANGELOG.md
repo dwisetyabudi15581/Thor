@@ -5,6 +5,14 @@ Semua perubahan penting pada bot ini akan didokumentasikan di file ini.
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), dan
 versi mengikuti [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.3] — 2026-07-31
+
+### CRITICAL
+- **Fix `removeAllKeysByUser(userId, guildId)` silently menghapus 0 key** — bug sejak v3.9.0. `keys.json` tidak menyimpan `guildId` per key, jadi filter `k.guildId === guildId` tidak pernah match. Akibatnya `/clear-schedule clear_keys:true` tidak menghapus key apa pun padahal admin mengira VIP sudah di-reset. Fix: `addKey` sekarang simpan `guildId`; `removeAllKeysByUser` backward compat (key lama tanpa guildId juga dihapus kalau guildId di-pass).
+
+### MEDIUM
+- **Validasi panjang title/description di `/announce` & `/announce-schedule`** — sebelumnya, title > 256 atau description > 4096 char menyebabkan `EmbedBuilder` throw `RangeError` yang ditangkap sebagai "Terjadi error" generik. Untuk `/announce-schedule`, error terjadi saat scheduled time (bukan saat command dijalankan) → entry stuck di `scheduledAnns.json`. Fix: validasi eksplisit sebelum build embed.
+
 ## [3.9.2] — 2026-07-31
 
 ### Added

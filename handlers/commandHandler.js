@@ -611,7 +611,8 @@ module.exports = async (interaction) => {
             username: member.user.tag,
             roleId: role.id,
             productName: product.label,
-            days: product.days || 0
+            days: product.days || 0,
+            guildId: interaction.guild.id  // v3.9.3: simpan guildId supaya cross-guild wipe akurat
         });
 
         // 2. Beri role
@@ -1019,6 +1020,17 @@ module.exports = async (interaction) => {
                 return interaction.editReply({ content: `❌ Color tidak valid: \`${colorStr}\`. Pakai format hex 6 digit, mis. \`#FF0000\` atau \`FF0000\`.` });
             }
             color = parsed;
+        }
+
+        // v3.9.3: validate Discord embed length limits sebelum setTitle/setDescription.
+        // Discord API akan throw RangeError kalau title > 256 atau description > 4096,
+        // yang sebelumnya ditangkap outer try-catch sebagai "Terjadi error" generik.
+        const { EMBED_LIMITS } = require('../utils/constants');
+        if (title.length > EMBED_LIMITS.TITLE) {
+            return interaction.editReply({ content: `❌ Title terlalu panjang (${title.length} char, maks ${EMBED_LIMITS.TITLE}).` });
+        }
+        if (description.length > EMBED_LIMITS.DESCRIPTION) {
+            return interaction.editReply({ content: `❌ Description terlalu panjang (${description.length} char, maks ${EMBED_LIMITS.DESCRIPTION}).` });
         }
 
         // Validate URLs
@@ -1500,6 +1512,18 @@ module.exports = async (interaction) => {
                 return interaction.editReply({ content: `❌ Color tidak valid: \`${color}\`. Pakai format hex 6 digit, mis. \`#FF0000\` atau \`FF0000\`.` });
             }
             colorNum = parsed;
+        }
+
+        // v3.9.3: validate Discord embed length limits (sama seperti /announce).
+        // Embedded announce dikirim saat scheduled time; kalau title/description
+        // kelebihan, EmbedBuilder akan throw saat processScheduledAnnouncement
+        // jalan → announce gagal terkirim dan entry stuck di scheduledAnns.json.
+        const { EMBED_LIMITS } = require('../utils/constants');
+        if (title.length > EMBED_LIMITS.TITLE) {
+            return interaction.editReply({ content: `❌ Title terlalu panjang (${title.length} char, maks ${EMBED_LIMITS.TITLE}).` });
+        }
+        if (description.length > EMBED_LIMITS.DESCRIPTION) {
+            return interaction.editReply({ content: `❌ Description terlalu panjang (${description.length} char, maks ${EMBED_LIMITS.DESCRIPTION}).` });
         }
 
         // Validate URLs

@@ -268,7 +268,8 @@ module.exports = async (interaction) => {
                 username: member.user.tag,
                 roleId: role.id,
                 productName: product.label,
-                days: product.days || 0
+                days: product.days || 0,
+                guildId: interaction.guild.id  // v3.9.3: simpan guildId supaya cross-guild wipe akurat
             });
 
             // === 2. Berikan role ke member ===

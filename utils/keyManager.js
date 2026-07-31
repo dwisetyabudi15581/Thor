@@ -51,9 +51,11 @@ function genId() {
 /**
  * Tambah key baru.
  *
- * @param {Object} data - { key, userId, username, roleId, productName, days }
+ * @param {Object} data - { key, userId, username, roleId, productName, days, guildId }
  *   - days: 0 = permanen, >0 = durasi hari
  *   - expireAt akan dihitung otomatis (now + days * 86400000) atau null kalau permanen
+ *   - guildId: ID guild tempat key ini diberikan (v3.9.3 — sebelumnya tidak disimpan,
+ *     yang bikin removeAllKeysByUser(userId, guildId) broken karena filter tidak pernah match)
  * @returns {Object} entry yang baru disimpan
  */
 function addKey(data) {
@@ -71,6 +73,7 @@ function addKey(data) {
         productName: data.productName || 'Unknown',
         days,
         expireAt,
+        guildId: data.guildId || null,  // v3.9.3: simpan guildId supaya cross-guild wipe bisa akurat
         createdAt: now
     };
     list.push(entry);
@@ -196,10 +199,12 @@ function removeExpiredKeys(now = Date.now()) {
  *   - Kalau guildId diberikan: hanya hapus key yang match userId DAN guildId.
  *   - Kalau guildId undefined/null: behavior lama (hapus semua key user — backward compat).
  *
- * CATATAN: keys.json saat ini tidak menyimpan guildId per key (key-driven model
- * global per user). Untuk backward compat, kalau guildId di-pass tapi key tidak
- * punya field guildId, fallback: hapus key yang roleId milik guild tersebut.
- * Implementasi ini akan lebih akurat setelah migrasi schema keys.json (TODO).
+ * v3.9.3 FIX: sebelumnya, kalau guildId di-pass tapi key tidak punya field guildId
+ *   (schema lama, sebelum v3.9.3), filter `k.guildId === guildId` TIDAK PERNAH match
+ *   karena k.guildId = undefined. Akibatnya, /clear-schedule clear_keys:true
+ *   silently menghapus 0 key padahal admin mengira VIP sudah di-reset.
+ *   Sekarang: key tanpa guildId (schema lama) dianggap milik guild yang memanggil
+ *   (asumsi: bot sebelumnya single-guild). Key baru (v3.9.3+) punya guildId eksplisit.
  *
  * @param {string} userId
  * @param {string} [guildId] - opsional, filter by guild kalau diberikan
@@ -209,9 +214,10 @@ function removeAllKeysByUser(userId, guildId) {
     const list = loadKeys();
     let filtered;
     if (guildId) {
-        // Hanya hapus key yang eksplisit milik guild ini.
-        // Kalau key tidak punya field guildId (schema lama), jangan hapus.
-        filtered = list.filter(k => !(k.userId === userId && k.guildId === guildId));
+        // Hapus key milik user ini di guild ini.
+        // Key tanpa guildId (schema lama, pre-v3.9.3) juga dihapus karena
+        // diasumsikan milik guild pertama yang memanggil (backward compat).
+        filtered = list.filter(k => !(k.userId === userId && (k.guildId === guildId || k.guildId === undefined || k.guildId === null)));
     } else {
         // Behavior lama: hapus semua key user (backward compat untuk single-guild).
         filtered = list.filter(k => k.userId !== userId);
