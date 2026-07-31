@@ -44,6 +44,72 @@ function genId() {
     return `poll_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
 }
 
+// === v3.9.1: In-memory poll session store ===
+// Dipakai untuk passing data dari /poll create command → modal submit handler.
+// Sebelumnya, data (channelId, multiple, question) di-encode ke customId modal,
+// yang bisa overflow 100-char Discord customId limit kalau question panjang
+// (apalagi setelah encodeURIComponent — spasi jadi %20, dll).
+// Sekarang: data disimpan di Map, customId hanya berisi short session id.
+const POLL_SESSION_TTL_MS = 5 * 60 * 1000; // 5 menit (modal harus di-submit cepat)
+const pollSessions = new Map();
+
+// Cleanup expired sessions tiap 5 menit supaya memory tidak bocor.
+setInterval(() => {
+    const now = Date.now();
+    let cleaned = 0;
+    for (const [id, s] of pollSessions) {
+        if (now - s.createdAt > POLL_SESSION_TTL_MS) {
+            pollSessions.delete(id);
+            cleaned++;
+        }
+    }
+    if (cleaned > 0) {
+        console.log(`🧹 Poll sessions: ${cleaned} expired dihapus.`);
+    }
+}, POLL_SESSION_TTL_MS).unref?.();
+
+function genSessionId() {
+    return `ps_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/**
+ * Buat poll session baru (dipanggil /poll create saat menampilkan modal).
+ * @param {Object} data - { userId, channelId, multiple, question }
+ * @returns {string} sessionId (pendek, aman dipakai di customId Discord)
+ */
+function createPollSession(data) {
+    const id = genSessionId();
+    pollSessions.set(id, {
+        userId: data.userId,
+        channelId: data.channelId,
+        multiple: !!data.multiple,
+        question: data.question,
+        createdAt: Date.now()
+    });
+    return id;
+}
+
+/**
+ * Ambil poll session by id. Auto-expire kalau sudah lewat TTL.
+ * @returns {Object|null}
+ */
+function getPollSession(id) {
+    const s = pollSessions.get(id);
+    if (!s) return null;
+    if (Date.now() - s.createdAt > POLL_SESSION_TTL_MS) {
+        pollSessions.delete(id);
+        return null;
+    }
+    return s;
+}
+
+/**
+ * Hapus poll session setelah modal di-submit (sukses atau gagal).
+ */
+function deletePollSession(id) {
+    return pollSessions.delete(id);
+}
+
 function create(data) {
     const list = load();
     const poll = {
@@ -159,5 +225,7 @@ function getTotalVotes(poll) {
 
 module.exports = {
     create, setMessageId, get, getByMessage, getByGuild,
-    vote, close, remove, getTotalVotes
+    vote, close, remove, getTotalVotes,
+    // v3.9.1: poll session (in-memory, for modal customId safety)
+    createPollSession, getPollSession, deletePollSession
 };

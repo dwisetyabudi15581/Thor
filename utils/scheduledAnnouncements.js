@@ -154,21 +154,40 @@ function computeNextRecurring(fromTs, type) {
  * Format yang didukung:
  *   - ISO: "2026-01-15 20:00" → di-asumsikan timezone lokal
  *   - Relative: "30m", "2h", "1d" → now + duration
+ *
+ * v3.9.1 FIX: tambah range validation supaya admin tidak schedule announce
+ *   1000000 hari ke depan (yang akan bikin recurring ghost entries forever).
+ *   - Relative: maks 365 hari (8760 jam)
+ *   - Absolute: maks 5 tahun ke depan
+ *   - Past time: null (akan di-reject oleh caller juga, tapi set di sini juga)
+ *
  * @returns {number|null} timestamp ms, atau null kalau invalid
  */
 function parseTime(input) {
     if (!input) return null;
     const trimmed = input.trim().toLowerCase();
+    const now = Date.now();
+    const MAX_RELATIVE_DAYS = 365;
+    const MAX_ABSOLUTE_FUTURE_MS = 5 * 365 * 24 * 60 * 60 * 1000; // 5 tahun
 
     // Relative: 30m, 2h, 1d, 1h30m
     const relMatch = trimmed.match(/^(\d+)([mhd])$/);
     if (relMatch) {
         const num = parseInt(relMatch[1]);
         const unit = relMatch[2];
-        const now = Date.now();
-        if (unit === 'm') return now + num * 60000;
-        if (unit === 'h') return now + num * 3600000;
-        if (unit === 'd') return now + num * 86400000;
+        // v3.9.1: range check — angka terlalu besar = invalid.
+        if (num <= 0 || num > 1000000) return null;
+
+        let deltaMs;
+        if (unit === 'm') deltaMs = num * 60000;
+        else if (unit === 'h') deltaMs = num * 3600000;
+        else if (unit === 'd') deltaMs = num * 86400000;
+        else return null;
+
+        // Cek batas atas (maks 365 hari)
+        if (deltaMs > MAX_RELATIVE_DAYS * 86400000) return null;
+
+        return now + deltaMs;
     }
 
     // ISO-like: "2026-01-15 20:00" atau "2026-01-15T20:00"
@@ -176,7 +195,12 @@ function parseTime(input) {
     if (isoMatch) {
         const [, y, mo, d, h, mi, s] = isoMatch;
         const dt = new Date(y, parseInt(mo) - 1, d, h, mi, s || 0);
-        if (!isNaN(dt.getTime())) return dt.getTime();
+        if (isNaN(dt.getTime())) return null;
+        const ts = dt.getTime();
+        // v3.9.1: reject kalau di masa lalu ATAU lebih dari 5 tahun ke depan.
+        if (ts < now) return null;
+        if (ts > now + MAX_ABSOLUTE_FUTURE_MS) return null;
+        return ts;
     }
 
     return null;

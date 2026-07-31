@@ -3,7 +3,7 @@ const {
     MessageFlags, StringSelectMenuBuilder, PermissionFlagsBits,
     ModalBuilder, TextInputBuilder, TextInputStyle
 } = require('discord.js');
-const { createTicket, closeTicket, sendInvoice } = require('../utils/ticketManager');
+const { createTicket, closeTicket, sendInvoice, getTicketMeta } = require('../utils/ticketManager');
 const { getConfig, setField } = require('../utils/configManager');
 const { isAdmin: checkIsAdmin } = require('../utils/permissions');
 const {
@@ -15,7 +15,7 @@ const { getPanelByMessage, getPanel } = require('../utils/selfRoleManager');
 const { buildPanelEmbed, buildPanelComponents } = require('../utils/selfRolePanelBuilder');
 const { getSession, deleteSession, buildEmbed: buildSessionEmbed, parseColor } = require('../utils/embedBuilderSessions');
 const { get: getGiveaway, addParticipant: gwAddParticipant, removeParticipant: gwRemoveParticipant, end: endGiveaway, pickWinners } = require('../utils/giveawayManager');
-const { get: getPoll, vote: votePoll, getByMessage: getPollByMessage, getTotalVotes: getPollTotalVotes, remove: removePoll } = require('../utils/pollManager');
+const { get: getPoll, vote: votePoll, getByMessage: getPollByMessage, getTotalVotes: getPollTotalVotes, remove: removePoll, getPollSession, deletePollSession } = require('../utils/pollManager');
 const { create: createPoll, setMessageId: setPollMessageId } = require('../utils/pollManager');
 const { logAudit } = require('../utils/auditLog');
 
@@ -228,19 +228,16 @@ module.exports = async (interaction) => {
                 return interaction.editReply({ content: '❌ Channel tiket sudah tidak ada (mungkin sudah ditutup admin lain).' }).catch(()=>{});
             }
 
-            // Parse topic
+            // v3.9.1: baca metadata tiket dari tickets.json (sumber kebenaran).
+            // Fallback ke topic parsing untuk tiket lama yang dibuat sebelum v3.9.1.
             const topic = interaction.channel.topic || '';
-            // P3-12 FIX: pakai `([^|]+?)` (bukan `(.+?)`) supaya label yang mengandung
-            // " | " tidak ter-truncate prematur. Trim hasil untuk hilangkan spasi.
-            const userIdMatch = topic.match(/UserID: (\d+)/);
-            const productMatch = topic.match(/Product:\s*([^|]+?)\s*\|/);
-            const priceMatch = topic.match(/Price:\s*(.+)$/);
-            const userId = userIdMatch ? userIdMatch[1] : null;
-            const productName = productMatch ? productMatch[1].trim() : 'Unknown';
-            const price = priceMatch ? priceMatch[1].trim() : 'Unknown';
+            const meta = getTicketMeta(interaction.channel.id, topic);
+            const userId = meta?.userId || null;
+            const productName = meta?.productName || 'Unknown';
+            const price = meta?.price || 'Unknown';
 
             if (!userId) {
-                return interaction.editReply({ content: '❌ Gagal parse UserID dari topic channel.' });
+                return interaction.editReply({ content: '❌ Gagal ambil metadata tiket (channel ini mungkin bukan tiket valid).' });
             }
 
             const product = config.products.find(p => p.value === productValue);
@@ -517,6 +514,24 @@ module.exports = async (interaction) => {
         if (interaction.isButton() && interaction.customId === 'reset_config_cancel') {
             return interaction.update({
                 content: '✅ Reset config dibatalkan. Tidak ada perubahan yang dilakukan.',
+                components: []
+            });
+        }
+
+        // ====================================================
+        // === v3.9.1: RESTORE BACKUP — Confirmation button handlers ===
+        // ====================================================
+        if (interaction.isButton() && interaction.customId.startsWith('restore_backup_confirm:')) {
+            return handleRestoreBackupConfirm(interaction);
+        }
+        if (interaction.isButton() && interaction.customId.startsWith('restore_backup_cancel:')) {
+            const parts = interaction.customId.split(':');
+            const ownerId = parts[1];
+            if (interaction.user.id !== ownerId) {
+                return interaction.reply({ content: '❌ Hanya admin yang memulai konfirmasi ini yang bisa membatalkan.', flags: MessageFlags.Ephemeral });
+            }
+            return interaction.update({
+                content: '✅ Restore backup dibatalkan. Tidak ada perubahan yang dilakukan.',
                 components: []
             });
         }
@@ -1242,11 +1257,29 @@ async function updatePollVoteMessage(interaction, poll) {
 // ====================================================
 async function handlePollModalCreate(interaction) {
     try {
-        // customId: poll_modal_create:<channelId>:<multiple>:<encoded question>
+        // v3.9.1 FIX: customId sekarang hanya `poll_modal_create:<sessionId>`.
+        // Data poll (channelId, multiple, question) disimpan di in-memory session
+        // supaya customId tidak overflow 100-char Discord limit kalau question panjang.
         const parts = interaction.customId.split(':');
-        const channelId = parts[1];
-        const multiple = parts[2] === '1';
-        const question = decodeURIComponent(parts.slice(3).join(':'));
+        const sessionId = parts[1];
+        const session = getPollSession(sessionId);
+
+        if (!session) {
+            return interaction.reply({
+                content: '❌ Session poll sudah expired (lebih dari 5 menit). Jalankan ulang `/poll create`.',
+                flags: MessageFlags.Ephemeral
+            });
+        }
+
+        // Defense-in-depth: pastikan user yang submit modal = user yang buat session.
+        if (session.userId !== interaction.user.id) {
+            return interaction.reply({
+                content: '❌ Modal ini bukan milik kamu. Jalankan `/poll create` sendiri.',
+                flags: MessageFlags.Ephemeral
+            });
+        }
+
+        const { channelId, multiple, question } = session;
 
         const optionsRaw = interaction.components[0]?.components?.[0]?.value?.trim() || '';
         if (!optionsRaw) {
@@ -1268,6 +1301,7 @@ async function handlePollModalCreate(interaction) {
 
         const channel = interaction.guild.channels.cache.get(channelId);
         if (!channel) {
+            deletePollSession(sessionId);
             return interaction.reply({ content: '❌ Channel tidak ditemukan.', flags: MessageFlags.Ephemeral });
         }
 
@@ -1324,9 +1358,12 @@ async function handlePollModalCreate(interaction) {
         if (!msg) {
             // P0-5 FIX: rollback poll entry yang sudah tersimpan kalau gagal kirim message.
             try { removePoll(poll.id); } catch (_) {}
+            deletePollSession(sessionId);
             return interaction.reply({ content: `❌ Gagal kirim poll ke ${channel}. Cek permission bot. Entry di-rollback.`, flags: MessageFlags.Ephemeral });
         }
         setPollMessageId(poll.id, msg.id);
+        // v3.9.1: session sudah dipakai, hapus dari memory.
+        deletePollSession(sessionId);
         // P1-10 FIX: tambah audit log untuk POLL_CREATE (sebelumnya missing).
         try {
             await logAudit(interaction.client, { action: 'POLL_CREATE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Buat poll **${question}** (${poll.options.length} options, ${multiple ? 'multi' : 'single'}-vote) di ${channel}`, guildId: interaction.guild.id });
@@ -2174,6 +2211,72 @@ async function handleResetConfigConfirm(interaction) {
             await interaction.editReply({ content: `❌ Gagal reset: ${err.message}` }).catch(()=>{});
         } else if (!interaction.replied) {
             await interaction.update({ content: `❌ Gagal reset: ${err.message}`, components: [] }).catch(()=>{});
+        }
+    }
+}
+
+// ====================================================
+// === v3.9.1: HELPER: RESTORE BACKUP CONFIRM ===
+// ====================================================
+async function handleRestoreBackupConfirm(interaction) {
+    try {
+        // customId: restore_backup_confirm:<ownerUserId>:<backupName>
+        const parts = interaction.customId.split(':');
+        const ownerId = parts[1];
+        // backupName bisa mengandung ":" kalau ada edge case, jadi join sisa parts.
+        const name = parts.slice(2).join(':');
+
+        // Defense-in-depth: hanya admin yang memulai yang bisa konfirmasi.
+        if (interaction.user.id !== ownerId) {
+            return interaction.reply({
+                content: '❌ Hanya admin yang memulai konfirmasi ini yang bisa mengeksekusi restore.',
+                flags: MessageFlags.Ephemeral
+            });
+        }
+
+        // Verify admin permission (defense-in-depth, even though slash command already gated)
+        const { isAdmin } = require('../utils/permissions');
+        if (!isAdmin(interaction.member)) {
+            return interaction.update({
+                content: '❌ Kamu tidak punya permission admin. Restore dibatalkan.',
+                components: []
+            });
+        }
+
+        const { restoreBackup } = require('../utils/backupManager');
+        const { logAudit } = require('../utils/auditLog');
+
+        const result = restoreBackup(name);
+        if (!result.ok) {
+            return interaction.update({
+                content: `❌ Gagal restore: ${result.errors[0]}\n\nPakai \`/backup-list\` untuk lihat daftar backup yang valid.`,
+                components: []
+            });
+        }
+
+        await logAudit(interaction.client, {
+            action: 'RESTORE_BACKUP',
+            actorId: interaction.user.id,
+            actorTag: interaction.user.tag,
+            details: `Restore backup \`${name}\` (${result.filesRestored} files, via 2-step confirm). Pre-restore backup: \`${result.preRestoreName}\``,
+            guildId: interaction.guild.id
+        });
+
+        return interaction.update({
+            content: `♻️ **Restore berhasil!**\n\n` +
+                `📁 Dari: \`${name}\`\n` +
+                `📦 File dipulihkan: **${result.filesRestored}**\n` +
+                `💾 Backup sebelum restore: \`${result.preRestoreName}\` (safety net)\n\n` +
+                `⚠️ **RESTART bot sekarang** supaya data baru ke-load penuh.\n\`\`\`bash\nnpm start\n\`\`\`\n` +
+                (result.errors.length > 0 ? `⚠️ Error: \`\`\`\n${result.errors.join('\n')}\n\`\`\`` : ''),
+            components: []
+        });
+    } catch (err) {
+        console.error('Restore backup confirm error:', err);
+        if (interaction.deferred && !interaction.replied) {
+            await interaction.editReply({ content: `❌ Gagal restore: ${err.message}` }).catch(()=>{});
+        } else if (!interaction.replied) {
+            await interaction.update({ content: `❌ Gagal restore: ${err.message}`, components: [] }).catch(()=>{});
         }
     }
 }

@@ -44,7 +44,8 @@ const FILES_TO_BACKUP = [
     'polls.json',
     'scheduledAnnouncements.json',
     'stats.json',
-    'tempVoice.json'
+    'tempVoice.json',
+    'tickets.json'
 ];
 
 const MAX_BACKUPS = 7;
@@ -155,14 +156,50 @@ function listBackups() {
 }
 
 /**
+ * v3.9.1: In-process lock supaya dua admin tidak restore bersamaan.
+ * Jika restoreInProgress = true, panggilan restoreBackup() berikutnya akan
+ * langsung ditolak (bukan di-antrikan) supaya file tidak saling overwrite.
+ */
+let restoreInProgress = false;
+
+/**
  * Restore backup berdasarkan nama folder.
  * @param {string} name - nama folder backup (mis. "2026-07-31_15-30-00")
+ *   atau "pre-restore_2026-07-31_15-30-00" (auto-backup sebelum restore).
  * @returns {Object} { ok, filesRestored, errors[] }
  */
 function restoreBackup(name) {
-    // Sanitize name — kalau ada slash/dot, reject
-    if (!/^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}$/.test(name)) {
+    // v3.9.1 FIX: cegah concurrent restore (race condition antar admin).
+    if (restoreInProgress) {
+        return {
+            ok: false,
+            filesRestored: 0,
+            errors: ['Restore lain sedang berjalan. Tunggu sampai selesai sebelum retry.']
+        };
+    }
+    restoreInProgress = true;
+    try {
+        return _restoreBackupImpl(name);
+    } finally {
+        restoreInProgress = false;
+    }
+}
+
+function _restoreBackupImpl(name) {
+    // Sanitize name — kalau ada slash/dot, reject.
+    // v3.9.1: izinkan prefix `pre-restore_` selain format YYYY-MM-DD_HH-mm-ss.
+    // Sebelumnya, backup pre-restore tidak bisa di-restore via /restore-backup
+    // karena regex hanya match format timestamp polos. Sekarang pre-restore
+    // juga bisa di-restore ( berguna untuk rollback kalau restore sebelumnya
+    // salah pilih backup).
+    const isPlainTimestamp = /^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}$/.test(name);
+    const isPreRestore = /^pre-restore_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}$/.test(name);
+    if (!isPlainTimestamp && !isPreRestore) {
         return { ok: false, filesRestored: 0, errors: ['Invalid backup name format'] };
+    }
+    // Defense-in-depth: pastikan name tidak mengandung `..` atau slash.
+    if (name.includes('..') || name.includes('/') || name.includes('\\')) {
+        return { ok: false, filesRestored: 0, errors: ['Invalid backup name (path traversal detected)'] };
     }
 
     const srcDir = path.join(backupsDir, name);
@@ -195,6 +232,14 @@ function restoreBackup(name) {
             result.errors.push(`${file}: ${err.message}`);
         }
     }
+
+    // v3.9.1: invalidate in-memory cache statsManager supaya data hasil restore
+    // tidak ditimpa oleh cache lama saat flush berikutnya.
+    try {
+        const stats = require('./statsManager');
+        if (typeof stats.reload === 'function') stats.reload();
+    } catch (_) {}
+
     return result;
 }
 

@@ -667,11 +667,15 @@ module.exports = async (interaction) => {
         try { trackPurchase(member.id, parsePriceNum(product.price)); } catch (_) {}
 
         // 7. Audit log (P1-10 FIX: sebelumnya tidak ada logAudit untuk SET_KEY)
+        // v3.9.1 FIX: jangan bocorkan key (bahkan sebagian) ke audit log channel.
+        // Sebelumnya `keyValue.slice(0, 8)` membocorkan 8 char pertama key, yang
+        // bisa ditebak orang yang punya akses ke audit-log channel. Sekarang
+        // hanya tampilkan panjang key saja (untuk debugging), nilai key disembunyikan.
         await logAudit(interaction.client, {
             action: 'SET_KEY',
             actorId: interaction.user.id,
             actorTag: interaction.user.tag,
-            details: `Set key untuk <@${member.id}> — produk: **${product.label}**, role: ${role.name}, key: \`${keyValue.slice(0, 8)}...\``,
+            details: `Set key untuk <@${member.id}> — produk: **${product.label}**, role: ${role.name}, key: \`***\` (len=${keyValue.length})`,
             guildId: interaction.guild.id
         });
 
@@ -1041,6 +1045,16 @@ module.exports = async (interaction) => {
         }
 
         // Build content (mention)
+        // v3.9.1 FIX: validasi mention secara ketat. Sebelumnya, admin bisa
+        // oper string bebas sebagai `mention` (mis. "halo @everyone dunia")
+        // yang akan bocor ke channel tujuan dan trigger ping yang tidak
+        // diinginkan. Sekarang hanya format berikut yang diterima:
+        //   - @everyone / everyone
+        //   - @here / here
+        //   - <@&ROLE_ID>      (role mention)
+        //   - <@USER_ID>       (user mention)
+        //   - <@!USER_ID>      (user mention, old format)
+        // Selain itu → reject dengan pesan error.
         let content = undefined;
         if (mention) {
             const m = mention.trim().toLowerCase();
@@ -1048,9 +1062,22 @@ module.exports = async (interaction) => {
                 content = '@everyone';
             } else if (m === 'here' || m === '@here') {
                 content = '@here';
-            } else {
-                // mention bisa berupa <@&role_id> atau <@user_id> atau text biasa
+            } else if (/^<@&\d{17,20}>$/.test(mention)) {
+                // Role mention: <@&123456789012345678>
                 content = mention;
+            } else if (/^<@!?\d{17,20}>$/.test(mention)) {
+                // User mention: <@123456789012345678> or <@!123456789012345678>
+                content = mention;
+            } else {
+                return interaction.editReply({
+                    content: `❌ Format mention tidak valid: \`${mention}\`\n\n` +
+                        `Format yang didukung:\n` +
+                        `• \`@everyone\` atau \`everyone\`\n` +
+                        `• \`@here\` atau \`here\`\n` +
+                        `• \`<@&ROLE_ID>\` (mention role)\n` +
+                        `• \`<@USER_ID>\` (mention user)\n\n` +
+                        `Tip: untuk mention role, ketik \`@rolename\` di Discord lalu copy hasilnya.`
+                });
             }
         }
 
@@ -1244,20 +1271,47 @@ module.exports = async (interaction) => {
     }
 
     if (interaction.commandName === 'restore-backup') {
-        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        // v3.9.1 FIX: tambah 2-step confirmation (sama seperti /reset-config).
+        // Sebelumnya, /restore-backup langsung overwrite semua file JSON tanpa
+        // konfirmasi. Kalau admin salah ketik nama backup, data hari ini hilang.
+        // Sekarang: bot tampilkan preview + 2 tombol (Confirm / Cancel).
         const name = interaction.options.getString('name');
-        const result = restoreBackup(name);
-        if (!result.ok) {
-            return interaction.editReply({ content: `❌ Gagal restore: ${result.errors[0]}\n\nPakai \`/backup-list\` untuk lihat daftar backup yang valid.` });
+
+        // Pre-validate name SEBELUM show confirmation supaya pesan error jelas.
+        const isPlainTimestamp = /^\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}$/.test(name);
+        const isPreRestore = /^pre-restore_\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2}$/.test(name);
+        if (!isPlainTimestamp && !isPreRestore) {
+            return interaction.reply({
+                content: `❌ Format nama backup tidak valid: \`${name}\`\n\nFormat yang didukung: \`YYYY-MM-DD_HH-mm-ss\` atau \`pre-restore_YYYY-MM-DD_HH-mm-ss\`. Lihat \`/backup-list\`.`,
+                flags: MessageFlags.Ephemeral
+            });
         }
-        await logAudit(interaction.client, { action: 'RESTORE_BACKUP', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Restore backup \`${name}\` (${result.filesRestored} files). Pre-restore backup: \`${result.preRestoreName}\``, guildId: interaction.guild.id });
-        return interaction.editReply({
-            content: `♻️ **Restore berhasil!**\n\n` +
-                `📁 Dari: \`${name}\`\n` +
-                `📦 File dipulihkan: **${result.filesRestored}**\n` +
-                `💾 Backup sebelum restore: \`${result.preRestoreName}\` (safety net)\n\n` +
-                `⚠️ **RESTART bot sekarang** supaya data baru ke-load.\n\`\`\`bash\nnpm start\n\`\`\`\n` +
-                (result.errors.length > 0 ? `⚠️ Error: \`\`\`\n${result.errors.join('\n')}\n\`\`\`` : '')
+
+        // Stash name di metadata message supaya handler tombol bisa ambil.
+        // Pakai interaction.user.id sebagai nonce untuk mencegah user lain klik
+        // tombol konfirmasi (defense-in-depth — slash command sudah admin-gated).
+        const confirmRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`restore_backup_confirm:${interaction.user.id}:${name}`)
+                .setLabel('⚠️ Ya, Restore Sekarang')
+                .setStyle(ButtonStyle.Danger),
+            new ButtonBuilder()
+                .setCustomId(`restore_backup_cancel:${interaction.user.id}`)
+                .setLabel('❌ Batal')
+                .setStyle(ButtonStyle.Secondary)
+        );
+
+        return interaction.reply({
+            content: `⚠️ **KONFIRMASI RESTORE BACKUP**\n\n` +
+                `📁 Backup: \`${name}\`\n\n` +
+                `**Apa yang akan terjadi kalau kamu klik Confirm:**\n` +
+                `• Bot akan bikin safety backup otomatis (pre-restore) dari kondisi SEKARANG\n` +
+                `• Semua file JSON (config, keys, scheduledRoles, warns, dll) akan ditimpa dengan versi dari backup ini\n` +
+                `• Bot perlu di-restart supaya data baru ke-load penuh\n\n` +
+                `**Tidak bisa di-undo** (kecuali restore ulang dari safety backup).\n\n` +
+                `Klik tombol di bawah untuk lanjutkan atau batalkan.`,
+            components: [confirmRow],
+            flags: MessageFlags.Ephemeral
         });
     }
 
@@ -1313,7 +1367,12 @@ module.exports = async (interaction) => {
                 new ButtonBuilder().setCustomId(`gw_join:${gw.id}`).setLabel('🎉 Join').setStyle(ButtonStyle.Success),
                 new ButtonBuilder().setCustomId(`gw_leave:${gw.id}`).setLabel('🚪 Leave').setStyle(ButtonStyle.Secondary)
             );
-            const msg = await channel.send({ embeds: [embed], components: [row], content: '@everyone 🎉 **GIVEAWAY BARU!**' }).catch(err => null);
+            // v3.9.1 FIX: jangan hardcoded @everyone ping (terlalu mengganggu member).
+            // Sebelumnya setiap giveaway baru otomatis ping @everyone, yang bisa
+            // menyebabkan member mute / leave server kalau terlalu sering.
+            // Sekarang admin yang mau ping @everyone bisa pakai /announce terpisah
+            // atau edit pesan giveaway setelah dibuat.
+            const msg = await channel.send({ embeds: [embed], components: [row], content: '🎉 **GIVEAWAY BARU!**' }).catch(err => null);
             if (!msg) {
                 // P0-5 FIX: rollback giveaway entry yang sudah tersimpan kalau gagal kirim message.
                 // Sebelumnya entry tetap ada dengan messageId=null → zombie giveaway.
@@ -1445,6 +1504,22 @@ module.exports = async (interaction) => {
         }
         if (thumbnail && !/^https?:\/\//.test(thumbnail)) {
             return interaction.editReply({ content: '❌ Thumbnail URL harus mulai dengan `http://` atau `https://`' });
+        }
+
+        // v3.9.1 FIX: validasi mention (sama seperti /announce) supaya admin
+        // tidak bisa inject string bebas yang memicu ping tidak diinginkan.
+        if (mention) {
+            const m = mention.trim().toLowerCase();
+            const isValidMention =
+                m === 'everyone' || m === '@everyone' ||
+                m === 'here' || m === '@here' ||
+                /^<@&\d{17,20}>$/.test(mention) ||
+                /^<@!?\d{17,20}>$/.test(mention);
+            if (!isValidMention) {
+                return interaction.editReply({
+                    content: `❌ Format mention tidak valid: \`${mention}\`\n\nFormat yang didukung: \`@everyone\`, \`@here\`, \`<@&ROLE_ID>\`, \`<@USER_ID>\`.`
+                });
+            }
         }
 
         const entry = createScheduledAnn({
@@ -1716,9 +1791,22 @@ module.exports = async (interaction) => {
             const question = interaction.options.getString('question');
             const multiple = interaction.options.getBoolean('multiple') || false;
 
+            // v3.9.1 FIX: simpan data poll di in-memory session, bukan di customId.
+            // Sebelumnya customId = `poll_modal_create:${channel.id}:${multiple}:${encodeURIComponent(question)}`
+            // yang bisa overflow 100-char Discord limit kalau question panjang
+            // (esp. setelah encodeURIComponent — spasi jadi %20, dll).
+            // Sekarang customId = `poll_modal_create:${sessionId}` (~50 char, aman).
+            const { createPollSession } = require('../utils/pollManager');
+            const sessionId = createPollSession({
+                userId: interaction.user.id,
+                channelId: channel.id,
+                multiple,
+                question
+            });
+
             // Open modal untuk input options (satu field, dipisah newline)
             const modal = new ModalBuilder()
-                .setCustomId(`poll_modal_create:${channel.id}:${multiple ? '1' : '0'}:${encodeURIComponent(question)}`)
+                .setCustomId(`poll_modal_create:${sessionId}`)
                 .setTitle('Buat Poll — Input Options');
             modal.addComponents(
                 new ActionRowBuilder().addComponents(

@@ -99,6 +99,27 @@ function shutdown() {
     }
 }
 
+/**
+ * v3.9.1: Invalidate cache + reload dari disk. Dipanggil setelah restoreBackup
+ * supaya in-memory cache (yang mungkin berisi data lama) tidak menimpa
+ * data hasil restore saat flush berikutnya.
+ *
+ * Skenario sebelum fix:
+ *   1. Bot jalan, cache stats.json berisi { userA: 5 messages }
+ *   2. Admin restore backup lama (stats.json berisi { userA: 3 messages })
+ *   3. User kirim pesan → incrementMessages update cache jadi { userA: 6 }
+ *      (seharusnya 4, karena data restore punya 3)
+ *   4. Periodic flush tulis { userA: 6 } ke stats.json → data restore hilang
+ *
+ * Fix: set cache = null supaya load() baca ulang dari disk.
+ */
+function reload() {
+    // Jangan flush cache lama — itu justru data basi yang mau kita buang.
+    dirty = false;
+    cache = null;
+    load();
+}
+
 // === Legacy save() untuk backward compat (langsung write cache) ===
 function save() {
     if (cache === null) return; // tidak ada yang di-load, tidak ada yang di-save
@@ -242,5 +263,5 @@ function parsePrice(priceStr) {
 module.exports = {
     getStats, incrementMessages, recordPurchase, recordGiveawayWin, recordJoin,
     getTopUsers, getServerStats, parsePrice,
-    startAutoFlush, shutdown, flush
+    startAutoFlush, shutdown, flush, reload
 };

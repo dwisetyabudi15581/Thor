@@ -128,7 +128,14 @@ function getMaxExpireAtByUserAndRole(userId, roleId, now = Date.now()) {
     const actives = getActiveKeysByUserAndRole(userId, roleId, now);
     if (actives.length === 0) return null;
     if (actives.some(k => k.expireAt === null)) return null; // ada permanen
-    return Math.max(...actives.map(k => k.expireAt));
+    // v3.9.1 FIX: pakai reduce, bukan Math.max(...spread). Kalau user punya
+    // ratusan key aktif (kasus ekstrim), spread bisa kena call stack limit
+    // dan throw RangeError "Maximum call stack size exceeded".
+    let max = -Infinity;
+    for (const k of actives) {
+        if (k.expireAt > max) max = k.expireAt;
+    }
+    return max === -Infinity ? null : max;
 }
 
 /**
