@@ -3,15 +3,23 @@
  *
  * File: stats.json
  * {
- *   "userId1": {
+ *   "<guildId>:<userId>": {
  *     "messages": 123,
  *     "lastMessageAt": 1735689600000,
  *     "vipPurchases": 2,
  *     "totalSpent": 80000,
  *     "joinedAt": 1735000000000,
- *     "giveawaysWon": 0
+ *     "giveawaysWon": 0,
+ *     "guildId": "...",   // v3.9.4: backfilled for filtering
+ *     "userId": "..."     // v3.9.4: backfilled for filtering
  *   }
  * }
+ *
+ * v3.9.4 FIX: cross-guild data isolation.
+ *   Sebelumnya key cuma `userId` → stats dari Guild A bocor ke Guild B.
+ *   Sekarang key = `${guildId}:${userId}` (composite, sama seperti warns.json).
+ *   Backward compat: legacy entries (key tanpa `:`) di-migrate ke guild pertama
+ *   yang didaftarkan via `init()` (dipanggil dari index.js ClientReady).
  *
  * Tracking:
  *   - messages: count pesan user (updated by messageCreate event)
@@ -37,6 +45,7 @@ const FLUSH_INTERVAL_MS = 30 * 1000; // 30 detik
 let cache = null;       // null = belum di-load
 let dirty = false;      // apakah cache ada perubahan yang belum di-flush?
 let flushTimer = null;  // timer periodic flush
+let defaultGuildId = null; // v3.9.4: untuk migrasi legacy entries
 
 function defaultUserStats() {
     return {
@@ -47,6 +56,78 @@ function defaultUserStats() {
         joinedAt: null,
         giveawaysWon: 0
     };
+}
+
+/**
+ * Composite key helper.
+ */
+function keyFor(guildId, userId) {
+    return `${guildId}:${userId}`;
+}
+
+/**
+ * v3.9.4: Init dengan default guild ID untuk migrasi legacy entries.
+ * Dipanggil dari index.js ClientReady. Kalau bot di 1 guild, semua legacy
+ * entries akan di-assign ke guild tersebut. Kalau bot di multi-guild,
+ * legacy entries di-assign ke guild pertama (cukup untuk mayoritas case).
+ *
+ * @param {string} guildId
+ */
+function init(guildId) {
+    if (!guildId) return;
+    defaultGuildId = guildId;
+    // Kalau cache sudah di-load, trigger migrasi sekarang.
+    if (cache !== null) migrateLegacyEntries();
+}
+
+/**
+ * v3.9.4: Migrate legacy entries (key tanpa `:`) ke composite key
+ * `${defaultGuildId}:${userId}`. Idempotent — entry yang sudah composite tidak diubah.
+ */
+function migrateLegacyEntries() {
+    if (!defaultGuildId || cache === null) return;
+    let migrated = 0;
+    const newCache = {};
+    for (const [k, v] of Object.entries(cache)) {
+        if (k.includes(':')) {
+            // Sudah composite — keep as-is, backfill guildId/userId fields kalau belum ada.
+            if (!v.guildId || !v.userId) {
+                const [gid, uid] = k.split(':');
+                if (!v.guildId) v.guildId = gid;
+                if (!v.userId) v.userId = uid;
+            }
+            newCache[k] = v;
+        } else {
+            // Legacy entry — k adalah userId plain. Re-key ke composite.
+            const newKey = keyFor(defaultGuildId, k);
+            if (!v.guildId) v.guildId = defaultGuildId;
+            if (!v.userId) v.userId = k;
+            // Kalau sudah ada entry composite untuk user ini (kasus race condition),
+            // merge: jumlahkan counters, ambil timestamps paling awal.
+            if (newCache[newKey]) {
+                const existing = newCache[newKey];
+                existing.messages = (existing.messages || 0) + (v.messages || 0);
+                existing.vipPurchases = (existing.vipPurchases || 0) + (v.vipPurchases || 0);
+                existing.totalSpent = (existing.totalSpent || 0) + (v.totalSpent || 0);
+                existing.giveawaysWon = (existing.giveawaysWon || 0) + (v.giveawaysWon || 0);
+                if (v.joinedAt && (!existing.joinedAt || v.joinedAt < existing.joinedAt)) {
+                    existing.joinedAt = v.joinedAt;
+                }
+                if (v.lastMessageAt && (!existing.lastMessageAt || v.lastMessageAt > existing.lastMessageAt)) {
+                    existing.lastMessageAt = v.lastMessageAt;
+                }
+            } else {
+                newCache[newKey] = v;
+            }
+            migrated++;
+        }
+    }
+    if (migrated > 0) {
+        cache = newCache;
+        dirty = true;
+        console.log(`🔄 stats.json: ${migrated} legacy entry di-migrate ke guild ${defaultGuildId}.`);
+        flush();
+    }
 }
 
 function load() {
@@ -61,6 +142,8 @@ function load() {
         console.warn('⚠️ stats.json rusak:', err.message);
         cache = {};
     }
+    // v3.9.4: jalankan migrasi legacy kalau defaultGuildId sudah di-set.
+    if (defaultGuildId) migrateLegacyEntries();
     return cache;
 }
 
@@ -127,75 +210,134 @@ function save() {
     flush();
 }
 
-function getStats(userId) {
+/**
+ * v3.9.4: Get stats user scoped ke guild.
+ * @param {string} guildId
+ * @param {string} userId
+ */
+function getStats(guildId, userId) {
     const all = load();
-    return all[userId] || defaultUserStats();
+    return all[keyFor(guildId, userId)] || defaultUserStats();
 }
 
 /**
  * Increment message count — P0-1 fix: pakai cache, TIDAK sync file I/O.
+ * v3.9.4: scoped per guild.
+ *
+ * @param {string} guildId
+ * @param {string} userId
  */
-function incrementMessages(userId) {
+function incrementMessages(guildId, userId) {
     const all = load();
-    if (!all[userId]) all[userId] = defaultUserStats();
-    all[userId].messages = (all[userId].messages || 0) + 1;
-    all[userId].lastMessageAt = Date.now();
+    const k = keyFor(guildId, userId);
+    if (!all[k]) {
+        all[k] = defaultUserStats();
+        all[k].guildId = guildId;
+        all[k].userId = userId;
+    }
+    all[k].messages = (all[k].messages || 0) + 1;
+    all[k].lastMessageAt = Date.now();
     dirty = true;
     // Tidak langsung flush — flush periodik tiap 30 detik.
 }
 
-function recordPurchase(userId, priceNum) {
+/**
+ * v3.9.4: scoped per guild.
+ */
+function recordPurchase(guildId, userId, priceNum) {
     const all = load();
-    if (!all[userId]) all[userId] = defaultUserStats();
-    all[userId].vipPurchases = (all[userId].vipPurchases || 0) + 1;
-    all[userId].totalSpent = (all[userId].totalSpent || 0) + (priceNum || 0);
+    const k = keyFor(guildId, userId);
+    if (!all[k]) {
+        all[k] = defaultUserStats();
+        all[k].guildId = guildId;
+        all[k].userId = userId;
+    }
+    all[k].vipPurchases = (all[k].vipPurchases || 0) + 1;
+    all[k].totalSpent = (all[k].totalSpent || 0) + (priceNum || 0);
     dirty = true;
     flush(); // penting, jangan sampai transaksi hilang kalau bot crash
 }
 
-function recordGiveawayWin(userId) {
+/**
+ * v3.9.4: scoped per guild.
+ */
+function recordGiveawayWin(guildId, userId) {
     const all = load();
-    if (!all[userId]) all[userId] = defaultUserStats();
-    all[userId].giveawaysWon = (all[userId].giveawaysWon || 0) + 1;
-    dirty = true;
-    flush();
-}
-
-function recordJoin(userId) {
-    const all = load();
-    if (!all[userId]) all[userId] = defaultUserStats();
-    if (!all[userId].joinedAt) all[userId].joinedAt = Date.now();
+    const k = keyFor(guildId, userId);
+    if (!all[k]) {
+        all[k] = defaultUserStats();
+        all[k].guildId = guildId;
+        all[k].userId = userId;
+    }
+    all[k].giveawaysWon = (all[k].giveawaysWon || 0) + 1;
     dirty = true;
     flush();
 }
 
 /**
- * Get top N users berdasarkan metric.
+ * v3.9.4: scoped per guild.
+ */
+function recordJoin(guildId, userId) {
+    const all = load();
+    const k = keyFor(guildId, userId);
+    if (!all[k]) {
+        all[k] = defaultUserStats();
+        all[k].guildId = guildId;
+        all[k].userId = userId;
+    }
+    if (!all[k].joinedAt) all[k].joinedAt = Date.now();
+    dirty = true;
+    flush();
+}
+
+/**
+ * Get top N users berdasarkan metric, scoped ke guild.
+ * v3.9.4: hanya hitung entry milik guild ini.
+ *
+ * @param {string} guildId
  * @param {string} metric - 'messages' | 'vipPurchases' | 'totalSpent' | 'giveawaysWon'
  * @param {number} limit
  * @returns {Array} [{ userId, value, ...otherStats }]
  */
-function getTopUsers(metric, limit = 10) {
+function getTopUsers(guildId, metric, limit = 10) {
     const all = load();
+    const prefix = `${guildId}:`;
     return Object.entries(all)
-        .map(([userId, stats]) => ({ userId, ...stats, value: stats[metric] || 0 }))
+        .filter(([k]) => k.startsWith(prefix))
+        .map(([k, stats]) => ({ userId: stats.userId || k.split(':')[1], ...stats, value: stats[metric] || 0 }))
         .filter(e => e.value > 0)
         .sort((a, b) => b.value - a.value)
         .slice(0, limit);
 }
 
 /**
- * Get agregat stats seluruh server.
+ * Get agregat stats untuk sebuah guild.
+ * v3.9.4: hanya hitung entry milik guild ini.
+ *
+ * @param {string} guildId
  */
-function getServerStats() {
+function getServerStats(guildId) {
     const all = load();
-    const users = Object.keys(all);
+    const prefix = `${guildId}:`;
+    let totalUsers = 0;
+    let totalMessages = 0;
+    let totalPurchases = 0;
+    let totalRevenue = 0;
+    let totalGiveawaysWon = 0;
+    for (const [k, s] of Object.entries(all)) {
+        if (!k.startsWith(prefix)) continue;
+        totalUsers++;
+        totalMessages += (s.messages || 0);
+        totalPurchases += (s.vipPurchases || 0);
+        totalRevenue += (s.totalSpent || 0);
+        totalGiveawaysWon += (s.giveawaysWon || 0);
+    }
     return {
-        totalUsers: users.length,
-        totalMessages: users.reduce((sum, id) => sum + (all[id].messages || 0), 0),
-        totalPurchases: users.reduce((sum, id) => sum + (all[id].vipPurchases || 0), 0),
-        totalRevenue: users.reduce((sum, id) => sum + (all[id].totalSpent || 0), 0),
-        totalGiveawaysWon: users.reduce((sum, id) => sum + (all[id].giveawaysWon || 0), 0)
+        totalUsers,
+        totalMessages,
+        totalPurchases,
+        totalRevenue,
+        totalGiveawaysWon
     };
 }
 
@@ -204,7 +346,7 @@ function getServerStats() {
  *
  * P2-13 FIX: sebelumnya `.replace(/\./g, '').replace(/,/g, '.')` ambigu:
  *   - "25,000" (US thousand) → "25.000" → parseFloat → 25 (SALAH, harusnya 25000)
- *   - "Rp. 50.000" (ID thousand) → "50000" → OK
+ *   - "Rp. 50.000" (ID thousand) → 50000 → OK
  *   - "2,5M" (ID decimal) → "2.5M" → 2.5 × 1000000 = OK
  * Sekarang: deteksi format berdasarkan keberadaan dot & comma bersamaan.
  */
@@ -261,6 +403,7 @@ function parsePrice(priceStr) {
 }
 
 module.exports = {
+    init,
     getStats, incrementMessages, recordPurchase, recordGiveawayWin, recordJoin,
     getTopUsers, getServerStats, parsePrice,
     startAutoFlush, shutdown, flush, reload

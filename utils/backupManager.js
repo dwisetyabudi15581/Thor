@@ -240,6 +240,14 @@ function _restoreBackupImpl(name) {
         if (typeof stats.reload === 'function') stats.reload();
     } catch (_) {}
 
+    // v3.9.4: invalidate permissions admin role cache juga.
+    // Sebelumnya, kalau restore backup punya admin role ID berbeda, isAdmin()
+    // masih pakai admin role lama sampai TTL 30 detik habis → admin lockout.
+    try {
+        const { invalidateAdminRoleCache } = require('./permissions');
+        invalidateAdminRoleCache();
+    } catch (_) {}
+
     return result;
 }
 

@@ -196,7 +196,8 @@ async function processGiveawayEnd(client, gw, options = {}) {
                     await user.send(`🎊 **Selamat! Kamu menang giveaway!**\n\nPrize: **${gw.prize}**\nHost: ${gw.hostTag}\nServer: ${guild.name}\n\nHubungi host untuk klaim hadiahmu.`).catch(()=>{});
                 }
                 // Track giveaway win untuk leaderboard
-                try { trackGiveawayWin(wid); } catch (_) {}
+                // v3.9.4: scoped per guild — sebelumnya bocor ke guild lain.
+                try { trackGiveawayWin(gw.guildId, wid); } catch (_) {}
             }
         } else {
             await channel.send({ content: `📭 Giveaway **${gw.prize}** berakhir tanpa pemenang (tidak ada peserta).` }).catch(()=>{});
@@ -229,7 +230,8 @@ async function announceRerollWinner(client, gw, winnerId) {
             await user.send(`🎊 **Selamat! Kamu menang giveaway (reroll)!**\n\nPrize: **${gw.prize}**\nHost: ${gw.hostTag}\nServer: ${guild.name}\n\nHubungi host untuk klaim hadiahmu.`).catch(()=>{});
         }
         // Track stats
-        try { trackGiveawayWin(winnerId); } catch (_) {}
+        // v3.9.4: scoped per guild
+        try { trackGiveawayWin(gw.guildId, winnerId); } catch (_) {}
     } catch (err) {
         console.error('Error announceRerollWinner:', err);
     }

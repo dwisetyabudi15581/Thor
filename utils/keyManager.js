@@ -182,6 +182,31 @@ function getStats(now = Date.now()) {
 }
 
 /**
+ * v3.9.4: Guild-scoped variant of getStats.
+ * Hanya hitung key milik guild ini (atau key legacy tanpa guildId, yang dianggap milik guild pemanggil).
+ *
+ * @param {string} guildId
+ * @param {number} now
+ * @returns {{total, active, expired, permanent}}
+ */
+function getStatsByGuild(guildId, now = Date.now()) {
+    if (!guildId) return getStats(now);
+    const list = loadKeys().filter(k => !k.guildId || k.guildId === guildId);
+    let active = 0, expired = 0, permanent = 0;
+    for (const k of list) {
+        if (k.expireAt === null || k.days === 0) {
+            permanent++;
+            active++;
+        } else if (k.expireAt > now) {
+            active++;
+        } else {
+            expired++;
+        }
+    }
+    return { total: list.length, active, expired, permanent };
+}
+
+/**
  * Hapus SEMUA key yang sudah expired dari keys.json.
  * @returns {number} jumlah key yang dihapus
  */
@@ -282,6 +307,7 @@ module.exports = {
     getExpiredKeys,
     getAllKeys,
     getStats,
+    getStatsByGuild,
     removeExpiredKeys,
     removeAllKeysByUser,
     removeAllKeysByUserAndRole,

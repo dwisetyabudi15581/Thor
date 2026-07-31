@@ -5,6 +5,27 @@ Semua perubahan penting pada bot ini akan didokumentasikan di file ini.
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), dan
 versi mengikuti [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.4] — 2026-08-01
+
+### CRITICAL
+- **Fix `stats.json` cross-guild data leak** — bug terlewat dari v3.9.0. `stats.json` key cuma `userId` (tanpa guildId), sehingga `/stats`, `/leaderboard`, `/my-stats` menampilkan data dari semua guild. Fix: composite key `${guildId}:${userId}` + auto-migration legacy entries via `statsManager.init(defaultGuildId)` di ClientReady.
+- **Fix `DiscordAPIError[10008]: Unknown Message` saat editReply** — terjadi saat user menutup ephemeral reply sebelum bot sempat editReply (terutama setelah long task seperti `/tempvoice-remove`). Fix: NEW `utils/safeReply.js` helper dengan followUp fallback; semua `interaction.editReply` di commandHandler (126 panggilan) dan interactionHandler (69 panggilan) diganti dengan `safeEditReply`. Global error handler di `index.js` klasifikasi 10008/10062/40060 sebagai warning ringan.
+
+### HIGH
+- **Fix `ticket_close` & `ticket_set_key` masih parse channel topic** — v3.9.1 regression. v3.9.1 menambahkan `getTicketMeta()` tapi 2 button handler tidak di-update. Fix: pakai `getTicketMeta(interaction.channel.id, topic)` sebagai sumber utama.
+- **Fix Temp voice orphan entries tidak pernah di-cleanup** — saat admin manual delete channel, entry tetap di `tempVoice.json`. Setiap join trigger berikutnya bikin channel baru (leak). Fix: tambah `else` branch di `handleCreateTempVoice` untuk `unregisterChannel` orphan.
+- **Fix Warn auto-action marked "taken" meskipun gagal** — `markActionTaken` dipanggil unconditional bahkan kalau `member.timeout()` throw. Akibatnya, warn berikutnya yang seharusnya re-trigger mute di-skip. Fix: hanya `markActionTaken` kalau API call sukses.
+- **Fix Auto-transfer voice ownership bisa ke bot** — `voiceChannel.members.filter` tidak exclude bot account. Fix: tambah `!m.user.bot` di filter.
+- **Fix `restoreBackup` tidak invalidate permissions cache** — TTL 30 detik untuk admin role ID masih pakai config lama setelah restore. Fix: panggil `invalidateAdminRoleCache()` bersamaan dengan `statsManager.reload()`.
+- **Fix `/config-show` menampilkan cross-guild stats** — `getKeyStats()` dan `getAllScheduledActive()` return global count. Fix: tambah `getStatsByGuild(guildId)` dan `getActiveByGuild(guildId)` variants.
+
+### MEDIUM
+- Fix `safeReply.js` `IGNORABLE_REPLY_CODES` tidak konsisten (40060 documented tapi tidak di Set)
+- Fix `/backup-list` age display "168h lalu" untuk backup 1 minggu (seharusnya "7d lalu")
+
+### LOW
+- Tambah 3 missing audit log action labels: `WARN_CLEAR_ALL`, `SETUP_TEMPVOICE`, `TEMPVOICE_REMOVE`
+
 ## [3.9.3] — 2026-07-31
 
 ### CRITICAL

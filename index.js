@@ -22,7 +22,8 @@ const { removeExpiredKeys } = require('./utils/keyManager');
 const { startAutoBackup } = require('./utils/backupManager');
 const { getEnding: getEndingGiveaways } = require('./utils/giveawayManager');
 const { getPending: getPendingAnns } = require('./utils/scheduledAnnouncements');
-const { incrementMessages: trackMessage, startAutoFlush: startStatsAutoFlush, shutdown: shutdownStats } = require('./utils/statsManager');
+// v3.9.4: statsManager.init dipanggil di ClientReady untuk migrate legacy entries ke guild scoping.
+const { incrementMessages: trackMessage, startAutoFlush: startStatsAutoFlush, shutdown: shutdownStats, init: initStats } = require('./utils/statsManager');
 // P3-6 REFACTOR: definisi command & scheduler tasks dipisah ke file terpisah supaya index.js lebih lean.
 const { getCommands } = require('./utils/commandDefinitions');
 const { processExpiredRole, processGiveawayEnd, processScheduledAnnouncement, attachToClient } = require('./utils/schedulerTasks');
@@ -117,6 +118,16 @@ client.once(Events.ClientReady, async (c) => {
         // === 4. Start AUTO-FLUSH stats cache (P0-1 fix) ===
         startStatsAutoFlush();
 
+        // === v3.9.4: init statsManager dengan default guild untuk migrasi legacy entries ===
+        // Kalau bot di 1 guild (mayoritas case), legacy entries (key tanpa `:`) akan di-assign ke guild ini.
+        // Kalau bot multi-guild, pakai guild pertama yang ada di cache.
+        const defaultStatsGuildId = GUILD_ID || (c.guilds.cache.size > 0 ? c.guilds.cache.first().id : null);
+        if (defaultStatsGuildId) {
+            try { initStats(defaultStatsGuildId); } catch (err) {
+                console.warn('⚠️ Gagal init statsManager:', err.message);
+            }
+        }
+
         // === P0-2 FIX: Guard overlap pada scheduler interval ===
         // Sebelumnya: jika iterasi >60 detik (API Discord lambat),
         // iterasi berikutnya fire & proses entry yang sama → double DM.
@@ -173,16 +184,27 @@ client.on(Events.InteractionCreate, async (interaction) => {
         //   - Transient (timeout, 5xx, ECONNRESET, ETIMEDOUT): warning ringan, jangan full stack
         //   - DiscordAPIError known (4xx): warning + kode error
         //   - Lainnya: full error stack (kemungkinan bug kode)
+        //
+        // FIX v3.9.4: tambah klasifikasi untuk "ignorable reply errors":
+        //   - 10008 Unknown Message: user menutup pesan ephemeral sebelum editReply jalan
+        //   - 10062 Unknown Interaction: token interaction expired (>15 menit)
+        //   - 40060 Interaction already acknowledged: race condition double-ack
+        //   Error ini BUKAN bug — user behavior yang wajar. Cukup warning 1 baris,
+        //   jangan full stack trace.
         const isTransient = isTransientNetworkError(err);
+        const isIgnorableReply = isIgnorableReplyError(err);
         if (isTransient) {
             console.warn(`⚠️ Transient network error on interaction ${interaction.id}:`, err.code || err.name, '-', err.message?.slice(0, 100));
+        } else if (isIgnorableReply) {
+            console.warn(`⚠️ Interaction ${interaction.id} reply gagal (code ${err.code}): ${err.message?.slice(0, 100)}`);
         } else {
             console.error('Interaction Error:', err);
         }
 
         // FIX v3.7.1: kalau transient, jangan coba reply (kemungkinan juga timeout).
         // Coba reply hanya kalau bukan transient DAN belum replied/deferred.
-        if (!isTransient && interaction.isRepliable() && !interaction.replied && !interaction.deferred) {
+        // v3.9.4: jangan coba reply kalau ignorable reply error (interaction sudah invalid).
+        if (!isTransient && !isIgnorableReply && interaction.isRepliable() && !interaction.replied && !interaction.deferred) {
             interaction.reply({ content: '❌ Terjadi error. Coba lagi sebentar.', flags: 64 }).catch(()=>{});
         }
     }
@@ -216,6 +238,21 @@ function isTransientNetworkError(err) {
     return false;
 }
 
+/**
+ * v3.9.4: Deteksi apakah error adalah "ignorable reply error" — yaitu error
+ * yang terjadi karena user behavior (dismiss ephemeral, biarkan >15 menit)
+ * BUKAN karena bug kode. Error ini cukup di-warning, tidak perlu stack trace.
+ *
+ * - 10008 Unknown Message: user menutup ephemeral reply sebelum editReply jalan
+ * - 10062 Unknown Interaction: token interaction sudah expired (>15 menit)
+ * - 40060 Interaction has already been acknowledged: race condition ack
+ */
+function isIgnorableReplyError(err) {
+    if (!err) return false;
+    const code = err.code;
+    return code === 10008 || code === 10062 || code === 40060;
+}
+
 // === MEMBER EVENTS (welcome / goodbye / auto role) ===
 client.on(Events.GuildMemberAdd, async (member) => {
     try {
@@ -241,7 +278,8 @@ client.on(Events.MessageCreate, async (message) => {
     try {
         if (message.author?.bot) return;
         if (!message.guild) return; // DM
-        trackMessage(message.author.id);
+        // v3.9.4: scoped per guild — sebelumnya bocor ke guild lain kalau bot multi-guild.
+        trackMessage(message.guild.id, message.author.id);
     } catch (_) {}
 });
 
@@ -341,7 +379,8 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
 async function handleAutoTransferOwnership(client, guildId, channelId, channelInfo, voiceChannel, oldOwnerId) {
     try {
         // Cari member lain (selain owner lama) — pilih yang joinedAt paling lama
-        const otherMembers = voiceChannel.members.filter(m => m.id !== oldOwnerId);
+        // v3.9.4 FIX: exclude bot account. Sebelumnya music bot di channel bisa jadi owner baru.
+        const otherMembers = voiceChannel.members.filter(m => m.id !== oldOwnerId && !m.user.bot);
         if (otherMembers.size === 0) return; // tidak ada member lain
 
         // Sort by joinedAt asc (paling lama join = paling senior)
@@ -422,6 +461,12 @@ async function handleCreateTempVoice(newState) {
                 } catch (_) {
                     // Kalau gagal pindah, biarkan di trigger channel
                 }
+            } else {
+                // v3.9.4 FIX: channel sudah dihapus (oleh admin atau bot crash sebelum unregister).
+                // Sebelumnya orphan entry tetap ada di tempVoice.json → findChannelByOwner selalu
+                // return ID ini → setiap join trigger selalu bikin channel baru (leak).
+                tempVoiceManager.unregisterChannel(guild.id, existingChannelId);
+                console.log(`🧹 Temp voice orphan ${existingChannelId} dihapus (channel tidak ada).`);
             }
         }
 

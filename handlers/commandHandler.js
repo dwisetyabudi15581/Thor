@@ -2,8 +2,8 @@ const { PermissionFlagsBits, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRow
 const { getConfig, saveConfig, setField, DEFAULTS } = require('../utils/configManager');
 const { Embeds } = require('../utils/embedBuilder');
 const { isAdmin: checkIsAdmin } = require('../utils/permissions');
-const { addKey, getActiveKeysByUserAndRole, findAllByUser, formatKeysForUser, removeAllKeysByUser, getStats: getKeyStats } = require('../utils/keyManager');
-const { scheduleRoleRemoval, removeActiveByUserAndRole, findAllByUser: findAllSchedulesByUser, removeAllByUser: removeAllSchedulesByUser, getRemainingDays, getAllActive: getAllScheduledActive } = require('../utils/roleScheduler');
+const { addKey, getActiveKeysByUserAndRole, findAllByUser, formatKeysForUser, removeAllKeysByUser, getStats: getKeyStats, getStatsByGuild: getKeyStatsByGuild } = require('../utils/keyManager');
+const { scheduleRoleRemoval, removeActiveByUserAndRole, findAllByUser: findAllSchedulesByUser, removeAllByUser: removeAllSchedulesByUser, getRemainingDays, getAllActive: getAllScheduledActive, getActiveByGuild: getScheduledActiveByGuild } = require('../utils/roleScheduler');
 const { createPanel, addRoleToPanel, removeRoleFromPanel, getPanel, getPanelsByGuild, deletePanel, setMessageId, deletePanel: deleteSelfRolePanel } = require('../utils/selfRoleManager');
 const { buildPanelEmbed, buildPanelComponents } = require('../utils/selfRolePanelBuilder');
 const { createSession, buildEmbed, getSessionsByUser, deleteSessionByOwner } = require('../utils/embedBuilderSessions');
@@ -14,6 +14,9 @@ const { create: createScheduledAnn, getByGuild: getScheduledAnnsByGuild, get: ge
 const { addWarn, getWarns, getWarnCount, removeWarn, clearWarns, markActionTaken, DEFAULT_THRESHOLDS: WARN_THRESHOLDS } = require('../utils/warnManager');
 const { getStats: getUserStats, getTopUsers: getTopUsersStats, getServerStats: getServerStatsAll, parsePrice: parsePriceNum, recordPurchase: trackPurchase } = require('../utils/statsManager');
 const { create: createPoll, setMessageId: setPollMessageId, get: getPoll, getByGuild: getPollsByGuild, close: closePoll, getTotalVotes: getPollTotalVotes } = require('../utils/pollManager');
+// v3.9.4: safeEditReply — fallback ke followUp kalau original ephemeral reply sudah di-dismiss user.
+// Dipakai di command yang deferReply → long task → editReply (user bisa sempat tutup ephemeral).
+const { safeEditReply } = require('../utils/safeReply');
 
 module.exports = async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
@@ -176,7 +179,7 @@ module.exports = async (interaction) => {
 
         // Kalau role verified belum di-set, minta admin set dulu
         if (!config.roles.verified) {
-            return interaction.editReply({ content: '❌ Role Verified belum di-set. Pakai `/set-role verified @role` dulu.' });
+            return safeEditReply(interaction,{ content: '❌ Role Verified belum di-set. Pakai `/set-role verified @role` dulu.' });
         }
 
         const embed = new EmbedBuilder()
@@ -197,7 +200,7 @@ module.exports = async (interaction) => {
         );
 
         await interaction.channel.send({ embeds: [embed], components: [row] });
-        return interaction.editReply({ content: '✅ Panel verifikasi dipasang!' });
+        return safeEditReply(interaction,{ content: '✅ Panel verifikasi dipasang!' });
     }
 
     // === SETUP TICKET ===
@@ -205,7 +208,7 @@ module.exports = async (interaction) => {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         if (!config.products || config.products.length === 0) {
-            return interaction.editReply({ content: '❌ Belum ada produk. Pakai `/add-product` dulu.' });
+            return safeEditReply(interaction,{ content: '❌ Belum ada produk. Pakai `/add-product` dulu.' });
         }
 
         const priceList = config.products.map(p => `• **${p.label}** — ${p.price}`).join('\n');
@@ -228,7 +231,7 @@ module.exports = async (interaction) => {
         );
 
         await interaction.channel.send({ embeds: [embed], components: [row] });
-        return interaction.editReply({ content: '✅ Panel tiket dipasang!' });
+        return safeEditReply(interaction,{ content: '✅ Panel tiket dipasang!' });
     }
 
     // === SET ROLE ===
@@ -238,7 +241,7 @@ module.exports = async (interaction) => {
         const role = interaction.options.getRole('role');
         setField(`roles.${tipe}`, role.id);
         await logAudit(interaction.client, { action: 'SET_ROLE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Role **${tipe}** diatur ke ${role.name} (\`${role.id}\`)`, guildId: interaction.guild.id });
-        return interaction.editReply({ content: `✅ Role **${tipe}** diatur ke ${role} (\`${role.id}\`)` });
+        return safeEditReply(interaction,{ content: `✅ Role **${tipe}** diatur ke ${role} (\`${role.id}\`)` });
     }
 
     // === SET CHANNEL ===
@@ -248,7 +251,7 @@ module.exports = async (interaction) => {
         const channel = interaction.options.getChannel('channel');
         setField(`channels.${tipe}`, channel.id);
         await logAudit(interaction.client, { action: 'SET_CHANNEL', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Channel **${tipe}** diatur ke #${channel.name} (\`${channel.id}\`)`, guildId: interaction.guild.id });
-        return interaction.editReply({ content: `✅ Channel **${tipe}** diatur ke ${channel} (\`${channel.id}\`)` });
+        return safeEditReply(interaction,{ content: `✅ Channel **${tipe}** diatur ke ${channel} (\`${channel.id}\`)` });
     }
 
     // === SET MESSAGE ===
@@ -265,13 +268,13 @@ module.exports = async (interaction) => {
         const limit = isTitle ? EMBED_LIMITS.TITLE : EMBED_LIMITS.DESCRIPTION;
         const limitLabel = isTitle ? 'title (max 256)' : 'body (max 4096)';
         if (teks.length > limit) {
-            return interaction.editReply({
+            return safeEditReply(interaction,{
                 content: `❌ Teks terlalu panjang untuk **${tipe}**.\n\n📏 Panjang: **${teks.length}** char\n🎯 Limit: **${limit}** char (${limitLabel})\n💡 Potong ${teks.length - limit} char lagi.`
             });
         }
         setField(`messages.${tipe}`, teks);
         await logAudit(interaction.client, { action: 'SET_MESSAGE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Set pesan **${tipe}** (${teks.length} char)`, guildId: interaction.guild.id });
-        return interaction.editReply({
+        return safeEditReply(interaction,{
             content: `✅ Pesan **${tipe}** diperbarui.\n\nPreview:\n\`\`\`\n${teks}\n\`\`\`\nVariabel tersedia: \`{user}\` \`{username}\` \`{server}\` \`{count}\` \`{action}\``
         });
     }
@@ -286,10 +289,10 @@ module.exports = async (interaction) => {
         const duration = interaction.options.getString('duration');
 
         if (config.products.some(p => p.value === value)) {
-            return interaction.editReply({ content: `❌ Produk dengan value \`${value}\` sudah ada.` });
+            return safeEditReply(interaction,{ content: `❌ Produk dengan value \`${value}\` sudah ada.` });
         }
         if (config.products.length >= 25) {
-            return interaction.editReply({ content: '❌ Maksimal 25 produk (batas dropdown Discord).' });
+            return safeEditReply(interaction,{ content: '❌ Maksimal 25 produk (batas dropdown Discord).' });
         }
 
         // Hanya simpan duration kalau diisi
@@ -301,7 +304,7 @@ module.exports = async (interaction) => {
 
         const durationInfo = duration ? ` (durasi: ${duration})` : ' (tanpa duration)';
         await logAudit(interaction.client, { action: 'ADD_PRODUCT', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Tambah produk: **${label}** (\`${value}\`) — ${price}${durationInfo}`, guildId: interaction.guild.id });
-        return interaction.editReply({ content: `✅ Produk ditambahkan: **${label}** — ${price}${durationInfo}` });
+        return safeEditReply(interaction,{ content: `✅ Produk ditambahkan: **${label}** — ${price}${durationInfo}` });
     }
 
     // === REMOVE PRODUCT ===
@@ -309,18 +312,18 @@ module.exports = async (interaction) => {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         const value = interaction.options.getString('value');
         const idx = config.products.findIndex(p => p.value === value);
-        if (idx === -1) return interaction.editReply({ content: `❌ Produk \`${value}\` tidak ditemukan.` });
+        if (idx === -1) return safeEditReply(interaction,{ content: `❌ Produk \`${value}\` tidak ditemukan.` });
         const [removed] = config.products.splice(idx, 1);
         saveConfig(config);
         await logAudit(interaction.client, { action: 'REMOVE_PRODUCT', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Hapus produk: **${removed.label}** (\`${removed.value}\`) — ${removed.price}`, guildId: interaction.guild.id });
-        return interaction.editReply({ content: `✅ Produk dihapus: **${removed.label}**` });
+        return safeEditReply(interaction,{ content: `✅ Produk dihapus: **${removed.label}**` });
     }
 
     // === LIST PRODUCTS ===
     if (interaction.commandName === 'list-products') {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         if (config.products.length === 0) {
-            return interaction.editReply({ content: '📭 Belum ada produk.' });
+            return safeEditReply(interaction,{ content: '📭 Belum ada produk.' });
         }
         const list = config.products.map((p, i) => {
             let line = `\`${i + 1}.\` **${p.label}** — ${p.price}\n   └ value: \`${p.value}\``;
@@ -328,7 +331,7 @@ module.exports = async (interaction) => {
             return line;
         }).join('\n');
         const embed = embeds.info('📋 DAFTAR PRODUK', list);
-        return interaction.editReply({ embeds: [embed] });
+        return safeEditReply(interaction,{ embeds: [embed] });
     }
 
     // === CONFIG SHOW (v3.1 — comprehensive view) ===
@@ -338,7 +341,8 @@ module.exports = async (interaction) => {
         const fmt = (id, type) => id ? `<${type}:${id}> (\`${id}\`)` : '❌ belum di-set';
 
         // --- Stats: VIP Keys ---
-        const keyStats = getKeyStats();
+        // v3.9.4: scoped per guild — sebelumnya getKeyStats() return global count.
+        const keyStats = getKeyStatsByGuild(interaction.guild.id);
         const keyLines = [
             `• Total key tersimpan: **${keyStats.total}**`,
             `• Aktif: **${keyStats.active}**${keyStats.permanent > 0 ? ` (termasuk ${keyStats.permanent} permanen)` : ''}`,
@@ -348,7 +352,8 @@ module.exports = async (interaction) => {
         ];
 
         // --- Stats: Scheduled Role Removals ---
-        const scheduled = getAllScheduledActive();
+        // v3.9.4: scoped per guild — sebelumnya getAllScheduledActive() return global list.
+        const scheduled = getScheduledActiveByGuild(interaction.guild.id);
         let nextDueStr = '—';
         if (scheduled.length > 0) {
             const next = scheduled.reduce((a, b) => (a.expireAt < b.expireAt ? a : b));
@@ -407,7 +412,7 @@ module.exports = async (interaction) => {
                 { name: `🎭 Self-Role Panels (${panels.length})`, value: panelSummary, inline: false },
                 { name: '🛠️ Embed Builder Sessions', value: sessionLine, inline: false }
             );
-        return interaction.editReply({ embeds: [embed] });
+        return safeEditReply(interaction,{ embeds: [embed] });
     }
 
     // === REMOVE ROLE ===
@@ -416,7 +421,7 @@ module.exports = async (interaction) => {
         const tipe = interaction.options.getString('tipe');
         const current = config.roles[tipe];
         if (!current) {
-            return interaction.editReply({ content: `ℹ️ Role **${tipe}** memang belum di-set, tidak ada yang perlu dihapus.` });
+            return safeEditReply(interaction,{ content: `ℹ️ Role **${tipe}** memang belum di-set, tidak ada yang perlu dihapus.` });
         }
         delete config.roles[tipe];
         saveConfig(config);
@@ -425,7 +430,7 @@ module.exports = async (interaction) => {
             try { require('../utils/permissions').invalidateAdminRoleCache(); } catch (_) {}
         }
         await logAudit(interaction.client, { action: 'REMOVE_ROLE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Hapus role **${tipe}** dari config (sebelumnya: <@&${current}>)`, guildId: interaction.guild.id });
-        return interaction.editReply({ content: `✅ Role **${tipe}** berhasil dihapus dari config.\n\n💡 Untuk set ulang, pakai: \`/set-role ${tipe} @role\`` });
+        return safeEditReply(interaction,{ content: `✅ Role **${tipe}** berhasil dihapus dari config.\n\n💡 Untuk set ulang, pakai: \`/set-role ${tipe} @role\`` });
     }
 
     // === REMOVE CHANNEL ===
@@ -434,12 +439,12 @@ module.exports = async (interaction) => {
         const tipe = interaction.options.getString('tipe');
         const current = config.channels[tipe];
         if (!current) {
-            return interaction.editReply({ content: `ℹ️ Channel **${tipe}** memang belum di-set, tidak ada yang perlu dihapus.` });
+            return safeEditReply(interaction,{ content: `ℹ️ Channel **${tipe}** memang belum di-set, tidak ada yang perlu dihapus.` });
         }
         delete config.channels[tipe];
         saveConfig(config);
         await logAudit(interaction.client, { action: 'REMOVE_CHANNEL', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Hapus channel **${tipe}** dari config (sebelumnya: <#${current}>)`, guildId: interaction.guild.id });
-        return interaction.editReply({ content: `✅ Channel **${tipe}** berhasil dihapus dari config.\n\n💡 Untuk set ulang, pakai: \`/set-channel ${tipe} #channel\`` });
+        return safeEditReply(interaction,{ content: `✅ Channel **${tipe}** berhasil dihapus dari config.\n\n💡 Untuk set ulang, pakai: \`/set-channel ${tipe} #channel\`` });
     }
 
     // === LIST MESSAGES ===
@@ -464,7 +469,7 @@ module.exports = async (interaction) => {
         }
         const embed = embeds.info('📝 DAFTAR PESAN EMBED', 'Berikut semua teks pesan saat ini. Pakai `/set-message` untuk ubah, `/reset-message` untuk kembalikan ke default.')
             .addFields(fields);
-        return interaction.editReply({ embeds: [embed] });
+        return safeEditReply(interaction,{ embeds: [embed] });
     }
 
     // === RESET MESSAGE ===
@@ -476,14 +481,14 @@ module.exports = async (interaction) => {
             config.messages = { ...DEFAULTS.messages };
             saveConfig(config);
             await logAudit(interaction.client, { action: 'RESET_MESSAGE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Reset SEMUA pesan ke default`, guildId: interaction.guild.id });
-            return interaction.editReply({ content: '✅ **SEMUA pesan** berhasil direset ke default.' });
+            return safeEditReply(interaction,{ content: '✅ **SEMUA pesan** berhasil direset ke default.' });
         }
 
         const before = config.messages[tipe];
         config.messages[tipe] = DEFAULTS.messages[tipe];
         saveConfig(config);
         await logAudit(interaction.client, { action: 'RESET_MESSAGE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Reset pesan **${tipe}** ke default`, guildId: interaction.guild.id });
-        return interaction.editReply({
+        return safeEditReply(interaction,{
             content: `✅ Pesan **${tipe}** berhasil direset ke default.\n\n**Sebelumnya:**\n\`\`\`\n${before}\n\`\`\`\n**Sekarang:**\n\`\`\`\n${config.messages[tipe]}\n\`\`\``
         });
     }
@@ -525,7 +530,7 @@ module.exports = async (interaction) => {
 
         const product = config.products.find(p => p.value === value);
         if (!product) {
-            return interaction.editReply({ content: `❌ Produk dengan value \`${value}\` tidak ditemukan. Pakai \`/list-products\` untuk lihat daftar.` });
+            return safeEditReply(interaction,{ content: `❌ Produk dengan value \`${value}\` tidak ditemukan. Pakai \`/list-products\` untuk lihat daftar.` });
         }
 
         product.roleId = role.id;
@@ -536,7 +541,7 @@ module.exports = async (interaction) => {
         const expireInfo = days > 0
             ? `akan otomatis dihapus setelah **${days} hari**`
             : '**permanen** (tidak akan otomatis dihapus)';
-        return interaction.editReply({
+        return safeEditReply(interaction,{
             content: `✅ Auto-role untuk produk **${product.label}** diatur!\n\n🎁 Role: ${role}\n⏰ Expire: ${expireInfo}\n\n💡 Saat admin klik "Transaksi Sukses" di tiket, role akan otomatis diberikan ke pembeli.`
         });
     }
@@ -548,17 +553,17 @@ module.exports = async (interaction) => {
 
         const product = config.products.find(p => p.value === value);
         if (!product) {
-            return interaction.editReply({ content: `❌ Produk dengan value \`${value}\` tidak ditemukan.` });
+            return safeEditReply(interaction,{ content: `❌ Produk dengan value \`${value}\` tidak ditemukan.` });
         }
         if (!product.roleId) {
-            return interaction.editReply({ content: `ℹ️ Produk **${product.label}** memang belum punya auto-role.` });
+            return safeEditReply(interaction,{ content: `ℹ️ Produk **${product.label}** memang belum punya auto-role.` });
         }
 
         delete product.roleId;
         delete product.days;
         saveConfig(config);
         await logAudit(interaction.client, { action: 'EDIT_PRODUCT', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Hapus auto-role produk **${product.label}**`, guildId: interaction.guild.id });
-        return interaction.editReply({ content: `✅ Auto-role untuk produk **${product.label}** berhasil dihapus.` });
+        return safeEditReply(interaction,{ content: `✅ Auto-role untuk produk **${product.label}** berhasil dihapus.` });
     }
 
     // === LIST PRODUCT ROLES ===
@@ -566,7 +571,7 @@ module.exports = async (interaction) => {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         const withRoles = config.products.filter(p => p.roleId);
         if (withRoles.length === 0) {
-            return interaction.editReply({ content: '📭 Belum ada produk yang punya auto-role. Pakai `/set-product-role` untuk setup.' });
+            return safeEditReply(interaction,{ content: '📭 Belum ada produk yang punya auto-role. Pakai `/set-product-role` untuk setup.' });
         }
         const list = withRoles.map(p => {
             const roleMention = `<@&${p.roleId}>`;
@@ -574,7 +579,7 @@ module.exports = async (interaction) => {
             return `• **${p.label}** (\`${p.value}\`) → ${roleMention} — expire: ${expire}`;
         }).join('\n');
         const embed = embeds.info('🎁 AUTO-ROLE PER PRODUK', list);
-        return interaction.editReply({ embeds: [embed] });
+        return safeEditReply(interaction,{ embeds: [embed] });
     }
 
     // ====================================================
@@ -588,20 +593,20 @@ module.exports = async (interaction) => {
 
         const product = config.products.find(p => p.value === value);
         if (!product) {
-            return interaction.editReply({ content: `❌ Produk value \`${value}\` tidak ditemukan. Pakai \`/list-products\` untuk lihat daftar.` });
+            return safeEditReply(interaction,{ content: `❌ Produk value \`${value}\` tidak ditemukan. Pakai \`/list-products\` untuk lihat daftar.` });
         }
         if (!product.roleId) {
-            return interaction.editReply({ content: `❌ Produk **${product.label}** belum punya auto-role. Pakai \`/set-product-role\` dulu.` });
+            return safeEditReply(interaction,{ content: `❌ Produk **${product.label}** belum punya auto-role. Pakai \`/set-product-role\` dulu.` });
         }
 
         const guild = interaction.guild;
         const member = await guild.members.fetch(user.id).catch(() => null);
         if (!member) {
-            return interaction.editReply({ content: `❌ User <@${user.id}> tidak ada di server.` });
+            return safeEditReply(interaction,{ content: `❌ User <@${user.id}> tidak ada di server.` });
         }
         const role = guild.roles.cache.get(product.roleId);
         if (!role) {
-            return interaction.editReply({ content: `❌ Role ID \`${product.roleId}\` tidak ditemukan di guild.` });
+            return safeEditReply(interaction,{ content: `❌ Role ID \`${product.roleId}\` tidak ditemukan di guild.` });
         }
 
         // 1. Simpan key
@@ -621,7 +626,7 @@ module.exports = async (interaction) => {
                 await member.roles.add(role);
             }
         } catch (err) {
-            return interaction.editReply({ content: `❌ Gagal add role ${role}. Pastikan role bot ada di ATAS role tersebut.\nKey tetap disimpan.` });
+            return safeEditReply(interaction,{ content: `❌ Gagal add role ${role}. Pastikan role bot ada di ATAS role tersebut.\nKey tetap disimpan.` });
         }
 
         // 3. Schedule (MAX EXTEND)
@@ -669,7 +674,8 @@ module.exports = async (interaction) => {
         }
 
         // 6. Track purchase untuk stats
-        try { trackPurchase(member.id, parsePriceNum(product.price)); } catch (_) {}
+        // v3.9.4: scoped per guild
+        try { trackPurchase(interaction.guild.id, member.id, parsePriceNum(product.price)); } catch (_) {}
 
         // 7. Audit log (P1-10 FIX: sebelumnya tidak ada logAudit untuk SET_KEY)
         // v3.9.1 FIX: jangan bocorkan key (bahkan sebagian) ke audit log channel.
@@ -685,7 +691,7 @@ module.exports = async (interaction) => {
         });
 
         const expireStr = keyEntry.expireAt === null ? 'permanen' : `${Math.ceil((keyEntry.expireAt - Date.now()) / 86400000)} hari`;
-        return interaction.editReply({
+        return safeEditReply(interaction,{
             content: `✅ **Set Key sukses!**\n\n` +
                 `👤 User: ${member}\n` +
                 `📦 Produk: ${product.label}\n` +
@@ -707,7 +713,7 @@ module.exports = async (interaction) => {
 
         const allKeys = findAllByUser(user.id);
         if (allKeys.length === 0) {
-            return interaction.editReply({ content: `📭 <@${user.id}> tidak punya key apa pun.` });
+            return safeEditReply(interaction,{ content: `📭 <@${user.id}> tidak punya key apa pun.` });
         }
 
         // Pisahkan jadi aktif & expired
@@ -738,7 +744,7 @@ module.exports = async (interaction) => {
             .addFields(fields)
             .setFooter({ text: interaction.client.user.username, iconURL: interaction.client.user.displayAvatarURL({ dynamic: true }) })
             .setTimestamp();
-        return interaction.editReply({ embeds: [embed] });
+        return safeEditReply(interaction,{ embeds: [embed] });
     }
 
     // ====================================================
@@ -795,7 +801,7 @@ module.exports = async (interaction) => {
 
         await logAudit(interaction.client, { action: 'CLEAR_SCHEDULE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Clear schedule <@${user.id}> di guild ${guildId}: ${removedSched} schedule${clearKeys ? ` + ${removedKeys} key${rolesRemoved.length > 0 ? ` + ${rolesRemoved.length} role` : ''}` : ' (tanpa key)'}`, guildId: interaction.guild.id });
 
-        return interaction.editReply({ content: msg });
+        return safeEditReply(interaction,{ content: msg });
     }
 
     // ====================================================
@@ -831,18 +837,18 @@ module.exports = async (interaction) => {
         } catch (err) {
             console.error('Gagal kirim self-role panel:', err.message);
             try { deleteSelfRolePanel(panel.id); } catch (_) {}
-            return interaction.editReply({ content: `❌ Gagal kirim panel ke ${interaction.channel}. Cek permission bot. Entry di-rollback.` });
+            return safeEditReply(interaction,{ content: `❌ Gagal kirim panel ke ${interaction.channel}. Cek permission bot. Entry di-rollback.` });
         }
         if (!panelMsg) {
             try { deleteSelfRolePanel(panel.id); } catch (_) {}
-            return interaction.editReply({ content: `❌ Gagal kirim panel (channel tidak ada). Entry di-rollback.` });
+            return safeEditReply(interaction,{ content: `❌ Gagal kirim panel (channel tidak ada). Entry di-rollback.` });
         }
 
         // Update messageId
         setMessageId(panel.id, panelMsg.id);
         await logAudit(interaction.client, { action: 'SETUP_SELFROLE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Buat panel self-role **${title}** (\`${panel.id}\`) di ${interaction.channel} — tipe: ${panel.type}, exclusive: ${panel.exclusive}`, guildId: interaction.guild.id });
 
-        return interaction.editReply({
+        return safeEditReply(interaction,{
             content: `✅ **Panel self-role dibuat!**\n\n` +
                 `🆔 Panel ID: \`${panel.id}\`\n` +
                 `📍 Channel: ${interaction.channel}\n` +
@@ -866,10 +872,10 @@ module.exports = async (interaction) => {
 
         const panel = getPanel(panelId);
         if (!panel) {
-            return interaction.editReply({ content: `❌ Panel ID \`${panelId}\` tidak ditemukan. Pakai \`/selfrole-list\` untuk lihat daftar.` });
+            return safeEditReply(interaction,{ content: `❌ Panel ID \`${panelId}\` tidak ditemukan. Pakai \`/selfrole-list\` untuk lihat daftar.` });
         }
         if (panel.guildId !== interaction.guild.id) {
-            return interaction.editReply({ content: `❌ Panel ini bukan dari guild ini.` });
+            return safeEditReply(interaction,{ content: `❌ Panel ini bukan dari guild ini.` });
         }
 
         const result = addRoleToPanel(panelId, {
@@ -879,7 +885,7 @@ module.exports = async (interaction) => {
             description
         });
         if (!result.ok) {
-            return interaction.editReply({ content: `❌ ${result.error}` });
+            return safeEditReply(interaction,{ content: `❌ ${result.error}` });
         }
 
         // Update panel message
@@ -899,7 +905,7 @@ module.exports = async (interaction) => {
         }
 
         await logAudit(interaction.client, { action: 'SELFROLE_ADD', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Tambah role ${role.name} ke panel \`${panelId}\` (label: ${label})`, guildId: interaction.guild.id });
-        return interaction.editReply({
+        return safeEditReply(interaction,{
             content: `✅ Role ${role} ditambahkan ke panel \`${panelId}\`.\nLabel: **${label}**${emoji ? ` | Emoji: ${emoji}` : ''}${description ? ` | Desc: ${description}` : ''}`
         });
     }
@@ -915,7 +921,7 @@ module.exports = async (interaction) => {
 
         const result = removeRoleFromPanel(panelId, role.id);
         if (!result.ok) {
-            return interaction.editReply({ content: `❌ ${result.error}` });
+            return safeEditReply(interaction,{ content: `❌ ${result.error}` });
         }
 
         // Update panel message
@@ -935,7 +941,7 @@ module.exports = async (interaction) => {
         }
 
         await logAudit(interaction.client, { action: 'SELFROLE_REMOVE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Hapus role ${role.name} dari panel \`${panelId}\``, guildId: interaction.guild.id });
-        return interaction.editReply({
+        return safeEditReply(interaction,{
             content: `✅ Role ${role} dihapus dari panel \`${panelId}\`.`
         });
     }
@@ -948,7 +954,7 @@ module.exports = async (interaction) => {
 
         const panels = getPanelsByGuild(interaction.guild.id);
         if (panels.length === 0) {
-            return interaction.editReply({ content: '📭 Belum ada panel self-role di guild ini. Pakai `/setup-selfrole` untuk membuat.' });
+            return safeEditReply(interaction,{ content: '📭 Belum ada panel self-role di guild ini. Pakai `/setup-selfrole` untuk membuat.' });
         }
 
         const lines = panels.map(p => {
@@ -966,7 +972,7 @@ module.exports = async (interaction) => {
             .setColor(0x9B59B6)
             .setFooter({ text: interaction.client.user.username, iconURL: interaction.client.user.displayAvatarURL({ dynamic: true }) })
             .setTimestamp();
-        return interaction.editReply({ embeds: [embed] });
+        return safeEditReply(interaction,{ embeds: [embed] });
     }
 
     // ====================================================
@@ -978,7 +984,7 @@ module.exports = async (interaction) => {
         const panelId = interaction.options.getString('panel_id');
         const panel = getPanel(panelId);
         if (!panel) {
-            return interaction.editReply({ content: `❌ Panel ID \`${panelId}\` tidak ditemukan.` });
+            return safeEditReply(interaction,{ content: `❌ Panel ID \`${panelId}\` tidak ditemukan.` });
         }
 
         // Hapus panel message
@@ -994,7 +1000,7 @@ module.exports = async (interaction) => {
 
         deletePanel(panelId);
         await logAudit(interaction.client, { action: 'SELFROLE_DELETE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Hapus panel self-role **${panel.title}** (\`${panelId}\`)`, guildId: interaction.guild.id });
-        return interaction.editReply({ content: `✅ Panel \`${panelId}\` (${panel.title}) berhasil dihapus.` });
+        return safeEditReply(interaction,{ content: `✅ Panel \`${panelId}\` (${panel.title}) berhasil dihapus.` });
     }
 
     // ====================================================
@@ -1017,7 +1023,7 @@ module.exports = async (interaction) => {
             const { parseColor } = require('../utils/embedBuilderSessions');
             const parsed = parseColor(colorStr);
             if (parsed === null) {
-                return interaction.editReply({ content: `❌ Color tidak valid: \`${colorStr}\`. Pakai format hex 6 digit, mis. \`#FF0000\` atau \`FF0000\`.` });
+                return safeEditReply(interaction,{ content: `❌ Color tidak valid: \`${colorStr}\`. Pakai format hex 6 digit, mis. \`#FF0000\` atau \`FF0000\`.` });
             }
             color = parsed;
         }
@@ -1027,18 +1033,18 @@ module.exports = async (interaction) => {
         // yang sebelumnya ditangkap outer try-catch sebagai "Terjadi error" generik.
         const { EMBED_LIMITS } = require('../utils/constants');
         if (title.length > EMBED_LIMITS.TITLE) {
-            return interaction.editReply({ content: `❌ Title terlalu panjang (${title.length} char, maks ${EMBED_LIMITS.TITLE}).` });
+            return safeEditReply(interaction,{ content: `❌ Title terlalu panjang (${title.length} char, maks ${EMBED_LIMITS.TITLE}).` });
         }
         if (description.length > EMBED_LIMITS.DESCRIPTION) {
-            return interaction.editReply({ content: `❌ Description terlalu panjang (${description.length} char, maks ${EMBED_LIMITS.DESCRIPTION}).` });
+            return safeEditReply(interaction,{ content: `❌ Description terlalu panjang (${description.length} char, maks ${EMBED_LIMITS.DESCRIPTION}).` });
         }
 
         // Validate URLs
         if (image && !/^https?:\/\//i.test(image)) {
-            return interaction.editReply({ content: '❌ Image URL harus mulai dengan `http://` atau `https://`' });
+            return safeEditReply(interaction,{ content: '❌ Image URL harus mulai dengan `http://` atau `https://`' });
         }
         if (thumbnail && !/^https?:\/\//i.test(thumbnail)) {
-            return interaction.editReply({ content: '❌ Thumbnail URL harus mulai dengan `http://` atau `https://`' });
+            return safeEditReply(interaction,{ content: '❌ Thumbnail URL harus mulai dengan `http://` atau `https://`' });
         }
 
         // Build embed
@@ -1057,7 +1063,7 @@ module.exports = async (interaction) => {
         // Resolve target channel
         const targetChannel = interaction.guild.channels.cache.get(channel.id);
         if (!targetChannel) {
-            return interaction.editReply({ content: '❌ Channel tidak ditemukan.' });
+            return safeEditReply(interaction,{ content: '❌ Channel tidak ditemukan.' });
         }
 
         // Build content (mention)
@@ -1085,7 +1091,7 @@ module.exports = async (interaction) => {
                 // User mention: <@123456789012345678> or <@!123456789012345678>
                 content = mention;
             } else {
-                return interaction.editReply({
+                return safeEditReply(interaction,{
                     content: `❌ Format mention tidak valid: \`${mention}\`\n\n` +
                         `Format yang didukung:\n` +
                         `• \`@everyone\` atau \`everyone\`\n` +
@@ -1100,12 +1106,12 @@ module.exports = async (interaction) => {
         try {
             await targetChannel.send({ content, embeds: [embed] });
             await logAudit(interaction.client, { action: 'ANNOUNCE_SEND', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Kirim announce ke ${targetChannel}: **${title}**${mention ? ` | mention: ${mention}` : ''}`, guildId: interaction.guild.id });
-            return interaction.editReply({
+            return safeEditReply(interaction,{
                 content: `✅ Announce terkirim ke ${targetChannel}!\n\n📋 **Preview:**`,
                 embeds: [embed]
             });
         } catch (err) {
-            return interaction.editReply({ content: `❌ Gagal kirim ke ${targetChannel}: ${err.message}` });
+            return safeEditReply(interaction,{ content: `❌ Gagal kirim ke ${targetChannel}: ${err.message}` });
         }
     }
 
@@ -1160,7 +1166,7 @@ module.exports = async (interaction) => {
         // Simpan messageId ke session
         session.messageId = draftMsg.id;
 
-        return interaction.editReply({
+        return safeEditReply(interaction,{
             content: `✅ Embed builder dimulai!\n📍 Draft: ${draftMsg}\n\n💡 Klik dropdown di draft untuk edit bagian embed. Setelah selesai, klik **📤 Send** untuk kirim ke channel target.`
         });
     }
@@ -1173,7 +1179,7 @@ module.exports = async (interaction) => {
 
         const userSessions = getSessionsByUser(interaction.user.id);
         if (userSessions.length === 0) {
-            return interaction.editReply({
+            return safeEditReply(interaction,{
                 content: '📭 **Tidak ada session embed builder aktif untuk kamu.**\n\nPakai `/embed-builder` untuk membuat draft baru.'
             });
         }
@@ -1212,7 +1218,7 @@ module.exports = async (interaction) => {
             .setColor(0x5865F2)
             .setFooter({ text: interaction.client.user.username, iconURL: interaction.client.user.displayAvatarURL({ dynamic: true }) })
             .setTimestamp();
-        return interaction.editReply({ embeds: [embed] });
+        return safeEditReply(interaction,{ embeds: [embed] });
     }
 
     // ====================================================
@@ -1225,7 +1231,7 @@ module.exports = async (interaction) => {
         const session = deleteSessionByOwner(sessionId, interaction.user.id);
 
         if (!session) {
-            return interaction.editReply({
+            return safeEditReply(interaction,{
                 content: `❌ Session \`${sessionId}\` tidak ditemukan atau bukan milik kamu.\n\nPakai \`/embed-list\` untuk lihat session aktif.`
             });
         }
@@ -1243,7 +1249,7 @@ module.exports = async (interaction) => {
             }
         } catch (_) {}
 
-        return interaction.editReply({
+        return safeEditReply(interaction,{
             content: `🗑️ Session \`${sessionId}\` dibatalkan.` + (draftDeleted ? ' Pesan draft juga dihapus.' : ' (Pesan draft sudah tidak ditemukan.)')
         });
     }
@@ -1255,7 +1261,7 @@ module.exports = async (interaction) => {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         const result = createBackup();
         await logAudit(interaction.client, { action: 'BACKUP_NOW', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Backup manual: \`${result.backupName}\` (${result.filesCopied} files, ${formatBackupSize(result.totalSize)})`, guildId: interaction.guild.id });
-        return interaction.editReply({
+        return safeEditReply(interaction,{
             content: `💾 **Backup berhasil dibuat!**\n\n` +
                 `📁 Nama: \`${result.backupName}\`\n` +
                 `📦 File disalin: **${result.filesCopied}**\n` +
@@ -1269,12 +1275,12 @@ module.exports = async (interaction) => {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         const backups = listBackups();
         if (backups.length === 0) {
-            return interaction.editReply({ content: '📭 Belum ada backup. Backup otomatis dibuat saat bot start.' });
+            return safeEditReply(interaction,{ content: '📭 Belum ada backup. Backup otomatis dibuat saat bot start.' });
         }
         const lines = backups.map((b, i) => {
             const ageMs = Date.now() - b.mtime.getTime();
             const ageMin = Math.floor(ageMs / 60000);
-            const ageStr = ageMin < 60 ? `${ageMin}m lalu` : ageMin < 1440 ? `${Math.floor(ageMin / 60)}h lalu` : `${Math.floor(ageMin / 1440)}h lalu`;
+            const ageStr = ageMin < 60 ? `${ageMin}m lalu` : ageMin < 1440 ? `${Math.floor(ageMin / 60)}h lalu` : `${Math.floor(ageMin / 1440)}d lalu`;
             return `\`${i + 1}.\` 📁 \`${b.name}\`\n   📦 ${b.fileCount} file | 📊 ${formatBackupSize(b.size)} | ⏰ ${ageStr}`;
         }).join('\n\n');
         const embed = new EmbedBuilder()
@@ -1283,7 +1289,7 @@ module.exports = async (interaction) => {
             .setColor(0x57F287)
             .setFooter({ text: interaction.client.user.username, iconURL: interaction.client.user.displayAvatarURL({ dynamic: true }) })
             .setTimestamp();
-        return interaction.editReply({ embeds: [embed] });
+        return safeEditReply(interaction,{ embeds: [embed] });
     }
 
     if (interaction.commandName === 'restore-backup') {
@@ -1347,10 +1353,10 @@ module.exports = async (interaction) => {
             const requiredRole = interaction.options.getRole('required_role');
 
             if (durationMin < 1) {
-                return interaction.editReply({ content: '❌ Durasi minimal 1 menit.' });
+                return safeEditReply(interaction,{ content: '❌ Durasi minimal 1 menit.' });
             }
             if (winners < 1 || winners > 20) {
-                return interaction.editReply({ content: '❌ Jumlah pemenang harus 1-20.' });
+                return safeEditReply(interaction,{ content: '❌ Jumlah pemenang harus 1-20.' });
             }
 
             const endsAt = Date.now() + durationMin * 60000;
@@ -1393,11 +1399,11 @@ module.exports = async (interaction) => {
                 // P0-5 FIX: rollback giveaway entry yang sudah tersimpan kalau gagal kirim message.
                 // Sebelumnya entry tetap ada dengan messageId=null → zombie giveaway.
                 try { removeGiveaway(gw.id); } catch (_) {}
-                return interaction.editReply({ content: `❌ Gagal kirim giveaway ke ${channel}. Cek permission bot. Entry di-rollback.` });
+                return safeEditReply(interaction,{ content: `❌ Gagal kirim giveaway ke ${channel}. Cek permission bot. Entry di-rollback.` });
             }
             setGiveawayMessageId(gw.id, msg.id);
             await logAudit(interaction.client, { action: 'GIVEAWAY_CREATE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Buat giveaway **${prize}** (${winners} pemenang, ${durationMin}m) di ${channel}`, guildId: interaction.guild.id });
-            return interaction.editReply({ content: `✅ Giveaway dibuat di ${channel}!\n🆔 \`${gw.id}\`\n⏰ Berakhir <t:${Math.floor(endsAt / 1000)}:R>` });
+            return safeEditReply(interaction,{ content: `✅ Giveaway dibuat di ${channel}!\n🆔 \`${gw.id}\`\n⏰ Berakhir <t:${Math.floor(endsAt / 1000)}:R>` });
         }
 
         // --- /giveaway list ---
@@ -1405,7 +1411,7 @@ module.exports = async (interaction) => {
             await interaction.deferReply({ flags: MessageFlags.Ephemeral });
             const all = getGiveawaysByGuild(interaction.guild.id);
             if (all.length === 0) {
-                return interaction.editReply({ content: '📭 Belum ada giveaway di guild ini.' });
+                return safeEditReply(interaction,{ content: '📭 Belum ada giveaway di guild ini.' });
             }
             const lines = all.map(g => {
                 const status = g.ended ? '✅ Selesai' : (g.endsAt <= Date.now() ? '⏳ Proses' : '🟢 Aktif');
@@ -1418,7 +1424,7 @@ module.exports = async (interaction) => {
                 .setColor(0xF1C40F)
                 .setFooter({ text: interaction.client.user.username, iconURL: interaction.client.user.displayAvatarURL({ dynamic: true }) })
                 .setTimestamp();
-            return interaction.editReply({ embeds: [embed] });
+            return safeEditReply(interaction,{ embeds: [embed] });
         }
 
         // --- /giveaway end ---
@@ -1430,9 +1436,9 @@ module.exports = async (interaction) => {
             await interaction.deferReply({ flags: MessageFlags.Ephemeral });
             const id = interaction.options.getString('id');
             const gw = getGiveaway(id);
-            if (!gw) return interaction.editReply({ content: `❌ Giveaway \`${id}\` tidak ditemukan.` });
-            if (gw.ended) return interaction.editReply({ content: `❌ Giveaway sudah berakhir.` });
-            if (gw.guildId !== interaction.guild.id) return interaction.editReply({ content: '❌ Giveaway ini bukan dari guild ini.' });
+            if (!gw) return safeEditReply(interaction,{ content: `❌ Giveaway \`${id}\` tidak ditemukan.` });
+            if (gw.ended) return safeEditReply(interaction,{ content: `❌ Giveaway sudah berakhir.` });
+            if (gw.guildId !== interaction.guild.id) return safeEditReply(interaction,{ content: '❌ Giveaway ini bukan dari guild ini.' });
 
             // Pick winners + persist ended state
             const winnerIds = pickWinners(gw.participantIds, gw.winnersCount);
@@ -1447,7 +1453,7 @@ module.exports = async (interaction) => {
             }
 
             await logAudit(interaction.client, { action: 'GIVEAWAY_END', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `End giveaway \`${id}\` (${gw.prize}). Winners: ${winnerIds.length > 0 ? winnerIds.map(w => `<@${w}>`).join(', ') : 'tidak ada peserta'}`, guildId: interaction.guild.id });
-            return interaction.editReply({ content: `✅ Giveaway **${gw.prize}** diakhiri!\n🏆 Winners: ${winnerIds.length > 0 ? winnerIds.map(w => `<@${w}>`).join(', ') : '_(tidak ada peserta)_'}\n\n📢 Pesan giveaway sudah diupdate + winner sudah di-DM + diumumkan ke channel.` });
+            return safeEditReply(interaction,{ content: `✅ Giveaway **${gw.prize}** diakhiri!\n🏆 Winners: ${winnerIds.length > 0 ? winnerIds.map(w => `<@${w}>`).join(', ') : '_(tidak ada peserta)_'}\n\n📢 Pesan giveaway sudah diupdate + winner sudah di-DM + diumumkan ke channel.` });
         }
 
         // --- /giveaway reroll ---
@@ -1459,12 +1465,12 @@ module.exports = async (interaction) => {
             await interaction.deferReply({ flags: MessageFlags.Ephemeral });
             const id = interaction.options.getString('id');
             const gw = getGiveaway(id);
-            if (!gw) return interaction.editReply({ content: `❌ Giveaway \`${id}\` tidak ditemukan.` });
-            if (!gw.ended) return interaction.editReply({ content: `❌ Giveaway belum berakhir. End dulu pakai \`/giveaway end\`.` });
+            if (!gw) return safeEditReply(interaction,{ content: `❌ Giveaway \`${id}\` tidak ditemukan.` });
+            if (!gw.ended) return safeEditReply(interaction,{ content: `❌ Giveaway belum berakhir. End dulu pakai \`/giveaway end\`.` });
 
             const result = rerollGiveaway(id);
-            if (!result) return interaction.editReply({ content: `❌ Giveaway \`${id}\` tidak ditemukan atau belum berakhir.` });
-            if (!result.winnerId) return interaction.editReply({ content: '❌ Tidak ada peserta untuk di-reroll.' });
+            if (!result) return safeEditReply(interaction,{ content: `❌ Giveaway \`${id}\` tidak ditemukan atau belum berakhir.` });
+            if (!result.winnerId) return safeEditReply(interaction,{ content: '❌ Tidak ada peserta untuk di-reroll.' });
 
             // Announce winner baru ke channel + DM + track stats
             if (typeof interaction.client.announceRerollWinner === 'function') {
@@ -1473,7 +1479,7 @@ module.exports = async (interaction) => {
 
             const reuseNote = result.reused ? ' _(semua peserta sudah pernah menang, fallback pick random)_' : '';
             await logAudit(interaction.client, { action: 'GIVEAWAY_REROLL', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Reroll giveaway \`${id}\` → new winner: <@${result.winnerId}>${reuseNote}`, guildId: interaction.guild.id });
-            return interaction.editReply({ content: `🎲 **Reroll!** Winner baru: <@${result.winnerId}>${reuseNote}\n\n📢 Winner sudah di-DM + diumumkan ke channel giveaway.` });
+            return safeEditReply(interaction,{ content: `🎲 **Reroll!** Winner baru: <@${result.winnerId}>${reuseNote}\n\n📢 Winner sudah di-DM + diumumkan ke channel giveaway.` });
         }
     }
 
@@ -1495,12 +1501,12 @@ module.exports = async (interaction) => {
         // Parse time
         const sendAt = parseAnnTime(at);
         if (!sendAt) {
-            return interaction.editReply({
+            return safeEditReply(interaction,{
                 content: '❌ Format waktu tidak valid.\n\nFormat yang didukung:\n• Relative: `30m`, `2h`, `1d`\n• Absolute: `2026-01-15 20:00` (WITA, format YYYY-MM-DD HH:MM)'
             });
         }
         if (sendAt <= Date.now()) {
-            return interaction.editReply({ content: '❌ Waktu yang dimasukkan sudah lewat. Pakai waktu di masa depan.' });
+            return safeEditReply(interaction,{ content: '❌ Waktu yang dimasukkan sudah lewat. Pakai waktu di masa depan.' });
         }
 
         // Parse color
@@ -1509,7 +1515,7 @@ module.exports = async (interaction) => {
             const { parseColor } = require('../utils/embedBuilderSessions');
             const parsed = parseColor(color);
             if (parsed === null) {
-                return interaction.editReply({ content: `❌ Color tidak valid: \`${color}\`. Pakai format hex 6 digit, mis. \`#FF0000\` atau \`FF0000\`.` });
+                return safeEditReply(interaction,{ content: `❌ Color tidak valid: \`${color}\`. Pakai format hex 6 digit, mis. \`#FF0000\` atau \`FF0000\`.` });
             }
             colorNum = parsed;
         }
@@ -1520,18 +1526,18 @@ module.exports = async (interaction) => {
         // jalan → announce gagal terkirim dan entry stuck di scheduledAnns.json.
         const { EMBED_LIMITS } = require('../utils/constants');
         if (title.length > EMBED_LIMITS.TITLE) {
-            return interaction.editReply({ content: `❌ Title terlalu panjang (${title.length} char, maks ${EMBED_LIMITS.TITLE}).` });
+            return safeEditReply(interaction,{ content: `❌ Title terlalu panjang (${title.length} char, maks ${EMBED_LIMITS.TITLE}).` });
         }
         if (description.length > EMBED_LIMITS.DESCRIPTION) {
-            return interaction.editReply({ content: `❌ Description terlalu panjang (${description.length} char, maks ${EMBED_LIMITS.DESCRIPTION}).` });
+            return safeEditReply(interaction,{ content: `❌ Description terlalu panjang (${description.length} char, maks ${EMBED_LIMITS.DESCRIPTION}).` });
         }
 
         // Validate URLs
         if (image && !/^https?:\/\//.test(image)) {
-            return interaction.editReply({ content: '❌ Image URL harus mulai dengan `http://` atau `https://`' });
+            return safeEditReply(interaction,{ content: '❌ Image URL harus mulai dengan `http://` atau `https://`' });
         }
         if (thumbnail && !/^https?:\/\//.test(thumbnail)) {
-            return interaction.editReply({ content: '❌ Thumbnail URL harus mulai dengan `http://` atau `https://`' });
+            return safeEditReply(interaction,{ content: '❌ Thumbnail URL harus mulai dengan `http://` atau `https://`' });
         }
 
         // v3.9.1 FIX: validasi mention (sama seperti /announce) supaya admin
@@ -1544,7 +1550,7 @@ module.exports = async (interaction) => {
                 /^<@&\d{17,20}>$/.test(mention) ||
                 /^<@!?\d{17,20}>$/.test(mention);
             if (!isValidMention) {
-                return interaction.editReply({
+                return safeEditReply(interaction,{
                     content: `❌ Format mention tidak valid: \`${mention}\`\n\nFormat yang didukung: \`@everyone\`, \`@here\`, \`<@&ROLE_ID>\`, \`<@USER_ID>\`.`
                 });
             }
@@ -1567,7 +1573,7 @@ module.exports = async (interaction) => {
 
         await logAudit(interaction.client, { action: 'ANNOUNCE_SCHEDULE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Schedule announce ke ${channel} pada <t:${Math.floor(sendAt / 1000)}:F>${recurring ? ` (recurring: ${recurring})` : ''} — Title: "${title}"`, guildId: interaction.guild.id });
 
-        return interaction.editReply({
+        return safeEditReply(interaction,{
             content: `✅ **Announce dijadwalkan!**\n\n` +
                 `📍 Channel: ${channel}\n` +
                 `⏰ Kirim pada: <t:${Math.floor(sendAt / 1000)}:F> (<t:${Math.floor(sendAt / 1000)}:R>)\n` +
@@ -1583,7 +1589,7 @@ module.exports = async (interaction) => {
         const entries = getScheduledAnnsByGuild(interaction.guild.id);
         const pending = entries.filter(e => !e.sent);
         if (pending.length === 0) {
-            return interaction.editReply({ content: '📭 Tidak ada announce terjadwal yang pending. Pakai `/announce-schedule` untuk bikin.' });
+            return safeEditReply(interaction,{ content: '📭 Tidak ada announce terjadwal yang pending. Pakai `/announce-schedule` untuk bikin.' });
         }
         const lines = pending.map(e => {
             const timeLeft = e.sendAt - Date.now();
@@ -1595,19 +1601,19 @@ module.exports = async (interaction) => {
             .setColor(0x5865F2)
             .setFooter({ text: interaction.client.user.username, iconURL: interaction.client.user.displayAvatarURL({ dynamic: true }) })
             .setTimestamp();
-        return interaction.editReply({ embeds: [embed] });
+        return safeEditReply(interaction,{ embeds: [embed] });
     }
 
     if (interaction.commandName === 'announce-cancel') {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         const id = interaction.options.getString('id');
         const entry = getScheduledAnn(id);
-        if (!entry) return interaction.editReply({ content: `❌ Announce ID \`${id}\` tidak ditemukan.` });
-        if (entry.sent) return interaction.editReply({ content: `❌ Announce sudah terkirim, tidak bisa dibatalkan.` });
-        if (entry.guildId !== interaction.guild.id) return interaction.editReply({ content: '❌ Announce ini bukan dari guild ini.' });
+        if (!entry) return safeEditReply(interaction,{ content: `❌ Announce ID \`${id}\` tidak ditemukan.` });
+        if (entry.sent) return safeEditReply(interaction,{ content: `❌ Announce sudah terkirim, tidak bisa dibatalkan.` });
+        if (entry.guildId !== interaction.guild.id) return safeEditReply(interaction,{ content: '❌ Announce ini bukan dari guild ini.' });
         removeScheduledAnn(id);
         await logAudit(interaction.client, { action: 'ANNOUNCE_CANCEL', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Cancel scheduled announce \`${id}\` (Title: "${entry.data.title}")`, guildId: interaction.guild.id });
-        return interaction.editReply({ content: `✅ Announce \`${id}\` (${entry.data.title}) dibatalkan.` });
+        return safeEditReply(interaction,{ content: `✅ Announce \`${id}\` (${entry.data.title}) dibatalkan.` });
     }
 
     // ====================================================
@@ -1619,20 +1625,20 @@ module.exports = async (interaction) => {
         const reason = interaction.options.getString('reason');
 
         if (user.id === interaction.user.id) {
-            return interaction.editReply({ content: '❌ Tidak bisa warn diri sendiri.' });
+            return safeEditReply(interaction,{ content: '❌ Tidak bisa warn diri sendiri.' });
         }
         if (user.bot) {
-            return interaction.editReply({ content: '❌ Tidak bisa warn bot.' });
+            return safeEditReply(interaction,{ content: '❌ Tidak bisa warn bot.' });
         }
 
         const member = await interaction.guild.members.fetch(user.id).catch(() => null);
         if (!member) {
-            return interaction.editReply({ content: `❌ User <@${user.id}> tidak ada di server.` });
+            return safeEditReply(interaction,{ content: `❌ User <@${user.id}> tidak ada di server.` });
         }
 
         // Cek hierarki: admin harus lebih tinggi dari target
         if (member.roles.highest.position >= interaction.member.roles.highest.position) {
-            return interaction.editReply({ content: '❌ Kamu tidak bisa warn member dengan role setingkat/lebih tinggi dari kamu.' });
+            return safeEditReply(interaction,{ content: '❌ Kamu tidak bisa warn member dengan role setingkat/lebih tinggi dari kamu.' });
         }
 
         // v3.9.0: addWarn sekarang scoped per guild (guildId, userId, data)
@@ -1648,6 +1654,9 @@ module.exports = async (interaction) => {
         // Eksekusi auto-action kalau perlu
         // P1-7 FIX: kalau actionAlreadyTaken=true, tidak re-apply timeout lagi
         // (user sudah pernah kena mute yang sama, jangan reset timer).
+        // v3.9.4 FIX: kalau action gagal (e.g., bot kagak punya ModerateMembers permission),
+        // jangan markActionTaken — sebelumnya markActionTaken dipanggil unconditional,
+        // menyebabkan action selanjutnya yang sama di-skip (silent enforcement failure).
         let actionMsg = '';
         if (result.actionAlreadyTaken) {
             actionMsg = `\nℹ️ Auto-action tidak diulang (user sudah pernah kena action yang sama sebelumnya).`;
@@ -1656,13 +1665,29 @@ module.exports = async (interaction) => {
                 if (result.actionToTake === 'mute_1h' || result.actionToTake === 'mute_1d') {
                     const durationMin = result.actionToTake === 'mute_1h' ? 60 : 1440;
                     // Cari role mute (atau bikin timeout)
-                    await member.timeout(durationMin * 60 * 1000, `Auto-action: ${result.count} warnings`).catch(()=>{});
-                    actionMsg = `\n🔇 **Auto-action:** Timeout ${durationMin === 60 ? '1 jam' : '1 hari'} (${result.count} warnings)`;
-                    markActionTaken(interaction.guild.id, user.id, result.warnEntry.id, result.actionToTake);
+                    let muted = false;
+                    try {
+                        await member.timeout(durationMin * 60 * 1000, `Auto-action: ${result.count} warnings`);
+                        muted = true;
+                    } catch (err) {
+                        actionMsg = `\n⚠️ Auto-action gagal: ${err.message}`;
+                    }
+                    if (muted) {
+                        actionMsg = `\n🔇 **Auto-action:** Timeout ${durationMin === 60 ? '1 jam' : '1 hari'} (${result.count} warnings)`;
+                        markActionTaken(interaction.guild.id, user.id, result.warnEntry.id, result.actionToTake);
+                    }
                 } else if (result.actionToTake === 'kick') {
-                    await member.kick(`Auto-action: ${result.count} warnings`).catch(()=>{});
-                    actionMsg = `\n👢 **Auto-action:** Kicked (${result.count} warnings)`;
-                    markActionTaken(interaction.guild.id, user.id, result.warnEntry.id, result.actionToTake);
+                    let kicked = false;
+                    try {
+                        await member.kick(`Auto-action: ${result.count} warnings`);
+                        kicked = true;
+                    } catch (err) {
+                        actionMsg = `\n⚠️ Auto-action gagal: ${err.message}`;
+                    }
+                    if (kicked) {
+                        actionMsg = `\n👢 **Auto-action:** Kicked (${result.count} warnings)`;
+                        markActionTaken(interaction.guild.id, user.id, result.warnEntry.id, result.actionToTake);
+                    }
                 }
             } catch (err) {
                 actionMsg = `\n⚠️ Auto-action gagal: ${err.message}`;
@@ -1674,7 +1699,7 @@ module.exports = async (interaction) => {
             await user.send(`⚠️ **Kamu mendapat warning di ${interaction.guild.name}**\n\nReason: ${reason}\nTotal warnings: ${result.count}\n${result.actionToTake ? `Action: ${result.actionToTake}` : 'Belum ada auto-action (threshold: 3=mute 1h, 5=mute 1d, 7=kick)'}`);
         } catch (_) {}
 
-        return interaction.editReply({
+        return safeEditReply(interaction,{
             content: `⚠️ **<@${user.id}> telah diwarn.**\n\n` +
                 `📝 Reason: ${reason}\n` +
                 `📊 Total warnings: **${result.count}**\n` +
@@ -1688,7 +1713,7 @@ module.exports = async (interaction) => {
         // v3.9.0: getWarns sekarang scoped per guild
         const warns = getWarns(interaction.guild.id, user.id);
         if (warns.length === 0) {
-            return interaction.editReply({ content: `✅ <@${user.id}> tidak punya warning.` });
+            return safeEditReply(interaction,{ content: `✅ <@${user.id}> tidak punya warning.` });
         }
         const lines = warns.map((w, i) => {
             const date = new Date(w.createdAt);
@@ -1700,7 +1725,7 @@ module.exports = async (interaction) => {
             .setColor(warns.length >= WARN_THRESHOLDS.kick ? 0xED4245 : warns.length >= WARN_THRESHOLDS.mute1h ? 0xE67E22 : 0xFEE75C)
             .setFooter({ text: `User ID: ${user.id}` })
             .setTimestamp();
-        return interaction.editReply({ embeds: [embed] });
+        return safeEditReply(interaction,{ embeds: [embed] });
     }
 
     if (interaction.commandName === 'warn-remove') {
@@ -1710,10 +1735,10 @@ module.exports = async (interaction) => {
         // v3.9.0: removeWarn sekarang scoped per guild
         const ok = removeWarn(interaction.guild.id, user.id, warnId);
         if (!ok) {
-            return interaction.editReply({ content: `❌ Warn ID \`${warnId}\` tidak ditemukan untuk user <@${user.id}> di guild ini.` });
+            return safeEditReply(interaction,{ content: `❌ Warn ID \`${warnId}\` tidak ditemukan untuk user <@${user.id}> di guild ini.` });
         }
         await logAudit(interaction.client, { action: 'WARN_REMOVE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Hapus warn \`${warnId}\` dari <@${user.id}>. Sisa: ${getWarnCount(interaction.guild.id, user.id)} warn`, guildId: interaction.guild.id });
-        return interaction.editReply({ content: `✅ Warn \`${warnId}\` dihapus dari <@${user.id}>.\n📊 Sisa warnings: **${getWarnCount(interaction.guild.id, user.id)}**` });
+        return safeEditReply(interaction,{ content: `✅ Warn \`${warnId}\` dihapus dari <@${user.id}>.\n📊 Sisa warnings: **${getWarnCount(interaction.guild.id, user.id)}**` });
     }
 
     if (interaction.commandName === 'warn-clear') {
@@ -1722,10 +1747,10 @@ module.exports = async (interaction) => {
         // v3.9.0: clearWarns sekarang scoped per guild
         const count = clearWarns(interaction.guild.id, user.id);
         if (count === 0) {
-            return interaction.editReply({ content: `ℹ️ <@${user.id}> memang tidak punya warning di guild ini.` });
+            return safeEditReply(interaction,{ content: `ℹ️ <@${user.id}> memang tidak punya warning di guild ini.` });
         }
         await logAudit(interaction.client, { action: 'WARN_CLEAR_ALL', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Clear ALL warns (${count}) dari <@${user.id}> di guild ini`, guildId: interaction.guild.id });
-        return interaction.editReply({ content: `✅ **${count}** warning dihapus dari <@${user.id}> di guild ini.` });
+        return safeEditReply(interaction,{ content: `✅ **${count}** warning dihapus dari <@${user.id}> di guild ini.` });
     }
 
     // ====================================================
@@ -1733,7 +1758,8 @@ module.exports = async (interaction) => {
     // ====================================================
     if (interaction.commandName === 'stats') {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-        const stats = getServerStatsAll();
+        // v3.9.4: scoped per guild — sebelumnya getServerStats() tidak terfilter.
+        const stats = getServerStatsAll(interaction.guild.id);
         const embed = new EmbedBuilder()
             .setTitle('📊 STATISTIK SERVER')
             .setDescription('Statistik agregat seluruh aktivitas member.')
@@ -1748,15 +1774,16 @@ module.exports = async (interaction) => {
             )
             .setFooter({ text: 'Data dari stats.json — tracking dimulai sejak bot v3.2' })
             .setTimestamp();
-        return interaction.editReply({ embeds: [embed] });
+        return safeEditReply(interaction,{ embeds: [embed] });
     }
 
     if (interaction.commandName === 'leaderboard') {
         await interaction.deferReply();
         const metric = interaction.options.getString('metric') || 'messages';
-        const top = getTopUsersStats(metric, 10);
+        // v3.9.4: scoped per guild — sebelumnya getTopUsers() tidak terfilter.
+        const top = getTopUsersStats(interaction.guild.id, metric, 10);
         if (top.length === 0) {
-            return interaction.editReply({ content: '📭 Belum ada data leaderboard untuk metric ini.' });
+            return safeEditReply(interaction,{ content: '📭 Belum ada data leaderboard untuk metric ini.' });
         }
 
         const metricLabels = {
@@ -1784,12 +1811,13 @@ module.exports = async (interaction) => {
             .setColor(0xF1C40F)
             .setFooter({ text: 'Tracking sejak bot v3.2 | Update tiap aktivitas' })
             .setTimestamp();
-        return interaction.editReply({ embeds: [embed] });
+        return safeEditReply(interaction,{ embeds: [embed] });
     }
 
     if (interaction.commandName === 'my-stats') {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-        const stats = getUserStats(interaction.user.id);
+        // v3.9.4: scoped per guild — sebelumnya getStats() tidak terfilter.
+        const stats = getUserStats(interaction.guild.id, interaction.user.id);
         const embed = new EmbedBuilder()
             .setTitle(`📊 STATS — ${interaction.user.tag}`)
             .setDescription('Statistik aktivitas kamu di server ini.')
@@ -1804,7 +1832,7 @@ module.exports = async (interaction) => {
             )
             .setFooter({ text: 'Cek posisi di leaderboard pakai /leaderboard' })
             .setTimestamp();
-        return interaction.editReply({ embeds: [embed] });
+        return safeEditReply(interaction,{ embeds: [embed] });
     }
 
     // ====================================================
@@ -1855,7 +1883,7 @@ module.exports = async (interaction) => {
             await interaction.deferReply({ flags: MessageFlags.Ephemeral });
             const polls = getPollsByGuild(interaction.guild.id);
             if (polls.length === 0) {
-                return interaction.editReply({ content: '📭 Belum ada poll di guild ini.' });
+                return safeEditReply(interaction,{ content: '📭 Belum ada poll di guild ini.' });
             }
             const lines = polls.map(p => {
                 const status = p.closed ? '🔒 Closed' : '🟢 Active';
@@ -1868,7 +1896,7 @@ module.exports = async (interaction) => {
                 .setColor(0x5865F2)
                 .setFooter({ text: interaction.client.user.username, iconURL: interaction.client.user.displayAvatarURL({ dynamic: true }) })
                 .setTimestamp();
-            return interaction.editReply({ embeds: [embed] });
+            return safeEditReply(interaction,{ embeds: [embed] });
         }
 
         // --- /poll close ---
@@ -1876,13 +1904,13 @@ module.exports = async (interaction) => {
             await interaction.deferReply({ flags: MessageFlags.Ephemeral });
             const id = interaction.options.getString('id');
             const poll = getPoll(id);
-            if (!poll) return interaction.editReply({ content: `❌ Poll \`${id}\` tidak ditemukan.` });
-            if (poll.guildId !== interaction.guild.id) return interaction.editReply({ content: '❌ Poll ini bukan dari guild ini.' });
-            if (poll.closed) return interaction.editReply({ content: `❌ Poll sudah closed.` });
+            if (!poll) return safeEditReply(interaction,{ content: `❌ Poll \`${id}\` tidak ditemukan.` });
+            if (poll.guildId !== interaction.guild.id) return safeEditReply(interaction,{ content: '❌ Poll ini bukan dari guild ini.' });
+            if (poll.closed) return safeEditReply(interaction,{ content: `❌ Poll sudah closed.` });
             const updated = closePoll(id);
             await updatePollMessage(interaction, updated);
             await logAudit(interaction.client, { action: 'POLL_CLOSE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Close poll \`${id}\` ("${poll.question}")`, guildId: interaction.guild.id });
-            return interaction.editReply({ content: `✅ Poll **${poll.question}** ditutup! Lihat hasil di channel.` });
+            return safeEditReply(interaction,{ content: `✅ Poll **${poll.question}** ditutup! Lihat hasil di channel.` });
         }
     }
 
@@ -1924,7 +1952,7 @@ module.exports = async (interaction) => {
                 const panelMsg = await existingControlChannel.send({ embeds: [embed], components }).catch(err => null);
                 if (panelMsg) {
                     tempVoiceManager.setControlMessageId(guild.id, panelMsg.id);
-                    return interaction.editReply({
+                    return safeEditReply(interaction,{
                         content: `✅ **Panel temp voice di-refresh!**\n\n🎛️ ${panelMsg.url}\n\n💡 Setup yang sudah ada tetap dipakai (kategori + trigger + control channel).`
                     });
                 }
@@ -1963,7 +1991,7 @@ module.exports = async (interaction) => {
             tempVoiceManager.setupGuild(guild.id, creatorChannel.id, category.id, controlChannel.id);
         } catch (err) {
             console.error('Error setup temp voice:', err);
-            return interaction.editReply({ content: `❌ Gagal setup temp voice: ${err.message}\n\nPastikan bot punya permission **Manage Channels** dan **Manage Roles**.` });
+            return safeEditReply(interaction,{ content: `❌ Gagal setup temp voice: ${err.message}\n\nPastikan bot punya permission **Manage Channels** dan **Manage Roles**.` });
         }
 
         // Kirim panel kontrol GLOBAL ke control channel
@@ -1977,7 +2005,7 @@ module.exports = async (interaction) => {
             panelMsg = await controlChannel.send({ embeds: [embed], components });
         } catch (err) {
             console.error('Gagal kirim panel global:', err.message);
-            return interaction.editReply({ content: `❌ Gagal kirim panel ke ${controlChannel}. Cek permission bot (Send Messages + Embed Links).` });
+            return safeEditReply(interaction,{ content: `❌ Gagal kirim panel ke ${controlChannel}. Cek permission bot (Send Messages + Embed Links).` });
         }
 
         // Simpan controlMessageId
@@ -1991,7 +2019,7 @@ module.exports = async (interaction) => {
             guildId: guild.id
         });
 
-        return interaction.editReply({
+        return safeEditReply(interaction,{
             content: `✅ **Temp Voice siap!**\n\n` +
                 `📂 **Kategori:** ${category.name}\n` +
                 `🎤 **Trigger channel:** ${creatorChannel} (member join sini untuk bikin voice baru)\n` +
@@ -2006,7 +2034,7 @@ module.exports = async (interaction) => {
         const tempVoiceManager = require('../utils/tempVoiceManager');
         const config = tempVoiceManager.getGuildConfig(interaction.guild.id);
         if (!config) {
-            return interaction.editReply({ content: 'ℹ️ Temp voice belum di-setup di guild ini.' });
+            return safeEditReply(interaction,{ content: 'ℹ️ Temp voice belum di-setup di guild ini.' });
         }
 
         // Hapus control panel message global
@@ -2050,7 +2078,7 @@ module.exports = async (interaction) => {
             guildId: interaction.guild.id
         });
 
-        return interaction.editReply({ content: '✅ Setup Temp Voice berhasil dihapus. Kategori + control panel + trigger channel + semua channel temp voice aktif juga dihapus.' });
+        return safeEditReply(interaction,{ content: '✅ Setup Temp Voice berhasil dihapus. Kategori + control panel + trigger channel + semua channel temp voice aktif juga dihapus.' });
     }
 };
 

@@ -19,7 +19,8 @@ async function onMemberAdd(member) {
     // Track join untuk stats
     try {
         const { recordJoin } = require('../utils/statsManager');
-        recordJoin(user.id);
+        // v3.9.4: scoped per guild
+        recordJoin(guild.id, user.id);
     } catch (_) {}
 
     // === 1. Beri role Unverified ===

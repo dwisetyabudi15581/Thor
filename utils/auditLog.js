@@ -62,9 +62,13 @@ const ACTION_LABELS = {
     // Warn
     WARN_ADD: '⚠️ Warn Member',
     WARN_REMOVE: '✅ Hapus Warn',
+    WARN_CLEAR_ALL: '🧹 Clear Semua Warn',
     // Poll
     POLL_CREATE: '📊 Buat Poll',
-    POLL_CLOSE: '🔒 Tutup Poll'
+    POLL_CLOSE: '🔒 Tutup Poll',
+    // v3.9.4: tambah label yang sebelumnya fallback ke raw action string.
+    SETUP_TEMPVOICE: '🎤 Setup Temp Voice',
+    TEMPVOICE_REMOVE: '🗑️ Hapus Setup Temp Voice'
 };
 
 const RETRY_DELAY_MS = 500;

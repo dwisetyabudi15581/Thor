@@ -252,6 +252,18 @@ function getAllActive() {
 }
 
 /**
+ * v3.9.4: Guild-scoped variant of getAllActive.
+ * Hanya return schedule milik guild ini.
+ *
+ * @param {string} guildId
+ * @returns {Array}
+ */
+function getActiveByGuild(guildId) {
+    if (!guildId) return loadScheduled();
+    return loadScheduled().filter(e => e.guildId === guildId);
+}
+
+/**
  * Cari scheduled role aktif untuk user tertentu + role tertentu.
  */
 function findActive(userId, roleId) {
@@ -294,6 +306,7 @@ module.exports = {
     removeEntry,
     getExpired,
     getAllActive,
+    getActiveByGuild,
     findActive,
     findAllByUser,
     removeAllByUser,
