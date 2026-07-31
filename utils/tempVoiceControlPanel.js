@@ -87,22 +87,14 @@ function buildGlobalControlPanel(options = {}) {
             .setTitle('🎛️ TEMP VOICE CONTROL PANEL')
             .setDescription(
                 '**Status:** Tidak ada voice channel aktif.\n\n' +
-                `👇 **Klik tombol "🎤 Buat Voice" di bawah** untuk membuat voice channel pribadi.\n\n` +
-                `💡 Setelah kamu jadi owner, panel ini akan otomatis menampilkan voice kamu di daftar aktif.`
+                `💡 **Join ke channel "🔊 Buat Voice"** untuk membuat voice channel pribadi.\n` +
+                `Setelah kamu jadi owner, panel ini akan otomatis menampilkan voice kamu di daftar aktif.`
             )
             .setColor(0x95A5A6)
             .setFooter({ text: `${guildName} • Temp Voice System` })
             .setTimestamp();
 
-        const components = new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId('tv_create')
-                .setLabel('Buat Voice')
-                .setEmoji('🎤')
-                .setStyle(ButtonStyle.Success)
-        );
-
-        return { embed, components: [components] };
+        return { embed, components: [] };
     }
 
     // v3.8.5: Sort activeOwners by createdAt desc (paling baru pertama)
@@ -125,9 +117,10 @@ function buildGlobalControlPanel(options = {}) {
     }
 
     description += `\n**🎮 Kontrol (klik untuk pakai):**\n`;
-    description += `• ✏️ Rename • 🚫 Kick • 👥 Limit • 🔒/🔓 Lock • 🔄 Transfer • 🗑️ Delete • ℹ️ Info Room\n\n`;
+    description += `• ✏️ Rename • 🚫 Kick • 👥 Limit • 🔒 Lock • 🔄 Transfer • 🗑️ Delete • ℹ️ Info Room\n\n`;
     description += `💡 Bot otomatis deteksi channel kamu saat klik tombol kontrol. Kamu harus berada di voice channel milikmu.\n`;
-    description += `💡 Klik **ℹ️ Info Room** untuk melihat detail voice room kamu.`;
+    description += `💡 Klik **ℹ️ Info Room** untuk melihat detail voice room kamu.\n`;
+    description += `💡 **Buat voice baru:** Join ke channel "🔊 Buat Voice".`;
 
     const embed = new EmbedBuilder()
         .setTitle('🎛️ TEMP VOICE CONTROL PANEL')
@@ -160,7 +153,7 @@ function buildGlobalControlPanel(options = {}) {
             .setStyle(ButtonStyle.Secondary)
     );
 
-    // Row 2: transfer, delete, info room, + buat voice baru
+    // Row 2: transfer, delete, info room
     const row2 = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
             .setCustomId('tv_transfer')
@@ -176,12 +169,7 @@ function buildGlobalControlPanel(options = {}) {
             .setCustomId('tv_info')
             .setLabel('Info Room')
             .setEmoji('ℹ️')
-            .setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder()
-            .setCustomId('tv_create')
-            .setLabel('Buat Voice')
-            .setEmoji('🎤')
-            .setStyle(ButtonStyle.Success)
+            .setStyle(ButtonStyle.Secondary)
     );
 
     const components = [row1, row2];

@@ -465,11 +465,9 @@ module.exports = async (interaction) => {
         }
 
         // ====================================================
-        // === v3.8: TEMP VOICE — Button / Modal / Select handlers ===
+        // === v3.8.5: TEMP VOICE — Button / Modal / Select handlers ===
+        // Note: Buat voice hanya via join trigger channel "🔊 Buat Voice", tidak ada button
         // ====================================================
-        if (interaction.isButton() && interaction.customId === 'tv_create') {
-            return handleTempVoiceCreate(interaction);
-        }
         if (interaction.isButton() && interaction.customId === 'tv_rename') {
             return handleTempVoiceRename(interaction);
         }
@@ -1396,93 +1394,6 @@ async function showChannelSelectMenu(interaction, channels, action) {
     } catch (err) {
         console.error('showChannelSelectMenu error:', err);
         await interaction.reply({ content: `❌ Gagal: ${err.message}`, flags: MessageFlags.Ephemeral }).catch(()=>{});
-    }
-}
-
-/**
- * Button: tv_create — dipakai saat member klik tombol "Buat Voice" di panel global.
- *
- * v3.8.5: Flow yang lebih baik:
- *   - Kalau user tidak di voice → redirect ke join trigger channel dulu
- *   - Kalau user di voice → buat channel baru, pindahkan ke channel baru
- *   - Alternatif: user bisa juga join langsung ke trigger channel "🔊 Buat Voice"
- */
-async function handleTempVoiceCreate(interaction) {
-    try {
-        if (!interaction.guild) {
-            return interaction.reply({ content: '❌ Command ini hanya bisa dipakai di server.', flags: MessageFlags.Ephemeral });
-        }
-
-        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-
-        const tempVoiceManager = require('../utils/tempVoiceManager');
-        const { ChannelType, PermissionFlagsBits: PFB } = require('discord.js');
-
-        const config = tempVoiceManager.getGuildConfig(interaction.guild.id);
-        if (!config?.creatorChannelId || !config?.categoryId) {
-            return interaction.editReply({ content: '❌ Temp voice belum di-setup. Minta admin jalankan `/setup-tempvoice`.' });
-        }
-
-        const member = interaction.member;
-
-        // Cek apakah member sudah punya channel
-        const existingChannelId = tempVoiceManager.findChannelByOwner(interaction.guild.id, member.id);
-        if (existingChannelId) {
-            const existing = interaction.guild.channels.cache.get(existingChannelId);
-            if (existing) {
-                // Pindahkan member kalau sedang di voice
-                if (member.voice.channelId) {
-                    try { await member.voice.setChannel(existingChannelId); } catch (_) {}
-                }
-                return interaction.editReply({ content: `🎤 Kamu sudah punya voice channel: ${existing.name}` });
-            }
-        }
-
-        // v3.8.5: Kalau user tidak di voice channel, minta join ke trigger channel dulu
-        if (!member.voice.channelId) {
-            const triggerChannel = interaction.guild.channels.cache.get(config.creatorChannelId);
-            const triggerMention = triggerChannel ? `${triggerChannel}` : `🔊 Buat Voice`;
-            return interaction.editReply({
-                content: `🎤 **Kamu harus join ke voice channel dulu!**\n\n💡 Join ke ${triggerMention} untuk otomatis membuat voice channel pribadi, atau join ke voice channel mana saja lalu klik tombol ini lagi.`
-            });
-        }
-
-        // Bikin channel baru
-        const channelName = `🔊 ${member.user.username}'s Room`;
-        const newChannel = await interaction.guild.channels.create({
-            name: channelName.slice(0, 100),
-            type: ChannelType.GuildVoice,
-            parent: config.categoryId,
-            bitrate: 64000,
-            permissionOverwrites: [
-                { id: interaction.guild.roles.everyone.id, allow: [PFB.ViewChannel, PFB.Connect] },
-                { id: member.id, allow: [
-                    PFB.ViewChannel, PFB.Connect, PFB.ManageChannels,
-                    PFB.MoveMembers, PFB.MuteMembers, PFB.DeafenMembers
-                ]}
-            ]
-        });
-
-        tempVoiceManager.registerChannel(interaction.guild.id, newChannel.id, member.id, member.user.tag, newChannel.name);
-
-        // v3.8.5: panel global — tidak lagi pakai focused owner, langsung refresh panel
-        if (typeof interaction.client.refreshGlobalControlPanel === 'function') {
-            await interaction.client.refreshGlobalControlPanel(interaction.client, interaction.guild.id);
-        }
-
-        // Pindahkan member ke channel baru
-        try { await member.voice.setChannel(newChannel.id); } catch (_) {}
-
-        return interaction.editReply({
-            content: `✅ Voice channel dibuat: ${newChannel}\n\n🎛️ **Control panel ada di control channel** — lihat panel global temp voice untuk kontrol (rename, kick, limit, lock, dll).`
-        });
-    } catch (err) {
-        console.error('TempVoice create error:', err);
-        if (interaction.deferred && !interaction.replied) {
-            await interaction.editReply({ content: `❌ Gagal: ${err.message}` }).catch(()=>{});
-        } else if (!interaction.replied) {
-            await interaction.reply({ content: `❌ Gagal: ${err.message}`, flags: MessageFlags.Ephemeral }).catch(()=>{});
-        }
     }
 }
 
