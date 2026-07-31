@@ -486,6 +486,18 @@ function getCommands() {
                     ]
                 }
             ]
+        },
+
+        // === TEMP VOICE ===
+        {
+            name: 'setup-tempvoice',
+            description: 'Pasang panel "Buat Voice Channel" pribadi (member bisa bikin voice sendiri + kontrol penuh)',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild
+        },
+        {
+            name: 'tempvoice-remove',
+            description: 'Hapus setup temp voice dari guild (channel trigger tidak ikut dihapus)',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild
         }
     ];
 }

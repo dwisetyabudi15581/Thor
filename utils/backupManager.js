@@ -10,6 +10,7 @@
  *   - warns.json (kalau ada)
  *   - polls.json (kalau ada)
  *   - scheduledAnnouncements.json (kalau ada)
+ *   - tempVoice.json (v3.8, kalau ada)
  *
  * Struktur folder:
  *   backups/
@@ -42,7 +43,8 @@ const FILES_TO_BACKUP = [
     'warns.json',
     'polls.json',
     'scheduledAnnouncements.json',
-    'stats.json'
+    'stats.json',
+    'tempVoice.json'
 ];
 
 const MAX_BACKUPS = 7;

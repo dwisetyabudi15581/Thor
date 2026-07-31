@@ -1743,6 +1743,122 @@ module.exports = async (interaction) => {
             return interaction.editReply({ content: `✅ Poll **${poll.question}** ditutup! Lihat hasil di channel.` });
         }
     }
+
+    // ====================================================
+    // === TEMP VOICE — /setup-tempvoice, /tempvoice-remove ===
+    // ====================================================
+    if (interaction.commandName === 'setup-tempvoice') {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+        const { ChannelType } = require('discord.js');
+        const tempVoiceManager = require('../utils/tempVoiceManager');
+        const { buildSetupPanelEmbed, buildSetupPanelComponents } = require('../utils/tempVoiceControlPanel');
+
+        const guild = interaction.guild;
+
+        // Cek apakah sudah ada setup sebelumnya
+        const existingConfig = tempVoiceManager.getGuildConfig(guild.id);
+        let creatorChannel = existingConfig?.creatorChannelId
+            ? guild.channels.cache.get(existingConfig.creatorChannelId)
+            : null;
+
+        // Kalau belum ada, bikin kategori + trigger channel
+        if (!creatorChannel) {
+            try {
+                // Bikin kategori "🎤 TEMP VOICE"
+                let category = guild.channels.cache.find(c => c.name === '🎤 TEMP VOICE' && c.type === ChannelType.GuildCategory);
+                if (!category) {
+                    category = await guild.channels.create({
+                        name: '🎤 TEMP VOICE',
+                        type: ChannelType.GuildCategory
+                    });
+                }
+
+                // Bikin trigger channel "🔊 Buat Voice"
+                creatorChannel = await guild.channels.create({
+                    name: '🔊 Buat Voice',
+                    type: ChannelType.GuildVoice,
+                    parent: category.id,
+                    bitrate: 64000
+                });
+
+                // Simpan config
+                tempVoiceManager.setupGuild(guild.id, creatorChannel.id, category.id);
+            } catch (err) {
+                console.error('Error setup temp voice:', err);
+                return interaction.editReply({ content: `❌ Gagal setup temp voice: ${err.message}\n\nPastikan bot punya permission **Manage Channels** dan **Manage Roles**.` });
+            }
+        }
+
+        // Kirim panel ke channel tempat command dijalankan
+        const embed = buildSetupPanelEmbed();
+        const components = buildSetupPanelComponents();
+        let panelMsg;
+        try {
+            panelMsg = await interaction.channel.send({ embeds: [embed], components });
+        } catch (err) {
+            console.error('Gagal kirim panel temp voice:', err.message);
+            return interaction.editReply({ content: `❌ Gagal kirim panel ke channel ini. Cek permission bot.` });
+        }
+
+        await logAudit(interaction.client, {
+            action: 'SETUP_SELFROLE',
+            actorId: interaction.user.id,
+            actorTag: interaction.user.tag,
+            details: `Setup Temp Voice — trigger channel: ${creatorChannel} (\`${creatorChannel.id}\`), panel di ${interaction.channel}`,
+            guildId: guild.id
+        });
+
+        return interaction.editReply({
+            content: `✅ **Temp Voice siap!**\n\n` +
+                `🎤 Trigger channel: ${creatorChannel} (member join sini untuk bikin voice baru)\n` +
+                `📋 Panel pendaftaran: ${panelMsg.url}\n\n` +
+                `💡 Member tinggal klik tombol **🎤 Buat Voice** di panel, atau join langsung ke trigger channel. Bot otomatis bikin voice baru + jadiin mereka owner.`
+        });
+    }
+
+    if (interaction.commandName === 'tempvoice-remove') {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+        const tempVoiceManager = require('../utils/tempVoiceManager');
+        const config = tempVoiceManager.getGuildConfig(interaction.guild.id);
+        if (!config) {
+            return interaction.editReply({ content: 'ℹ️ Temp voice belum di-setup di guild ini.' });
+        }
+
+        // Hapus trigger channel + kategori (opsional, tapi bersih)
+        try {
+            if (config.creatorChannelId) {
+                const trigger = interaction.guild.channels.cache.get(config.creatorChannelId);
+                if (trigger) await trigger.delete('Temp voice setup dihapus').catch(()=>{});
+            }
+            // Hapus semua channel temp voice yang masih aktif
+            if (config.channels) {
+                for (const channelId of Object.keys(config.channels)) {
+                    const ch = interaction.guild.channels.cache.get(channelId);
+                    if (ch) await ch.delete('Temp voice setup dihapus').catch(()=>{});
+                }
+            }
+            // Hapus kategori kalau kosong
+            if (config.categoryId) {
+                const cat = interaction.guild.channels.cache.get(config.categoryId);
+                if (cat && cat.children.size === 0) {
+                    await cat.delete('Temp voice kategori kosong').catch(()=>{});
+                }
+            }
+        } catch (_) {}
+
+        tempVoiceManager.removeGuild(interaction.guild.id);
+        await logAudit(interaction.client, {
+            action: 'SELFROLE_DELETE',
+            actorId: interaction.user.id,
+            actorTag: interaction.user.tag,
+            details: `Hapus setup Temp Voice dari guild`,
+            guildId: interaction.guild.id
+        });
+
+        return interaction.editReply({ content: '✅ Setup Temp Voice berhasil dihapus. Trigger channel + semua channel temp voice aktif juga dihapus.' });
+    }
 };
 
 // ====================================================

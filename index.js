@@ -1,11 +1,12 @@
-const { Client, GatewayIntentBits, Partials, PermissionFlagsBits, Events } = require('discord.js');
+const { Client, GatewayIntentBits, Partials, PermissionFlagsBits, Events, ChannelType } = require('discord.js');
 require('dotenv').config();
 
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.GuildMembers
+        GatewayIntentBits.GuildMembers,
+        GatewayIntentBits.GuildVoiceStates   // v3.8: untuk temp voice
     ],
     partials: [Partials.Channel, Partials.Message, Partials.GuildMember, Partials.User]
 });
@@ -25,6 +26,8 @@ const { incrementMessages: trackMessage, startAutoFlush: startStatsAutoFlush, sh
 // P3-6 REFACTOR: definisi command & scheduler tasks dipisah ke file terpisah supaya index.js lebih lean.
 const { getCommands } = require('./utils/commandDefinitions');
 const { processExpiredRole, processGiveawayEnd, processScheduledAnnouncement, attachToClient } = require('./utils/schedulerTasks');
+// v3.8: Temp Voice manager
+const tempVoiceManager = require('./utils/tempVoiceManager');
 
 // === ERROR HANDLER GLOBAL ===
 process.on('unhandledRejection', (reason) => {
@@ -241,6 +244,162 @@ client.on(Events.MessageCreate, async (message) => {
         trackMessage(message.author.id);
     } catch (_) {}
 });
+
+// === v3.8: TEMP VOICE — voiceStateUpdate handler ===
+// Logic:
+//   1. Member join trigger channel → bikin voice baru untuk member, pindahkan
+//   2. Member join channel temp voice milik dia → kirim control panel ephemeral
+//   3. Member leave channel temp voice → kalau channel kosong, hapus
+client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
+    try {
+        // Skip kalau bukan guild
+        if (!newState.guild) return;
+
+        const guildId = newState.guild.id;
+        const userId = newState.id;
+        const creatorChannelId = tempVoiceManager.getCreatorChannelId(guildId);
+        if (!creatorChannelId) return; // temp voice belum di-setup
+
+        const oldChannelId = oldState.channelId;
+        const newChannelId = newState.channelId;
+
+        // === CASE 1: Member join trigger channel → bikin voice baru ===
+        if (newChannelId === creatorChannelId && oldChannelId !== creatorChannelId) {
+            await handleCreateTempVoice(newState);
+            return;
+        }
+
+        // === CASE 2: Member join channel temp voice miliknya → kirim control panel ===
+        if (newChannelId && newChannelId !== oldChannelId) {
+            const channelInfo = tempVoiceManager.getChannel(guildId, newChannelId);
+            if (channelInfo && channelInfo.ownerId === userId) {
+                // Owner join channel-nya sendiri → kirim control panel ephemeral
+                await sendControlPanelEphemeral(newState, newChannelId, channelInfo);
+            }
+        }
+
+        // === CASE 3: Member leave channel temp voice → hapus kalau kosong ===
+        if (oldChannelId && oldChannelId !== newChannelId) {
+            const channelInfo = tempVoiceManager.getChannel(guildId, oldChannelId);
+            if (channelInfo) {
+                const oldChannel = newState.guild.channels.cache.get(oldChannelId);
+                if (oldChannel && oldChannel.members.size === 0) {
+                    // Channel kosong → hapus
+                    try {
+                        await oldChannel.delete('Temp voice kosong');
+                        tempVoiceManager.unregisterChannel(guildId, oldChannelId);
+                        console.log(`🎤 Temp voice ${oldChannelId} dihapus (kosong).`);
+                    } catch (err) {
+                        if (err.code !== 10003) { // 10003 = Unknown Channel (sudah dihapus)
+                            console.warn(`⚠️ Gagal hapus temp voice ${oldChannelId}:`, err.message);
+                        }
+                        tempVoiceManager.unregisterChannel(guildId, oldChannelId);
+                    }
+                }
+            }
+        }
+    } catch (err) {
+        console.error('VoiceStateUpdate Error:', err.message);
+    }
+});
+
+/**
+ * Handle saat member join trigger channel → bikin voice baru.
+ */
+async function handleCreateTempVoice(newState) {
+    const guild = newState.guild;
+    const member = newState.member;
+
+    try {
+        const config = tempVoiceManager.getGuildConfig(guild.id);
+        if (!config?.categoryId) {
+            console.warn('⚠️ Temp voice config tidak ada categoryId.');
+            return;
+        }
+
+        // Cek apakah member sudah punya channel aktif
+        const existingChannelId = tempVoiceManager.findChannelByOwner(guild.id, member.id);
+        if (existingChannelId) {
+            const existingChannel = guild.channels.cache.get(existingChannelId);
+            if (existingChannel) {
+                // Pindahkan member ke channel yang sudah ada
+                try {
+                    await member.voice.setChannel(existingChannelId);
+                    await member.send(`🎤 Kamu sudah punya voice channel: ${existingChannel.name}. Dipindahkan ke sana.`).catch(()=>{});
+                    return;
+                } catch (_) {
+                    // Kalau gagal pindah, biarkan di trigger channel
+                }
+            }
+        }
+
+        // Bikin voice channel baru
+        const channelName = `🔊 ${member.user.username}'s Room`;
+        const newChannel = await guild.channels.create({
+            name: channelName.slice(0, 100),
+            type: ChannelType.GuildVoice,
+            parent: config.categoryId,
+            bitrate: 64000,
+            permissionOverwrites: [
+                { id: guild.roles.everyone.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect] },
+                { id: member.id, allow: [
+                    PermissionFlagsBits.ViewChannel,
+                    PermissionFlagsBits.Connect,
+                    PermissionFlagsBits.ManageChannels,
+                    PermissionFlagsBits.MoveMembers,
+                    PermissionFlagsBits.MuteMembers,
+                    PermissionFlagsBits.DeafenMembers
+                ]}
+            ]
+        });
+
+        // Register ke manager
+        tempVoiceManager.registerChannel(guild.id, newChannel.id, member.id, member.user.tag, newChannel.name);
+
+        // Pindahkan member ke channel baru
+        try {
+            await member.voice.setChannel(newChannel.id);
+        } catch (err) {
+            console.warn(`⚠️ Gagal pindahkan member ke channel baru: ${err.message}`);
+        }
+
+        // Kirim control panel ephemeral ke owner
+        const channelInfo = tempVoiceManager.getChannel(guild.id, newChannel.id);
+        await sendControlPanelEphemeral(newState, newChannel.id, channelInfo);
+
+        console.log(`🎤 Temp voice dibuat: ${newChannel.name} (${newChannel.id}) oleh ${member.user.tag}`);
+    } catch (err) {
+        console.error('Error create temp voice:', err);
+        try {
+            await member.send(`❌ Gagal bikin voice channel: ${err.message}`).catch(()=>{});
+        } catch (_) {}
+    }
+}
+
+/**
+ * Kirim control panel ephemeral ke owner channel temp voice.
+ */
+async function sendControlPanelEphemeral(state, channelId, channelInfo) {
+    try {
+        const member = state.member;
+        const channel = state.guild.channels.cache.get(channelId);
+        if (!channel) return;
+
+        const { buildControlEmbed, buildControlComponents } = require('./utils/tempVoiceControlPanel');
+        const embed = buildControlEmbed(channelInfo, channel, member.user);
+        const components = buildControlComponents(channelInfo);
+
+        // Kirim DM ke owner (lebih persistent daripada ephemeral)
+        try {
+            await member.send({ content: `🎛️ Control panel voice channel kamu: **${channel.name}**`, embeds: [embed], components });
+        } catch (dmErr) {
+            // Kalau DM ditutup, skip (member bisa refresh dengan leave+join lagi nanti)
+            console.log(`ℹ️ Tidak bisa DM control panel ke ${member.user.tag} (DM ditutup).`);
+        }
+    } catch (err) {
+        console.warn('Gagal kirim control panel:', err.message);
+    }
+}
 
 // === P0-1 FIX: Graceful shutdown — flush stats cache sebelum exit ===
 function gracefulShutdown(signal) {
