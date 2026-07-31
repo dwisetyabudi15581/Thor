@@ -494,6 +494,9 @@ module.exports = async (interaction) => {
         if (interaction.isButton() && interaction.customId === 'tv_delete') {
             return handleTempVoiceDelete(interaction);
         }
+        if (interaction.isButton() && interaction.customId === 'tv_info') {
+            return handleTempVoiceInfo(interaction);
+        }
         if (interaction.isModalSubmit() && interaction.customId === 'tv_modal_rename') {
             return handleTempVoiceRenameSubmit(interaction);
         }
@@ -1397,8 +1400,12 @@ async function showChannelSelectMenu(interaction, channels, action) {
 }
 
 /**
- * Button: tv_create — dipakai saat member klik tombol "Buat Voice" di panel setup.
- * Alternatif dari join trigger channel.
+ * Button: tv_create — dipakai saat member klik tombol "Buat Voice" di panel global.
+ *
+ * v3.8.5: Flow yang lebih baik:
+ *   - Kalau user tidak di voice → redirect ke join trigger channel dulu
+ *   - Kalau user di voice → buat channel baru, pindahkan ke channel baru
+ *   - Alternatif: user bisa juga join langsung ke trigger channel "🔊 Buat Voice"
  */
 async function handleTempVoiceCreate(interaction) {
     try {
@@ -1417,6 +1424,7 @@ async function handleTempVoiceCreate(interaction) {
         }
 
         const member = interaction.member;
+
         // Cek apakah member sudah punya channel
         const existingChannelId = tempVoiceManager.findChannelByOwner(interaction.guild.id, member.id);
         if (existingChannelId) {
@@ -1428,6 +1436,15 @@ async function handleTempVoiceCreate(interaction) {
                 }
                 return interaction.editReply({ content: `🎤 Kamu sudah punya voice channel: ${existing.name}` });
             }
+        }
+
+        // v3.8.5: Kalau user tidak di voice channel, minta join ke trigger channel dulu
+        if (!member.voice.channelId) {
+            const triggerChannel = interaction.guild.channels.cache.get(config.creatorChannelId);
+            const triggerMention = triggerChannel ? `${triggerChannel}` : `🔊 Buat Voice`;
+            return interaction.editReply({
+                content: `🎤 **Kamu harus join ke voice channel dulu!**\n\n💡 Join ke ${triggerMention} untuk otomatis membuat voice channel pribadi, atau join ke voice channel mana saja lalu klik tombol ini lagi.`
+            });
         }
 
         // Bikin channel baru
@@ -1448,19 +1465,13 @@ async function handleTempVoiceCreate(interaction) {
 
         tempVoiceManager.registerChannel(interaction.guild.id, newChannel.id, member.id, member.user.tag, newChannel.name);
 
-        // v3.8.3: auto-set focusedOwner ke creator supaya panel langsung tampilkan channel mereka
-        tempVoiceManager.setFocusedOwner(interaction.guild.id, member.id);
-
-        // v3.8.1: TIDAK kirim DM owner — control panel sudah global di control channel.
-        // Refresh panel global supaya menampilkan kontrol untuk owner baru.
+        // v3.8.5: panel global — tidak lagi pakai focused owner, langsung refresh panel
         if (typeof interaction.client.refreshGlobalControlPanel === 'function') {
             await interaction.client.refreshGlobalControlPanel(interaction.client, interaction.guild.id);
         }
 
-        // Pindahkan member ke channel baru kalau sedang di voice
-        if (member.voice.channelId) {
-            try { await member.voice.setChannel(newChannel.id); } catch (_) {}
-        }
+        // Pindahkan member ke channel baru
+        try { await member.voice.setChannel(newChannel.id); } catch (_) {}
 
         return interaction.editReply({
             content: `✅ Voice channel dibuat: ${newChannel}\n\n🎛️ **Control panel ada di control channel** — lihat panel global temp voice untuk kontrol (rename, kick, limit, lock, dll).`
@@ -1710,7 +1721,8 @@ async function handleTempVoiceLimitSubmit(interaction) {
 }
 
 /**
- * Button: tv_lock / tv_unlock — toggle lock channel.
+ * Button: tv_lock — toggle lock/unlock channel.
+ * v3.8.5: Single button, toggles based on current locked state.
  */
 async function handleTempVoiceLockToggle(interaction) {
     try {
@@ -1729,7 +1741,8 @@ async function handleTempVoiceLockToggle(interaction) {
         const found = check.found;
         const tempVoiceManager = require('../utils/tempVoiceManager');
         const { PermissionFlagsBits: PFB } = require('discord.js');
-        const willLock = interaction.customId === 'tv_lock';
+        // v3.8.5: toggle based on current state (panel hanya punya 1 tombol Lock)
+        const willLock = !found.channelInfo.locked;
 
         try {
             // Lock = deny Connect untuk @everyone, Unlock = allow Connect
@@ -1893,13 +1906,115 @@ async function handleTempVoiceDelete(interaction) {
 }
 
 /**
- * v3.8.2: Select menu tv_switch_select — owner pilih channel mereka dari list.
+ * v3.8.5: Button: tv_info — tampilkan info room voice (ephemeral).
+ *
+ * Logic:
+ *   - Kalau user adalah owner → tampilkan info channel miliknya
+ *   - Kalau user bukan owner tapi sedang di voice → tampilkan info voice yang sedang dia tinggali
+ *   - Kalau user tidak di voice → tampilkan daftar semua voice aktif
+ */
+async function handleTempVoiceInfo(interaction) {
+    try {
+        if (!interaction.guild) {
+            return interaction.reply({ content: '❌ Hanya bisa dipakai di server.', flags: MessageFlags.Ephemeral });
+        }
+
+        const tempVoiceManager = require('../utils/tempVoiceManager');
+        const { buildInfoRoomEmbed } = require('../utils/tempVoiceControlPanel');
+        const config = tempVoiceManager.getGuildConfig(interaction.guild.id);
+
+        if (!config?.channels || Object.keys(config.channels).length === 0) {
+            return interaction.reply({ content: '❌ Tidak ada voice channel aktif saat ini.', flags: MessageFlags.Ephemeral });
+        }
+
+        // Cek apakah user sedang di voice channel yang merupakan temp voice
+        const userVoiceChannel = interaction.member?.voice?.channelId;
+        if (userVoiceChannel) {
+            const channelInfo = tempVoiceManager.getChannel(interaction.guild.id, userVoiceChannel);
+            if (channelInfo) {
+                // User sedang di temp voice → tampilkan info room-nya
+                const voiceChannel = interaction.guild.channels.cache.get(userVoiceChannel);
+                if (voiceChannel) {
+                    const { embed } = buildInfoRoomEmbed(channelInfo, voiceChannel, interaction.guild.name);
+                    return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+                }
+            }
+        }
+
+        // User tidak di temp voice → cek apakah user adalah owner dari channel manapun
+        const allOwned = await findAllOwnerVoiceChannels(interaction);
+        if (allOwned.length === 1) {
+            // User punya 1 channel → tampilkan info
+            const found = allOwned[0];
+            const { embed } = buildInfoRoomEmbed(found.channelInfo, found.channel, interaction.guild.name);
+            return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+        }
+
+        if (allOwned.length > 1) {
+            // User punya multiple channels → tampilkan select menu
+            const { ActionRowBuilder, StringSelectMenuBuilder, EmbedBuilder } = require('discord.js');
+            const options = allOwned.map(o => ({
+                label: o.channelInfo.name.slice(0, 100),
+                value: o.channelId,
+                description: `Owner: ${o.channelInfo.ownerTag} (${o.channel.members.size} member)`.slice(0, 100)
+            }));
+            const selectRow = new ActionRowBuilder().addComponents(
+                new StringSelectMenuBuilder()
+                    .setCustomId('tv_switch_select')
+                    .setPlaceholder('Pilih channel untuk lihat info...')
+                    .addOptions(options.slice(0, 25))
+                    .setMinValues(1)
+                    .setMaxValues(1)
+            );
+            const embed = new EmbedBuilder()
+                .setTitle('ℹ️ INFO ROOM')
+                .setDescription('Kamu owner dari beberapa voice channel. Pilih channel yang ingin kamu lihat infonya:')
+                .setColor(0x5865F2);
+            return interaction.reply({ embeds: [embed], components: [selectRow], flags: MessageFlags.Ephemeral });
+        }
+
+        // User bukan owner dan tidak di temp voice → tampilkan daftar semua voice aktif
+        const activeList = [];
+        for (const [channelId, info] of Object.entries(config.channels)) {
+            const vc = interaction.guild.channels.cache.get(channelId);
+            if (vc) {
+                const mc = vc.members.size;
+                const limitPart = info.limit > 0 ? `/${info.limit}` : '';
+                const lockIcon = info.locked ? ' 🔒' : '';
+                activeList.push(`• **${info.name}** — <@${info.ownerId}> (${mc}${limitPart} member${lockIcon})`);
+            }
+        }
+
+        if (activeList.length === 0) {
+            return interaction.reply({ content: '❌ Tidak ada voice channel aktif saat ini.', flags: MessageFlags.Ephemeral });
+        }
+
+        const embed = new EmbedBuilder()
+            .setTitle('ℹ️ INFO ROOM — DAFTAR VOICE AKTIF')
+            .setDescription(
+                `Kamu tidak sedang berada di temp voice.\n\n` +
+                `**Voice Channel Aktif (${activeList.length}):**\n${activeList.slice(0, 15).join('\n')}` +
+                (activeList.length > 15 ? `\n... dan ${activeList.length - 15} lainnya` : '') +
+                `\n\n💡 Join ke voice channel untuk melihat info room, atau gunakan dropdown di panel global.`
+            )
+            .setColor(0x5865F2);
+
+        return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+    } catch (err) {
+        console.error('TempVoice info error:', err);
+        if (interaction.isRepliable() && !interaction.replied && !interaction.deferred) {
+            await interaction.reply({ content: `❌ Gagal: ${err.message}`, flags: MessageFlags.Ephemeral }).catch(()=>{});
+        }
+    }
+}
+
+/**
+ * v3.8.5: Select menu tv_switch_select — user pilih channel untuk lihat info room.
  *
  * Logic:
  *   - User pilih channelId dari dropdown
- *   - Cek apakah user tersebut adalah owner dari channel yang dipilih
- *   - Kalau iya → set focusedOwnerId ke user tsb, refresh panel global ke channel mereka
- *   - Kalau bukan → tampilkan error "kamu bukan owner channel itu"
+ *   - Tampilkan info room (ephemeral) untuk channel yang dipilih
+ *   - Semua user bisa lihat info, bukan owner saja
  */
 async function handleTempVoiceSwitchSelect(interaction) {
     try {
@@ -1917,31 +2032,16 @@ async function handleTempVoiceSwitchSelect(interaction) {
             return interaction.editReply({ content: '❌ Channel tersebut sudah tidak aktif.' });
         }
 
-        // Cek apakah user adalah owner channel yang dipilih
-        if (channelInfo.ownerId !== interaction.user.id) {
-            return interaction.editReply({
-                content: `❌ Kamu bukan owner channel **${channelInfo.name}**. Channel ini milik <@${channelInfo.ownerId}>.\n\n💡 Kamu hanya bisa pilih channel milikmu sendiri.`
-            });
-        }
-
-        // Cek apakah owner sedang di voice channelnya
         const voiceChannel = interaction.guild.channels.cache.get(selectedChannelId);
-        if (!voiceChannel || !voiceChannel.members.has(interaction.user.id)) {
-            return interaction.editReply({
-                content: `❌ Kamu harus berada di voice channel kamu (${voiceChannel || channelInfo.name}) untuk mengontrolnya.`
-            });
+        if (!voiceChannel) {
+            return interaction.editReply({ content: '❌ Channel tidak ditemukan.' });
         }
 
-        // Set focused owner ke user ini, refresh panel
-        tempVoiceManager.setFocusedOwner(interaction.guild.id, interaction.user.id);
+        // Tampilkan info room (ephemeral)
+        const { buildInfoRoomEmbed } = require('../utils/tempVoiceControlPanel');
+        const { embed } = buildInfoRoomEmbed(channelInfo, voiceChannel, interaction.guild.name);
 
-        if (typeof interaction.client.refreshGlobalControlPanel === 'function') {
-            await interaction.client.refreshGlobalControlPanel(interaction.client, interaction.guild.id);
-        }
-
-        return interaction.editReply({
-            content: `✅ Panel sekarang fokus ke channel kamu: **${channelInfo.name}**\n\n💡 Kamu bisa pakai tombol kontrol di panel global sekarang. Fokus akan otomatis reset ke owner terbaru setelah 5 menit atau kalau kamu keluar dari voice.`
-        });
+        return interaction.editReply({ embeds: [embed] });
     } catch (err) {
         console.error('TempVoice switch select error:', err);
         if (interaction.deferred && !interaction.replied) {

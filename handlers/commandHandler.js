@@ -1842,7 +1842,7 @@ module.exports = async (interaction) => {
         tempVoiceManager.setControlMessageId(guild.id, panelMsg.id);
 
         await logAudit(interaction.client, {
-            action: 'SETUP_SELFROLE',
+            action: 'SETUP_TEMPVOICE',
             actorId: interaction.user.id,
             actorTag: interaction.user.tag,
             details: `Setup Temp Voice — kategori: ${category.name}, trigger: ${creatorChannel} (\`${creatorChannel.id}\`), control panel: ${controlChannel} (\`${controlChannel.id}\`)`,
@@ -1901,7 +1901,7 @@ module.exports = async (interaction) => {
 
         tempVoiceManager.removeGuild(interaction.guild.id);
         await logAudit(interaction.client, {
-            action: 'SELFROLE_DELETE',
+            action: 'TEMPVOICE_REMOVE',
             actorId: interaction.user.id,
             actorTag: interaction.user.tag,
             details: `Hapus setup Temp Voice dari guild (kategori + semua channel terkait dihapus)`,

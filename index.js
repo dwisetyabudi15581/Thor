@@ -295,14 +295,7 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
                     await handleAutoTransferOwnership(newState.client, guildId, oldChannelId, channelInfo, oldChannel, userId);
                 }
 
-                // v3.8.2: kalau yang leave adalah focused owner, clear focus supaya
-                // panel balik ke tampilan default (owner terbaru)
-                if (channelInfo.ownerId === userId) {
-                    const focusedOwnerId = tempVoiceManager.getFocusedOwner(guildId);
-                    if (focusedOwnerId === userId) {
-                        tempVoiceManager.clearFocusedOwner(guildId);
-                    }
-                }
+                // v3.8.5: panel global — tidak lagi pakai focused owner concept
 
                 if (oldChannel && oldChannel.members.size === 0) {
                     // Channel kosong → hapus
@@ -328,15 +321,15 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
 
 /**
  * v3.8.4: AUTO-TRANSFER OWNERSHIP saat owner leave voice channel.
+ * v3.8.5: Removed focused owner logic — panel is now fully global.
  *
  * Logic:
  *   1. Cari member lain yang masih di channel (selain owner lama)
  *   2. Pilih member dengan joinedAt paling lama (paling senior di channel)
  *   3. Update permission channel (lepas owner lama, beri owner baru)
  *   4. Update tempVoiceManager.transferOwnership
- *   5. Set focusedOwner ke owner baru (supaya panel tampilkan mereka)
- *   6. Kirim notif ke owner baru via DM
- *   7. Refresh panel global
+ *   5. Kirim notif ke owner baru via DM
+ *   6. Refresh panel global
  *
  * @param {Client} client
  * @param {string} guildId
@@ -386,8 +379,7 @@ async function handleAutoTransferOwnership(client, guildId, channelId, channelIn
         // Update manager
         tempVoiceManager.transferOwnership(guildId, channelId, newOwner.id, newOwner.user.tag);
 
-        // Set focusedOwner ke owner baru supaya panel tampilkan mereka
-        tempVoiceManager.setFocusedOwner(guildId, newOwner.id);
+        // v3.8.5: panel global — tidak lagi pakai focused owner, refresh panel saja
 
         // Notif owner baru via DM
         try {
@@ -456,9 +448,7 @@ async function handleCreateTempVoice(newState) {
         // Register ke manager
         tempVoiceManager.registerChannel(guild.id, newChannel.id, member.id, member.user.tag, newChannel.name);
 
-        // v3.8.3: auto-set focusedOwner ke creator supaya panel langsung tampilkan
-        // channel mereka. Fokus akan auto-expire setelah 5 menit atau saat mereka leave.
-        tempVoiceManager.setFocusedOwner(guild.id, member.id);
+        // v3.8.5: panel global — tidak lagi pakai focused owner, langsung refresh panel
 
         // Pindahkan member ke channel baru
         try {
@@ -477,15 +467,14 @@ async function handleCreateTempVoice(newState) {
 }
 
 /**
- * v3.8.1: Refresh panel kontrol global di control channel.
+ * v3.8.5: Refresh panel kontrol global di control channel.
  *
- * Panel ini menampilkan info owner voice aktif + button kontrol.
+ * Panel ini menampilkan daftar semua voice aktif + button kontrol.
  * - Kalau tidak ada voice aktif → tampilan idle (hanya tombol Buat Voice)
- * - Kalau ada voice aktif → tampilan kontrol (rename, kick, limit, lock, transfer, delete)
+ * - Kalau ada voice aktif → tampilan global (daftar semua voice + kontrol buttons)
  *
- * v3.8.2: Kalau ada focusedOwnerId (owner yang pilih channel via switch select),
- * panel akan fokus ke channel milik owner tersebut. Kalau focusedOwnerId tidak
- * ada atau expired, panel tampilkan owner terbaru sebagai default.
+ * Control buttons (Rename, Kick, Limit, Lock, Transfer, Delete, Info Room)
+ * bekerja via auto-detect owner (bot otomatis deteksi channel user).
  *
  * Panel di-fetch berdasarkan controlMessageId yang disimpan di tempVoice.json.
  * Kalau pesan hilang (dihapus admin), bot tidak kirim ulang (admin harus
@@ -522,27 +511,7 @@ async function refreshGlobalControlPanel(client, guildId) {
             activeOwners.sort((a, b) => (b.channelInfo.createdAt || 0) - (a.channelInfo.createdAt || 0));
         }
 
-        // v3.8.2: cek focusedOwnerId — kalau ada & valid, prioritaskan channel milik owner tsb
-        const focusedOwnerId = tempVoiceManager.getFocusedOwner(guildId);
-        if (focusedOwnerId && activeOwners.length > 0) {
-            const focusedOwner = activeOwners.find(o => o.channelInfo.ownerId === focusedOwnerId);
-            if (focusedOwner) {
-                // Pakai focused owner sebagai first element
-                const reordered = [focusedOwner, ...activeOwners.filter(o => o.channelInfo.ownerId !== focusedOwnerId)];
-                const { buildGlobalControlPanel } = require('./utils/tempVoiceControlPanel');
-                const { embed, components } = buildGlobalControlPanel({
-                    activeOwners: reordered,
-                    guildName: guild.name
-                });
-                await panelMsg.edit({ embeds: [embed], components }).catch(err => {
-                    console.warn(`⚠️ Gagal refresh panel global temp voice: ${err.message}`);
-                });
-                return;
-            }
-            // Focused owner tidak valid lagi (channelnya hilang) → clear
-            tempVoiceManager.clearFocusedOwner(guildId);
-        }
-
+        // v3.8.5: panel global — tampilkan semua voice aktif tanpa focused owner
         const { buildGlobalControlPanel } = require('./utils/tempVoiceControlPanel');
         const { embed, components } = buildGlobalControlPanel({
             activeOwners,

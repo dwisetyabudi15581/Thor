@@ -234,6 +234,7 @@ module.exports = {
     setControlMessageId,
     getControlChannelId,
     getControlMessageId,
+    // v3.8.5: focused owner functions kept for backward compat (data migration) but no longer used
     setFocusedOwner,
     getFocusedOwner,
     clearFocusedOwner,
