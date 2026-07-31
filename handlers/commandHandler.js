@@ -4,12 +4,12 @@ const { Embeds } = require('../utils/embedBuilder');
 const { isAdmin: checkIsAdmin } = require('../utils/permissions');
 const { addKey, getActiveKeysByUserAndRole, findAllByUser, formatKeysForUser, removeAllKeysByUser, getStats: getKeyStats } = require('../utils/keyManager');
 const { scheduleRoleRemoval, removeActiveByUserAndRole, findAllByUser: findAllSchedulesByUser, removeAllByUser: removeAllSchedulesByUser, getRemainingDays, getAllActive: getAllScheduledActive } = require('../utils/roleScheduler');
-const { createPanel, addRoleToPanel, removeRoleFromPanel, getPanel, getPanelsByGuild, deletePanel, setMessageId } = require('../utils/selfRoleManager');
+const { createPanel, addRoleToPanel, removeRoleFromPanel, getPanel, getPanelsByGuild, deletePanel, setMessageId, deletePanel: deleteSelfRolePanel } = require('../utils/selfRoleManager');
 const { buildPanelEmbed, buildPanelComponents } = require('../utils/selfRolePanelBuilder');
 const { createSession, buildEmbed, getSessionsByUser, deleteSessionByOwner } = require('../utils/embedBuilderSessions');
 const { logAudit } = require('../utils/auditLog');
 const { createBackup, listBackups, restoreBackup, formatSize: formatBackupSize } = require('../utils/backupManager');
-const { create: createGiveaway, setMessageId: setGiveawayMessageId, getByGuild: getGiveawaysByGuild, get: getGiveaway, end: endGiveaway, reroll: rerollGiveaway, pickWinners, formatTimeLeft } = require('../utils/giveawayManager');
+const { create: createGiveaway, setMessageId: setGiveawayMessageId, getByGuild: getGiveawaysByGuild, get: getGiveaway, end: endGiveaway, reroll: rerollGiveaway, pickWinners, formatTimeLeft, remove: removeGiveaway } = require('../utils/giveawayManager');
 const { create: createScheduledAnn, getByGuild: getScheduledAnnsByGuild, get: getScheduledAnn, markSent: markScheduledAnnSent, remove: removeScheduledAnn, parseTime: parseAnnTime, formatTimeLeft: formatAnnTimeLeft } = require('../utils/scheduledAnnouncements');
 const { addWarn, getWarns, getWarnCount, removeWarn, clearWarns, markActionTaken, DEFAULT_THRESHOLDS: WARN_THRESHOLDS } = require('../utils/warnManager');
 const { getStats: getUserStats, getTopUsers: getTopUsersStats, getServerStats: getServerStatsAll, parsePrice: parsePriceNum } = require('../utils/statsManager');
@@ -742,7 +742,19 @@ module.exports = async (interaction) => {
         const components = buildPanelComponents(panel);
 
         // Kirim panel message
-        const panelMsg = await interaction.channel.send({ embeds: [embed], components });
+        // P0-5 FIX: rollback panel entry kalau gagal kirim message (sebelumnya zombie entry).
+        let panelMsg;
+        try {
+            panelMsg = await interaction.channel.send({ embeds: [embed], components });
+        } catch (err) {
+            console.error('Gagal kirim self-role panel:', err.message);
+            try { deleteSelfRolePanel(panel.id); } catch (_) {}
+            return interaction.editReply({ content: `❌ Gagal kirim panel ke ${interaction.channel}. Cek permission bot. Entry di-rollback.` });
+        }
+        if (!panelMsg) {
+            try { deleteSelfRolePanel(panel.id); } catch (_) {}
+            return interaction.editReply({ content: `❌ Gagal kirim panel (channel tidak ada). Entry di-rollback.` });
+        }
 
         // Update messageId
         setMessageId(panel.id, panelMsg.id);
@@ -1225,7 +1237,10 @@ module.exports = async (interaction) => {
             );
             const msg = await channel.send({ embeds: [embed], components: [row], content: '@everyone 🎉 **GIVEAWAY BARU!**' }).catch(err => null);
             if (!msg) {
-                return interaction.editReply({ content: `❌ Gagal kirim giveaway ke ${channel}. Cek permission bot.` });
+                // P0-5 FIX: rollback giveaway entry yang sudah tersimpan kalau gagal kirim message.
+                // Sebelumnya entry tetap ada dengan messageId=null → zombie giveaway.
+                try { removeGiveaway(gw.id); } catch (_) {}
+                return interaction.editReply({ content: `❌ Gagal kirim giveaway ke ${channel}. Cek permission bot. Entry di-rollback.` });
             }
             setGiveawayMessageId(gw.id, msg.id);
             await logAudit(interaction.client, { action: 'GIVEAWAY_CREATE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Buat giveaway **${prize}** (${winners} pemenang, ${durationMin}m) di ${channel}`, guildId: interaction.guild.id });
@@ -1254,6 +1269,10 @@ module.exports = async (interaction) => {
         }
 
         // --- /giveaway end ---
+        // P0-3 FIX: sebelumnya hanya pick + persist, TIDAK update message,
+        // TIDAK announce winner, TIDAK DM winner, TIDAK track stats.
+        // Sekarang: panggil processGiveawayEnd (shared dengan auto-end) supaya
+        // message diupdate + announce + DM + track stats.
         if (sub === 'end') {
             await interaction.deferReply({ flags: MessageFlags.Ephemeral });
             const id = interaction.options.getString('id');
@@ -1262,24 +1281,46 @@ module.exports = async (interaction) => {
             if (gw.ended) return interaction.editReply({ content: `❌ Giveaway sudah berakhir.` });
             if (gw.guildId !== interaction.guild.id) return interaction.editReply({ content: '❌ Giveaway ini bukan dari guild ini.' });
 
-            // Pick winners
+            // Pick winners + persist ended state
             const winnerIds = pickWinners(gw.participantIds, gw.winnersCount);
             endGiveaway(id, winnerIds);
+
+            // Re-fetch gw yang sudah di-update (winnerIds sudah persist)
+            const updatedGw = getGiveaway(id);
+
+            // Panggil shared processGiveawayEnd dengan skipPick=true supaya tidak pick 2x
+            if (typeof interaction.client.processGiveawayEnd === 'function') {
+                await interaction.client.processGiveawayEnd(interaction.client, updatedGw, { skipPick: true });
+            }
+
             await logAudit(interaction.client, { action: 'GIVEAWAY_END', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `End giveaway \`${id}\` (${gw.prize}). Winners: ${winnerIds.length > 0 ? winnerIds.map(w => `<@${w}>`).join(', ') : 'tidak ada peserta'}`, guildId: interaction.guild.id });
-            return interaction.editReply({ content: `✅ Giveaway **${gw.prize}** diakhiri!\n🏆 Winners: ${winnerIds.length > 0 ? winnerIds.map(w => `<@${w}>`).join(', ') : '_(tidak ada peserta)_'}` });
+            return interaction.editReply({ content: `✅ Giveaway **${gw.prize}** diakhiri!\n🏆 Winners: ${winnerIds.length > 0 ? winnerIds.map(w => `<@${w}>`).join(', ') : '_(tidak ada peserta)_'}\n\n📢 Pesan giveaway sudah diupdate + winner sudah di-DM + diumumkan ke channel.` });
         }
 
         // --- /giveaway reroll ---
+        // P0-4 FIX: sebelumnya hanya return winnerId ke admin (ephemeral).
+        // Sekarang: persist winner baru ke gw.winnerIds, announce ke channel,
+        // DM winner, track stats. Juga exclude winner yang sudah ada supaya
+        // tidak pick orang yang sama 2x.
         if (sub === 'reroll') {
             await interaction.deferReply({ flags: MessageFlags.Ephemeral });
             const id = interaction.options.getString('id');
             const gw = getGiveaway(id);
             if (!gw) return interaction.editReply({ content: `❌ Giveaway \`${id}\` tidak ditemukan.` });
             if (!gw.ended) return interaction.editReply({ content: `❌ Giveaway belum berakhir. End dulu pakai \`/giveaway end\`.` });
+
             const result = rerollGiveaway(id);
-            if (!result || !result.winnerId) return interaction.editReply({ content: '❌ Tidak ada peserta untuk di-reroll.' });
-            await logAudit(interaction.client, { action: 'GIVEAWAY_REROLL', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Reroll giveaway \`${id}\` → new winner: <@${result.winnerId}>`, guildId: interaction.guild.id });
-            return interaction.editReply({ content: `🎲 **Reroll!** Winner baru: <@${result.winnerId}>` });
+            if (!result) return interaction.editReply({ content: `❌ Giveaway \`${id}\` tidak ditemukan atau belum berakhir.` });
+            if (!result.winnerId) return interaction.editReply({ content: '❌ Tidak ada peserta untuk di-reroll.' });
+
+            // Announce winner baru ke channel + DM + track stats
+            if (typeof interaction.client.announceRerollWinner === 'function') {
+                await interaction.client.announceRerollWinner(interaction.client, result.gw, result.winnerId);
+            }
+
+            const reuseNote = result.reused ? ' _(semua peserta sudah pernah menang, fallback pick random)_' : '';
+            await logAudit(interaction.client, { action: 'GIVEAWAY_REROLL', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Reroll giveaway \`${id}\` → new winner: <@${result.winnerId}>${reuseNote}`, guildId: interaction.guild.id });
+            return interaction.editReply({ content: `🎲 **Reroll!** Winner baru: <@${result.winnerId}>${reuseNote}\n\n📢 Winner sudah di-DM + diumumkan ke channel giveaway.` });
         }
     }
 
@@ -1423,8 +1464,12 @@ module.exports = async (interaction) => {
         await logAudit(interaction.client, { action: 'WARN_ADD', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Warn <@${user.id}> (${user.tag}) — Reason: "${reason}" — Total: ${result.count} warn`, guildId: interaction.guild.id });
 
         // Eksekusi auto-action kalau perlu
+        // P1-7 FIX: kalau actionAlreadyTaken=true, tidak re-apply timeout lagi
+        // (user sudah pernah kena mute yang sama, jangan reset timer).
         let actionMsg = '';
-        if (result.actionToTake) {
+        if (result.actionAlreadyTaken) {
+            actionMsg = `\nℹ️ Auto-action tidak diulang (user sudah pernah kena action yang sama sebelumnya).`;
+        } else if (result.actionToTake) {
             try {
                 if (result.actionToTake === 'mute_1h' || result.actionToTake === 'mute_1d') {
                     const durationMin = result.actionToTake === 'mute_1h' ? 60 : 1440;

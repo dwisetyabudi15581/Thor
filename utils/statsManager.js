@@ -18,30 +18,27 @@
  *   - vipPurchases: count pembelian VIP (updated by set-key flow)
  *   - totalSpent: total uang dihabiskan (extracted dari price produk)
  *   - giveawaysWon: count menang giveaway
+ *
+ * === P0-1 FIX: In-memory cache + periodic flush ===
+ * Sebelumnya: tiap `incrementMessages` load+save file JSON synchronously
+ * → memblock event loop pada setiap pesan → bot lag di server aktif.
+ * Sekarang: pakai in-memory cache, flush ke disk tiap 30 detik atau
+ * kalau ada perubahan non-message (purchase/win/join).
  */
 
 const fs = require('fs');
 const path = require('path');
 
 const filePath = path.join(__dirname, '..', 'stats.json');
+const FLUSH_INTERVAL_MS = 30 * 1000; // 30 detik
 
-function load() {
-    try {
-        if (!fs.existsSync(filePath)) return {};
-        return JSON.parse(fs.readFileSync(filePath, 'utf8'));
-    } catch (err) {
-        console.warn('⚠️ stats.json rusak:', err.message);
-        return {};
-    }
-}
+// === In-memory cache ===
+let cache = null;       // null = belum di-load
+let dirty = false;      // apakah cache ada perubahan yang belum di-flush?
+let flushTimer = null;  // timer periodic flush
 
-function save(data) {
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-}
-
-function getStats(userId) {
-    const all = load();
-    return all[userId] || {
+function defaultUserStats() {
+    return {
         messages: 0,
         lastMessageAt: null,
         vipPurchases: 0,
@@ -51,34 +48,102 @@ function getStats(userId) {
     };
 }
 
+function load() {
+    if (cache !== null) return cache;
+    try {
+        if (!fs.existsSync(filePath)) {
+            cache = {};
+        } else {
+            cache = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+        }
+    } catch (err) {
+        console.warn('⚠️ stats.json rusak:', err.message);
+        cache = {};
+    }
+    return cache;
+}
+
+/**
+ * Flush cache ke disk kalau dirty. Tidak throw — log error saja.
+ */
+function flush() {
+    if (!dirty || cache === null) return;
+    try {
+        fs.writeFileSync(filePath, JSON.stringify(cache, null, 2));
+        dirty = false;
+    } catch (err) {
+        console.error('⚠️ Gagal flush stats.json:', err.message);
+    }
+}
+
+/**
+ * Mulai periodic flush timer. Dipanggil sekali saat bot start (di index.js ready).
+ */
+function startAutoFlush() {
+    if (flushTimer) return; // sudah start
+    flushTimer = setInterval(flush, FLUSH_INTERVAL_MS);
+    // Jangan block process exit
+    if (typeof flushTimer.unref === 'function') flushTimer.unref();
+}
+
+/**
+ * Force flush + stop timer. Dipanggil saat graceful shutdown.
+ */
+function shutdown() {
+    flush();
+    if (flushTimer) {
+        clearInterval(flushTimer);
+        flushTimer = null;
+    }
+}
+
+// === Legacy save() untuk backward compat (langsung write cache) ===
+function save() {
+    if (cache === null) return; // tidak ada yang di-load, tidak ada yang di-save
+    dirty = true;
+    flush();
+}
+
+function getStats(userId) {
+    const all = load();
+    return all[userId] || defaultUserStats();
+}
+
+/**
+ * Increment message count — P0-1 fix: pakai cache, TIDAK sync file I/O.
+ */
 function incrementMessages(userId) {
     const all = load();
-    if (!all[userId]) all[userId] = { messages: 0, lastMessageAt: null, vipPurchases: 0, totalSpent: 0, joinedAt: null, giveawaysWon: 0 };
+    if (!all[userId]) all[userId] = defaultUserStats();
     all[userId].messages = (all[userId].messages || 0) + 1;
     all[userId].lastMessageAt = Date.now();
-    save(all);
+    dirty = true;
+    // Tidak langsung flush — flush periodik tiap 30 detik.
 }
 
 function recordPurchase(userId, priceNum) {
     const all = load();
-    if (!all[userId]) all[userId] = { messages: 0, lastMessageAt: null, vipPurchases: 0, totalSpent: 0, joinedAt: null, giveawaysWon: 0 };
+    if (!all[userId]) all[userId] = defaultUserStats();
     all[userId].vipPurchases = (all[userId].vipPurchases || 0) + 1;
     all[userId].totalSpent = (all[userId].totalSpent || 0) + (priceNum || 0);
-    save(all);
+    dirty = true;
+    flush(); // penting, jangan sampai transaksi hilang kalau bot crash
 }
 
 function recordGiveawayWin(userId) {
     const all = load();
-    if (!all[userId]) all[userId] = { messages: 0, lastMessageAt: null, vipPurchases: 0, totalSpent: 0, joinedAt: null, giveawaysWon: 0 };
+    if (!all[userId]) all[userId] = defaultUserStats();
     all[userId].giveawaysWon = (all[userId].giveawaysWon || 0) + 1;
-    save(all);
+    dirty = true;
+    flush();
 }
 
 function recordJoin(userId) {
     const all = load();
-    if (!all[userId]) all[userId] = { messages: 0, lastMessageAt: null, vipPurchases: 0, totalSpent: 0, joinedAt: null, giveawaysWon: 0 };
+    if (!all[userId]) all[userId] = defaultUserStats();
     if (!all[userId].joinedAt) all[userId].joinedAt = Date.now();
-    save(all);
+    dirty = true;
+    flush();
 }
 
 /**
@@ -128,5 +193,6 @@ function parsePrice(priceStr) {
 
 module.exports = {
     getStats, incrementMessages, recordPurchase, recordGiveawayWin, recordJoin,
-    getTopUsers, getServerStats, parsePrice
+    getTopUsers, getServerStats, parsePrice,
+    startAutoFlush, shutdown, flush
 };

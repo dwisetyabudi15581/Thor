@@ -19,7 +19,7 @@ const { removeExpiredKeys, getActiveKeysByUserAndRole, hasPermanentKey, getMaxEx
 const { startAutoBackup } = require('./utils/backupManager');
 const { getEnding: getEndingGiveaways, end: endGiveaway, pickWinners: pickGiveawayWinners } = require('./utils/giveawayManager');
 const { getPending: getPendingAnns, markSent: markAnnSent } = require('./utils/scheduledAnnouncements');
-const { incrementMessages: trackMessage, recordJoin: trackJoin, recordPurchase: trackPurchase, recordGiveawayWin: trackGiveawayWin, parsePrice: parsePriceNum } = require('./utils/statsManager');
+const { incrementMessages: trackMessage, recordJoin: trackJoin, recordPurchase: trackPurchase, recordGiveawayWin: trackGiveawayWin, parsePrice: parsePriceNum, startAutoFlush: startStatsAutoFlush, shutdown: shutdownStats } = require('./utils/statsManager');
 
 // === ERROR HANDLER GLOBAL ===
 process.on('unhandledRejection', (reason) => {
@@ -95,27 +95,45 @@ client.once(Events.ClientReady, async (c) => {
         // === 3. Start AUTO-BACKUP (saat start + tiap 24 jam) ===
         startAutoBackup(client);
 
-        // Cek setiap 1 menit
+        // === 4. Start AUTO-FLUSH stats cache (P0-1 fix) ===
+        startStatsAutoFlush();
+
+        // === P0-2 FIX: Guard overlap pada scheduler interval ===
+        // Sebelumnya: jika iterasi >60 detik (API Discord lambat),
+        // iterasi berikutnya fire & proses entry yang sama → double DM.
+        // Sekarang: pakai lock flag, skip iterasi kalau sebelumnya belum selesai.
+        let schedulerRunning = false;
         setInterval(async () => {
-            // 1. Bersihkan key expired
-            const removed = removeExpiredKeys();
-            if (removed > 0) {
-                console.log(`🧹 ${removed} key expired dihapus.`);
+            if (schedulerRunning) {
+                console.log('⏭️ Scheduler tick di-skip (iterasi sebelumnya masih jalan).');
+                return;
             }
-            // 2. Proses schedule expired (dengan recheck key)
-            const expiredNow = getExpired();
-            for (const entry of expiredNow) {
-                await processExpiredRole(client, entry);
-            }
-            // 3. Auto-end giveaways yang sudah waktunya
-            const endingGws = getEndingGiveaways();
-            for (const gw of endingGws) {
-                await processGiveawayEnd(client, gw);
-            }
-            // 4. Auto-send scheduled announcements yang sudah waktunya
-            const pendingAnns = getPendingAnns();
-            for (const ann of pendingAnns) {
-                await processScheduledAnnouncement(client, ann);
+            schedulerRunning = true;
+            try {
+                // 1. Bersihkan key expired
+                const removed = removeExpiredKeys();
+                if (removed > 0) {
+                    console.log(`🧹 ${removed} key expired dihapus.`);
+                }
+                // 2. Proses schedule expired (dengan recheck key)
+                const expiredNow = getExpired();
+                for (const entry of expiredNow) {
+                    await processExpiredRole(client, entry);
+                }
+                // 3. Auto-end giveaways yang sudah waktunya
+                const endingGws = getEndingGiveaways();
+                for (const gw of endingGws) {
+                    await processGiveawayEnd(client, gw);
+                }
+                // 4. Auto-send scheduled announcements yang sudah waktunya
+                const pendingAnns = getPendingAnns();
+                for (const ann of pendingAnns) {
+                    await processScheduledAnnouncement(client, ann);
+                }
+            } catch (err) {
+                console.error('Scheduler tick error:', err);
+            } finally {
+                schedulerRunning = false;
             }
         }, 60 * 1000);
     } catch (err) {
@@ -147,7 +165,9 @@ async function processExpiredRole(client, entry) {
             removeEntry(entry.id);
             return;
         }
-        const role = guild.roles.cache.get(entry.roleId);
+        // P2-11 FIX: pakai fetch (fallback ke API) bukan cache.get
+        // supaya role yang belum ter-cache tetap bisa diproses.
+        const role = await guild.roles.fetch(entry.roleId).catch(() => null);
         const now = Date.now();
 
         // === 1. Cek key PERMANEN ===
@@ -717,8 +737,13 @@ client.on(Events.MessageCreate, async (message) => {
 
 /**
  * Proses giveaway yang sudah berakhir — pick winners + edit message + announce.
+ *
+ * P0-3 FIX: tambah opsi `options.skipPick` — kalau true, tidak pick winners lagi
+ * (dipakai saat manual `/giveaway end` yang sudah pick winners sebelumnya).
+ *
+ * Bisa diakses dari commandHandler via `client.processGiveawayEnd(gw, opts)`.
  */
-async function processGiveawayEnd(client, gw) {
+async function processGiveawayEnd(client, gw, options = {}) {
     try {
         const { EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
         const guild = await client.guilds.fetch(gw.guildId).catch(() => null);
@@ -727,9 +752,14 @@ async function processGiveawayEnd(client, gw) {
         const channel = guild.channels.cache.get(gw.channelId);
         if (!channel) return;
 
-        // Pick winners
-        const winnerIds = pickGiveawayWinners(gw.participantIds, gw.winnersCount);
-        endGiveaway(gw.id, winnerIds);
+        // Pick winners (skip kalau sudah di-pick sebelumnya — untuk manual /giveaway end)
+        let winnerIds;
+        if (options.skipPick && gw.winnerIds && gw.winnerIds.length > 0) {
+            winnerIds = gw.winnerIds;
+        } else {
+            winnerIds = pickGiveawayWinners(gw.participantIds, gw.winnersCount);
+            endGiveaway(gw.id, winnerIds);
+        }
 
         // Edit message
         const msg = await channel.messages.fetch(gw.messageId).catch(() => null);
@@ -777,6 +807,37 @@ async function processGiveawayEnd(client, gw) {
     }
 }
 
+// Expose ke client supaya commandHandler bisa panggil untuk /giveaway end & reroll
+client.processGiveawayEnd = processGiveawayEnd;
+
+/**
+ * Helper: kirim announce winner baru ke channel giveaway (untuk /giveaway reroll).
+ * Dipakai oleh commandHandler setelah reroll persist winner baru.
+ */
+async function announceRerollWinner(client, gw, winnerId) {
+    try {
+        const guild = await client.guilds.fetch(gw.guildId).catch(() => null);
+        if (!guild) return;
+        const channel = guild.channels.cache.get(gw.channelId);
+        if (!channel) return;
+
+        await channel.send({
+            content: `🎲 **REROLL!** Winner baru untuk giveaway **${gw.prize}**: <@${winnerId}>!\n\nSelamat! 🎉 Host akan DM kamu untuk klaim hadiah.`
+        }).catch(()=>{});
+
+        // DM winner baru
+        const user = await client.users.fetch(winnerId).catch(() => null);
+        if (user) {
+            await user.send(`🎊 **Selamat! Kamu menang giveaway (reroll)!**\n\nPrize: **${gw.prize}**\nHost: ${gw.hostTag}\nServer: ${guild.name}\n\nHubungi host untuk klaim hadiahmu.`).catch(()=>{});
+        }
+        // Track stats
+        try { trackGiveawayWin(winnerId); } catch (_) {}
+    } catch (err) {
+        console.error('Error announceRerollWinner:', err);
+    }
+}
+client.announceRerollWinner = announceRerollWinner;
+
 /**
  * Proses scheduled announcement yang sudah waktunya dikirim.
  */
@@ -810,5 +871,15 @@ async function processScheduledAnnouncement(client, ann) {
         console.error('Error processScheduledAnnouncement:', err);
     }
 }
+
+// === P0-1 FIX: Graceful shutdown — flush stats cache sebelum exit ===
+function gracefulShutdown(signal) {
+    console.log(`\n⚠️ Received ${signal}, flushing stats & shutting down...`);
+    try { shutdownStats(); } catch (_) {}
+    try { client.destroy(); } catch (_) {}
+    process.exit(0);
+}
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 
 client.login(process.env.DISCORD_TOKEN);

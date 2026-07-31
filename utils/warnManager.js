@@ -54,8 +54,14 @@ function genId() {
 
 /**
  * Tambah warn ke user.
- * @returns {Object} { warnEntry, count, actionToTake }
+ * @returns {Object} { warnEntry, count, actionToTake, actionAlreadyTaken }
  *   actionToTake: null | 'mute_1h' | 'mute_1d' | 'kick'
+ *   actionAlreadyTaken: true kalau user sudah pernah kena action yang sama
+ *     di warn sebelumnya (P1-7 fix — supaya tidak re-mute terus-menerus).
+ *
+ * P1-7 FIX: sebelumnya pakai `>=` → setiap warn setelah threshold
+ * re-apply timeout (reset timer). Sekarang: cek apakah ada warn sebelumnya
+ * dengan actionTaken yang sama. Kalau sudah ada, TIDAK re-apply.
  */
 function addWarn(userId, data) {
     const all = load();
@@ -73,12 +79,28 @@ function addWarn(userId, data) {
     save(all);
 
     const count = all[userId].length;
+
+    // Tentukan action berdasarkan threshold
     let actionToTake = null;
     if (count >= DEFAULT_THRESHOLDS.kick) actionToTake = 'kick';
     else if (count >= DEFAULT_THRESHOLDS.mute1d) actionToTake = 'mute_1d';
     else if (count >= DEFAULT_THRESHOLDS.mute1h) actionToTake = 'mute_1h';
 
-    return { warnEntry: entry, count, actionToTake };
+    // P1-7 FIX: cek apakah action yang sama sudah pernah diambil sebelumnya.
+    // Kalau sudah, set actionToTake=null supaya tidak re-apply timeout (kecuali kick
+    // yang tetap boleh diulang untuk user yang sudah di-unkick dan kembali).
+    let actionAlreadyTaken = false;
+    if (actionToTake && actionToTake !== 'kick') {
+        const previouslyTookSameAction = all[userId].some(w =>
+            w.id !== entry.id && w.actionTaken === actionToTake
+        );
+        if (previouslyTookSameAction) {
+            actionAlreadyTaken = true;
+            actionToTake = null; // jangan re-apply, sudah pernah
+        }
+    }
+
+    return { warnEntry: entry, count, actionToTake, actionAlreadyTaken };
 }
 
 function getWarns(userId) {

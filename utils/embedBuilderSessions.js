@@ -21,6 +21,24 @@
 
 const sessions = new Map();
 
+// P3-4 FIX: TTL supaya session yang ditinggal user tidak menjadi memory leak.
+const SESSION_TTL_MS = 60 * 60 * 1000; // 1 jam
+const CLEANUP_INTERVAL_MS = 10 * 60 * 1000; // cleanup tiap 10 menit
+
+setInterval(() => {
+    const now = Date.now();
+    let cleaned = 0;
+    for (const [id, s] of sessions) {
+        if (now - s.createdAt > SESSION_TTL_MS) {
+            sessions.delete(id);
+            cleaned++;
+        }
+    }
+    if (cleaned > 0) {
+        console.log(`🧹 Embed builder: ${cleaned} session expired dihapus.`);
+    }
+}, CLEANUP_INTERVAL_MS).unref?.();
+
 function genId() {
     return `emb_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
 }
@@ -54,7 +72,14 @@ function createSession(ownerId, channelId) {
 }
 
 function getSession(id) {
-    return sessions.get(id) || null;
+    const s = sessions.get(id);
+    if (!s) return null;
+    // P3-4 FIX: lazy expiry saat akses
+    if (Date.now() - s.createdAt > SESSION_TTL_MS) {
+        sessions.delete(id);
+        return null;
+    }
+    return s;
 }
 
 function getSessionByMessage(messageId) {

@@ -15,14 +15,32 @@ const { getPanelByMessage, getPanel } = require('../utils/selfRoleManager');
 const { buildPanelEmbed, buildPanelComponents } = require('../utils/selfRolePanelBuilder');
 const { getSession, deleteSession, buildEmbed: buildSessionEmbed, parseColor } = require('../utils/embedBuilderSessions');
 const { get: getGiveaway, addParticipant: gwAddParticipant, removeParticipant: gwRemoveParticipant, end: endGiveaway, pickWinners, formatTimeLeft } = require('../utils/giveawayManager');
-const { get: getPoll, vote: votePoll, getByMessage: getPollByMessage, getTotalVotes: getPollTotalVotes } = require('../utils/pollManager');
+const { get: getPoll, vote: votePoll, getByMessage: getPollByMessage, getTotalVotes: getPollTotalVotes, remove: removePoll } = require('../utils/pollManager');
 const { create: createPoll, setMessageId: setPollMessageId } = require('../utils/pollManager');
 const { logAudit } = require('../utils/auditLog');
 
+// P1-6 FIX: track interaction yang sudah diproses untuk hindari double-processing.
+// Sebelumnya modal submit lewat guard `replied/deferred` → bisa double-reply.
+const processedInteractions = new Set();
+const PROCESSED_TTL_MS = 5 * 60 * 1000; // cleanup setiap 5 menit
+
+// Periodic cleanup supaya Set tidak bengkak
+setInterval(() => {
+    processedInteractions.clear();
+}, PROCESSED_TTL_MS).unref?.();
+
 module.exports = async (interaction) => {
+    // P1-6 FIX: cek duplikat interaction ID dulu (defense-in-depth).
+    // Discord kadang fire event yang sama 2x kalau ada retry.
+    if (processedInteractions.has(interaction.id)) {
+        return;
+    }
+    processedInteractions.add(interaction.id);
+
+    // Guard: skip kalau interaction sudah replied/deferred (kecuali modal submit yang sah).
+    // Modal submit yang sudah replied = ANGGAP SUDAH DIPROSES, jangan lanjut.
     if (interaction.replied || interaction.deferred) {
-        // Untuk modal submit, replied=false default; skip cuma untuk non-modal
-        if (!interaction.isModalSubmit()) return;
+        return;
     }
     if (!interaction.isButton() && !interaction.isStringSelectMenu() && !interaction.isModalSubmit()) return;
 
@@ -200,6 +218,13 @@ module.exports = async (interaction) => {
 
             const productValue = interaction.customId.split(':')[1];
             const keyValue = interaction.components[0]?.components?.[0]?.value?.trim() || '';
+
+            // P1-8 FIX: validasi interaction.channel masih ada (belum dihapus admin lain).
+            // Sebelumnya: kalau channel sudah dihapus saat admin submit modal,
+            // `interaction.channel.topic` throw TypeError → error generik.
+            if (!interaction.channel) {
+                return interaction.editReply({ content: '❌ Channel tiket sudah tidak ada (mungkin sudah ditutup admin lain).' }).catch(()=>{});
+            }
 
             // Parse topic
             const topic = interaction.channel.topic || '';
@@ -1166,7 +1191,9 @@ async function handlePollModalCreate(interaction) {
 
         const msg = await channel.send({ embeds: [embed], components: rows, content: `📊 **POLL BARU** oleh ${interaction.user}` }).catch(err => null);
         if (!msg) {
-            return interaction.reply({ content: `❌ Gagal kirim poll ke ${channel}. Cek permission bot.`, flags: MessageFlags.Ephemeral });
+            // P0-5 FIX: rollback poll entry yang sudah tersimpan kalau gagal kirim message.
+            try { removePoll(poll.id); } catch (_) {}
+            return interaction.reply({ content: `❌ Gagal kirim poll ke ${channel}. Cek permission bot. Entry di-rollback.`, flags: MessageFlags.Ephemeral });
         }
         setPollMessageId(poll.id, msg.id);
         return interaction.reply({ content: `✅ Poll dibuat di ${channel}!\n🆔 \`${poll.id}\`\n💡 Tutup pakai \`/poll close id:${poll.id}\``, flags: MessageFlags.Ephemeral });

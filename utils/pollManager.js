@@ -99,7 +99,9 @@ function vote(id, userId, optionIndex) {
     const poll = list.find(p => p.id === id);
     if (!poll) return null;
     if (poll.closed) return { closed: true };
-    if (optionIndex < 0 || optionIndex >= poll.options.length) return null;
+    // P2-8 FIX: Number.isInteger check — sebelumnya NaN lolos check
+    // karena (NaN < 0) = false dan (NaN >= length) = false.
+    if (!Number.isInteger(optionIndex) || optionIndex < 0 || optionIndex >= poll.options.length) return null;
 
     const option = poll.options[optionIndex];
     const alreadyVoted = option.votes.includes(userId);

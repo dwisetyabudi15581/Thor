@@ -128,13 +128,38 @@ function end(id, winnerIds = []) {
     return gw;
 }
 
+/**
+ * Reroll — pilih 1 winner baru dari participant (exclude winner yang sudah ada).
+ * Persist winner baru ke gw.winnerIds. Return { winnerId, gw } atau null kalau gagal.
+ *
+ * P0-4 FIX: sebelumnya cuma return winnerId tanpa persist & tanpa dedup.
+ */
 function reroll(id) {
     const list = load();
     const gw = list.find(g => g.id === id);
     if (!gw || !gw.ended) return null;
-    if (gw.participantIds.length === 0) return { winnerId: null };
-    const idx = Math.floor(Math.random() * gw.participantIds.length);
-    return { winnerId: gw.participantIds[idx] };
+
+    // Exclude participant yang sudah pernah menang
+    const existingWinners = new Set(gw.winnerIds || []);
+    const pool = gw.participantIds.filter(uid => !existingWinners.has(uid));
+
+    if (pool.length === 0) {
+        // Kalau semua participant sudah pernah menang, fallback: pick dari semua participant
+        if (gw.participantIds.length === 0) return { winnerId: null, gw };
+        const fallbackIdx = Math.floor(Math.random() * gw.participantIds.length);
+        const winnerId = gw.participantIds[fallbackIdx];
+        return { winnerId, gw, reused: true };
+    }
+
+    const idx = Math.floor(Math.random() * pool.length);
+    const winnerId = pool[idx];
+
+    // Persist ke gw.winnerIds
+    if (!gw.winnerIds) gw.winnerIds = [];
+    gw.winnerIds.push(winnerId);
+    save(list);
+
+    return { winnerId, gw, reused: false };
 }
 
 function remove(id) {
@@ -148,12 +173,26 @@ function remove(id) {
 }
 
 /**
+ * Fisher-Yates shuffle — distribusi uniform, TIDAK biased seperti sort(random).
+ * P1-9 FIX: sebelumnya pakai `[...arr].sort(() => Math.random() - 0.5)`
+ * yang distribusinya TIDAK uniform di engine V8 modern.
+ */
+function shuffle(arr) {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+}
+
+/**
  * Pick winners secara random dari participant list.
  * Returns array of userId (unique).
  */
 function pickWinners(participantIds, count) {
     if (!participantIds || participantIds.length === 0) return [];
-    const shuffled = [...participantIds].sort(() => Math.random() - 0.5);
+    const shuffled = shuffle(participantIds);
     return shuffled.slice(0, Math.min(count, shuffled.length));
 }
 
@@ -171,5 +210,5 @@ function formatTimeLeft(ms) {
 
 module.exports = {
     create, setMessageId, get, getByMessage, getByGuild, getActive, getEnding,
-    addParticipant, removeParticipant, end, reroll, remove, pickWinners, formatTimeLeft
+    addParticipant, removeParticipant, end, reroll, remove, pickWinners, formatTimeLeft, shuffle
 };
