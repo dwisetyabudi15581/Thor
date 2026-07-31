@@ -489,17 +489,16 @@ function getCommands() {
         },
 
         // === TEMP VOICE ===
+        // v3.8.2: /setup-tempvoice tanpa parameter — bot auto-create kategori
+        // berisi text channel (untuk panel) + voice channel (untuk trigger).
         {
             name: 'setup-tempvoice',
-            description: 'Pasang panel temp voice + control panel global di channel teks tertentu',
-            defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
-            options: [
-                { type: 7, name: 'control_channel', description: 'Channel teks tempat panel kontrol global dipasang', required: true }
-            ]
+            description: 'Setup temp voice — auto buat kategori + channel panel + channel trigger',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild
         },
         {
             name: 'tempvoice-remove',
-            description: 'Hapus setup temp voice dari guild (channel trigger tidak ikut dihapus)',
+            description: 'Hapus setup temp voice dari guild (kategori + semua channel terkait dihapus)',
             defaultMemberPermissions: PermissionFlagsBits.ManageGuild
         }
     ];

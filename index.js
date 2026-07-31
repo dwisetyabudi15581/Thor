@@ -286,6 +286,15 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
         if (oldChannelId && oldChannelId !== newChannelId) {
             const channelInfo = tempVoiceManager.getChannel(guildId, oldChannelId);
             if (channelInfo) {
+                // v3.8.2: kalau yang leave adalah focused owner, clear focus supaya
+                // panel balik ke tampilan default (owner terbaru)
+                if (channelInfo.ownerId === userId) {
+                    const focusedOwnerId = tempVoiceManager.getFocusedOwner(guildId);
+                    if (focusedOwnerId === userId) {
+                        tempVoiceManager.clearFocusedOwner(guildId);
+                    }
+                }
+
                 const oldChannel = newState.guild.channels.cache.get(oldChannelId);
                 if (oldChannel && oldChannel.members.size === 0) {
                     // Channel kosong → hapus
@@ -299,9 +308,9 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
                         }
                         tempVoiceManager.unregisterChannel(guildId, oldChannelId);
                     }
-                    // Refresh panel setelah hapus channel kosong
-                    await refreshGlobalControlPanel(newState.client, guildId);
                 }
+                // Refresh panel setelah leave (member count atau channel hilang)
+                await refreshGlobalControlPanel(newState.client, guildId);
             }
         }
     } catch (err) {
@@ -384,6 +393,10 @@ async function handleCreateTempVoice(newState) {
  * - Kalau tidak ada voice aktif → tampilan idle (hanya tombol Buat Voice)
  * - Kalau ada voice aktif → tampilan kontrol (rename, kick, limit, lock, transfer, delete)
  *
+ * v3.8.2: Kalau ada focusedOwnerId (owner yang pilih channel via switch select),
+ * panel akan fokus ke channel milik owner tersebut. Kalau focusedOwnerId tidak
+ * ada atau expired, panel tampilkan owner terbaru sebagai default.
+ *
  * Panel di-fetch berdasarkan controlMessageId yang disimpan di tempVoice.json.
  * Kalau pesan hilang (dihapus admin), bot tidak kirim ulang (admin harus
  * jalankan /setup-tempvoice lagi untuk membuat panel baru).
@@ -417,6 +430,27 @@ async function refreshGlobalControlPanel(client, guildId) {
             }
             // Sort by createdAt desc (paling baru pertama)
             activeOwners.sort((a, b) => (b.channelInfo.createdAt || 0) - (a.channelInfo.createdAt || 0));
+        }
+
+        // v3.8.2: cek focusedOwnerId — kalau ada & valid, prioritaskan channel milik owner tsb
+        const focusedOwnerId = tempVoiceManager.getFocusedOwner(guildId);
+        if (focusedOwnerId && activeOwners.length > 0) {
+            const focusedOwner = activeOwners.find(o => o.channelInfo.ownerId === focusedOwnerId);
+            if (focusedOwner) {
+                // Pakai focused owner sebagai first element
+                const reordered = [focusedOwner, ...activeOwners.filter(o => o.channelInfo.ownerId !== focusedOwnerId)];
+                const { buildGlobalControlPanel } = require('./utils/tempVoiceControlPanel');
+                const { embed, components } = buildGlobalControlPanel({
+                    activeOwners: reordered,
+                    guildName: guild.name
+                });
+                await panelMsg.edit({ embeds: [embed], components }).catch(err => {
+                    console.warn(`⚠️ Gagal refresh panel global temp voice: ${err.message}`);
+                });
+                return;
+            }
+            // Focused owner tidak valid lagi (channelnya hilang) → clear
+            tempVoiceManager.clearFocusedOwner(guildId);
         }
 
         const { buildGlobalControlPanel } = require('./utils/tempVoiceControlPanel');

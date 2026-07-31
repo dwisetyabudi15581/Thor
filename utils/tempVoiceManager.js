@@ -88,6 +88,42 @@ function getControlMessageId(guildId) {
 }
 
 /**
+ * v3.8.2: Set owner yang sedang fokus di panel global.
+ * Dipakai saat owner pilih channel mereka via switch select menu.
+ * Panel global akan menampilkan channel milik focusedOwnerId.
+ *
+ * @param {string} guildId
+ * @param {string} ownerId - userId owner yang sedang fokus (null = reset ke default terbaru)
+ */
+function setFocusedOwner(guildId, ownerId) {
+    const all = load();
+    if (!all[guildId]) all[guildId] = { channels: {} };
+    all[guildId].focusedOwnerId = ownerId || null;
+    all[guildId].focusedAt = Date.now();
+    save(all);
+    return all[guildId];
+}
+
+function getFocusedOwner(guildId) {
+    const cfg = getGuildConfig(guildId);
+    if (!cfg?.focusedOwnerId) return null;
+    // Auto-expire setelah 5 menit kalau owner tidak ada di voice lagi
+    if (cfg.focusedAt && (Date.now() - cfg.focusedAt) > 5 * 60 * 1000) {
+        return null;
+    }
+    return cfg.focusedOwnerId;
+}
+
+function clearFocusedOwner(guildId) {
+    const all = load();
+    if (all[guildId]) {
+        delete all[guildId].focusedOwnerId;
+        delete all[guildId].focusedAt;
+        save(all);
+    }
+}
+
+/**
  * Hapus setup temp voice untuk guild.
  */
 function removeGuild(guildId) {
@@ -198,6 +234,9 @@ module.exports = {
     setControlMessageId,
     getControlChannelId,
     getControlMessageId,
+    setFocusedOwner,
+    getFocusedOwner,
+    clearFocusedOwner,
     registerChannel,
     unregisterChannel,
     getChannel,

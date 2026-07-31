@@ -500,6 +500,9 @@ module.exports = async (interaction) => {
         if (interaction.isModalSubmit() && interaction.customId === 'tv_modal_limit') {
             return handleTempVoiceLimitSubmit(interaction);
         }
+        if (interaction.isStringSelectMenu() && interaction.customId === 'tv_switch_select') {
+            return handleTempVoiceSwitchSelect(interaction);
+        }
 
     } catch (err) {
         console.error('Interaction Handler Error:', err);
@@ -1794,6 +1797,64 @@ async function handleTempVoiceDelete(interaction) {
         return interaction.editReply({ content: '🗑️ Voice channel kamu berhasil dihapus.' });
     } catch (err) {
         console.error('TempVoice delete error:', err);
+        if (interaction.deferred && !interaction.replied) {
+            await interaction.editReply({ content: `❌ Gagal: ${err.message}` }).catch(()=>{});
+        }
+    }
+}
+
+/**
+ * v3.8.2: Select menu tv_switch_select — owner pilih channel mereka dari list.
+ *
+ * Logic:
+ *   - User pilih channelId dari dropdown
+ *   - Cek apakah user tersebut adalah owner dari channel yang dipilih
+ *   - Kalau iya → set focusedOwnerId ke user tsb, refresh panel global ke channel mereka
+ *   - Kalau bukan → tampilkan error "kamu bukan owner channel itu"
+ */
+async function handleTempVoiceSwitchSelect(interaction) {
+    try {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+        if (!interaction.guild) {
+            return interaction.editReply({ content: '❌ Hanya bisa dipakai di server.' });
+        }
+
+        const tempVoiceManager = require('../utils/tempVoiceManager');
+        const selectedChannelId = interaction.values[0];
+        const channelInfo = tempVoiceManager.getChannel(interaction.guild.id, selectedChannelId);
+
+        if (!channelInfo) {
+            return interaction.editReply({ content: '❌ Channel tersebut sudah tidak aktif.' });
+        }
+
+        // Cek apakah user adalah owner channel yang dipilih
+        if (channelInfo.ownerId !== interaction.user.id) {
+            return interaction.editReply({
+                content: `❌ Kamu bukan owner channel **${channelInfo.name}**. Channel ini milik <@${channelInfo.ownerId}>.\n\n💡 Kamu hanya bisa pilih channel milikmu sendiri.`
+            });
+        }
+
+        // Cek apakah owner sedang di voice channelnya
+        const voiceChannel = interaction.guild.channels.cache.get(selectedChannelId);
+        if (!voiceChannel || !voiceChannel.members.has(interaction.user.id)) {
+            return interaction.editReply({
+                content: `❌ Kamu harus berada di voice channel kamu (${voiceChannel || channelInfo.name}) untuk mengontrolnya.`
+            });
+        }
+
+        // Set focused owner ke user ini, refresh panel
+        tempVoiceManager.setFocusedOwner(interaction.guild.id, interaction.user.id);
+
+        if (typeof interaction.client.refreshGlobalControlPanel === 'function') {
+            await interaction.client.refreshGlobalControlPanel(interaction.client, interaction.guild.id);
+        }
+
+        return interaction.editReply({
+            content: `✅ Panel sekarang fokus ke channel kamu: **${channelInfo.name}**\n\n💡 Kamu bisa pakai tombol kontrol di panel global sekarang. Fokus akan otomatis reset ke owner terbaru setelah 5 menit atau kalau kamu keluar dari voice.`
+        });
+    } catch (err) {
+        console.error('TempVoice switch select error:', err);
         if (interaction.deferred && !interaction.replied) {
             await interaction.editReply({ content: `❌ Gagal: ${err.message}` }).catch(()=>{});
         }

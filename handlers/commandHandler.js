@@ -1747,6 +1747,10 @@ module.exports = async (interaction) => {
     // ====================================================
     // === TEMP VOICE — /setup-tempvoice, /tempvoice-remove ===
     // ====================================================
+    // v3.8.2: /setup-tempvoice tanpa parameter.
+    // Bot auto-create 1 kategori berisi:
+    //   - 1 text channel "📋 control-panel" (tempat panel global dipasang)
+    //   - 1 voice channel "🔊 Buat Voice" (trigger — member join untuk bikin voice baru)
     if (interaction.commandName === 'setup-tempvoice') {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
@@ -1755,59 +1759,69 @@ module.exports = async (interaction) => {
         const { buildGlobalControlPanel } = require('../utils/tempVoiceControlPanel');
 
         const guild = interaction.guild;
-        const controlChannel = interaction.options.getChannel('control_channel');
-
-        // Validasi: control channel harus text channel
-        if (!controlChannel || controlChannel.type !== ChannelType.GuildText) {
-            return interaction.editReply({ content: '❌ Control channel harus berupa **text channel** (bukan voice/category).' });
-        }
 
         // Cek apakah sudah ada setup sebelumnya
         const existingConfig = tempVoiceManager.getGuildConfig(guild.id);
-        let creatorChannel = existingConfig?.creatorChannelId
-            ? guild.channels.cache.get(existingConfig.creatorChannelId)
-            : null;
 
-        // Kalau belum ada, bikin kategori + trigger channel
-        if (!creatorChannel) {
-            try {
-                // Bikin kategori "🎤 TEMP VOICE"
-                let category = guild.channels.cache.find(c => c.name === '🎤 TEMP VOICE' && c.type === ChannelType.GuildCategory);
-                if (!category) {
-                    category = await guild.channels.create({
-                        name: '🎤 TEMP VOICE',
-                        type: ChannelType.GuildCategory
+        // Kalau sudah ada setup, langsung re-kirim panel ke control channel yang ada
+        if (existingConfig?.controlChannelId && existingConfig?.creatorChannelId) {
+            const existingControlChannel = guild.channels.cache.get(existingConfig.controlChannelId);
+            if (existingControlChannel) {
+                // Hapus panel lama kalau ada
+                if (existingConfig.controlMessageId) {
+                    try {
+                        const oldMsg = await existingControlChannel.messages.fetch(existingConfig.controlMessageId).catch(() => null);
+                        if (oldMsg) await oldMsg.delete().catch(()=>{});
+                    } catch (_) {}
+                }
+                // Kirim panel baru
+                const { embed, components } = buildGlobalControlPanel({
+                    activeOwners: [],
+                    guildName: guild.name
+                });
+                const panelMsg = await existingControlChannel.send({ embeds: [embed], components }).catch(err => null);
+                if (panelMsg) {
+                    tempVoiceManager.setControlMessageId(guild.id, panelMsg.id);
+                    return interaction.editReply({
+                        content: `✅ **Panel temp voice di-refresh!**\n\n🎛️ ${panelMsg.url}\n\n💡 Setup yang sudah ada tetap dipakai (kategori + trigger + control channel).`
                     });
                 }
-
-                // Bikin trigger channel "🔊 Buat Voice"
-                creatorChannel = await guild.channels.create({
-                    name: '🔊 Buat Voice',
-                    type: ChannelType.GuildVoice,
-                    parent: category.id,
-                    bitrate: 64000
-                });
-
-                // Simpan config (sementara tanpa controlMessageId — akan diupdate setelah kirim panel)
-                tempVoiceManager.setupGuild(guild.id, creatorChannel.id, category.id, controlChannel.id);
-            } catch (err) {
-                console.error('Error setup temp voice:', err);
-                return interaction.editReply({ content: `❌ Gagal setup temp voice: ${err.message}\n\nPastikan bot punya permission **Manage Channels** dan **Manage Roles**.` });
             }
-        } else {
-            // Update control channel ke yang baru
-            tempVoiceManager.setupGuild(guild.id, creatorChannel.id, existingConfig.categoryId, controlChannel.id);
         }
 
-        // Hapus panel global lama di control channel lama (kalau ada)
-        if (existingConfig?.controlMessageId && existingConfig?.controlChannelId) {
-            try {
-                const oldControlChannel = guild.channels.cache.get(existingConfig.controlChannelId);
-                if (oldControlChannel) {
-                    const oldMsg = await oldControlChannel.messages.fetch(existingConfig.controlMessageId).catch(() => null);
-                    if (oldMsg) await oldMsg.delete().catch(()=>{});
-                }
-            } catch (_) {}
+        // === Setup baru: bikin kategori + 2 channel ===
+        let category, controlChannel, creatorChannel;
+        try {
+            // Bikin kategori "🎤 TEMP VOICE"
+            category = guild.channels.cache.find(c => c.name === '🎤 TEMP VOICE' && c.type === ChannelType.GuildCategory);
+            if (!category) {
+                category = await guild.channels.create({
+                    name: '🎤 TEMP VOICE',
+                    type: ChannelType.GuildCategory
+                });
+            }
+
+            // Bikin text channel "📋 control-panel" untuk naruh panel global
+            controlChannel = await guild.channels.create({
+                name: '📋 control-panel',
+                type: ChannelType.GuildText,
+                parent: category.id,
+                topic: 'Panel kontrol global untuk temp voice. Jangan dihapus — bot pakai pesan di sini untuk kontrol voice channel.'
+            });
+
+            // Bikin voice channel "🔊 Buat Voice" sebagai trigger
+            creatorChannel = await guild.channels.create({
+                name: '🔊 Buat Voice',
+                type: ChannelType.GuildVoice,
+                parent: category.id,
+                bitrate: 64000
+            });
+
+            // Simpan config
+            tempVoiceManager.setupGuild(guild.id, creatorChannel.id, category.id, controlChannel.id);
+        } catch (err) {
+            console.error('Error setup temp voice:', err);
+            return interaction.editReply({ content: `❌ Gagal setup temp voice: ${err.message}\n\nPastikan bot punya permission **Manage Channels** dan **Manage Roles**.` });
         }
 
         // Kirim panel kontrol GLOBAL ke control channel
@@ -1831,12 +1845,13 @@ module.exports = async (interaction) => {
             action: 'SETUP_SELFROLE',
             actorId: interaction.user.id,
             actorTag: interaction.user.tag,
-            details: `Setup Temp Voice — trigger: ${creatorChannel} (\`${creatorChannel.id}\`), control panel: ${controlChannel} (\`${controlChannel.id}\`)`,
+            details: `Setup Temp Voice — kategori: ${category.name}, trigger: ${creatorChannel} (\`${creatorChannel.id}\`), control panel: ${controlChannel} (\`${controlChannel.id}\`)`,
             guildId: guild.id
         });
 
         return interaction.editReply({
             content: `✅ **Temp Voice siap!**\n\n` +
+                `📂 **Kategori:** ${category.name}\n` +
                 `🎤 **Trigger channel:** ${creatorChannel} (member join sini untuk bikin voice baru)\n` +
                 `🎛️ **Control panel:** ${panelMsg.url}\n\n` +
                 `💡 Member tinggal klik tombol **🎤 Buat Voice** di control panel, atau join langsung ke trigger channel. Setelah jadi owner, panel akan otomatis update untuk menampilkan kontrol channel mereka.`
@@ -1863,25 +1878,24 @@ module.exports = async (interaction) => {
             }
         } catch (_) {}
 
-        // Hapus trigger channel + kategori (opsional, tapi bersih)
+        // v3.8.2: hapus SEMUA channel di kategori (control, trigger, temp voice aktif, kategori sendiri)
         try {
-            if (config.creatorChannelId) {
-                const trigger = interaction.guild.channels.cache.get(config.creatorChannelId);
-                if (trigger) await trigger.delete('Temp voice setup dihapus').catch(()=>{});
-            }
-            // Hapus semua channel temp voice yang masih aktif
+            const channelsToDelete = [];
+            if (config.controlChannelId) channelsToDelete.push(config.controlChannelId);
+            if (config.creatorChannelId) channelsToDelete.push(config.creatorChannelId);
             if (config.channels) {
                 for (const channelId of Object.keys(config.channels)) {
-                    const ch = interaction.guild.channels.cache.get(channelId);
-                    if (ch) await ch.delete('Temp voice setup dihapus').catch(()=>{});
+                    channelsToDelete.push(channelId);
                 }
             }
-            // Hapus kategori kalau kosong
+            for (const channelId of channelsToDelete) {
+                const ch = interaction.guild.channels.cache.get(channelId);
+                if (ch) await ch.delete('Temp voice setup dihapus').catch(()=>{});
+            }
+            // Hapus kategori (sekarang harusnya kosong)
             if (config.categoryId) {
                 const cat = interaction.guild.channels.cache.get(config.categoryId);
-                if (cat && cat.children.size === 0) {
-                    await cat.delete('Temp voice kategori kosong').catch(()=>{});
-                }
+                if (cat) await cat.delete('Temp voice kategori dihapus').catch(()=>{});
             }
         } catch (_) {}
 
@@ -1890,11 +1904,11 @@ module.exports = async (interaction) => {
             action: 'SELFROLE_DELETE',
             actorId: interaction.user.id,
             actorTag: interaction.user.tag,
-            details: `Hapus setup Temp Voice dari guild`,
+            details: `Hapus setup Temp Voice dari guild (kategori + semua channel terkait dihapus)`,
             guildId: interaction.guild.id
         });
 
-        return interaction.editReply({ content: '✅ Setup Temp Voice berhasil dihapus. Control panel + trigger channel + semua channel temp voice aktif juga dihapus.' });
+        return interaction.editReply({ content: '✅ Setup Temp Voice berhasil dihapus. Kategori + control panel + trigger channel + semua channel temp voice aktif juga dihapus.' });
     }
 };
 

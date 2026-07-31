@@ -225,7 +225,8 @@ function buildGlobalControlPanel(options = {}) {
         (b.channelInfo.createdAt || 0) - (a.channelInfo.createdAt || 0)
     );
 
-    // Ada voice aktif — tampilan kontrol owner
+    // v3.8.2: kalau ada multiple owners, owner lain bisa pilih channel mereka
+    // via select menu. Panel tetap tampilkan owner terbaru sebagai default.
     const owner = sorted[0]; // Ambil owner pertama (yang paling baru)
     const { channelInfo, voiceChannel } = owner;
     const memberCount = voiceChannel?.members?.size || 0;
@@ -239,9 +240,9 @@ function buildGlobalControlPanel(options = {}) {
         `📊 **Limit:** ${limitStr}\n` +
         `${channelInfo.locked ? '🔒' : '🔓'} **Status:** ${lockStr}\n\n`;
 
-    if (activeOwners.length > 1) {
-        description += `ℹ️ Ada **${activeOwners.length}** voice aktif. Panel ini menampilkan kontrol untuk owner terbaru (<@${channelInfo.ownerId}>).\n`;
-        description += `Owner lain bisa pakai kontrol dengan cara: keluar dari voice kamu, lalu panel akan refresh ke owner berikutnya.\n\n`;
+    if (sorted.length > 1) {
+        description += `ℹ️ Ada **${sorted.length}** voice aktif di server ini.\n`;
+        description += `Kalau kamu owner salah satunya, pakai **dropdown "Switch Channel"** di bawah untuk pilih channel kamu.\n\n`;
     }
 
     description +=
@@ -299,6 +300,81 @@ function buildGlobalControlPanel(options = {}) {
             .setStyle(ButtonStyle.Success)
     );
 
+    const components = [row1, row2];
+
+    // v3.8.2: kalau ada multiple owners, tambah select menu "Switch Channel"
+    // supaya owner lain bisa pilih channel mereka untuk kontrol.
+    if (sorted.length > 1) {
+        const switchOptions = sorted.map(o => ({
+            label: `${o.channelInfo.name}`.slice(0, 100),
+            value: o.channelId,
+            description: `Owner: ${o.channelInfo.ownerTag}`.slice(0, 100)
+        }));
+        const switchRow = new ActionRowBuilder().addComponents(
+            new StringSelectMenuBuilder()
+                .setCustomId('tv_switch_select')
+                .setPlaceholder('🔄 Switch ke channel lain (untuk owner lain)...')
+                .addOptions(switchOptions.slice(0, 25))
+                .setMinValues(1)
+                .setMaxValues(1)
+        );
+        components.push(switchRow);
+    }
+
+    return { embed, components };
+}
+
+/**
+ * v3.8.2: Build panel khusus untuk channel yang dipilih via switch select.
+ * Sama seperti active state, tapi owner = channel yang dipilih (bukan default terbaru).
+ */
+function buildGlobalControlPanelForChannel(options = {}) {
+    const { channelInfo, voiceChannel, guildName = 'Server', totalActiveCount = 1 } = options;
+
+    const memberCount = voiceChannel?.members?.size || 0;
+    const limitStr = channelInfo.limit === 0 ? '♾️ Tanpa batas' : `${channelInfo.limit} member`;
+    const lockStr = channelInfo.locked ? '🔒 Terkunci' : '🔓 Terbuka';
+
+    let description =
+        `**🎙️ Channel Aktif Milik:** <@${channelInfo.ownerId}>\n` +
+        `🔊 **Nama:** ${channelInfo.name}\n` +
+        `👥 **Member:** ${memberCount}${channelInfo.limit > 0 ? ` / ${channelInfo.limit}` : ''}\n` +
+        `📊 **Limit:** ${limitStr}\n` +
+        `${channelInfo.locked ? '🔒' : '🔓'} **Status:** ${lockStr}\n\n`;
+
+    if (totalActiveCount > 1) {
+        description += `ℹ️ Ada **${totalActiveCount}** voice aktif. Kamu sedang melihat channel ini (via switch).\n\n`;
+    }
+
+    description +=
+        `**🎮 Kontrol (klik untuk pakai):**\n` +
+        `• ✏️ Rename • 🚫 Kick • 👥 Limit • ${channelInfo.locked ? '🔓 Unlock' : '🔒 Lock'} • 🔄 Transfer • 🗑️ Delete\n\n` +
+        `💡 Hanya owner (<@${channelInfo.ownerId}>) yang bisa pakai kontrol di bawah.`;
+
+    const embed = new EmbedBuilder()
+        .setTitle('🎛️ TEMP VOICE CONTROL PANEL')
+        .setDescription(description)
+        .setColor(channelInfo.locked ? 0xE67E22 : 0x57F287)
+        .setFooter({ text: `${guildName} • Owner: ${channelInfo.ownerTag}` })
+        .setTimestamp();
+
+    const row1 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('tv_rename').setLabel('Rename').setEmoji('✏️').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId('tv_kick').setLabel('Kick').setEmoji('🚫').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId('tv_limit').setLabel('Limit').setEmoji('👥').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+            .setCustomId(channelInfo.locked ? 'tv_unlock' : 'tv_lock')
+            .setLabel(channelInfo.locked ? 'Unlock' : 'Lock')
+            .setEmoji(channelInfo.locked ? '🔓' : '🔒')
+            .setStyle(channelInfo.locked ? ButtonStyle.Success : ButtonStyle.Secondary)
+    );
+
+    const row2 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId('tv_transfer').setLabel('Transfer Owner').setEmoji('🔄').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId('tv_delete').setLabel('Delete Channel').setEmoji('🗑️').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId('tv_create').setLabel('Buat Voice Baru').setEmoji('🎤').setStyle(ButtonStyle.Success)
+    );
+
     return { embed, components: [row1, row2] };
 }
 
@@ -309,5 +385,6 @@ module.exports = {
     buildTransferSelectMenu,
     buildSetupPanelEmbed,
     buildSetupPanelComponents,
-    buildGlobalControlPanel
+    buildGlobalControlPanel,
+    buildGlobalControlPanelForChannel
 };
