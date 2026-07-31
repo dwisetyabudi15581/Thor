@@ -127,6 +127,16 @@ function setField(dotPath, value) {
     }
     cur[keys[keys.length - 1]] = value;
     saveConfig(config);
+
+    // v3.9.2: invalidate permissions cache kalau admin role berubah,
+    // supaya perubahan langsung efektif tanpa nunggu TTL 30 detik.
+    if (keys[0] === 'roles' && keys[1] === 'admin') {
+        try {
+            const { invalidateAdminRoleCache } = require('./permissions');
+            invalidateAdminRoleCache();
+        } catch (_) { /* permissions belum di-load — ignore */ }
+    }
+
     return config;
 }
 

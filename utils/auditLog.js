@@ -14,6 +14,10 @@
  * Channel tujuan diambil dari config.channels['audit-log'].
  * Kalau belum di-set, log di-skip (silent fail).
  *
+ * v3.9.2: tambah retry 1x dengan delay 500ms kalau pengiriman pertama gagal
+ * (mis. karena rate-limit Discord atau network blip). Sebelumnya, satu error
+ * transient langsung bikin audit log hilang. Sekarang setidaknya ada 2 percobaan.
+ *
  * Tidak ada file JSON — log dikirim langsung ke channel Discord.
  */
 
@@ -63,6 +67,13 @@ const ACTION_LABELS = {
     POLL_CLOSE: '🔒 Tutup Poll'
 };
 
+const RETRY_DELAY_MS = 500;
+const MAX_ATTEMPTS = 2;
+
+function sleep(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 /**
  * Kirim entry audit log ke channel yang sudah di-set.
  * @param {Client} client - Discord client
@@ -70,38 +81,63 @@ const ACTION_LABELS = {
  * @returns {Promise<boolean>} true kalau berhasil terkirim, false kalau gagal/skip
  */
 async function logAudit(client, data) {
+    let auditChannelId;
     try {
         const { getConfig } = require('./configManager');
         const config = getConfig();
-        const auditChannelId = config.channels['audit-log'];
-        if (!auditChannelId) return false; // belum di-set, silent skip
-
-        // P3-7 FIX: pakai fetch (fallback ke API) bukan cache.get,
-        // supaya channel yang belum ter-cache tetap bisa diakses.
-        const channel = client.channels.cache.get(auditChannelId)
-            || await client.channels.fetch(auditChannelId).catch(() => null);
-        if (!channel) return false;
-
-        const label = ACTION_LABELS[data.action] || data.action;
-        const embed = new EmbedBuilder()
-            .setTitle(`🔧 AUDIT: ${label}`)
-            .setColor(0x2C2F33)
-            .addFields(
-                { name: '👤 Admin', value: `<@${data.actorId}> (\`${data.actorTag || data.actorId}\`)`, inline: true },
-                { name: '🕐 Waktu', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true },
-                { name: '📋 Detail', value: data.details || '_(tidak ada detail)_' }
-            )
-            .setFooter({ text: `Action: ${data.action}` })
-            .setTimestamp();
-
-        if (data.guildId) embed.addFields({ name: '🏠 Guild', value: `\`${data.guildId}\``, inline: true });
-
-        await channel.send({ embeds: [embed] });
-        return true;
+        auditChannelId = config.channels['audit-log'];
     } catch (err) {
-        console.warn('⚠️ Gagal kirim audit log:', err.message);
+        // config rusak — skip
         return false;
     }
+    if (!auditChannelId) return false; // belum di-set, silent skip
+
+    // Resolve channel (cache dulu, fallback fetch)
+    let channel;
+    try {
+        channel = client.channels.cache.get(auditChannelId)
+            || await client.channels.fetch(auditChannelId).catch(() => null);
+    } catch (err) {
+        console.warn('⚠️ Audit log: gagal resolve channel:', err.message);
+        return false;
+    }
+    if (!channel) return false;
+
+    const label = ACTION_LABELS[data.action] || data.action;
+    const embed = new EmbedBuilder()
+        .setTitle(`🔧 AUDIT: ${label}`)
+        .setColor(0x2C2F33)
+        .addFields(
+            { name: '👤 Admin', value: `<@${data.actorId}> (\`${data.actorTag || data.actorId}\`)`, inline: true },
+            { name: '🕐 Waktu', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true },
+            { name: '📋 Detail', value: data.details || '_(tidak ada detail)_' }
+        )
+        .setFooter({ text: `Action: ${data.action}` })
+        .setTimestamp();
+
+    if (data.guildId) embed.addFields({ name: '🏠 Guild', value: `\`${data.guildId}\``, inline: true });
+
+    // v3.9.2: retry sekali kalau send gagal karena transient error (rate limit,
+    // network blip, dll). Error non-retryable (permission, 4xx) tidak di-retry.
+    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+        try {
+            await channel.send({ embeds: [embed] });
+            return true;
+        } catch (err) {
+            const code = err.code || err.status || 0;
+            // Discord 5xx errors, network errors, rate limit → retry.
+            // 4xx (kecuali 429 rate limit) → tidak retry (pasti gagal lagi).
+            const isRetryable = code >= 500 || code === 429 || code === 0;
+            if (attempt < MAX_ATTEMPTS && isRetryable) {
+                console.warn(`⚠️ Audit log attempt ${attempt} gagal (code ${code}), retry dalam ${RETRY_DELAY_MS}ms...`);
+                await sleep(RETRY_DELAY_MS);
+                continue;
+            }
+            console.warn(`⚠️ Audit log gagal terkirim (attempt ${attempt}/${MAX_ATTEMPTS}, code ${code}):`, err.message);
+            return false;
+        }
+    }
+    return false;
 }
 
 module.exports = { logAudit, ACTION_LABELS };

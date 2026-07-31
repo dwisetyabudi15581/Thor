@@ -1,4 +1,4 @@
-# 📖 ADMIN GUIDE — MLBB Community Bot v3.7
+# 📖 ADMIN GUIDE — MLBB Community Bot v3.9.2
 
 Panduan lengkap untuk admin server Discord yang menjalankan bot ini. Cocok untuk admin baru yang baru pertama kali setup, maupun admin yang sudah ada untuk referensi harian.
 
@@ -15,6 +15,7 @@ Panduan lengkap untuk admin server Discord yang menjalankan bot ini. Cocok untuk
 7. [Backup & Restore](#7-backup--restore)
 8. [Troubleshooting](#8-troubleshooting)
 9. [Best Practices](#9-best-practices)
+10. [Apa yang Baru di v3.9.x](#10-apa-yang-baru-di-v39x)
 
 ---
 
@@ -22,7 +23,7 @@ Panduan lengkap untuk admin server Discord yang menjalankan bot ini. Cocok untuk
 
 ### Prasyarat
 - Node.js 16.11+ (rekomendasi 18+)
-- Bot sudah di-invite ke server dengan permission: Manage Roles, Manage Channels, Send Messages, Embed Links, View Audit Log, Moderate Members
+- Bot sudah di-invite ke server dengan permission: Manage Roles, Manage Channels, Send Messages, Embed Links, View Audit Log, Moderate Members, Move Members
 - Server Members Intent sudah di-enable di Discord Developer Portal
 - **Role bot di ATAS** semua role yang akan dikelola (Verified, Unverified, VIP, dll)
 
@@ -37,7 +38,7 @@ npm start
 ### Verifikasi
 - Cek console muncul: `✅ Bot online sebagai NamaBot#1234`
 - Cek console muncul: `✅ Slash Commands terdaftar ke guild: Nama Server (instan!)`
-- Cek di Discord, ketik `/` — semua 45 slash command harus muncul
+- Cek di Discord, ketik `/` — semua 47 slash command harus muncul
 - Kalau command tidak muncul, pastikan `GUILD_ID` di `.env` benar
 
 ---
@@ -57,6 +58,7 @@ Urutan ini **rekomendasi** untuk server baru. Skip yang sudah pernah di-set.
 - Role `verified` = role yang didapat member setelah klik tombol verifikasi
 - Role `unverified` = role default member baru (akan dilepas setelah verify)
 - Role `admin` = role staff yang akan dapat akses channel tiket + panel admin
+- Perubahan admin role langsung efektif (cache di-invalidate otomatis)
 
 ### Step 2: Set Channel
 ```
@@ -71,6 +73,7 @@ Urutan ini **rekomendasi** untuk server baru. Skip yang sudah pernah di-set.
 - `goodbye` — channel tempat bot kirim goodbye message saat member leave/kick/ban
 - `invoice` — channel testimoni transaksi (otomatis terisi setiap Set Key sukses)
 - `audit-log` — channel tempat bot catat SEMUA admin action (24 action types)
+  - Audit log di-retry 1x otomatis bila gagal kirim (rate limit/network blip)
 
 ### Step 3: Pasang Panel Verifikasi
 ```
@@ -160,13 +163,13 @@ Untuk kasus member sudah bayar tapi lewat DM / transfer langsung:
 ```
 
 Bot akan otomatis:
-1. Simpan key ke `keys.json`
+1. Simpan key ke `keys.json` (di-scope per guild — aman untuk multi-server)
 2. Beri role VIP ke member
 3. Schedule auto-remove (MAX EXTEND)
 4. DM member dengan key + info expire
 5. Kirim invoice ke channel invoice
 6. Track purchase ke stats
-7. Audit log SET_KEY
+7. Audit log SET_KEY — **key dimasking** (hanya `***` + panjang, tidak bocor nilai key)
 
 ### Lihat Key Member
 ```
@@ -180,8 +183,8 @@ Untuk kasus member minta reset / refund:
 /clear-schedule user:@member clear_keys:true
 ```
 Bot akan:
-- Hapus semua schedule role user
-- Hapus SEMUA key user dari `keys.json`
+- Hapus semua schedule role user (di guild ini saja)
+- Hapus SEMUA key user dari `keys.json` (di guild ini saja)
 - Lepas semua role VIP yang terkait produk
 
 **Hati-hati:** Tidak bisa di-undo. Pakai `clear_keys:false` kalau hanya ingin hapus schedule tanpa hapus key.
@@ -204,6 +207,7 @@ Bot akan:
 - Key bisa apa saja (string bebas), mis. `ABCDE-12345-FGHIJ-67890`
 - Bot akan DM member dengan key + info expire + list semua key aktif
 - Invoice otomatis terkirim ke channel invoice (testimoni)
+- Metadata tiket (userId, productName, price) disimpan di `tickets.json` — bukan di channel topic (anti spoof/edit)
 
 ### Tutup Tiket Tanpa Transaksi
 Klik **🔒 Tutup Tiket** → pilih **❌ Tidak Jadi Beli** → tiket ditutup tanpa key/role.
@@ -212,6 +216,14 @@ Klik **🔒 Tutup Tiket** → pilih **❌ Tidak Jadi Beli** → tiket ditutup ta
 ```
 /announce channel:#announcements title:"Maintenance Besok" description:"Server akan maintenance jam 03:00 WIB" color:#FF0000 mention:@everyone
 ```
+
+**Format mention yang valid (v3.9.1+):**
+- `@everyone` atau `everyone`
+- `@here` atau `here`
+- `<@&ROLE_ID>` — role mention (copy dari Discord)
+- `<@USER_ID>` atau `<@!USER_ID>` — user mention
+
+String lain akan ditolak dengan pesan error. Ini untuk mencegah admin tidak sengaja nge-ping karena typo di string mention.
 
 ### Interactive Embed Builder (untuk embed kompleks)
 ```
@@ -223,6 +235,7 @@ Bot kirim draft + dropdown. Klik dropdown → pilih bagian (Title/Description/Co
 - Bisa edit lagi setelah Send? Tidak. Embed yang sudah dikirim tidak bisa di-edit via builder. Hapus manual + buat ulang.
 - Session hilang kalau bot restart. Tapi TTL 1 jam (auto-cleanup) supaya tidak memory leak.
 - Pakai `/embed-list` untuk lihat session aktif, `/embed-cancel` untuk batalkan.
+- Validasi panjang title (256), description (4096), field name (256), field value (1024) — kalau kelebihan, bot tolak dengan pesan jelas.
 
 ### Scheduled Announcement
 ```
@@ -233,8 +246,8 @@ Bot kirim draft + dropdown. Klik dropdown → pilih bagian (Title/Description/Co
 **Format `at`:**
 - `30m` — 30 menit dari sekarang
 - `2h` — 2 jam dari sekarang
-- `1d` — 1 hari dari sekarang
-- `2026-01-15 20:00` — tanggal & waktu spesifik (format YYYY-MM-DD HH:mm, WIB)
+- `1d` — 1 hari dari sekarang (maks 365 hari)
+- `2026-01-15 20:00` — tanggal & waktu spesifik (format YYYY-MM-DD HH:mm, WIB; maks 5 tahun ke depan)
 
 **Recurring:** `daily`, `weekly`, `monthly` — bot otomatis jadwalkan ulang setelah fire.
 
@@ -254,14 +267,14 @@ Bot kirim draft + dropdown. Klik dropdown → pilih bagian (Title/Description/Co
 ```
 
 Bot akan:
-- Tambah warning ke `warns.json`
+- Tambah warning ke `warns.json` (di-scope per guild)
 - DM member dengan alasan + total warning
 - Auto-action kalau mencapai threshold:
   - **3 warning** → mute (timeout) 1 jam
   - **5 warning** → mute (timeout) 1 hari
   - **7 warning** → kick dari server
 
-**Catatan v3.7:** Auto-action tidak re-apply berulang. Kalau member dapat warning ke-4 (sudah pernah mute 1h di warning ke-3), bot tidak akan re-mute. Hanya threshold baru (5, 7) yang trigger action baru.
+**Catatan:** Auto-action tidak re-apply berulang. Kalau member dapat warning ke-4 (sudah pernah mute 1h di warning ke-3), bot tidak akan re-mute. Hanya threshold baru (5, 7) yang trigger action baru.
 
 ### Lihat History Warning
 ```
@@ -297,6 +310,7 @@ Bot akan menolak `/warn` kalau:
 - `duration` dalam **menit** (min 1)
 - `winners` 1-20
 - `required_role` opsional — hanya member dengan role itu yang bisa ikut
+- **Tidak otomatis ping `@everyone`** (sejak v3.9.1) — kalau mau ping, pakai `/announce` terpisah atau edit pesan giveaway setelah dibuat
 
 Bot akan kirim embed giveaway + tombol 🎉 Join / 🚪 Leave. Member klik Join → terdaftar. Saat berakhir:
 - Bot pick winners (Fisher-Yates shuffle, distribusi uniform)
@@ -304,6 +318,8 @@ Bot akan kirim embed giveaway + tombol 🎉 Join / 🚪 Leave. Member klik Join 
 - Announce winners ke channel
 - DM winners
 - Track ke stats (leaderboard Top Winner)
+
+**Anti double-join (v3.9.2):** Kalau user klik tombol Join terlalu cepat (double-click <100ms), klik kedua ditolak dengan pesan "Tunggu sebentar". Ini mencegah race condition yang bisa menyebabkan participant terdaftar dobel.
 
 ### Akhiri Giveaway Lebih Awal
 ```
@@ -327,6 +343,8 @@ Modal muncul → input options (1 per baris, min 2, maks 10). Bot kirim embed po
 - `multiple:false` — single choice (klik option lain otomatis pindah vote)
 - `multiple:true` — multi choice (boleh pilih banyak)
 
+**Anti double-vote (v3.9.2):** Sama seperti giveaway, klik terlalu cepat akan ditolak supaya tidak terjadi toggle dobel yang bisa membuat vote hilang.
+
 ### Tutup Poll
 ```
 /poll close id:poll_xxx
@@ -341,7 +359,7 @@ Bot akan disable semua tombol + tampilkan hasil akhir.
 ```
 /backup-now
 ```
-Bot buat folder `backups/YYYY-MM-DD_HH-mm-ss/` berisi copy semua JSON files (config, keys, scheduledRoles, selfRoles, giveaways, polls, warns, stats, scheduledAnns).
+Bot buat folder `backups/YYYY-MM-DD_HH-mm-ss/` berisi copy semua JSON files (config, keys, scheduledRoles, selfRoles, giveaways, polls, warns, stats, scheduledAnns, tempVoice, tickets).
 
 ### Auto-Backup
 - Saat bot start: backup otomatis
@@ -352,16 +370,25 @@ Bot buat folder `backups/YYYY-MM-DD_HH-mm-ss/` berisi copy semua JSON files (con
 ```
 /backup-list
 ```
+Akan tampil semua backup termasuk safety backup `pre-restore_*` (kalau pernah restore).
 
 ### Restore Backup
 ```
 /restore-backup name:2026-01-15_20-00-00
 ```
 
-**Penting:**
-- Bot auto-buat safety backup sebelum restore (supaya kalau salah restore bisa undo)
-- Setelah restore, **RESTART bot** (`Ctrl+C` lalu `npm start`) supaya data baru ke-load
-- Selama belum restart, bot masih pakai data lama di memory
+**Flow (v3.9.1+):**
+1. Bot kirim embed konfirmasi dengan 2 tombol: **Ya, Restore Sekarang** dan **Batal**
+2. Admin klik tombol → restore dijalankan
+3. Bot otomatis buat safety backup `pre-restore_*` sebelum overwrite (jaga-jaga kalau salah restore bisa undo)
+4. Setelah restore selesai, cache in-memory di-reload otomatis (sejak v3.9.1 — `statsManager.reload()`)
+5. **RESTART bot** (`Ctrl+C` lalu `npm start`) tetap direkomendasikan untuk konsistensi penuh
+
+**Proteksi (v3.9.1+):**
+- 2-step confirmation — tidak ada lagi restore tidak sengaja karena typo
+- Restore lock — kalau 2 admin klik restore bersamaan, hanya 1 yang jalan, yang lain ditolak
+- Path traversal guard — name backup divalidasi (tidak boleh mengandung `..`, `/`, `\`)
+- Pre-restore backup sekarang bisa juga di-restore (sebelumnya hanya muncul di list tapi tidak bisa di-restore)
 
 ---
 
@@ -391,10 +418,12 @@ Bot buat folder `backups/YYYY-MM-DD_HH-mm-ss/` berisi copy semua JSON files (con
 ### Audit log tidak terkirim
 - Cek `config.channels['audit-log']` sudah di-set via `/set-channel audit-log #channel`
 - Cek bot punya `Send Messages` + `Embed Links` + `View Audit Log` di channel itu
+- Sejak v3.9.2, audit log di-retry 1x otomatis bila gagal kirim karena rate limit/network
 
 ### Stats tidak update
 - Stats di-cache di memory, flush setiap 30 detik. Tunggu sebentar lalu cek lagi.
 - Kalau bot baru restart, stats lama tetap ada di `stats.json`.
+- Setelah restore backup, stats cache otomatis di-reload (sejak v3.9.1) — tidak perlu restart manual untuk stats.
 - Cek `/stats` untuk agregat server, `/my-stats` untuk pribadi.
 
 ### Tiket tidak bisa dibuat
@@ -409,8 +438,14 @@ Bot buat folder `backups/YYYY-MM-DD_HH-mm-ss/` berisi copy semua JSON files (con
 - Bisa pakai `/giveaway end id:gw_xxx` untuk force-end manual
 
 ### Setelah restore, data masih lama
-- Bot pakai data di memory. **RESTART bot** setelah restore.
-- Data JSON files sudah benar, tapi manager managers (keyManager, statsManager, dll) cache di memory.
+- Sejak v3.9.1, `statsManager.reload()` otomatis invalidate cache setelah restore.
+- Untuk konsistensi penuh, **RESTART bot** tetap direkomendasikan.
+- Manager lain (keyManager, roleScheduler, dll) baca dari disk setiap call — tidak ada cache.
+
+### Pesan "Tunggu sebentar, kamu lagi klik terlalu cepat"
+- Ini muncul kalau user double-click tombol Discord (giveaway/poll) dalam <100ms.
+- Lock otomatis release dalam 5 detik.
+- Coba klik sekali lagi setelah 1 detik — seharusnya sukses.
 
 ---
 
@@ -422,6 +457,7 @@ Bot buat folder `backups/YYYY-MM-DD_HH-mm-ss/` berisi copy semua JSON files (con
 3. Backup folder `backups/` juga jangan di-commit (berisi data sensitif)
 4. Periodically rotate token (1-2 bulan sekali) di Discord Developer Portal
 5. Limit admin role hanya ke orang yang dipercaya
+6. Cek `#audit-log` secara berkala untuk deteksi misuse admin
 
 ### Performance
 1. Jangan tambah >100 produk (bakal lambat di `/config-show` dan dropdown)
@@ -450,6 +486,43 @@ Bot buat folder `backups/YYYY-MM-DD_HH-mm-ss/` berisi copy semua JSON files (con
 
 ---
 
+## 10. Apa yang Baru di v3.9.x
+
+### v3.9.2 — Race condition & docs hardening
+- **Per-user lock** untuk giveaway join/leave & poll vote — mencegah double-click TOCTOU
+- **TTL cache 30s** untuk admin role check — kurangi disk I/O di setiap interaction
+- **Retry 1x** dengan delay 500ms untuk audit log — anti transient error (rate limit, network blip)
+- **Validasi panjang** title/description/field di embed builder (defense-in-depth)
+- **Dokumentasi**: update README.md, ADMIN_GUIDE.md, tambah CHANGELOG.md, perbaiki `.env.example`
+- **Versi**: package.json di-update ke 3.9.2
+
+### v3.9.1 — Security & race condition hardening
+- **Mask key di audit log** — sebelumnya bocor 8 char pertama key
+- **2-step confirmation** untuk `/restore-backup` — tidak ada lagi restore tidak sengaja
+- **Poll modal customId pakai session store** — anti 100-char Discord limit overflow
+- **Tiket metadata pindah ke `tickets.json`** — sebelumnya di channel topic (bisa di-spoof/edit)
+- **Validasi mention ketat** di `/announce` & `/announce-schedule`
+- **Hapus hardcoded `@everyone` ping** di giveaway creation
+- **`Math.max(...spread)` diganti loop** di keyManager (anti RangeError)
+- **Restore lock + path traversal guard** di backupManager
+- **`statsManager.reload()`** di-call setelah restore (anti stale cache)
+- **Range validation `parseTime`** di scheduledAnnouncements (maks 365 hari relatif, maks 5 tahun absolut)
+
+### v3.9.0 — Critical bug fixes & data integrity
+- **Atomic write** (`safeWriteJSON`) untuk semua 9 JSON store — anti corrupt kalau bot crash / power loss
+- **`/clear-schedule` di-scope per guild** — tidak bocor ke guild lain
+- **2-step confirmation** untuk `/reset-config` — anti reset tidak sengaja
+- **Exclusive mode** di self-role select — hanya 1 role pada satu waktu
+- **Prototype pollution guard** di `configManager.setField`
+- **`warnManager` keyed by `(guildId, userId)`** + auto-migration dari format lama
+- **`processExpiredRole` tidak hapus schedule** pada transient error
+- **Ghost loop fix** untuk recurring announcements saat channel dihapus
+- **Skip bots + single audit log fetch** di memberHandler
+
+Lihat [CHANGELOG.md](./CHANGELOG.md) dan `CHANGES_v3.9.0.md` / `CHANGES_v3.9.1.md` untuk detail teknis lengkap.
+
+---
+
 ## 📞 Bantuan
 
 Kalau ada masalah yang tidak ada di Troubleshooting:
@@ -462,6 +535,6 @@ Kalau ada masalah yang tidak ada di Troubleshooting:
 
 ---
 
-**Versi dokumen:** v3.7  
+**Versi dokumen:** v3.9.2  
 **Last updated:** July 2026  
-**Bot version:** 3.7.0
+**Bot version:** 3.9.2

@@ -18,6 +18,9 @@ const { get: getGiveaway, addParticipant: gwAddParticipant, removeParticipant: g
 const { get: getPoll, vote: votePoll, getByMessage: getPollByMessage, getTotalVotes: getPollTotalVotes, remove: removePoll, getPollSession, deletePollSession } = require('../utils/pollManager');
 const { create: createPoll, setMessageId: setPollMessageId } = require('../utils/pollManager');
 const { logAudit } = require('../utils/auditLog');
+// v3.9.2 FIX: per-user lock untuk mencegah TOCTOU race condition
+// kalau user double-click tombol Discord (giveaway join/leave, poll vote).
+const { withLock: withUserLock } = require('../utils/userLock');
 
 // P1-6 FIX: track interaction yang sudah diproses untuk hindari double-processing.
 // Sebelumnya modal submit lewat guard `replied/deferred` → bisa double-reply.
@@ -947,12 +950,22 @@ async function handleEmbedBuilderModal(interaction) {
 
     // === TITLE ===
     if (modalType === 'emb_modal_title') {
-        d.title = getFieldValue(0) || null;
+        // v3.9.2: validate Discord embed title limit (256 char)
+        const val = getFieldValue(0);
+        if (val && val.length > 256) {
+            return interaction.editReply({ content: `❌ Title terlalu panjang (${val.length} char, maks 256).` });
+        }
+        d.title = val || null;
     }
 
     // === DESCRIPTION ===
     else if (modalType === 'emb_modal_desc') {
-        d.description = getFieldValue(0) || null;
+        // v3.9.2: validate Discord embed description limit (4096 char)
+        const val = getFieldValue(0);
+        if (val && val.length > 4096) {
+            return interaction.editReply({ content: `❌ Description terlalu panjang (${val.length} char, maks 4096).` });
+        }
+        d.description = val || null;
     }
 
     // === COLOR ===
@@ -1025,6 +1038,15 @@ async function handleEmbedBuilderModal(interaction) {
         }
         if (d.fields.length >= 25) {
             return interaction.editReply({ content: '❌ Maksimal 25 field (batas Discord).' });
+        }
+        // v3.9.2: defense-in-depth — walau modal setMaxLength sudah membatasi,
+        // validasi lagi di sini supaya embed tidak throw di buildEmbed().
+        // Field name maks 256 char, value maks 1024 char (Discord API limit).
+        if (name.length > 256) {
+            return interaction.editReply({ content: `❌ Field name terlalu panjang (${name.length} char, maks 256).` });
+        }
+        if (value.length > 1024) {
+            return interaction.editReply({ content: `❌ Field value terlalu panjang (${value.length} char, maks 1024).` });
         }
         d.fields.push({ name, value, inline });
     }
@@ -1126,24 +1148,62 @@ async function handleGiveawayButton(interaction) {
             }
         }
 
-        // JOIN
-        if (action === 'gw_join') {
-            if (gw.participantIds.includes(interaction.user.id)) {
-                return interaction.reply({ content: 'ℹ️ Kamu sudah join giveaway ini.', flags: MessageFlags.Ephemeral });
+        // v3.9.2 FIX: wrap join/leave dalam per-user lock untuk mencegah
+        // TOCTOU race condition. Sebelumnya, 2 klik cepat (<100ms) bisa
+        // lolos cek `includes()` keduanya, lalu keduanya push userId →
+        // participant dobel. Lock memaksa klik kedua nunggu klik pertama
+        // selesai (di mana save() sudah menulis data terbaru ke disk).
+        const lockResult = await withUserLock('gw', interaction.user.id, async () => {
+            // Refresh gw dari disk di dalam lock supaya baca data terbaru
+            const gwFresh = getGiveaway(gwId);
+            if (!gwFresh) return { type: 'notfound' };
+            if (gwFresh.ended) return { type: 'ended' };
+
+            // JOIN
+            if (action === 'gw_join') {
+                if (gwFresh.participantIds.includes(interaction.user.id)) {
+                    return { type: 'already_joined' };
+                }
+                const updated = gwAddParticipant(gwId, interaction.user.id);
+                await updateGiveawayMessage(interaction, updated);
+                return { type: 'joined', total: updated.participantIds.length };
             }
-            const updated = gwAddParticipant(gwId, interaction.user.id);
-            await updateGiveawayMessage(interaction, updated);
-            return interaction.reply({ content: `✅ Kamu join giveaway **${gw.prize}**! 🎉\n👥 Total peserta: ${updated.participantIds.length}`, flags: MessageFlags.Ephemeral });
+
+            // LEAVE
+            if (action === 'gw_leave') {
+                if (!gwFresh.participantIds.includes(interaction.user.id)) {
+                    return { type: 'not_joined' };
+                }
+                const updated = gwRemoveParticipant(gwId, interaction.user.id);
+                await updateGiveawayMessage(interaction, updated);
+                return { type: 'left' };
+            }
+            return { type: 'noop' };
+        });
+
+        if (lockResult === null) {
+            // Lock gagal acquire — user klik terlalu cepat
+            return interaction.reply({
+                content: '⏳ Tunggu sebentar, kamu lagi klik terlalu cepat. Coba lagi dalam 1 detik.',
+                flags: MessageFlags.Ephemeral
+            });
         }
 
-        // LEAVE
-        if (action === 'gw_leave') {
-            if (!gw.participantIds.includes(interaction.user.id)) {
+        switch (lockResult.type) {
+            case 'notfound':
+                return interaction.reply({ content: '❌ Giveaway tidak ditemukan (mungkin sudah dihapus).', flags: MessageFlags.Ephemeral });
+            case 'ended':
+                return interaction.reply({ content: '❌ Giveaway sudah berakhir.', flags: MessageFlags.Ephemeral });
+            case 'already_joined':
+                return interaction.reply({ content: 'ℹ️ Kamu sudah join giveaway ini.', flags: MessageFlags.Ephemeral });
+            case 'not_joined':
                 return interaction.reply({ content: 'ℹ️ Kamu belum join giveaway ini.', flags: MessageFlags.Ephemeral });
-            }
-            const updated = gwRemoveParticipant(gwId, interaction.user.id);
-            await updateGiveawayMessage(interaction, updated);
-            return interaction.reply({ content: `🚪 Kamu keluar dari giveaway **${gw.prize}**.`, flags: MessageFlags.Ephemeral });
+            case 'joined':
+                return interaction.reply({ content: `✅ Kamu join giveaway **${gw.prize}**! 🎉\n👥 Total peserta: ${lockResult.total}`, flags: MessageFlags.Ephemeral });
+            case 'left':
+                return interaction.reply({ content: `🚪 Kamu keluar dari giveaway **${gw.prize}**.`, flags: MessageFlags.Ephemeral });
+            default:
+                return interaction.reply({ content: '❌ Tidak ada aksi yang dilakukan.', flags: MessageFlags.Ephemeral });
         }
     } catch (err) {
         console.error('Giveaway button error:', err);
@@ -1189,14 +1249,32 @@ async function handlePollButton(interaction) {
         const parts = interaction.customId.split(':');
         const pollId = parts[1];
         const optionIndex = parseInt(parts[2]);
-        const poll = getPoll(pollId);
-        if (!poll) {
+
+        // Pre-check cepat untuk feedback instan (tanpa lock)
+        const pollPre = getPoll(pollId);
+        if (!pollPre) {
             return interaction.reply({ content: '❌ Poll tidak ditemukan.', flags: MessageFlags.Ephemeral });
         }
-        if (poll.closed) {
+        if (pollPre.closed) {
             return interaction.reply({ content: '❌ Poll sudah ditutup.', flags: MessageFlags.Ephemeral });
         }
-        const result = votePoll(pollId, interaction.user.id, optionIndex);
+
+        // v3.9.2 FIX: per-user lock untuk mencegah TOCTOU race condition.
+        // Sebelumnya, 2 klik cepat di option yang sama (multiple=false)
+        // bisa: klik-1 toggle ON, klik-2 toggle OFF. Hasil: vote hilang
+        // padahal user merasa sudah vote. Lock memaksa klik-2 baca data
+        // terbaru setelah klik-1 selesai.
+        const result = await withUserLock('poll', interaction.user.id, () => {
+            return votePoll(pollId, interaction.user.id, optionIndex);
+        });
+
+        if (result === null) {
+            // Lock gagal — user klik terlalu cepat
+            return interaction.reply({
+                content: '⏳ Tunggu sebentar, kamu lagi klik terlalu cepat. Coba lagi dalam 1 detik.',
+                flags: MessageFlags.Ephemeral
+            });
+        }
         if (!result) {
             return interaction.reply({ content: '❌ Gagal vote. Option mungkin tidak valid.', flags: MessageFlags.Ephemeral });
         }

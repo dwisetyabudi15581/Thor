@@ -420,6 +420,10 @@ module.exports = async (interaction) => {
         }
         delete config.roles[tipe];
         saveConfig(config);
+        // v3.9.2: invalidate permissions cache kalau admin role dihapus
+        if (tipe === 'admin') {
+            try { require('../utils/permissions').invalidateAdminRoleCache(); } catch (_) {}
+        }
         await logAudit(interaction.client, { action: 'REMOVE_ROLE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Hapus role **${tipe}** dari config (sebelumnya: <@&${current}>)`, guildId: interaction.guild.id });
         return interaction.editReply({ content: `✅ Role **${tipe}** berhasil dihapus dari config.\n\n💡 Untuk set ulang, pakai: \`/set-role ${tipe} @role\`` });
     }

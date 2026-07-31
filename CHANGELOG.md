@@ -1,0 +1,127 @@
+# Changelog
+
+Semua perubahan penting pada bot ini akan didokumentasikan di file ini.
+
+Format mengikuti [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), dan
+versi mengikuti [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [3.9.2] — 2026-07-31
+
+### Added
+- `utils/userLock.js` — per-user in-process lock utility untuk mencegah TOCTOU race condition
+- Retry 1x dengan delay 500ms di `utils/auditLog.js` untuk error transient (rate limit, network blip)
+- Validasi panjang title (256), description (4096), field name (256), field value (1024) di embed builder modal submission — defense-in-depth walau modal sudah setMaxLength
+- TTL cache 30 detik untuk admin role ID di `utils/permissions.js` — kurangi disk I/O di setiap interaction
+- `invalidateAdminRoleCache()` — dipanggil otomatis saat `/set-role admin` atau `/remove-role admin`
+- File `CHANGELOG.md` ini
+- `.env.example` diperluas dengan catatan keamanan & cara dapat Guild ID
+
+### Changed
+- `package.json` version bump ke 3.9.2
+- `README.md` diupdate untuk refleksikan v3.9.x changes:
+  - Update header version
+  - Tambah section atomic JSON writes
+  - Tambah mention validation di `/announce`
+  - Tambah range validation di `/announce-schedule`
+  - Update `/restore-backup` description (2-step confirmation + reload cache)
+  - Update `/reset-config` description (2-step confirmation)
+  - Tambah section "Apa yang Baru di v3.9.x" di changelog
+- `ADMIN_GUIDE.md` diupdate:
+  - Update header version ke 3.9.2
+  - Tambah section 10 "Apa yang Baru di v3.9.x"
+  - Update section Backup & Restore dengan flow 2-step confirmation
+  - Update section Announce dengan format mention yang valid
+  - Tambah troubleshooting untuk pesan "klik terlalu cepat"
+  - Tambah troubleshooting untuk audit log retry
+
+### Fixed
+- **TOCTOU race condition di giveaway join/leave** — 2 klik cepat (<100ms) sebelumnya bisa lolos cek `includes()` keduanya lalu keduanya push userId → participant dobel. Sekarang di-wrap per-user lock.
+- **TOCTOU race condition di poll vote** — 2 klik cepat di option yang sama (multiple=false) sebelumnya bisa toggle ON lalu toggle OFF → vote hilang padahal user merasa sudah vote. Sekarang di-wrap per-user lock.
+- **`permissions.isAdmin` baca config sync di setiap call** — sebelumnya 50-100 disk read/detik untuk server aktif. Sekarang di-cache 30 detik, invalidate saat admin role berubah.
+- **`auditLog.logAudit` silent failure** — sebelumnya, satu error transient langsung bikin audit log hilang. Sekarang di-retry 1x.
+
+## [3.9.1] — 2026-07-31
+
+### CRITICAL
+- **Mask key di audit log** — sebelumnya `key.slice(0, 8) + '...'` bocor 8 char pertama key ke channel audit-log. Sekarang ganti dengan `***` + panjang key saja.
+- **2-step confirmation untuk `/restore-backup`** — sebelumnya langsung overwrite semua JSON file tanpa konfirmasi. Sekarang admin harus klik tombol "Ya, Restore Sekarang" dulu.
+- **Poll modal customId overflow 100-char Discord limit** — sebelumnya `poll_modal_create:<channelId>:<multiple>:<encodeURIComponent(question)>`. Kalau question panjang, Discord API reject modal-nya. Sekarang pakai in-memory session store dengan TTL 5 menit.
+- **Tiket metadata pindah dari channel topic ke `tickets.json`** — sebelumnya di channel topic yang bisa di-edit admin (spoofable) dan dibatasi 1024 char. Sekarang di JSON file dengan backward compat fallback ke topic parsing untuk tiket lama.
+
+### HIGH
+- **Validasi mention ketat di `/announce` & `/announce-schedule`** — sebelumnya admin bisa oper string bebas yang bisa trigger ping tidak diinginkan. Sekarang hanya `@everyone`, `@here`, `<@&ROLE_ID>`, `<@USER_ID>` yang diterima.
+- **Hapus hardcoded `@everyone` ping di giveaway creation** — sebelumnya setiap giveaway baru otomatis ping `@everyone`. Sekarang admin yang mau ping pakai `/announce` terpisah.
+- **`Math.max(...spread)` diganti loop di `keyManager.getMaxExpireAtByUserAndRole`** — anti RangeError pada kasus ekstrim dengan ratusan key aktif.
+- **Restore lock di `backupManager.restoreBackup`** — anti concurrent restore yang bisa corrupt data.
+- **Pre-restore backup sekarang bisa di-restore** — sebelumnya muncul di `/backup-list` tapi tidak bisa di-restore (regex mismatch). Sekarang regex di-update + path traversal guard.
+- **`statsManager.reload()` di-call setelah restore** — sebelumnya cache in-memory bisa overwrite data hasil restore saat periodic flush jalan.
+
+### MEDIUM
+- **Range validation `parseTime` di `scheduledAnnouncements`** — maks 365 hari untuk relative time, maks 5 tahun untuk absolute time, reject past time.
+
+## [3.9.0] — 2026-07-31
+
+### CRITICAL
+- **Atomic write via `safeWriteJSON`** — pattern `tmp + rename` untuk semua 9 JSON store (config, keys, scheduledRoles, selfRoles, giveaways, polls, warns, stats, scheduledAnns, tempVoice). Anti corrupt kalau bot crash / OOM / power loss saat write.
+- **`/clear-schedule` di-scope per guild** — sebelumnya hapus schedule user di SEMUA guild. Sekarang hanya di guild tempat command dijalankan.
+- **2-step confirmation untuk `/reset-config`** — sebelumnya langsung hapus SEMUA setting tanpa konfirmasi. Sekarang admin harus klik tombol konfirmasi dulu.
+- **Prototype pollution guard di `configManager.setField`** — reject path yang mengandung `__proto__`, `constructor`, `prototype`.
+
+### HIGH
+- **`warnManager` keyed by `(guildId, userId)`** — sebelumnya keyed by `userId` saja (bocor cross-guild). Sekarang di-scope per guild + auto-migration dari format lama.
+- **`processExpiredRole` tidak hapus schedule pada transient error** — sebelumnya, error transient (mis. Discord API 5xx) bikin schedule dihapus padahal role masih ada. Sekarang schedule tetap di-retry.
+- **Ghost loop fix untuk recurring announcements** — sebelumnya, kalau channel tujuan dihapus, recurring announcement tetap jalan forever (next fire tiap interval). Sekarang di-cancel otomatis.
+- **Exclusive mode di self-role select** — sebelumnya, `exclusive: true` di select menu tidak benar-benar eksklusif (role lain tetap bisa dipilih). Sekarang role lain otomatis dilepas.
+- **`/clear-schedule` skip-write optimization** — kalau tidak ada schedule yang perlu dihapus, skip write ke disk.
+
+### MEDIUM
+- **`memberHandler` skip bots** — sebelumnya, bot yang join/leave server trigger welcome/goodbye message. Sekarang di-skip.
+- **`memberHandler` single `fetchAuditLogs` call** — sebelumnya, 2 call (kick + ban check) yang redundan. Sekarang 1 call saja.
+
+## [3.8.5] — Temp Voice Global Panel
+
+### Added
+- Panel global: menampilkan daftar semua voice aktif (bukan focused owner/personal)
+- Button Info Room — lihat detail voice room (ephemeral)
+- Auto-transfer ownership saat owner leave dan masih ada member lain
+
+### Changed
+- Switch select: semua user bisa lihat info room (bukan owner-only)
+- Lock button: toggle otomatis (1 tombol, bukan 2)
+- Buat voice hanya via join trigger channel "🔊 Buat Voice" (hapus button dari panel)
+
+### Fixed
+- Audit log action mismatch (SETUP_SELFROLE → SETUP_TEMPVOICE)
+
+## [3.7] — Stability & Code Quality Release
+
+### Added
+- Refactor besar: index.js dipecah jadi 3 file (commandHandler, interactionHandler, memberHandler)
+- Audit log coverage: 14 action missing ditambahkan (total 24 action types)
+
+### Fixed
+- Bug fix race condition tiket, validasi input, ~20 perbaikan code quality
+
+## [3.6] — Temp Voice removed
+- Seluruh fitur Temp Voice dihapus (diperbaiki ulang di v3.8.5)
+
+## [3.5] — Critical bug fixes
+- statsManager caching, scheduler overlap guard, giveaway end/reroll, rollback zombie entries
+
+## [3.2] — audit, backup, giveaway, scheduled ann, warn, stats, poll
+
+## [3.0] — key-driven + self-role
+
+## [2.0] — Welcome/Goodbye, Verify, Ticket, Invoice, fully configurable
+
+## [1.0] — Versi awal
+
+---
+
+**Legend:**
+- **CRITICAL** — bug yang bisa cause data loss, security breach, atau crash
+- **HIGH** — bug yang cause incorrect behavior atau poor UX
+- **MEDIUM** — improvement yang tidak critical tapi nice to have
+- **Added** — fitur baru
+- **Changed** — perubahan pada existing functionality
+- **Fixed** — bug fix
