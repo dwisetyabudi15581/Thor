@@ -20,11 +20,11 @@
  * }
  *
  * Cara kerja:
- *   1. Admin setup via /setup-tempvoice → bot buat voice channel trigger + simpan config
- *   2. Member join trigger channel → bot bikin voice channel private untuk member tsb
+ *   1. Admin setup via /setup-tempvoice → bot buat kategori + trigger channel + control panel
+ *   2. Member join trigger channel "🔊 Buat Voice" → bot bikin voice channel private untuk member
  *   3. Member jadi owner, otomatis dipindah ke channel baru
- *   4. Bot kirim control panel (embed + button) ke channel teks (atau DM owner)
- *   5. Owner pakai button: rename, kick, limit, lock, unlock, transfer, delete
+ *   4. Panel global di control channel menampilkan semua voice aktif + button kontrol
+ *   5. Owner pakai button: rename, kick, limit, lock, transfer, delete, info room
  *   6. Saat owner leave dan channel kosong → bot hapus channel otomatis
  */
 

@@ -100,6 +100,13 @@ module.exports = async (interaction) => {
                     '• `/selfrole-list` — lihat semua panel',
                     '• `/selfrole-delete panel_id:` — hapus panel'
                 ].join('\n'), inline: false },
+                { name: '🎤 Temp Voice', value: [
+                    '• `/setup-tempvoice` — setup kategori + trigger channel + control panel',
+                    '• `/tempvoice-remove` — hapus semua setup temp voice',
+                    '💡 Member join channel "🔊 Buat Voice" → otomatis buat voice channel pribadi',
+                    '💡 Panel kontrol: Rename, Kick, Limit, Lock, Transfer, Delete, Info Room',
+                    '💡 Channel otomatis dihapus saat kosong'
+                ].join('\n'), inline: false },
                 { name: '📢 Announce & Embed Builder', value: [
                     '• `/announce channel:#ch title:... description:... color? image? thumbnail? mention?` — quick announce',
                     '• `/embed-builder` — interactive builder (live preview, edit bagian per bagian)',

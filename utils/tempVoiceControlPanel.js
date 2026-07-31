@@ -1,11 +1,12 @@
 /**
  * Temp Voice Control Panel Builder — render embed + button untuk panel kontrol GLOBAL.
  *
- * v3.8.5: Panel GLOBAL — tidak lagi fokus ke 1 owner (personal).
- *   - Idle: tampilkan tombol Buat Voice saja
- *   - Active: tampilkan daftar semua voice aktif + button kontrol
- *   - Button "Info Room" untuk lihat detail voice room (ephemeral)
- *   - Control buttons (Rename, Kick, Limit, Lock, Transfer, Delete) bekerja via auto-detect owner
+ * v3.8.5: Panel GLOBAL — menampilkan daftar semua voice aktif + button kontrol.
+ *   - Idle: tampilkan info cara buat voice
+ *   - Active: tampilkan daftar voice aktif + button kontrol (Rename, Kick, Limit, Lock, Transfer, Delete, Info Room)
+ *   - Buat voice hanya via join trigger channel "🔊 Buat Voice", tidak ada button di panel
+ *   - Info Room: tampilkan detail voice room (ephemeral)
+ *   - Control buttons bekerja via auto-detect owner
  *
  * Dipakai oleh refreshGlobalControlPanel() di index.js.
  */
@@ -130,7 +131,7 @@ function buildGlobalControlPanel(options = {}) {
         .setFooter({ text: `${guildName}` })
         .setTimestamp();
 
-    // Row 1: rename, kick, limit, lock/unlock
+    // Row 1: rename, kick, limit, lock
     const row1 = new ActionRowBuilder().addComponents(
         new ButtonBuilder()
             .setCustomId('tv_rename')

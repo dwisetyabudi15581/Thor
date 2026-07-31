@@ -6,7 +6,7 @@ const client = new Client({
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.GuildMembers,
-        GatewayIntentBits.GuildVoiceStates   // v3.8: untuk temp voice
+        GatewayIntentBits.GuildVoiceStates   // v3.8.5: untuk temp voice
     ],
     partials: [Partials.Channel, Partials.Message, Partials.GuildMember, Partials.User]
 });
@@ -26,7 +26,7 @@ const { incrementMessages: trackMessage, startAutoFlush: startStatsAutoFlush, sh
 // P3-6 REFACTOR: definisi command & scheduler tasks dipisah ke file terpisah supaya index.js lebih lean.
 const { getCommands } = require('./utils/commandDefinitions');
 const { processExpiredRole, processGiveawayEnd, processScheduledAnnouncement, attachToClient } = require('./utils/schedulerTasks');
-// v3.8: Temp Voice manager
+// v3.8.5: Temp Voice manager
 const tempVoiceManager = require('./utils/tempVoiceManager');
 
 // === ERROR HANDLER GLOBAL ===
@@ -245,9 +245,9 @@ client.on(Events.MessageCreate, async (message) => {
     } catch (_) {}
 });
 
-// === v3.8: TEMP VOICE — voiceStateUpdate handler ===
+// === v3.8.5: TEMP VOICE — voiceStateUpdate handler ===
 // Logic:
-//   1. Member join trigger channel → bikin voice baru untuk member, pindahkan
+//   1. Member join trigger channel "🔊 Buat Voice" → bikin voice baru, pindahkan member
 //   2. Member join/leave channel temp voice → refresh panel global
 //   3. Member leave channel temp voice → kalau channel kosong, hapus + refresh panel
 client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
