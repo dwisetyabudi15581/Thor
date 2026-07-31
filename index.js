@@ -282,10 +282,19 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
             }
         }
 
-        // === CASE 3: Member leave channel temp voice → hapus kalau kosong ===
+        // === CASE 3: Member leave channel temp voice ===
         if (oldChannelId && oldChannelId !== newChannelId) {
             const channelInfo = tempVoiceManager.getChannel(guildId, oldChannelId);
             if (channelInfo) {
+                const oldChannel = newState.guild.channels.cache.get(oldChannelId);
+
+                // v3.8.4: AUTO-TRANSFER — kalau yang leave adalah OWNER dan masih ada member lain,
+                // ownership otomatis pindah ke member lain (yang paling lama join).
+                // Ini supaya channel tidak kehilangan owner yang bisa kontrol.
+                if (channelInfo.ownerId === userId && oldChannel && oldChannel.members.size > 0) {
+                    await handleAutoTransferOwnership(newState.client, guildId, oldChannelId, channelInfo, oldChannel, userId);
+                }
+
                 // v3.8.2: kalau yang leave adalah focused owner, clear focus supaya
                 // panel balik ke tampilan default (owner terbaru)
                 if (channelInfo.ownerId === userId) {
@@ -295,7 +304,6 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
                     }
                 }
 
-                const oldChannel = newState.guild.channels.cache.get(oldChannelId);
                 if (oldChannel && oldChannel.members.size === 0) {
                     // Channel kosong → hapus
                     try {
@@ -309,7 +317,7 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
                         tempVoiceManager.unregisterChannel(guildId, oldChannelId);
                     }
                 }
-                // Refresh panel setelah leave (member count atau channel hilang)
+                // Refresh panel setelah leave (member count, owner, atau channel hilang)
                 await refreshGlobalControlPanel(newState.client, guildId);
             }
         }
@@ -317,6 +325,84 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
         console.error('VoiceStateUpdate Error:', err.message);
     }
 });
+
+/**
+ * v3.8.4: AUTO-TRANSFER OWNERSHIP saat owner leave voice channel.
+ *
+ * Logic:
+ *   1. Cari member lain yang masih di channel (selain owner lama)
+ *   2. Pilih member dengan joinedAt paling lama (paling senior di channel)
+ *   3. Update permission channel (lepas owner lama, beri owner baru)
+ *   4. Update tempVoiceManager.transferOwnership
+ *   5. Set focusedOwner ke owner baru (supaya panel tampilkan mereka)
+ *   6. Kirim notif ke owner baru via DM
+ *   7. Refresh panel global
+ *
+ * @param {Client} client
+ * @param {string} guildId
+ * @param {string} channelId
+ * @param {Object} channelInfo - info dari tempVoiceManager
+ * @param {VoiceChannel} voiceChannel - channel object
+ * @param {string} oldOwnerId - userId owner lama yang leave
+ */
+async function handleAutoTransferOwnership(client, guildId, channelId, channelInfo, voiceChannel, oldOwnerId) {
+    try {
+        // Cari member lain (selain owner lama) — pilih yang joinedAt paling lama
+        const otherMembers = voiceChannel.members.filter(m => m.id !== oldOwnerId);
+        if (otherMembers.size === 0) return; // tidak ada member lain
+
+        // Sort by joinedAt asc (paling lama join = paling senior)
+        const sorted = [...otherMembers.values()].sort((a, b) => {
+            const aTime = a.voice?.joinedTimestamp || a.joinedTimestamp || 0;
+            const bTime = b.voice?.joinedTimestamp || b.joinedTimestamp || 0;
+            return aTime - bTime;
+        });
+        const newOwner = sorted[0];
+        if (!newOwner) return;
+
+        const { PermissionFlagsBits: PFB } = require('discord.js');
+
+        // Update permission: lepas owner lama, beri owner baru
+        try {
+            await voiceChannel.permissionOverwrites.edit(oldOwnerId, {
+                [PFB.ManageChannels]: false,
+                [PFB.MoveMembers]: false,
+                [PFB.MuteMembers]: false,
+                [PFB.DeafenMembers]: false
+            });
+            await voiceChannel.permissionOverwrites.edit(newOwner.id, {
+                [PFB.ViewChannel]: true,
+                [PFB.Connect]: true,
+                [PFB.ManageChannels]: true,
+                [PFB.MoveMembers]: true,
+                [PFB.MuteMembers]: true,
+                [PFB.DeafenMembers]: true
+            });
+        } catch (err) {
+            console.warn(`⚠️ Gagal update permission saat auto-transfer: ${err.message}`);
+            return;
+        }
+
+        // Update manager
+        tempVoiceManager.transferOwnership(guildId, channelId, newOwner.id, newOwner.user.tag);
+
+        // Set focusedOwner ke owner baru supaya panel tampilkan mereka
+        tempVoiceManager.setFocusedOwner(guildId, newOwner.id);
+
+        // Notif owner baru via DM
+        try {
+            await newOwner.send(
+                `🎁 **Kamu sekarang owner voice channel: ${voiceChannel.name}**\n\n` +
+                `Ownership otomatis dipindahkan ke kamu karena owner sebelumnya (<@${oldOwnerId}>) keluar dari voice.\n\n` +
+                `🎛️ Kamu bisa kontrol channel ini lewat panel global temp voice di server. Klik tombol kontrol (Rename, Kick, Limit, dll) — bot akan otomatis deteksi channel kamu.`
+            );
+        } catch (_) {}
+
+        console.log(`🔄 Auto-transfer ownership channel ${channelId}: ${oldOwnerId} → ${newOwner.id} (${newOwner.user.tag})`);
+    } catch (err) {
+        console.error('Error auto-transfer ownership:', err.message);
+    }
+}
 
 /**
  * Handle saat member join trigger channel → bikin voice baru.
