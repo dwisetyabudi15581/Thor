@@ -84,14 +84,13 @@ function buildGlobalControlPanel(options = {}) {
     if (activeOwners.length === 0) {
         // Tidak ada voice aktif — tampilan idle
         const embed = new EmbedBuilder()
-            .setTitle('🎛️ TEMP VOICE CONTROL PANEL')
+            .setTitle('TEMP VOICE')
             .setDescription(
-                '**Status:** Tidak ada voice channel aktif.\n\n' +
-                `💡 **Join ke channel "🔊 Buat Voice"** untuk membuat voice channel pribadi.\n` +
-                `Setelah kamu jadi owner, panel ini akan otomatis menampilkan voice kamu di daftar aktif.`
+                'Tidak ada voice channel aktif.\n\n' +
+                `Join ke channel "🔊 Buat Voice" untuk membuat voice channel pribadi.`
             )
-            .setColor(0x95A5A6)
-            .setFooter({ text: `${guildName} • Temp Voice System` })
+            .setColor(0x2C2F33)
+            .setFooter({ text: `${guildName}` })
             .setTimestamp();
 
         return { embed, components: [] };
@@ -102,31 +101,33 @@ function buildGlobalControlPanel(options = {}) {
         (b.channelInfo.createdAt || 0) - (a.channelInfo.createdAt || 0)
     );
 
-    // Build description — daftar semua voice aktif (GLOBAL, bukan personal)
-    let description = `📋 **Voice Channel Aktif (${sorted.length}):**\n\n`;
+    // Build description — daftar voice aktif + keterangan button
+    let description = `**Voice Aktif (${sorted.length})**\n\n`;
 
-    for (let i = 0; i < Math.min(sorted.length, 15); i++) {
+    for (let i = 0; i < Math.min(sorted.length, 10); i++) {
         const o = sorted[i];
         const mc = o.voiceChannel?.members?.size || 0;
-        const limitPart = o.channelInfo.limit > 0 ? `/${o.channelInfo.limit}` : '';
         const lockIcon = o.channelInfo.locked ? ' 🔒' : '';
-        description += `• **${o.channelInfo.name}** — <@${o.channelInfo.ownerId}> (${mc}${limitPart} member${lockIcon})\n`;
+        description += `• ${o.channelInfo.name} — <@${o.channelInfo.ownerId}> (${mc}${lockIcon})\n`;
     }
-    if (sorted.length > 15) {
-        description += `• ... dan ${sorted.length - 15} lainnya\n`;
+    if (sorted.length > 10) {
+        description += `• ... +${sorted.length - 10} lainnya\n`;
     }
 
-    description += `\n**🎮 Kontrol (klik untuk pakai):**\n`;
-    description += `• ✏️ Rename • 🚫 Kick • 👥 Limit • 🔒 Lock • 🔄 Transfer • 🗑️ Delete • ℹ️ Info Room\n\n`;
-    description += `💡 Bot otomatis deteksi channel kamu saat klik tombol kontrol. Kamu harus berada di voice channel milikmu.\n`;
-    description += `💡 Klik **ℹ️ Info Room** untuk melihat detail voice room kamu.\n`;
-    description += `💡 **Buat voice baru:** Join ke channel "🔊 Buat Voice".`;
+    description += `\n**Tombol Kontrol:**\n`;
+    description += `✏️ Rename — Ubah nama channel\n`;
+    description += `🚫 Kick — Keluarkan member dari voice\n`;
+    description += `👥 Limit — Atur max member (0 = unlimited)\n`;
+    description += `🔒 Lock — Kunci/buka akses join\n`;
+    description += `🔄 Transfer — Pindah ownership\n`;
+    description += `🗑️ Delete — Hapus channel\n`;
+    description += `ℹ️ Info Room — Lihat detail voice room`;
 
     const embed = new EmbedBuilder()
-        .setTitle('🎛️ TEMP VOICE CONTROL PANEL')
+        .setTitle('TEMP VOICE')
         .setDescription(description)
-        .setColor(0x5865F2)
-        .setFooter({ text: `${guildName} • Temp Voice System • ${sorted.length} voice aktif` })
+        .setColor(0x2C2F33)
+        .setFooter({ text: `${guildName}` })
         .setTimestamp();
 
     // Row 1: rename, kick, limit, lock/unlock
@@ -207,37 +208,35 @@ function buildGlobalControlPanel(options = {}) {
  */
 function buildInfoRoomEmbed(channelInfo, voiceChannel, guildName = 'Server') {
     const memberCount = voiceChannel?.members?.size || 0;
-    const limitStr = channelInfo.limit === 0 ? '♾️ Tanpa batas' : `${channelInfo.limit} member`;
-    const lockStr = channelInfo.locked ? '🔒 Terkunci' : '🔓 Terbuka';
+    const limitStr = channelInfo.limit === 0 ? 'Unlimited' : `${channelInfo.limit}`;
+    const lockStr = channelInfo.locked ? 'Terkunci' : 'Terbuka';
     const createdDate = channelInfo.createdAt
         ? `<t:${Math.floor(channelInfo.createdAt / 1000)}:R>`
-        : 'Tidak diketahui';
+        : '-';
 
-    // List members in voice
     let memberList = '';
     if (voiceChannel?.members && voiceChannel.members.size > 0) {
         const members = [...voiceChannel.members.values()];
         for (const m of members) {
             const isOwner = m.id === channelInfo.ownerId;
-            memberList += `${isOwner ? '👑' : '•'} <@${m.id}>${isOwner ? ' **(Owner)**' : ''}\n`;
+            memberList += `${isOwner ? '👑' : '•'} <@${m.id}>${isOwner ? ' (Owner)' : ''}\n`;
         }
     } else {
-        memberList = 'Tidak ada member saat ini.';
+        memberList = '-';
     }
 
     const embed = new EmbedBuilder()
-        .setTitle(`ℹ️ INFO ROOM — ${channelInfo.name}`)
+        .setTitle(`${channelInfo.name}`)
         .setDescription(
-            `🔊 **Nama:** ${channelInfo.name}\n` +
-            `👑 **Owner:** <@${channelInfo.ownerId}> (${channelInfo.ownerTag})\n` +
-            `👥 **Member:** ${memberCount}${channelInfo.limit > 0 ? ` / ${channelInfo.limit}` : ''}\n` +
-            `📊 **Limit:** ${limitStr}\n` +
-            `${channelInfo.locked ? '🔒' : '🔓'} **Status:** ${lockStr}\n` +
-            `🕐 **Dibuat:** ${createdDate}\n\n` +
+            `👑 Owner: <@${channelInfo.ownerId}>\n` +
+            `👥 Member: ${memberCount}${channelInfo.limit > 0 ? ` / ${channelInfo.limit}` : ''}\n` +
+            `📊 Limit: ${limitStr}\n` +
+            `🔒 Status: ${lockStr}\n` +
+            `🕐 Dibuat: ${createdDate}\n\n` +
             `**Member di voice:**\n${memberList}`
         )
         .setColor(channelInfo.locked ? 0xE67E22 : 0x57F287)
-        .setFooter({ text: `${guildName} • Temp Voice System` })
+        .setFooter({ text: `${guildName}` })
         .setTimestamp();
 
     return { embed };
