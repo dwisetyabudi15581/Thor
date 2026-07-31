@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { safeWriteJSON } = require('./safeWrite');
 
 const configPath = path.join(__dirname, '..', 'config.json');
 
@@ -92,20 +93,36 @@ function getConfig() {
 
 /**
  * Simpan config.json dengan format rapi.
+ * v3.9.0 FIX: pakai safeWriteJSON (atomic write via tmp+rename) supaya
+ * kalau bot crash / OOM / power loss saat write, file config.json tidak
+ * corrupt (truncated / empty). Sebelumnya pakai fs.writeFileSync langsung.
  */
 function saveConfig(config) {
-    fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+    safeWriteJSON(configPath, config);
 }
 
 /**
  * Set nilai nested (mis. 'roles.admin' atau 'channels.welcome').
+ * v3.9.0 FIX: sanitize dotPath untuk cegah prototype pollution
+ * (mis. '__proto__.polluted' atau 'constructor.prototype.x').
  */
 function setField(dotPath, value) {
     const config = getConfig();
     const keys = dotPath.split('.');
+
+    // Reject keys yang bisa menyentuh Object.prototype
+    const FORBIDDEN_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+    for (const k of keys) {
+        if (FORBIDDEN_KEYS.has(k)) {
+            throw new Error(`Path "${dotPath}" mengandung key terlarang: ${k}`);
+        }
+    }
+
     let cur = config;
     for (let i = 0; i < keys.length - 1; i++) {
-        if (!cur[keys[i]]) cur[keys[i]] = {};
+        if (typeof cur[keys[i]] !== 'object' || cur[keys[i]] === null) {
+            cur[keys[i]] = {};
+        }
         cur = cur[keys[i]];
     }
     cur[keys[keys.length - 1]] = value;

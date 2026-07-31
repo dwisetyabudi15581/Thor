@@ -24,6 +24,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { safeWriteJSON } = require('./safeWrite');
 
 const filePath = path.join(__dirname, '..', 'giveaways.json');
 
@@ -37,8 +38,9 @@ function load() {
     }
 }
 
+// v3.9.0 FIX: atomic write via safeWriteJSON (tmp+rename) to prevent corruption on crash
 function save(list) {
-    fs.writeFileSync(filePath, JSON.stringify(list, null, 2));
+    safeWriteJSON(filePath, list);
 }
 
 function genId() {

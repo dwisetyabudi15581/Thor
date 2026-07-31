@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { safeWriteJSON } = require('./safeWrite');
 
 const scheduledPath = path.join(__dirname, '..', 'scheduledRoles.json');
 
@@ -38,8 +39,11 @@ function loadScheduled() {
     }
 }
 
+/**
+ * v3.9.0 FIX: atomic write via safeWriteJSON (tmp + rename).
+ */
 function saveScheduled(list) {
-    fs.writeFileSync(scheduledPath, JSON.stringify(list, null, 2));
+    safeWriteJSON(scheduledPath, list);
 }
 
 /**
@@ -203,6 +207,7 @@ function scheduleRoleRemoval(data) {
  * Update expireAt dari sebuah schedule entry (dipakai saat scheduler recheck).
  * Dipakai oleh index.js processExpiredRole ketika key aktif masih ada dengan
  * expireAt yang lebih besar → reschedule ke max.
+ * v3.9.0 FIX: skip write kalau nilai tidak berubah (hindari disk I/O + race window).
  *
  * @param {string} id - schedule entry id
  * @param {number} newExpireAt - timestamp ms baru
@@ -212,6 +217,7 @@ function updateExpireAt(id, newExpireAt) {
     const list = loadScheduled();
     const entry = list.find(e => e.id === id);
     if (!entry) return false;
+    if (entry.expireAt === newExpireAt) return true; // tidak ada perubahan, skip write
     entry.expireAt = newExpireAt;
     saveScheduled(list);
     return true;
@@ -219,10 +225,12 @@ function updateExpireAt(id, newExpireAt) {
 
 /**
  * Hapus entry dari scheduled list (biasanya setelah role berhasil di-remove).
+ * v3.9.0 FIX: skip write kalau entry tidak ditemukan (hindari disk I/O).
  */
 function removeEntry(id) {
     const list = loadScheduled();
     const filtered = list.filter(e => e.id !== id);
+    if (filtered.length === list.length) return; // tidak ada yang dihapus, skip write
     saveScheduled(filtered);
 }
 
@@ -261,11 +269,20 @@ function findAllByUser(userId) {
 
 /**
  * Hapus SEMUA schedule milik user tertentu.
+ * v3.9.0 FIX: tambah parameter guildId supaya cross-guild wipe tidak terjadi
+ * saat bot di-deploy multi-guild.
+ *   - guildId diberikan → hanya hapus entry yang match userId DAN guildId.
+ *   - guildId undefined → hapus semua entry user (backward compat).
  * @returns {number} jumlah yang dihapus
  */
-function removeAllByUser(userId) {
+function removeAllByUser(userId, guildId) {
     const list = loadScheduled();
-    const filtered = list.filter(e => e.userId !== userId);
+    let filtered;
+    if (guildId) {
+        filtered = list.filter(e => !(e.userId === userId && e.guildId === guildId));
+    } else {
+        filtered = list.filter(e => e.userId !== userId);
+    }
     const removed = list.length - filtered.length;
     if (removed > 0) saveScheduled(filtered);
     return removed;

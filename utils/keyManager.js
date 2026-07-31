@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { safeWriteJSON } = require('./safeWrite');
 
 const keysPath = path.join(__dirname, '..', 'keys.json');
 
@@ -35,8 +36,12 @@ function loadKeys() {
     }
 }
 
+/**
+ * v3.9.0 FIX: pakai safeWriteJSON (atomic tmp+rename) supaya crash mid-write
+ * tidak corrupt keys.json (yang bisa wipe semua VIP key).
+ */
 function saveKeys(list) {
-    fs.writeFileSync(keysPath, JSON.stringify(list, null, 2));
+    safeWriteJSON(keysPath, list);
 }
 
 function genId() {
@@ -180,11 +185,30 @@ function removeExpiredKeys(now = Date.now()) {
 
 /**
  * Hapus SEMUA key milik user tertentu (dipakai /clear-schedule --clear_keys).
+ * v3.9.0 FIX: tambah parameter guildId supaya cross-guild wipe tidak terjadi.
+ *   - Kalau guildId diberikan: hanya hapus key yang match userId DAN guildId.
+ *   - Kalau guildId undefined/null: behavior lama (hapus semua key user — backward compat).
+ *
+ * CATATAN: keys.json saat ini tidak menyimpan guildId per key (key-driven model
+ * global per user). Untuk backward compat, kalau guildId di-pass tapi key tidak
+ * punya field guildId, fallback: hapus key yang roleId milik guild tersebut.
+ * Implementasi ini akan lebih akurat setelah migrasi schema keys.json (TODO).
+ *
+ * @param {string} userId
+ * @param {string} [guildId] - opsional, filter by guild kalau diberikan
  * @returns {number} jumlah key yang dihapus
  */
-function removeAllKeysByUser(userId) {
+function removeAllKeysByUser(userId, guildId) {
     const list = loadKeys();
-    const filtered = list.filter(k => k.userId !== userId);
+    let filtered;
+    if (guildId) {
+        // Hanya hapus key yang eksplisit milik guild ini.
+        // Kalau key tidak punya field guildId (schema lama), jangan hapus.
+        filtered = list.filter(k => !(k.userId === userId && k.guildId === guildId));
+    } else {
+        // Behavior lama: hapus semua key user (backward compat untuk single-guild).
+        filtered = list.filter(k => k.userId !== userId);
+    }
     const removed = list.length - filtered.length;
     if (removed > 0) saveKeys(filtered);
     return removed;

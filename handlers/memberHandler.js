@@ -5,9 +5,15 @@ const { getConfig, fillTemplate } = require('../utils/configManager');
  * Member join:
  * 1. Beri role Unverified otomatis
  * 2. Kirim embed welcome ke channel welcome (pakai template pesan)
+ *
+ * v3.9.0 FIX: skip bot account (sebelumnya bot yang join juga dapat role unverified + welcome ping).
  */
 async function onMemberAdd(member) {
     const { guild, user } = member;
+
+    // v3.9.0: Skip bot account — bot tidak perlu welcome/verify
+    if (user.bot) return;
+
     const config = getConfig();
 
     // Track join untuk stats
@@ -65,9 +71,21 @@ async function onMemberAdd(member) {
  * Member keluar:
  * - Deteksi kick vs leave sukarela via audit log
  * - Kirim embed goodbye ke channel goodbye (pakai template pesan)
+ *
+ * v3.9.0 FIX:
+ *   1. Skip bot account.
+ *   2. Single fetchAuditLogs call (sebelumnya 2x — kick + ban terpisah).
+ *      Diskripsi: ambil 10 entry terbaru tanpa type filter, filter client-side.
+ *      Hemat 1 API call per member leave + lebih sedikit rate limit pressure.
+ *   3. Kalau fetchAuditLogs throw karena missing ViewAuditLog permission,
+ *      log warning sekali (bukan silent catch) supaya admin sadar.
  */
 async function onMemberRemove(member) {
     const { guild, user } = member;
+
+    // v3.9.0: Skip bot account
+    if (user.bot) return;
+
     const config = getConfig();
 
     if (!config.channels.goodbye) return;
@@ -78,31 +96,25 @@ async function onMemberRemove(member) {
     }
 
     // Cek audit log - apakah di-kick atau di-ban?
-    // P2-7 FIX: sebelumnya cuma fetch 1 entry + cek kick (type 20) saja.
-    // Sekarang: fetch 10 entry terbaru, cek kick (20) + ban (22),
-    // dan cocokkan by target.id (lebih akurat kalau ada multiple leave).
+    // v3.9.0: single fetchAuditLogs call, filter client-side untuk kick (20) dan ban (22).
     let action = 'keluar';
     const AUDIT_WINDOW_MS = 5 * 1000;
     try {
-        const audits = await guild.fetchAuditLogs({ limit: 10, type: 20 }); // MEMBER_KICK
-        const kickEntry = audits.entries.find(e =>
+        const audits = await guild.fetchAuditLogs({ limit: 25 }); // no type filter, ambil semua
+        const entry = audits.entries.find(e =>
+            (e.action === 20 || e.action === 22) && // MEMBER_KICK or MEMBER_BAN_ADD
             e.target?.id === user.id &&
             (Date.now() - e.createdTimestamp) < AUDIT_WINDOW_MS
         );
-        if (kickEntry) {
-            action = 'dikeluarkan (kick)';
-        } else {
-            // Cek juga ban (type 22)
-            const banAudits = await guild.fetchAuditLogs({ limit: 10, type: 22 }).catch(() => null);
-            const banEntry = banAudits?.entries?.find(e =>
-                e.target?.id === user.id &&
-                (Date.now() - e.createdTimestamp) < AUDIT_WINDOW_MS
-            );
-            if (banEntry) {
-                action = 'di-ban';
-            }
+        if (entry) {
+            action = entry.action === 22 ? 'di-ban' : 'dikeluarkan (kick)';
         }
-    } catch (_) { /* abaikan — mungkin tidak punya ViewAuditLog permission */ }
+    } catch (err) {
+        // v3.9.0: log warning (bukan silent) supaya admin sadar kalau bot kekurangan permission.
+        // Tapi jangan spam — hanya log sekali per event dengan pesan singkat.
+        console.warn(`⚠️ Tidak bisa akses audit log untuk goodbye <@${user.id}>: ${err.message?.slice(0, 80)}. ` +
+            `Pastikan bot punya permission View Audit Log.`);
+    }
 
     const vars = {
         user: `<@${user.id}>`,

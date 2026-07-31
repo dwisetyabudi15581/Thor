@@ -508,6 +508,19 @@ module.exports = async (interaction) => {
             return handleTempVoiceChannelSelect(interaction);
         }
 
+        // ====================================================
+        // === v3.9.0: RESET CONFIG — Confirmation button handlers ===
+        // ====================================================
+        if (interaction.isButton() && interaction.customId === 'reset_config_confirm') {
+            return handleResetConfigConfirm(interaction);
+        }
+        if (interaction.isButton() && interaction.customId === 'reset_config_cancel') {
+            return interaction.update({
+                content: '✅ Reset config dibatalkan. Tidak ada perubahan yang dilakukan.',
+                components: []
+            });
+        }
+
     } catch (err) {
         console.error('Interaction Handler Error:', err);
         if (interaction.isRepliable() && !interaction.replied && !interaction.deferred) {
@@ -589,14 +602,62 @@ async function handleSelfRoleSelect(interaction) {
     const selectedIds = new Set(interaction.values); // role IDs yang dipilih user
     const panelRoleIds = panel.roles.map(r => r.roleId);
 
+    // === v3.9.0 FIX: Implementasi mode EXCLUSIVE yang sebelumnya missing ===
+    // Mode exclusive: user hanya boleh punya 1 role dari panel pada satu waktu.
+    // Behavior:
+    //   - Kalau user pilih 1 role (atau lebih — Discord memungkinkan multi-select):
+    //     * Ambil role pertama yang dipilih sebagai "role aktif".
+    //     * Remove semua role panel lain yang sudah dimiliki user.
+    //     * Add role yang dipilih.
+    //   - Kalau user pilih 0 role (clear selection):
+    //     * Remove semua role panel yang dimiliki.
+    if (panel.exclusive) {
+        const targetRoleId = selectedIds.size > 0
+            ? interaction.values[0]  // role pertama yang dipilih
+            : null;
+
+        const toRemoveExclusive = panelRoleIds.filter(rid =>
+            rid !== targetRoleId && member.roles.cache.has(rid)
+        );
+        const toAddExclusive = targetRoleId && !member.roles.cache.has(targetRoleId)
+            ? [targetRoleId]
+            : [];
+
+        try {
+            if (toRemoveExclusive.length > 0) await member.roles.remove(toRemoveExclusive);
+            if (toAddExclusive.length > 0) await member.roles.add(toAddExclusive);
+        } catch (err) {
+            console.error('Self-role select (exclusive) error:', err.message);
+            return interaction.reply({
+                content: `❌ Gagal mengubah role. Pastikan role bot ada di ATAS role yang dipilih.`,
+                flags: MessageFlags.Ephemeral
+            });
+        }
+
+        const action = targetRoleId
+            ? `**Ditambahkan:** <@&${targetRoleId}>${toRemoveExclusive.length > 0 ? `\n**Dilepas (karena mode exclusive):** ${toRemoveExclusive.map(rid => `<@&${rid}>`).join(', ')}` : ''}`
+            : `**Dilepas:** ${toRemoveExclusive.length > 0 ? toRemoveExclusive.map(rid => `<@&${rid}>`).join(', ') : '(tidak ada)'}`;
+
+        await interaction.reply({
+            content: `✅ Role diperbarui (mode exclusive).\n${action}`,
+            flags: MessageFlags.Ephemeral
+        });
+
+        // Update select menu supaya pilihan ter-sync dengan role yang sekarang dimiliki
+        try {
+            const newComponents = buildPanelComponents(panel);
+            if (newComponents.length > 0) {
+                await interaction.message.edit({ components: newComponents });
+            }
+        } catch (err) {
+            console.warn('Gagal update select menu setelah pilih (exclusive):', err.message);
+        }
+        return;
+    }
+
+    // === Mode MULTI (default) — logic lama ===
     const toAdd = panelRoleIds.filter(rid => selectedIds.has(rid) && !member.roles.cache.has(rid));
     const toRemove = panelRoleIds.filter(rid => !selectedIds.has(rid) && member.roles.cache.has(rid));
-
-    // Untuk mode exclusive: hanya 1 role yang boleh, sisanya harus dihapus
-    if (panel.exclusive) {
-        // Hapus semua role panel lain yang sudah dimiliki tapi tidak dipilih
-        // Tambahkan role yang dipilih
-    }
 
     try {
         if (toRemove.length > 0) await member.roles.remove(toRemove);
@@ -2052,6 +2113,67 @@ async function handleTempVoiceChannelSelect(interaction) {
         console.error('TempVoice channel select error:', err);
         if (interaction.deferred && !interaction.replied) {
             await interaction.editReply({ content: `❌ Gagal: ${err.message}` }).catch(()=>{});
+        }
+    }
+}
+
+// ====================================================
+// === v3.9.0: HELPER — Reset Config Confirmation ===
+// ====================================================
+/**
+ * Handle tombol "Ya, Reset Total" yang muncul setelah admin jalankan /reset-config.
+ * Sebelumnya, /reset-config langsung hapus semua config tanpa konfirmasi.
+ * Sekarang, admin harus klik tombol ini untuk benar-benar reset.
+ */
+async function handleResetConfigConfirm(interaction) {
+    try {
+        const { saveConfig, DEFAULTS } = require('../utils/configManager');
+        const { logAudit } = require('../utils/auditLog');
+
+        // Verify admin permission (defense-in-depth, even though slash command already gated)
+        const { isAdmin } = require('../utils/permissions');
+        if (!isAdmin(interaction.member)) {
+            return interaction.update({
+                content: '❌ Kamu tidak punya permission admin. Reset dibatalkan.',
+                components: []
+            });
+        }
+
+        const fresh = {
+            roles: {},
+            channels: {},
+            messages: { ...DEFAULTS.messages },
+            colors: { ...DEFAULTS.colors },
+            products: []
+        };
+        saveConfig(fresh);
+
+        await logAudit(interaction.client, {
+            action: 'RESET_CONFIG',
+            actorId: interaction.user.id,
+            actorTag: interaction.user.tag,
+            details: '⚠️ RESET CONFIG TOTAL — semua setting dihapus (via 2-step confirm)',
+            guildId: interaction.guild.id
+        });
+
+        return interaction.update({
+            content: '⚠️ **SEMUA konfigurasi berhasil direset.**\n\n' +
+                'Sekarang config.json kosong. Silakan set ulang:\n' +
+                '• `/set-role verified @role`\n' +
+                '• `/set-role unverified @role`\n' +
+                '• `/set-role admin @role`\n' +
+                '• `/set-channel welcome #channel`\n' +
+                '• `/set-channel goodbye #channel`\n' +
+                '• `/set-channel invoice #channel`\n' +
+                '• `/add-product label value price duration`',
+            components: []
+        });
+    } catch (err) {
+        console.error('Reset config confirm error:', err);
+        if (interaction.deferred && !interaction.replied) {
+            await interaction.editReply({ content: `❌ Gagal reset: ${err.message}` }).catch(()=>{});
+        } else if (!interaction.replied) {
+            await interaction.update({ content: `❌ Gagal reset: ${err.message}`, components: [] }).catch(()=>{});
         }
     }
 }

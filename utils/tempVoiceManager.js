@@ -30,6 +30,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { safeWriteJSON } = require('./safeWrite');
 
 const filePath = path.join(__dirname, '..', 'tempVoice.json');
 
@@ -43,8 +44,9 @@ function load() {
     }
 }
 
+// v3.9.0 FIX: atomic write via safeWriteJSON (tmp+rename) to prevent corruption on crash
 function save(data) {
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+    safeWriteJSON(filePath, data);
 }
 
 /**

@@ -484,20 +484,31 @@ module.exports = async (interaction) => {
         });
     }
 
-    // === RESET CONFIG (hapus semua) ===
+    // === RESET CONFIG (hapus semua) — v3.9.0: dengan tombol konfirmasi 2-step ===
+    // Sebelumnya: 1 klik /reset-config → semua config hilang, tidak bisa undo.
+    // Sekarang: tampilkan tombol konfirmasi dulu, admin harus klik "Ya, Reset"
+    // untuk benar-benar reset. Mencegah fat-finger / misclick.
     if (interaction.commandName === 'reset-config') {
-        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-        const fresh = {
-            roles: {},
-            channels: {},
-            messages: { ...DEFAULTS.messages },
-            colors: { ...DEFAULTS.colors },
-            products: []
-        };
-        saveConfig(fresh);
-        await logAudit(interaction.client, { action: 'RESET_CONFIG', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `⚠️ RESET CONFIG TOTAL — semua setting dihapus`, guildId: interaction.guild.id });
-        return interaction.editReply({
-            content: '⚠️ **SEMUA konfigurasi berhasil direset.**\n\nSekarang config.json kosong. Silakan set ulang:\n• `/set-role verified @role`\n• `/set-role unverified @role`\n• `/set-role admin @role`\n• `/set-channel welcome #channel`\n• `/set-channel goodbye #channel`\n• `/set-channel invoice #channel`\n• `/add-product label value price duration`'
+        const { ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
+
+        const confirmBtn = new ButtonBuilder()
+            .setCustomId('reset_config_confirm')
+            .setLabel('⚠️ Ya, Reset Total')
+            .setStyle(ButtonStyle.Danger);
+        const cancelBtn = new ButtonBuilder()
+            .setCustomId('reset_config_cancel')
+            .setLabel('Batal')
+            .setStyle(ButtonStyle.Secondary);
+
+        const row = new ActionRowBuilder().addComponents(confirmBtn, cancelBtn);
+
+        return interaction.reply({
+            content: '🚨 **KONFIRMASI RESET CONFIG**\n\n' +
+                'Peringatan: ini akan menghapus **SEMUA** pengaturan (roles, channels, products, messages).\n' +
+                'Tidak bisa di-undo!\n\n' +
+                'Klik tombol di bawah untuk konfirmasi:',
+            components: [row],
+            flags: MessageFlags.Ephemeral
         });
     }
 
@@ -724,18 +735,22 @@ module.exports = async (interaction) => {
     // ====================================================
     // === /clear-schedule — HAPUS SCHEDULE (+ KEY) ===
     // ====================================================
+    // v3.9.0 FIX: pass guildId supaya cross-guild wipe tidak terjadi.
+    // Sebelumnya, removeAllByUser/removeAllKeysByUser hanya filter by userId,
+    // yang berarti admin di Guild A bisa wipe key + schedule user di Guild B.
     if (interaction.commandName === 'clear-schedule') {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         const user = interaction.options.getUser('user');
         const clearKeys = interaction.options.getBoolean('clear_keys') || false;
+        const guildId = interaction.guild.id;  // v3.9.0: scope to this guild only
 
-        // Hapus semua schedule milik user
-        const removedSched = removeAllSchedulesByUser(user.id);
+        // Hapus semua schedule milik user DI GUILD INI saja
+        const removedSched = removeAllSchedulesByUser(user.id, guildId);
 
-        // Hapus key kalau diminta
+        // Hapus key kalau diminta (juga scoped to guild)
         let removedKeys = 0;
         if (clearKeys) {
-            removedKeys = removeAllKeysByUser(user.id);
+            removedKeys = removeAllKeysByUser(user.id, guildId);
         }
 
         // Opsional: lepas semua role yang terkait schedule?
@@ -763,13 +778,13 @@ module.exports = async (interaction) => {
 
         const msg = `🧹 **Clear selesai!**\n\n` +
             `👤 User: <@${user.id}>\n` +
-            `📋 Schedule dihapus: **${removedSched}**\n` +
+            `📋 Schedule dihapus (guild ini): **${removedSched}**\n` +
             (clearKeys
-                ? `🔑 Key dihapus: **${removedKeys}**\n` +
+                ? `🔑 Key dihapus (guild ini): **${removedKeys}**\n` +
                   (rolesRemoved.length > 0 ? `🎭 Role dilepas: ${rolesRemoved.map(n => `\`${n}\``).join(', ')}\n` : '')
                 : `ℹ️ Key TIDAK dihapus (clear_keys=false). Pakai \`clear_keys:true\` untuk reset total VIP.\n`);
 
-        await logAudit(interaction.client, { action: 'CLEAR_SCHEDULE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Clear schedule <@${user.id}>: ${removedSched} schedule${clearKeys ? ` + ${removedKeys} key${rolesRemoved.length > 0 ? ` + ${rolesRemoved.length} role` : ''}` : ' (tanpa key)'}`, guildId: interaction.guild.id });
+        await logAudit(interaction.client, { action: 'CLEAR_SCHEDULE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Clear schedule <@${user.id}> di guild ${guildId}: ${removedSched} schedule${clearKeys ? ` + ${removedKeys} key${rolesRemoved.length > 0 ? ` + ${rolesRemoved.length} role` : ''}` : ' (tanpa key)'}`, guildId: interaction.guild.id });
 
         return interaction.editReply({ content: msg });
     }
@@ -1517,7 +1532,8 @@ module.exports = async (interaction) => {
             return interaction.editReply({ content: '❌ Kamu tidak bisa warn member dengan role setingkat/lebih tinggi dari kamu.' });
         }
 
-        const result = addWarn(user.id, {
+        // v3.9.0: addWarn sekarang scoped per guild (guildId, userId, data)
+        const result = addWarn(interaction.guild.id, user.id, {
             reason,
             warnedBy: interaction.user.id,
             warnedByTag: interaction.user.tag,
@@ -1539,11 +1555,11 @@ module.exports = async (interaction) => {
                     // Cari role mute (atau bikin timeout)
                     await member.timeout(durationMin * 60 * 1000, `Auto-action: ${result.count} warnings`).catch(()=>{});
                     actionMsg = `\n🔇 **Auto-action:** Timeout ${durationMin === 60 ? '1 jam' : '1 hari'} (${result.count} warnings)`;
-                    markActionTaken(user.id, result.warnEntry.id, result.actionToTake);
+                    markActionTaken(interaction.guild.id, user.id, result.warnEntry.id, result.actionToTake);
                 } else if (result.actionToTake === 'kick') {
                     await member.kick(`Auto-action: ${result.count} warnings`).catch(()=>{});
                     actionMsg = `\n👢 **Auto-action:** Kicked (${result.count} warnings)`;
-                    markActionTaken(user.id, result.warnEntry.id, result.actionToTake);
+                    markActionTaken(interaction.guild.id, user.id, result.warnEntry.id, result.actionToTake);
                 }
             } catch (err) {
                 actionMsg = `\n⚠️ Auto-action gagal: ${err.message}`;
@@ -1566,7 +1582,8 @@ module.exports = async (interaction) => {
     if (interaction.commandName === 'warn-list') {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         const user = interaction.options.getUser('user');
-        const warns = getWarns(user.id);
+        // v3.9.0: getWarns sekarang scoped per guild
+        const warns = getWarns(interaction.guild.id, user.id);
         if (warns.length === 0) {
             return interaction.editReply({ content: `✅ <@${user.id}> tidak punya warning.` });
         }
@@ -1587,23 +1604,25 @@ module.exports = async (interaction) => {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         const user = interaction.options.getUser('user');
         const warnId = interaction.options.getString('warn_id');
-        const ok = removeWarn(user.id, warnId);
+        // v3.9.0: removeWarn sekarang scoped per guild
+        const ok = removeWarn(interaction.guild.id, user.id, warnId);
         if (!ok) {
-            return interaction.editReply({ content: `❌ Warn ID \`${warnId}\` tidak ditemukan untuk user <@${user.id}>.` });
+            return interaction.editReply({ content: `❌ Warn ID \`${warnId}\` tidak ditemukan untuk user <@${user.id}> di guild ini.` });
         }
-        await logAudit(interaction.client, { action: 'WARN_REMOVE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Hapus warn \`${warnId}\` dari <@${user.id}>. Sisa: ${getWarnCount(user.id)} warn`, guildId: interaction.guild.id });
-        return interaction.editReply({ content: `✅ Warn \`${warnId}\` dihapus dari <@${user.id}>.\n📊 Sisa warnings: **${getWarnCount(user.id)}**` });
+        await logAudit(interaction.client, { action: 'WARN_REMOVE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Hapus warn \`${warnId}\` dari <@${user.id}>. Sisa: ${getWarnCount(interaction.guild.id, user.id)} warn`, guildId: interaction.guild.id });
+        return interaction.editReply({ content: `✅ Warn \`${warnId}\` dihapus dari <@${user.id}>.\n📊 Sisa warnings: **${getWarnCount(interaction.guild.id, user.id)}**` });
     }
 
     if (interaction.commandName === 'warn-clear') {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         const user = interaction.options.getUser('user');
-        const count = clearWarns(user.id);
+        // v3.9.0: clearWarns sekarang scoped per guild
+        const count = clearWarns(interaction.guild.id, user.id);
         if (count === 0) {
-            return interaction.editReply({ content: `ℹ️ <@${user.id}> memang tidak punya warning.` });
+            return interaction.editReply({ content: `ℹ️ <@${user.id}> memang tidak punya warning di guild ini.` });
         }
-        await logAudit(interaction.client, { action: 'WARN_REMOVE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Clear ALL warns (${count}) dari <@${user.id}>`, guildId: interaction.guild.id });
-        return interaction.editReply({ content: `✅ **${count}** warning dihapus dari <@${user.id}>.` });
+        await logAudit(interaction.client, { action: 'WARN_CLEAR_ALL', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Clear ALL warns (${count}) dari <@${user.id}> di guild ini`, guildId: interaction.guild.id });
+        return interaction.editReply({ content: `✅ **${count}** warning dihapus dari <@${user.id}> di guild ini.` });
     }
 
     // ====================================================

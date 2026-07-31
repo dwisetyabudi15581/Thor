@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const { safeWriteJSON } = require('./safeWrite');
 
 const selfRolesPath = path.join(__dirname, '..', 'selfRoles.json');
 
@@ -44,8 +45,9 @@ function loadPanels() {
     }
 }
 
+// v3.9.0 FIX: atomic write via safeWriteJSON (tmp+rename) to prevent corruption on crash
 function savePanels(list) {
-    fs.writeFileSync(selfRolesPath, JSON.stringify(list, null, 2));
+    safeWriteJSON(selfRolesPath, list);
 }
 
 function genId() {

@@ -28,6 +28,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { safeWriteJSON } = require('./safeWrite');
 
 const filePath = path.join(__dirname, '..', 'stats.json');
 const FLUSH_INTERVAL_MS = 30 * 1000; // 30 detik
@@ -66,10 +67,11 @@ function load() {
 /**
  * Flush cache ke disk kalau dirty. Tidak throw — log error saja.
  */
+// v3.9.0 FIX: atomic write via safeWriteJSON (tmp+rename) to prevent corruption on crash
 function flush() {
     if (!dirty || cache === null) return;
     try {
-        fs.writeFileSync(filePath, JSON.stringify(cache, null, 2));
+        safeWriteJSON(filePath, cache);
         dirty = false;
     } catch (err) {
         console.error('⚠️ Gagal flush stats.json:', err.message);

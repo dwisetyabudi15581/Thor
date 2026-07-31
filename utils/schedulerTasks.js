@@ -17,7 +17,7 @@
 const { getExpired, removeEntry, updateExpireAt } = require('./roleScheduler');
 const { hasPermanentKey, getMaxExpireAtByUserAndRole } = require('./keyManager');
 const { end: endGiveaway, pickWinners: pickGiveawayWinners } = require('./giveawayManager');
-const { markSent: markAnnSent } = require('./scheduledAnnouncements');
+const { markSent: markAnnSent, remove: removeAnn } = require('./scheduledAnnouncements');
 const { recordGiveawayWin: trackGiveawayWin } = require('./statsManager');
 
 /**
@@ -30,17 +30,23 @@ const { recordGiveawayWin: trackGiveawayWin } = require('./statsManager');
  *      b. Kalau ada key aktif dengan expireAt > now → reschedule ke max(expireAt).
  *         Role tetap. (ini kunci MAX EXTEND — schedule tidak boleh lebih pendek dari key terpanjang)
  *      c. Kalau tidak ada key aktif → hapus role + hapus schedule.
+ *
+ * v3.9.0 FIX: kalau terjadi transient error (Discord API 5xx, network blip),
+ * JANGAN hapus schedule entry. Sebelumnya, catch block selalu removeEntry
+ * yang bikin user keep role forever kalau error-nya transient. Sekarang,
+ * entry tetap ada untuk di-retry tick berikutnya.
  */
 async function processExpiredRole(client, entry) {
     try {
         const guild = await client.guilds.fetch(entry.guildId).catch(() => null);
         if (!guild) {
+            // Guild benar-benar hilang (bot di-kick) → safe to remove.
             removeEntry(entry.id);
             return;
         }
         const member = await guild.members.fetch(entry.userId).catch(() => null);
         if (!member) {
-            // User sudah leave, hapus entry
+            // User sudah leave guild → safe to remove.
             removeEntry(entry.id);
             return;
         }
@@ -78,14 +84,56 @@ async function processExpiredRole(client, entry) {
                     });
                 } catch (_) {}
             } catch (err) {
-                console.error(`Gagal hapus role ${entry.roleId} dari ${member.user.tag}:`, err.message);
+                // v3.9.0 FIX: kalau gagal hapus role, cek apakah error transient.
+                // Kalau transient (Discord 5xx, ECONNRESET, ETIMEDOUT), JANGAN hapus
+                // schedule entry — biarkan tick berikutnya retry.
+                // Kalau non-transient (Missing Permissions, Unknown Role), hapus entry
+                // supaya tidak stuck forever.
+                const isTransient = isTransientDiscordError(err);
+                if (isTransient) {
+                    console.warn(`⚠️ Gagal hapus role ${entry.roleId} dari ${member.user.tag} (transient: ${err.code || err.name}). Akan di-retry tick berikutnya. Entry TIDAK dihapus.`);
+                    return; // penting: jangan removeEntry
+                }
+                // Non-transient: log error, hapus entry supaya tidak loop forever.
+                console.error(`❌ Gagal hapus role ${entry.roleId} dari ${member.user.tag} (permanent: ${err.code || err.name}):`, err.message);
+                removeEntry(entry.id);
+                return;
             }
         }
         removeEntry(entry.id);
     } catch (err) {
-        console.error(`Error process expired role ${entry.id}:`, err.message);
+        // v3.9.0 FIX: hanya hapus entry kalau error-nya non-transient.
+        // Transient error (network blip) → biarkan tick berikutnya retry.
+        const isTransient = isTransientDiscordError(err);
+        if (isTransient) {
+            console.warn(`⚠️ Transient error di processExpiredRole ${entry.id} (${err.code || err.name}). Entry TIDAK dihapus, akan di-retry.`);
+            return;
+        }
+        console.error(`❌ Error process expired role ${entry.id} (permanent):`, err.message);
         removeEntry(entry.id);
     }
+}
+
+/**
+ * Deteksi apakah error adalah transient (network / Discord 5xx / rate limit).
+ * Transient errors seharusnya di-retry, bukan dianggap permanent failure.
+ */
+function isTransientDiscordError(err) {
+    if (!err) return false;
+    const code = err.code || '';
+    const status = err.status || 0;
+    const name = err.name || '';
+
+    // Network / timeout
+    if (['ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'EAI_AGAIN', 'ENOTFOUND', 'UND_ERR_CONNECT_TIMEOUT'].includes(code)) return true;
+    if (['ConnectTimeoutError', 'WebSocketClosedError'].includes(name)) return true;
+
+    // Discord 5xx (server error, transient)
+    if (status >= 500 && status < 600) return true;
+    // Rate limit (transient)
+    if (status === 429) return true;
+
+    return false;
 }
 
 /**
@@ -189,15 +237,31 @@ async function announceRerollWinner(client, gw, winnerId) {
 
 /**
  * Proses scheduled announcement yang sudah waktunya dikirim.
+ * v3.9.0 FIX: kalau channel target sudah tidak ada (dihapus admin), REMOVE entry
+ *   instead of markSent. Sebelumnya, markSent pada recurring announcement akan
+ *   membuat entry baru untuk next cycle → next cycle juga gagal karena channel
+ *   tetap tidak ada → bikin entry baru lagi → unbounded ghost entries yang
+ *   menumpuk dan ngabisin disk + scheduler time.
  */
 async function processScheduledAnnouncement(client, ann) {
     try {
         const { EmbedBuilder } = require('discord.js');
         const guild = await client.guilds.fetch(ann.guildId).catch(() => null);
-        if (!guild) { markAnnSent(ann.id); return; }
+        if (!guild) {
+            // Guild hilang (bot di-kick) → hapus entry supaya tidak ghost loop.
+            console.warn(`⚠️ Scheduled announce ${ann.id}: guild ${ann.guildId} tidak ditemukan, hapus entry.`);
+            removeAnn(ann.id);
+            return;
+        }
 
         const channel = guild.channels.cache.get(ann.channelId);
-        if (!channel) { markAnnSent(ann.id); return; }
+        if (!channel) {
+            // v3.9.0 FIX: channel sudah dihapus → REMOVE entry, jangan markSent
+            // (karena markSent untuk recurring akan bikin entry baru yang juga gagal).
+            console.warn(`⚠️ Scheduled announce ${ann.id}: channel ${ann.channelId} tidak ditemukan di guild ${guild.name}, hapus entry.`);
+            removeAnn(ann.id);
+            return;
+        }
 
         const d = ann.data;
         const embed = new EmbedBuilder()
