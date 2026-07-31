@@ -166,12 +166,52 @@ client.on(Events.InteractionCreate, async (interaction) => {
             await interactionHandler(interaction);
         }
     } catch (err) {
-        console.error('Interaction Error:', err);
-        if (interaction.isRepliable() && !interaction.replied && !interaction.deferred) {
-            interaction.reply({ content: '❌ Terjadi error.', flags: 64 }).catch(()=>{});
+        // FIX v3.7.1: klasifikasi error supaya logging tidak noisy untuk transient network issues.
+        //   - Transient (timeout, 5xx, ECONNRESET, ETIMEDOUT): warning ringan, jangan full stack
+        //   - DiscordAPIError known (4xx): warning + kode error
+        //   - Lainnya: full error stack (kemungkinan bug kode)
+        const isTransient = isTransientNetworkError(err);
+        if (isTransient) {
+            console.warn(`⚠️ Transient network error on interaction ${interaction.id}:`, err.code || err.name, '-', err.message?.slice(0, 100));
+        } else {
+            console.error('Interaction Error:', err);
+        }
+
+        // FIX v3.7.1: kalau transient, jangan coba reply (kemungkinan juga timeout).
+        // Coba reply hanya kalau bukan transient DAN belum replied/deferred.
+        if (!isTransient && interaction.isRepliable() && !interaction.replied && !interaction.deferred) {
+            interaction.reply({ content: '❌ Terjadi error. Coba lagi sebentar.', flags: 64 }).catch(()=>{});
         }
     }
 });
+
+/**
+ * Deteksi apakah error adalah transient network issue (timeout, koneksi, 5xx).
+ * Transient error tidak perlu full stack trace — cukup warning ringan.
+ */
+function isTransientNetworkError(err) {
+    if (!err) return false;
+    const name = err.name || '';
+    const code = err.code || '';
+    const status = err.status || 0;
+
+    // Network / timeout errors
+    if (name === 'ConnectTimeoutError') return true;
+    if (name === 'WebSocketClosedError') return true;
+    if (code === 'UND_ERR_CONNECT_TIMEOUT') return true;
+    if (code === 'ETIMEDOUT') return true;
+    if (code === 'ECONNRESET') return true;
+    if (code === 'ECONNREFUSED') return true;
+    if (code === 'EAI_AGAIN') return true; // DNS temp fail
+    if (code === 'ENOTFOUND') return true;
+
+    // Discord 5xx server errors (transient)
+    if (status >= 500 && status < 600) return true;
+    // Discord 429 rate limit (transient)
+    if (status === 429) return true;
+
+    return false;
+}
 
 // === MEMBER EVENTS (welcome / goodbye / auto role) ===
 client.on(Events.GuildMemberAdd, async (member) => {

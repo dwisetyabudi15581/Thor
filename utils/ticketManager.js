@@ -6,6 +6,12 @@ const { getConfig } = require('./configManager');
 // (channel belum dibuat) → 2 tiket terbuat. Sekarang: lock per userId sampai selesai.
 const ticketLocks = new Map();
 
+// FIX v3.7.1: per-channel close lock — cegah double-close race condition.
+// Skenario: admin klik "Tutup Tiket" → network lambat → admin klik lagi →
+// 2 closeTicket jalan bersamaan → salah satunya dapat "Unknown Channel".
+// Lock ini memastikan hanya 1 closeTicket per channel pada satu waktu.
+const closeTicketLocks = new Set();
+
 /**
  * Buat channel tiket baru.
  * Tiket transaksi menampilkan tombol "Set Key" + "Tutup Tiket".
@@ -146,11 +152,34 @@ async function sendInvoice(channel, userId, productName, price, closer) {
  * Tutup tiket — HANYA hapus channel + kirim invoice (kalau sukses).
  * Role granting & key delivery sekarang ditangani oleh Set Key button.
  *
+ * FIX v3.7.1:
+ *   - Per-channel lock mencegah double-close race condition
+ *   - Handle DiscordAPIError 10003 (Unknown Channel) sebagai sukses —
+ *     channel sudah tidak ada, yang artinya tujuan close sudah tercapai
+ *     (mungkin dihapus admin lain atau close sebelumnya berhasil tapi
+ *     reply-nya timeout).
+ *   - Invoice failure tidak block close (log warning saja)
+ *
  * @param {Channel} channel - channel tiket
  * @param {User} closer - admin yang menutup
  * @param {boolean} isSuccess - true kalau transaksi sukses (kirim invoice), false kalau batal
  */
 async function closeTicket(channel, closer, isSuccess) {
+    const channelId = channel?.id;
+
+    // FIX v3.7.1: skip kalau channel sudah tidak ada (partial/deleted)
+    if (!channelId) {
+        console.log('ℹ️ closeTicket dipanggil tanpa channel valid — skip.');
+        return;
+    }
+
+    // FIX v3.7.1: cegah double-close — kalau channel ini sedang di-close, skip.
+    if (closeTicketLocks.has(channelId)) {
+        console.log(`⏭️ Channel ${channelId} sedang di-close, skip double-close.`);
+        return;
+    }
+    closeTicketLocks.add(channelId);
+
     try {
         const topic = channel.topic || '';
         // P3-12 FIX: pakai [^|]+? supaya label yang mengandung " | " tidak ter-truncate.
@@ -163,15 +192,35 @@ async function closeTicket(channel, closer, isSuccess) {
         const price = priceMatch ? priceMatch[1].trim() : 'Unknown';
 
         // Kirim invoice kalau sukses & bukan tiket help/report
+        // FIX v3.7.1: invoice failure tidak boleh block close — log warning saja.
         if (isSuccess && userId) {
-            await sendInvoice(channel, userId, productName, price, closer);
+            try {
+                await sendInvoice(channel, userId, productName, price, closer);
+            } catch (invoiceErr) {
+                console.warn(`⚠️ Gagal kirim invoice saat close ticket ${channelId}:`, invoiceErr.message);
+            }
         }
 
         // Hapus channel
-        await channel.delete();
+        // FIX v3.7.1: handle 10003 (Unknown Channel) sebagai sukses.
+        try {
+            await channel.delete();
+        } catch (deleteErr) {
+            // DiscordAPIError code 10003 = Unknown Channel — sudah dihapus.
+            // Anggap sukses karena tujuan close sudah tercapai.
+            if (deleteErr.code === 10003) {
+                console.log(`ℹ️ Channel ${channelId} sudah tidak ada (kemungkinan dihapus admin lain atau close sebelumnya). Anggap sukses.`);
+            } else {
+                // Error lain (permission, network) — log tapi jangan crash
+                console.warn(`⚠️ Gagal hapus channel ${channelId}:`, deleteErr.message);
+            }
+        }
     } catch (err) {
-        console.error('Error closing ticket:', err);
-        try { await channel.delete(); } catch (_) {}
+        // Error saat parse topic atau operasi lain — log tapi jangan crash
+        console.error('Error closing ticket:', err.message);
+    } finally {
+        // FIX v3.7.1: pastikan lock dilepas walau ada error.
+        closeTicketLocks.delete(channelId);
     }
 }
 
