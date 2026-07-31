@@ -491,8 +491,11 @@ function getCommands() {
         // === TEMP VOICE ===
         {
             name: 'setup-tempvoice',
-            description: 'Pasang panel "Buat Voice Channel" pribadi (member bisa bikin voice sendiri + kontrol penuh)',
-            defaultMemberPermissions: PermissionFlagsBits.ManageGuild
+            description: 'Pasang panel temp voice + control panel global di channel teks tertentu',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
+            options: [
+                { type: 7, name: 'control_channel', description: 'Channel teks tempat panel kontrol global dipasang', required: true }
+            ]
         },
         {
             name: 'tempvoice-remove',

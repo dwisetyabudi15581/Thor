@@ -147,7 +147,7 @@ function buildTransferSelectMenu(voiceChannel, ownerId) {
 }
 
 /**
- * Build embed untuk panel setup (yang dipasang admin).
+ * Build embed untuk panel setup (yang dipasang admin di channel teks).
  */
 function buildSetupPanelEmbed() {
     return new EmbedBuilder()
@@ -178,11 +178,136 @@ function buildSetupPanelComponents() {
     );
 }
 
+// ====================================================
+// === v3.8.1: GLOBAL CONTROL PANEL — single persistent message ===
+// ====================================================
+
+/**
+ * Build embed + components untuk panel kontrol GLOBAL.
+ *
+ * Panel ini dipasang sekali oleh admin di control channel (channel teks).
+ * Saat ada owner voice aktif → embed menampilkan info owner + button kontrol.
+ * Saat tidak ada voice aktif → embed balik ke "tidak ada voice aktif" + hanya tombol Buat.
+ *
+ * @param {Object} options - { activeOwners: [{channelId, channelInfo, voiceChannel}], guildName }
+ * @returns {Object} { embed, components }
+ */
+function buildGlobalControlPanel(options = {}) {
+    const { activeOwners = [], guildName = 'Server' } = options;
+
+    if (activeOwners.length === 0) {
+        // Tidak ada voice aktif — tampilan idle
+        const embed = new EmbedBuilder()
+            .setTitle('🎛️ TEMP VOICE CONTROL PANEL')
+            .setDescription(
+                '**Status:** Tidak ada voice channel aktif.\n\n' +
+                `👇 **Klik tombol "🎤 Buat Voice" di bawah** untuk membuat voice channel pribadi.\n\n` +
+                `💡 Setelah kamu jadi owner, panel ini akan otomatis menampilkan kontrol untuk channel kamu (rename, kick, limit, lock, dll).`
+            )
+            .setColor(0x95A5A6)
+            .setFooter({ text: `${guildName} • Temp Voice System` })
+            .setTimestamp();
+
+        const components = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId('tv_create')
+                .setLabel('Buat Voice')
+                .setEmoji('🎤')
+                .setStyle(ButtonStyle.Success)
+        );
+
+        return { embed, components: [components] };
+    }
+
+    // v3.8.1: sort activeOwners by createdAt desc (paling baru pertama)
+    // supaya panel menampilkan owner terbaru.
+    const sorted = [...activeOwners].sort((a, b) =>
+        (b.channelInfo.createdAt || 0) - (a.channelInfo.createdAt || 0)
+    );
+
+    // Ada voice aktif — tampilan kontrol owner
+    const owner = sorted[0]; // Ambil owner pertama (yang paling baru)
+    const { channelInfo, voiceChannel } = owner;
+    const memberCount = voiceChannel?.members?.size || 0;
+    const limitStr = channelInfo.limit === 0 ? '♾️ Tanpa batas' : `${channelInfo.limit} member`;
+    const lockStr = channelInfo.locked ? '🔒 Terkunci' : '🔓 Terbuka';
+
+    let description =
+        `**🎙️ Channel Aktif Milik:** <@${channelInfo.ownerId}>\n` +
+        `🔊 **Nama:** ${channelInfo.name}\n` +
+        `👥 **Member:** ${memberCount}${channelInfo.limit > 0 ? ` / ${channelInfo.limit}` : ''}\n` +
+        `📊 **Limit:** ${limitStr}\n` +
+        `${channelInfo.locked ? '🔒' : '🔓'} **Status:** ${lockStr}\n\n`;
+
+    if (activeOwners.length > 1) {
+        description += `ℹ️ Ada **${activeOwners.length}** voice aktif. Panel ini menampilkan kontrol untuk owner terbaru (<@${channelInfo.ownerId}>).\n`;
+        description += `Owner lain bisa pakai kontrol dengan cara: keluar dari voice kamu, lalu panel akan refresh ke owner berikutnya.\n\n`;
+    }
+
+    description +=
+        `**🎮 Kontrol (klik untuk pakai):**\n` +
+        `• ✏️ Rename • 🚫 Kick • 👥 Limit • ${channelInfo.locked ? '🔓 Unlock' : '🔒 Lock'} • 🔄 Transfer • 🗑️ Delete\n\n` +
+        `💡 Hanya owner (<@${channelInfo.ownerId}>) yang bisa pakai kontrol di bawah.`;
+
+    const embed = new EmbedBuilder()
+        .setTitle('🎛️ TEMP VOICE CONTROL PANEL')
+        .setDescription(description)
+        .setColor(channelInfo.locked ? 0xE67E22 : 0x57F287)
+        .setFooter({ text: `${guildName} • Owner: ${channelInfo.ownerTag}` })
+        .setTimestamp();
+
+    // Row 1: rename, kick, limit, lock/unlock
+    const row1 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId('tv_rename')
+            .setLabel('Rename')
+            .setEmoji('✏️')
+            .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+            .setCustomId('tv_kick')
+            .setLabel('Kick')
+            .setEmoji('🚫')
+            .setStyle(ButtonStyle.Danger),
+        new ButtonBuilder()
+            .setCustomId('tv_limit')
+            .setLabel('Limit')
+            .setEmoji('👥')
+            .setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder()
+            .setCustomId(channelInfo.locked ? 'tv_unlock' : 'tv_lock')
+            .setLabel(channelInfo.locked ? 'Unlock' : 'Lock')
+            .setEmoji(channelInfo.locked ? '🔓' : '🔒')
+            .setStyle(channelInfo.locked ? ButtonStyle.Success : ButtonStyle.Secondary)
+    );
+
+    // Row 2: transfer, delete, + buat voice baru
+    const row2 = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId('tv_transfer')
+            .setLabel('Transfer Owner')
+            .setEmoji('🔄')
+            .setStyle(ButtonStyle.Primary),
+        new ButtonBuilder()
+            .setCustomId('tv_delete')
+            .setLabel('Delete Channel')
+            .setEmoji('🗑️')
+            .setStyle(ButtonStyle.Danger),
+        new ButtonBuilder()
+            .setCustomId('tv_create')
+            .setLabel('Buat Voice Baru')
+            .setEmoji('🎤')
+            .setStyle(ButtonStyle.Success)
+    );
+
+    return { embed, components: [row1, row2] };
+}
+
 module.exports = {
     buildControlEmbed,
     buildControlComponents,
     buildKickSelectMenu,
     buildTransferSelectMenu,
     buildSetupPanelEmbed,
-    buildSetupPanelComponents
+    buildSetupPanelComponents,
+    buildGlobalControlPanel
 };

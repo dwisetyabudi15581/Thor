@@ -48,15 +48,43 @@ function save(data) {
 }
 
 /**
- * Setup temp voice untuk guild: simpan trigger channel + category.
+ * Setup temp voice untuk guild: simpan trigger channel + category + control channel.
+ *
+ * @param {string} guildId
+ * @param {string} creatorChannelId - voice channel trigger (member join → bikin baru)
+ * @param {string} categoryId - kategori tempat channel baru dibuat
+ * @param {string} controlChannelId - text channel tempat panel kontrol global dipasang
  */
-function setupGuild(guildId, creatorChannelId, categoryId) {
+function setupGuild(guildId, creatorChannelId, categoryId, controlChannelId) {
     const all = load();
     if (!all[guildId]) all[guildId] = { channels: {} };
     all[guildId].creatorChannelId = creatorChannelId;
     all[guildId].categoryId = categoryId;
+    all[guildId].controlChannelId = controlChannelId;
     save(all);
     return all[guildId];
+}
+
+/**
+ * Simpan controlMessageId (pesan panel global yang sudah dipasang).
+ * Dipakai untuk edit panel yang sama (refresh) saat ada perubahan.
+ */
+function setControlMessageId(guildId, messageId) {
+    const all = load();
+    if (!all[guildId]) all[guildId] = { channels: {} };
+    all[guildId].controlMessageId = messageId;
+    save(all);
+    return all[guildId];
+}
+
+function getControlChannelId(guildId) {
+    const cfg = getGuildConfig(guildId);
+    return cfg?.controlChannelId || null;
+}
+
+function getControlMessageId(guildId) {
+    const cfg = getGuildConfig(guildId);
+    return cfg?.controlMessageId || null;
 }
 
 /**
@@ -167,6 +195,9 @@ module.exports = {
     removeGuild,
     getGuildConfig,
     getCreatorChannelId,
+    setControlMessageId,
+    getControlChannelId,
+    getControlMessageId,
     registerChannel,
     unregisterChannel,
     getChannel,

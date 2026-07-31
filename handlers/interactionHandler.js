@@ -1279,6 +1279,10 @@ async function handlePollModalCreate(interaction) {
 /**
  * Helper: cari voice channel yang di-owner oleh interaction.user.
  * Bisa dari interaction guild (klik button di server) atau DM (klik button di DM).
+ *
+ * v3.8.1: cek juga apakah owner saat ini sedang berada di voice channelnya.
+ * Kalau owner sudah tidak di voice (channel mungkin kosong atau dia sudah leave),
+ * button di panel global tidak akan bisa dieksekusi — tampilkan pesan jelas.
  */
 async function findOwnerVoiceChannel(interaction) {
     const tempVoiceManager = require('../utils/tempVoiceManager');
@@ -1298,6 +1302,31 @@ async function findOwnerVoiceChannel(interaction) {
         }
     }
     return null;
+}
+
+/**
+ * v3.8.1: Helper untuk guard button control panel.
+ * Cek apakah user yang klik adalah owner dari voice channel yang sedang aktif
+ * (yang ditampilkan di panel global).
+ *
+ * Returns: { ok: true, found } kalau owner valid, { ok: false, reason } kalau tidak.
+ */
+async function requireTempVoiceOwner(interaction) {
+    const found = await findOwnerVoiceChannel(interaction);
+    if (!found) {
+        return {
+            ok: false,
+            reason: '❌ Kamu tidak punya voice channel aktif. Klik **🎤 Buat Voice** dulu untuk bikin channel sendiri.'
+        };
+    }
+    // Cek apakah owner saat ini sedang di voice channelnya
+    if (!found.channel.members.has(found.channelInfo.ownerId)) {
+        return {
+            ok: false,
+            reason: `❌ Kamu harus berada di voice channel kamu (${found.channel}) untuk pakai kontrol ini.`
+        };
+    }
+    return { ok: true, found };
 }
 
 /**
@@ -1352,14 +1381,11 @@ async function handleTempVoiceCreate(interaction) {
 
         tempVoiceManager.registerChannel(interaction.guild.id, newChannel.id, member.id, member.user.tag, newChannel.name);
 
-        // Kirim control panel ke DM
-        const { buildControlEmbed, buildControlComponents } = require('../utils/tempVoiceControlPanel');
-        const channelInfo = tempVoiceManager.getChannel(interaction.guild.id, newChannel.id);
-        const embed = buildControlEmbed(channelInfo, newChannel, member.user);
-        const components = buildControlComponents(channelInfo);
-        try {
-            await member.send({ content: `🎛️ Control panel voice channel kamu: **${newChannel.name}**`, embeds: [embed], components });
-        } catch (_) {}
+        // v3.8.1: TIDAK kirim DM owner — control panel sudah global di control channel.
+        // Refresh panel global supaya menampilkan kontrol untuk owner baru.
+        if (typeof interaction.client.refreshGlobalControlPanel === 'function') {
+            await interaction.client.refreshGlobalControlPanel(interaction.client, interaction.guild.id);
+        }
 
         // Pindahkan member ke channel baru kalau sedang di voice
         if (member.voice.channelId) {
@@ -1367,7 +1393,7 @@ async function handleTempVoiceCreate(interaction) {
         }
 
         return interaction.editReply({
-            content: `✅ Voice channel dibuat: ${newChannel}\n\n📬 Control panel sudah dikirim ke DM kamu. Klik button di DM untuk atur channel (rename, kick, limit, lock, dll).`
+            content: `✅ Voice channel dibuat: ${newChannel}\n\n🎛️ **Control panel ada di control channel** — lihat panel global temp voice untuk kontrol (rename, kick, limit, lock, dll).`
         });
     } catch (err) {
         console.error('TempVoice create error:', err);
@@ -1384,6 +1410,11 @@ async function handleTempVoiceCreate(interaction) {
  */
 async function handleTempVoiceRename(interaction) {
     try {
+        // v3.8.1: cek owner valid sebelum buka modal
+        const check = await requireTempVoiceOwner(interaction);
+        if (!check.ok) {
+            return interaction.reply({ content: check.reason, flags: MessageFlags.Ephemeral });
+        }
         const modal = new ModalBuilder()
             .setCustomId('tv_modal_rename')
             .setTitle('✏️ Rename Voice Channel');
@@ -1418,12 +1449,12 @@ async function handleTempVoiceRenameSubmit(interaction) {
             return interaction.editReply({ content: '❌ Nama tidak boleh kosong.' });
         }
 
-        const found = await findOwnerVoiceChannel(interaction);
-        if (!found) {
-            return interaction.editReply({ content: '❌ Kamu tidak punya voice channel aktif. Buat dulu lewat panel atau join trigger channel.' });
+        const check = await requireTempVoiceOwner(interaction);
+        if (!check.ok) {
+            return interaction.editReply({ content: check.reason });
         }
-
-        const { guild, channel, channelId, channelInfo } = found;
+        const found = check.found;
+        const { guild, channel, channelId } = found;
         try {
             await channel.setName(newName.slice(0, 100));
         } catch (err) {
@@ -1432,6 +1463,11 @@ async function handleTempVoiceRenameSubmit(interaction) {
 
         const tempVoiceManager = require('../utils/tempVoiceManager');
         tempVoiceManager.updateChannel(guild.id, channelId, { name: newName.slice(0, 100) });
+
+        // v3.8.1: refresh panel global supaya nama baru ter-update
+        if (typeof interaction.client.refreshGlobalControlPanel === 'function') {
+            await interaction.client.refreshGlobalControlPanel(interaction.client, guild.id);
+        }
 
         return interaction.editReply({ content: `✅ Channel di-rename jadi: **${newName}**` });
     } catch (err) {
@@ -1447,11 +1483,11 @@ async function handleTempVoiceRenameSubmit(interaction) {
  */
 async function handleTempVoiceKickMenu(interaction) {
     try {
-        const found = await findOwnerVoiceChannel(interaction);
-        if (!found) {
-            return interaction.reply({ content: '❌ Kamu tidak punya voice channel aktif.', flags: MessageFlags.Ephemeral });
+        const check = await requireTempVoiceOwner(interaction);
+        if (!check.ok) {
+            return interaction.reply({ content: check.reason, flags: MessageFlags.Ephemeral });
         }
-
+        const found = check.found;
         const { buildKickSelectMenu } = require('../utils/tempVoiceControlPanel');
         const selectMenu = buildKickSelectMenu(found.channel, found.channelInfo.ownerId);
         if (!selectMenu) {
@@ -1477,10 +1513,11 @@ async function handleTempVoiceKickExecute(interaction) {
     try {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-        const found = await findOwnerVoiceChannel(interaction);
-        if (!found) {
-            return interaction.editReply({ content: '❌ Kamu tidak punya voice channel aktif.' });
+        const check = await requireTempVoiceOwner(interaction);
+        if (!check.ok) {
+            return interaction.editReply({ content: check.reason });
         }
+        const found = check.found;
 
         const targetIds = interaction.values;
         const kicked = [];
@@ -1505,6 +1542,12 @@ async function handleTempVoiceKickExecute(interaction) {
         if (failed.length > 0) {
             msg += `\n❌ Gagal: ${failed.join(', ')}`;
         }
+
+        // v3.8.1: refresh panel global supaya member count ter-update
+        if (typeof interaction.client.refreshGlobalControlPanel === 'function') {
+            await interaction.client.refreshGlobalControlPanel(interaction.client, found.guild.id);
+        }
+
         return interaction.editReply({ content: msg });
     } catch (err) {
         console.error('TempVoice kick execute error:', err);
@@ -1519,6 +1562,10 @@ async function handleTempVoiceKickExecute(interaction) {
  */
 async function handleTempVoiceLimit(interaction) {
     try {
+        const check = await requireTempVoiceOwner(interaction);
+        if (!check.ok) {
+            return interaction.reply({ content: check.reason, flags: MessageFlags.Ephemeral });
+        }
         const modal = new ModalBuilder()
             .setCustomId('tv_modal_limit')
             .setTitle('👥 Atur Limit Member');
@@ -1553,10 +1600,11 @@ async function handleTempVoiceLimitSubmit(interaction) {
         if (isNaN(limit) || limit < 0) limit = 0;
         if (limit > 99) limit = 99;
 
-        const found = await findOwnerVoiceChannel(interaction);
-        if (!found) {
-            return interaction.editReply({ content: '❌ Kamu tidak punya voice channel aktif.' });
+        const check = await requireTempVoiceOwner(interaction);
+        if (!check.ok) {
+            return interaction.editReply({ content: check.reason });
         }
+        const found = check.found;
 
         try {
             await found.channel.setUserLimit(limit);
@@ -1566,6 +1614,11 @@ async function handleTempVoiceLimitSubmit(interaction) {
 
         const tempVoiceManager = require('../utils/tempVoiceManager');
         tempVoiceManager.updateChannel(found.guild.id, found.channelId, { limit });
+
+        // v3.8.1: refresh panel global supaya limit ter-update
+        if (typeof interaction.client.refreshGlobalControlPanel === 'function') {
+            await interaction.client.refreshGlobalControlPanel(interaction.client, found.guild.id);
+        }
 
         const limitStr2 = limit === 0 ? 'unlimited' : `${limit} member`;
         return interaction.editReply({ content: `✅ Limit diatur ke: **${limitStr2}**` });
@@ -1584,11 +1637,11 @@ async function handleTempVoiceLockToggle(interaction) {
     try {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-        const found = await findOwnerVoiceChannel(interaction);
-        if (!found) {
-            return interaction.editReply({ content: '❌ Kamu tidak punya voice channel aktif.' });
+        const check = await requireTempVoiceOwner(interaction);
+        if (!check.ok) {
+            return interaction.editReply({ content: check.reason });
         }
-
+        const found = check.found;
         const tempVoiceManager = require('../utils/tempVoiceManager');
         const { PermissionFlagsBits: PFB } = require('discord.js');
         const willLock = interaction.customId === 'tv_lock';
@@ -1603,6 +1656,11 @@ async function handleTempVoiceLockToggle(interaction) {
         }
 
         tempVoiceManager.updateChannel(found.guild.id, found.channelId, { locked: willLock });
+
+        // v3.8.1: refresh panel global supaya status lock ter-update
+        if (typeof interaction.client.refreshGlobalControlPanel === 'function') {
+            await interaction.client.refreshGlobalControlPanel(interaction.client, found.guild.id);
+        }
 
         return interaction.editReply({
             content: willLock
@@ -1622,11 +1680,11 @@ async function handleTempVoiceLockToggle(interaction) {
  */
 async function handleTempVoiceTransferMenu(interaction) {
     try {
-        const found = await findOwnerVoiceChannel(interaction);
-        if (!found) {
-            return interaction.reply({ content: '❌ Kamu tidak punya voice channel aktif.', flags: MessageFlags.Ephemeral });
+        const check = await requireTempVoiceOwner(interaction);
+        if (!check.ok) {
+            return interaction.reply({ content: check.reason, flags: MessageFlags.Ephemeral });
         }
-
+        const found = check.found;
         const { buildTransferSelectMenu } = require('../utils/tempVoiceControlPanel');
         const selectMenu = buildTransferSelectMenu(found.channel, found.channelInfo.ownerId);
         if (!selectMenu) {
@@ -1652,10 +1710,11 @@ async function handleTempVoiceTransferExecute(interaction) {
     try {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-        const found = await findOwnerVoiceChannel(interaction);
-        if (!found) {
-            return interaction.editReply({ content: '❌ Kamu tidak punya voice channel aktif.' });
+        const check = await requireTempVoiceOwner(interaction);
+        if (!check.ok) {
+            return interaction.editReply({ content: check.reason });
         }
+        const found = check.found;
 
         const newOwnerId = interaction.values[0];
         const newOwner = found.channel.members.get(newOwnerId);
@@ -1688,14 +1747,10 @@ async function handleTempVoiceTransferExecute(interaction) {
 
         tempVoiceManager.transferOwnership(found.guild.id, found.channelId, newOwnerId, newOwner.user.tag);
 
-        // Kirim control panel baru ke owner baru via DM
-        try {
-            const { buildControlEmbed, buildControlComponents } = require('../utils/tempVoiceControlPanel');
-            const updatedInfo = tempVoiceManager.getChannel(found.guild.id, found.channelId);
-            const embed = buildControlEmbed(updatedInfo, found.channel, newOwner.user);
-            const components = buildControlComponents(updatedInfo);
-            await newOwner.send({ content: `🎁 Kamu sekarang owner voice channel: **${found.channel.name}**`, embeds: [embed], components });
-        } catch (_) {}
+        // v3.8.1: refresh panel global supaya owner baru ter-display
+        if (typeof interaction.client.refreshGlobalControlPanel === 'function') {
+            await interaction.client.refreshGlobalControlPanel(interaction.client, found.guild.id);
+        }
 
         return interaction.editReply({
             content: `✅ Ownership dipindahkan ke <@${newOwnerId}>. Kamu tidak lagi owner channel ini.`
@@ -1715,11 +1770,11 @@ async function handleTempVoiceDelete(interaction) {
     try {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-        const found = await findOwnerVoiceChannel(interaction);
-        if (!found) {
-            return interaction.editReply({ content: '❌ Kamu tidak punya voice channel aktif.' });
+        const check = await requireTempVoiceOwner(interaction);
+        if (!check.ok) {
+            return interaction.editReply({ content: check.reason });
         }
-
+        const found = check.found;
         const tempVoiceManager = require('../utils/tempVoiceManager');
 
         try {
@@ -1730,6 +1785,11 @@ async function handleTempVoiceDelete(interaction) {
             }
         }
         tempVoiceManager.unregisterChannel(found.guild.id, found.channelId);
+
+        // v3.8.1: refresh panel global supaya kembali ke tampilan idle
+        if (typeof interaction.client.refreshGlobalControlPanel === 'function') {
+            await interaction.client.refreshGlobalControlPanel(interaction.client, found.guild.id);
+        }
 
         return interaction.editReply({ content: '🗑️ Voice channel kamu berhasil dihapus.' });
     } catch (err) {

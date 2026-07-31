@@ -248,8 +248,8 @@ client.on(Events.MessageCreate, async (message) => {
 // === v3.8: TEMP VOICE — voiceStateUpdate handler ===
 // Logic:
 //   1. Member join trigger channel → bikin voice baru untuk member, pindahkan
-//   2. Member join channel temp voice milik dia → kirim control panel ephemeral
-//   3. Member leave channel temp voice → kalau channel kosong, hapus
+//   2. Member join/leave channel temp voice → refresh panel global
+//   3. Member leave channel temp voice → kalau channel kosong, hapus + refresh panel
 client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
     try {
         // Skip kalau bukan guild
@@ -269,12 +269,16 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
             return;
         }
 
-        // === CASE 2: Member join channel temp voice miliknya → kirim control panel ===
-        if (newChannelId && newChannelId !== oldChannelId) {
-            const channelInfo = tempVoiceManager.getChannel(guildId, newChannelId);
-            if (channelInfo && channelInfo.ownerId === userId) {
-                // Owner join channel-nya sendiri → kirim control panel ephemeral
-                await sendControlPanelEphemeral(newState, newChannelId, channelInfo);
+        // === CASE 2: Member join/leave channel temp voice → refresh panel global ===
+        // Cek apakah ada perubahan channel voice yang relevan untuk refresh panel
+        if (oldChannelId !== newChannelId) {
+            // Cek apakah channel yang ditinggalkan atau dituju adalah temp voice milik seseorang
+            const involvedTempVoice = (
+                (oldChannelId && tempVoiceManager.getChannel(guildId, oldChannelId)) ||
+                (newChannelId && tempVoiceManager.getChannel(guildId, newChannelId))
+            );
+            if (involvedTempVoice) {
+                await refreshGlobalControlPanel(newState.client, guildId);
             }
         }
 
@@ -295,6 +299,8 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
                         }
                         tempVoiceManager.unregisterChannel(guildId, oldChannelId);
                     }
+                    // Refresh panel setelah hapus channel kosong
+                    await refreshGlobalControlPanel(newState.client, guildId);
                 }
             }
         }
@@ -325,7 +331,6 @@ async function handleCreateTempVoice(newState) {
                 // Pindahkan member ke channel yang sudah ada
                 try {
                     await member.voice.setChannel(existingChannelId);
-                    await member.send(`🎤 Kamu sudah punya voice channel: ${existingChannel.name}. Dipindahkan ke sana.`).catch(()=>{});
                     return;
                 } catch (_) {
                     // Kalau gagal pindah, biarkan di trigger channel
@@ -363,43 +368,74 @@ async function handleCreateTempVoice(newState) {
             console.warn(`⚠️ Gagal pindahkan member ke channel baru: ${err.message}`);
         }
 
-        // Kirim control panel ephemeral ke owner
-        const channelInfo = tempVoiceManager.getChannel(guild.id, newChannel.id);
-        await sendControlPanelEphemeral(newState, newChannel.id, channelInfo);
+        // Refresh panel global supaya menampilkan kontrol untuk owner baru
+        await refreshGlobalControlPanel(newState.client, guild.id);
 
         console.log(`🎤 Temp voice dibuat: ${newChannel.name} (${newChannel.id}) oleh ${member.user.tag}`);
     } catch (err) {
         console.error('Error create temp voice:', err);
-        try {
-            await member.send(`❌ Gagal bikin voice channel: ${err.message}`).catch(()=>{});
-        } catch (_) {}
     }
 }
 
 /**
- * Kirim control panel ephemeral ke owner channel temp voice.
+ * v3.8.1: Refresh panel kontrol global di control channel.
+ *
+ * Panel ini menampilkan info owner voice aktif + button kontrol.
+ * - Kalau tidak ada voice aktif → tampilan idle (hanya tombol Buat Voice)
+ * - Kalau ada voice aktif → tampilan kontrol (rename, kick, limit, lock, transfer, delete)
+ *
+ * Panel di-fetch berdasarkan controlMessageId yang disimpan di tempVoice.json.
+ * Kalau pesan hilang (dihapus admin), bot tidak kirim ulang (admin harus
+ * jalankan /setup-tempvoice lagi untuk membuat panel baru).
  */
-async function sendControlPanelEphemeral(state, channelId, channelInfo) {
+async function refreshGlobalControlPanel(client, guildId) {
     try {
-        const member = state.member;
-        const channel = state.guild.channels.cache.get(channelId);
-        if (!channel) return;
+        const config = tempVoiceManager.getGuildConfig(guildId);
+        if (!config?.controlChannelId || !config?.controlMessageId) return;
 
-        const { buildControlEmbed, buildControlComponents } = require('./utils/tempVoiceControlPanel');
-        const embed = buildControlEmbed(channelInfo, channel, member.user);
-        const components = buildControlComponents(channelInfo);
+        const guild = client.guilds.cache.get(guildId);
+        if (!guild) return;
 
-        // Kirim DM ke owner (lebih persistent daripada ephemeral)
-        try {
-            await member.send({ content: `🎛️ Control panel voice channel kamu: **${channel.name}**`, embeds: [embed], components });
-        } catch (dmErr) {
-            // Kalau DM ditutup, skip (member bisa refresh dengan leave+join lagi nanti)
-            console.log(`ℹ️ Tidak bisa DM control panel ke ${member.user.tag} (DM ditutup).`);
+        const controlChannel = guild.channels.cache.get(config.controlChannelId);
+        if (!controlChannel) return;
+
+        const panelMsg = await controlChannel.messages.fetch(config.controlMessageId).catch(() => null);
+        if (!panelMsg) {
+            // Panel message hilang — log warning, admin harus re-setup
+            console.warn(`⚠️ Panel global temp voice untuk guild ${guildId} tidak ditemukan. Jalankan /setup-tempvoice lagi.`);
+            return;
         }
+
+        // Kumpulkan semua owner voice aktif (urut dari yang paling baru dibuat)
+        const activeOwners = [];
+        if (config.channels) {
+            for (const [channelId, channelInfo] of Object.entries(config.channels)) {
+                const voiceChannel = guild.channels.cache.get(channelId);
+                if (voiceChannel) {
+                    activeOwners.push({ channelId, channelInfo, voiceChannel });
+                }
+            }
+            // Sort by createdAt desc (paling baru pertama)
+            activeOwners.sort((a, b) => (b.channelInfo.createdAt || 0) - (a.channelInfo.createdAt || 0));
+        }
+
+        const { buildGlobalControlPanel } = require('./utils/tempVoiceControlPanel');
+        const { embed, components } = buildGlobalControlPanel({
+            activeOwners,
+            guildName: guild.name
+        });
+
+        await panelMsg.edit({ embeds: [embed], components }).catch(err => {
+            console.warn(`⚠️ Gagal refresh panel global temp voice: ${err.message}`);
+        });
     } catch (err) {
-        console.warn('Gagal kirim control panel:', err.message);
+        console.warn('Gagal refresh panel global:', err.message);
     }
 }
+
+// Expose refreshGlobalControlPanel ke client supaya interactionHandler bisa panggil
+// setelah rename/kick/limit/lock/transfer/delete.
+client.refreshGlobalControlPanel = refreshGlobalControlPanel;
 
 // === P0-1 FIX: Graceful shutdown — flush stats cache sebelum exit ===
 function gracefulShutdown(signal) {
