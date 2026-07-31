@@ -9,10 +9,10 @@ const { buildPanelEmbed, buildPanelComponents } = require('../utils/selfRolePane
 const { createSession, buildEmbed, getSessionsByUser, deleteSessionByOwner } = require('../utils/embedBuilderSessions');
 const { logAudit } = require('../utils/auditLog');
 const { createBackup, listBackups, restoreBackup, formatSize: formatBackupSize } = require('../utils/backupManager');
-const { create: createGiveaway, setMessageId: setGiveawayMessageId, getByGuild: getGiveawaysByGuild, get: getGiveaway, end: endGiveaway, reroll: rerollGiveaway, pickWinners, formatTimeLeft, remove: removeGiveaway } = require('../utils/giveawayManager');
-const { create: createScheduledAnn, getByGuild: getScheduledAnnsByGuild, get: getScheduledAnn, markSent: markScheduledAnnSent, remove: removeScheduledAnn, parseTime: parseAnnTime, formatTimeLeft: formatAnnTimeLeft } = require('../utils/scheduledAnnouncements');
+const { create: createGiveaway, setMessageId: setGiveawayMessageId, getByGuild: getGiveawaysByGuild, get: getGiveaway, end: endGiveaway, reroll: rerollGiveaway, pickWinners, remove: removeGiveaway } = require('../utils/giveawayManager');
+const { create: createScheduledAnn, getByGuild: getScheduledAnnsByGuild, get: getScheduledAnn, markSent: markScheduledAnnSent, remove: removeScheduledAnn, parseTime: parseAnnTime } = require('../utils/scheduledAnnouncements');
 const { addWarn, getWarns, getWarnCount, removeWarn, clearWarns, markActionTaken, DEFAULT_THRESHOLDS: WARN_THRESHOLDS } = require('../utils/warnManager');
-const { getStats: getUserStats, getTopUsers: getTopUsersStats, getServerStats: getServerStatsAll, parsePrice: parsePriceNum } = require('../utils/statsManager');
+const { getStats: getUserStats, getTopUsers: getTopUsersStats, getServerStats: getServerStatsAll, parsePrice: parsePriceNum, recordPurchase: trackPurchase } = require('../utils/statsManager');
 const { create: createPoll, setMessageId: setPollMessageId, get: getPoll, getByGuild: getPollsByGuild, close: closePoll, getTotalVotes: getPollTotalVotes } = require('../utils/pollManager');
 
 module.exports = async (interaction) => {
@@ -249,7 +249,21 @@ module.exports = async (interaction) => {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         const tipe = interaction.options.getString('tipe');
         const teks = interaction.options.getString('teks');
+
+        // P2-10 FIX: validasi panjang sesuai Discord embed limits.
+        // Sebelumnya: admin bisa set teks sepanjang apapun → saat embed dikirim,
+        // `setTitle` / `setDescription` throw error → silent failure.
+        const { EMBED_LIMITS } = require('../utils/constants');
+        const isTitle = tipe.endsWith('Title');
+        const limit = isTitle ? EMBED_LIMITS.TITLE : EMBED_LIMITS.DESCRIPTION;
+        const limitLabel = isTitle ? 'title (max 256)' : 'body (max 4096)';
+        if (teks.length > limit) {
+            return interaction.editReply({
+                content: `❌ Teks terlalu panjang untuk **${tipe}**.\n\n📏 Panjang: **${teks.length}** char\n🎯 Limit: **${limit}** char (${limitLabel})\n💡 Potong ${teks.length - limit} char lagi.`
+            });
+        }
         setField(`messages.${tipe}`, teks);
+        await logAudit(interaction.client, { action: 'SET_MESSAGE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Set pesan **${tipe}** (${teks.length} char)`, guildId: interaction.guild.id });
         return interaction.editReply({
             content: `✅ Pesan **${tipe}** diperbarui.\n\nPreview:\n\`\`\`\n${teks}\n\`\`\`\nVariabel tersedia: \`{user}\` \`{username}\` \`{server}\` \`{count}\` \`{action}\``
         });
@@ -399,6 +413,7 @@ module.exports = async (interaction) => {
         }
         delete config.roles[tipe];
         saveConfig(config);
+        await logAudit(interaction.client, { action: 'REMOVE_ROLE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Hapus role **${tipe}** dari config (sebelumnya: <@&${current}>)`, guildId: interaction.guild.id });
         return interaction.editReply({ content: `✅ Role **${tipe}** berhasil dihapus dari config.\n\n💡 Untuk set ulang, pakai: \`/set-role ${tipe} @role\`` });
     }
 
@@ -412,6 +427,7 @@ module.exports = async (interaction) => {
         }
         delete config.channels[tipe];
         saveConfig(config);
+        await logAudit(interaction.client, { action: 'REMOVE_CHANNEL', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Hapus channel **${tipe}** dari config (sebelumnya: <#${current}>)`, guildId: interaction.guild.id });
         return interaction.editReply({ content: `✅ Channel **${tipe}** berhasil dihapus dari config.\n\n💡 Untuk set ulang, pakai: \`/set-channel ${tipe} #channel\`` });
     }
 
@@ -448,12 +464,14 @@ module.exports = async (interaction) => {
         if (tipe === 'ALL') {
             config.messages = { ...DEFAULTS.messages };
             saveConfig(config);
+            await logAudit(interaction.client, { action: 'RESET_MESSAGE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Reset SEMUA pesan ke default`, guildId: interaction.guild.id });
             return interaction.editReply({ content: '✅ **SEMUA pesan** berhasil direset ke default.' });
         }
 
         const before = config.messages[tipe];
         config.messages[tipe] = DEFAULTS.messages[tipe];
         saveConfig(config);
+        await logAudit(interaction.client, { action: 'RESET_MESSAGE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Reset pesan **${tipe}** ke default`, guildId: interaction.guild.id });
         return interaction.editReply({
             content: `✅ Pesan **${tipe}** berhasil direset ke default.\n\n**Sebelumnya:**\n\`\`\`\n${before}\n\`\`\`\n**Sekarang:**\n\`\`\`\n${config.messages[tipe]}\n\`\`\``
         });
@@ -470,6 +488,7 @@ module.exports = async (interaction) => {
             products: []
         };
         saveConfig(fresh);
+        await logAudit(interaction.client, { action: 'RESET_CONFIG', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `⚠️ RESET CONFIG TOTAL — semua setting dihapus`, guildId: interaction.guild.id });
         return interaction.editReply({
             content: '⚠️ **SEMUA konfigurasi berhasil direset.**\n\nSekarang config.json kosong. Silakan set ulang:\n• `/set-role verified @role`\n• `/set-role unverified @role`\n• `/set-role admin @role`\n• `/set-channel welcome #channel`\n• `/set-channel goodbye #channel`\n• `/set-channel invoice #channel`\n• `/add-product label value price duration`'
         });
@@ -490,6 +509,7 @@ module.exports = async (interaction) => {
         product.roleId = role.id;
         product.days = days;
         saveConfig(config);
+        await logAudit(interaction.client, { action: 'EDIT_PRODUCT', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Set auto-role produk **${product.label}** → ${role.name} (${days > 0 ? days + ' hari' : 'permanen'})`, guildId: interaction.guild.id });
 
         const expireInfo = days > 0
             ? `akan otomatis dihapus setelah **${days} hari**`
@@ -515,6 +535,7 @@ module.exports = async (interaction) => {
         delete product.roleId;
         delete product.days;
         saveConfig(config);
+        await logAudit(interaction.client, { action: 'EDIT_PRODUCT', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Hapus auto-role produk **${product.label}**`, guildId: interaction.guild.id });
         return interaction.editReply({ content: `✅ Auto-role untuk produk **${product.label}** berhasil dihapus.` });
     }
 
@@ -609,6 +630,33 @@ module.exports = async (interaction) => {
             dmSent = true;
         } catch (_) {}
 
+        // 5. P2-1 FIX: kirim invoice juga (sebelumnya hanya modal set key yang kirim invoice,
+        //    /set-key slash command skip — inkonsistensi jejak transaksi).
+        let invoiceSent = false;
+        try {
+            const { sendInvoice } = require('../utils/ticketManager');
+            // Buat pseudo-channel dari guild untuk akses invoiceChannel.
+            // sendInvoice mengambil channel dari channel.guild.channels.cache,
+            // jadi kita oper interaction.channel (channel command dijalankan).
+            if (interaction.channel && interaction.channel.guild) {
+                invoiceSent = await sendInvoice(interaction.channel, member.id, product.label, product.price, interaction.user);
+            }
+        } catch (err) {
+            console.warn('Gagal kirim invoice dari /set-key:', err.message);
+        }
+
+        // 6. Track purchase untuk stats
+        try { trackPurchase(member.id, parsePriceNum(product.price)); } catch (_) {}
+
+        // 7. Audit log (P1-10 FIX: sebelumnya tidak ada logAudit untuk SET_KEY)
+        await logAudit(interaction.client, {
+            action: 'SET_KEY',
+            actorId: interaction.user.id,
+            actorTag: interaction.user.tag,
+            details: `Set key untuk <@${member.id}> — produk: **${product.label}**, role: ${role.name}, key: \`${keyValue.slice(0, 8)}...\``,
+            guildId: interaction.guild.id
+        });
+
         const expireStr = keyEntry.expireAt === null ? 'permanen' : `${Math.ceil((keyEntry.expireAt - Date.now()) / 86400000)} hari`;
         return interaction.editReply({
             content: `✅ **Set Key sukses!**\n\n` +
@@ -618,7 +666,8 @@ module.exports = async (interaction) => {
                 `🎭 Role: ${role}\n` +
                 `⏰ Expire: ${expireStr}\n` +
                 `${schedResult.extended ? '↳ Schedule di-extend (MAX EXTEND).' : (schedResult.permanent ? '↳ Permanen, schedule lama dihapus.' : '↳ Schedule baru dibuat.')}\n` +
-                `${dmSent ? '📬 DM terkirim.' : '⚠️ DM gagal (DM ditutup).'}`
+                `${dmSent ? '📬 DM terkirim.' : '⚠️ DM gagal (DM ditutup).'}\n` +
+                `${invoiceSent ? '🧾 Invoice terkirim.' : '⚠️ Invoice tidak terkirim (channel invoice belum di-set).'}`
         });
     }
 
@@ -713,6 +762,8 @@ module.exports = async (interaction) => {
                   (rolesRemoved.length > 0 ? `🎭 Role dilepas: ${rolesRemoved.map(n => `\`${n}\``).join(', ')}\n` : '')
                 : `ℹ️ Key TIDAK dihapus (clear_keys=false). Pakai \`clear_keys:true\` untuk reset total VIP.\n`);
 
+        await logAudit(interaction.client, { action: 'CLEAR_SCHEDULE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Clear schedule <@${user.id}>: ${removedSched} schedule${clearKeys ? ` + ${removedKeys} key${rolesRemoved.length > 0 ? ` + ${rolesRemoved.length} role` : ''}` : ' (tanpa key)'}`, guildId: interaction.guild.id });
+
         return interaction.editReply({ content: msg });
     }
 
@@ -758,6 +809,7 @@ module.exports = async (interaction) => {
 
         // Update messageId
         setMessageId(panel.id, panelMsg.id);
+        await logAudit(interaction.client, { action: 'SETUP_SELFROLE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Buat panel self-role **${title}** (\`${panel.id}\`) di ${interaction.channel} — tipe: ${panel.type}, exclusive: ${panel.exclusive}`, guildId: interaction.guild.id });
 
         return interaction.editReply({
             content: `✅ **Panel self-role dibuat!**\n\n` +
@@ -815,6 +867,7 @@ module.exports = async (interaction) => {
             console.warn('Gagal update panel message:', err.message);
         }
 
+        await logAudit(interaction.client, { action: 'SELFROLE_ADD', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Tambah role ${role.name} ke panel \`${panelId}\` (label: ${label})`, guildId: interaction.guild.id });
         return interaction.editReply({
             content: `✅ Role ${role} ditambahkan ke panel \`${panelId}\`.\nLabel: **${label}**${emoji ? ` | Emoji: ${emoji}` : ''}${description ? ` | Desc: ${description}` : ''}`
         });
@@ -850,6 +903,7 @@ module.exports = async (interaction) => {
             console.warn('Gagal update panel message:', err.message);
         }
 
+        await logAudit(interaction.client, { action: 'SELFROLE_REMOVE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Hapus role ${role.name} dari panel \`${panelId}\``, guildId: interaction.guild.id });
         return interaction.editReply({
             content: `✅ Role ${role} dihapus dari panel \`${panelId}\`.`
         });
@@ -908,6 +962,7 @@ module.exports = async (interaction) => {
         }
 
         deletePanel(panelId);
+        await logAudit(interaction.client, { action: 'SELFROLE_DELETE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Hapus panel self-role **${panel.title}** (\`${panelId}\`)`, guildId: interaction.guild.id });
         return interaction.editReply({ content: `✅ Panel \`${panelId}\` (${panel.title}) berhasil dihapus.` });
     }
 
@@ -979,6 +1034,7 @@ module.exports = async (interaction) => {
 
         try {
             await targetChannel.send({ content, embeds: [embed] });
+            await logAudit(interaction.client, { action: 'ANNOUNCE_SEND', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Kirim announce ke ${targetChannel}: **${title}**${mention ? ` | mention: ${mention}` : ''}`, guildId: interaction.guild.id });
             return interaction.editReply({
                 content: `✅ Announce terkirim ke ${targetChannel}!\n\n📋 **Preview:**`,
                 embeds: [embed]

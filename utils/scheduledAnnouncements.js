@@ -192,5 +192,5 @@ function formatTimeLeft(ms) {
 
 module.exports = {
     create, get, getByGuild, getPending, markSent, remove,
-    computeNextRecurring, parseTime, formatTimeLeft
+    computeNextRecurring, parseTime
 };

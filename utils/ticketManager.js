@@ -1,6 +1,11 @@
 const { ChannelType, PermissionFlagsBits, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
 const { getConfig } = require('./configManager');
 
+// P2-2 FIX: per-user lock supaya tidak bisa buka 2 tiket bersamaan (race condition).
+// Sebelumnya: 2 klik tombol <100ms → kedua interaction lolos check existing ticket
+// (channel belum dibuat) → 2 tiket terbuat. Sekarang: lock per userId sampai selesai.
+const ticketLocks = new Map();
+
 /**
  * Buat channel tiket baru.
  * Tiket transaksi menampilkan tombol "Set Key" + "Tutup Tiket".
@@ -11,20 +16,26 @@ async function createTicket(interaction, product) {
     const user = interaction.user;
     const config = getConfig();
 
-    // Cek apakah user punya tiket aktif
-    const existingTicket = guild.channels.cache.find(c => c.topic && c.topic.startsWith(`Ticket UserID: ${user.id}`));
-    if (existingTicket) {
-        return interaction.editReply({ content: `❌ Kamu sudah punya tiket aktif di ${existingTicket}!` });
+    // P2-2 FIX: cek lock dulu — kalau sedang diproses, reject.
+    if (ticketLocks.has(user.id)) {
+        return interaction.editReply({ content: '⏳ Tiket kamu sedang dibuat, tunggu sebentar...' }).catch(()=>{});
     }
-
-    // Admin role wajib sudah di-set
-    if (!config.roles.admin) {
-        return interaction.editReply({ content: '❌ Role Admin belum di-set. Pakai `/set-role admin @role` dulu.' });
-    }
-
-    const isTransaction = product.label !== 'Bantuan/Lapor';
+    ticketLocks.set(user.id, true);
 
     try {
+        // Cek apakah user punya tiket aktif
+        const existingTicket = guild.channels.cache.find(c => c.topic && c.topic.startsWith(`Ticket UserID: ${user.id}`));
+        if (existingTicket) {
+            return interaction.editReply({ content: `❌ Kamu sudah punya tiket aktif di ${existingTicket}!` });
+        }
+
+        // Admin role wajib sudah di-set
+        if (!config.roles.admin) {
+            return interaction.editReply({ content: '❌ Role Admin belum di-set. Pakai `/set-role admin @role` dulu.' });
+        }
+
+        const isTransaction = product.label !== 'Bantuan/Lapor';
+
         // Buat kategori kalau belum ada
         let category = guild.channels.cache.find(c => c.name === '🎫 TICKETS' && c.type === ChannelType.GuildCategory);
         if (!category) {
@@ -95,6 +106,9 @@ async function createTicket(interaction, product) {
     } catch (err) {
         console.error('Error creating ticket:', err);
         await interaction.editReply({ content: '❌ Terjadi error saat membuat tiket. Cek izin bot!' }).catch(()=>{});
+    } finally {
+        // P2-2 FIX: pastikan lock dilepas walau ada error.
+        ticketLocks.delete(user.id);
     }
 }
 
@@ -139,13 +153,14 @@ async function sendInvoice(channel, userId, productName, price, closer) {
 async function closeTicket(channel, closer, isSuccess) {
     try {
         const topic = channel.topic || '';
+        // P3-12 FIX: pakai [^|]+? supaya label yang mengandung " | " tidak ter-truncate.
         const userIdMatch = topic.match(/UserID: (\d+)/);
-        const productMatch = topic.match(/Product: (.+?) \|/);
-        const priceMatch = topic.match(/Price: (.+)/);
+        const productMatch = topic.match(/Product:\s*([^|]+?)\s*\|/);
+        const priceMatch = topic.match(/Price:\s*(.+)$/);
 
         const userId = userIdMatch ? userIdMatch[1] : null;
-        const productName = productMatch ? productMatch[1] : 'Unknown';
-        const price = priceMatch ? priceMatch[1] : 'Unknown';
+        const productName = productMatch ? productMatch[1].trim() : 'Unknown';
+        const price = priceMatch ? priceMatch[1].trim() : 'Unknown';
 
         // Kirim invoice kalau sukses & bukan tiket help/report
         if (isSuccess && userId) {

@@ -32,14 +32,21 @@ const DEFAULTS = {
  * - Kalau file tidak ada / rusak -> pakai DEFAULTS
  * - Kalau format v1 (flat) -> auto-migrate ke v2 (nested)
  * - Kalau format v2 -> merge dengan DEFAULTS supaya field baru tetap ada
+ *
+ * P2-4 FIX: sebelumnya pakai `delete require.cache` + `require()` yang
+ * rentan race condition dan anti-pattern. Sekarang pakai readFileSync + JSON.parse
+ * seperti manager lain.
  */
 function getConfig() {
     let raw = {};
     try {
-        delete require.cache[require.resolve('../config.json')];
-        raw = require('../config.json');
+        const fileContent = fs.readFileSync(configPath, 'utf8');
+        raw = JSON.parse(fileContent);
     } catch (err) {
-        console.warn('⚠️ config.json tidak ditemukan/rusak, pakai DEFAULTS. Pesan:', err.message);
+        if (err.code !== 'ENOENT') {
+            // File ada tapi rusak — log warning. Kalau ENOENT (file belum ada), silent.
+            console.warn('⚠️ config.json rusak, pakai DEFAULTS. Pesan:', err.message);
+        }
         raw = {};
     }
 

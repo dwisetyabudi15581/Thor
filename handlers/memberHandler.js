@@ -77,15 +77,32 @@ async function onMemberRemove(member) {
         return;
     }
 
-    // Cek audit log - apakah di-kick?
+    // Cek audit log - apakah di-kick atau di-ban?
+    // P2-7 FIX: sebelumnya cuma fetch 1 entry + cek kick (type 20) saja.
+    // Sekarang: fetch 10 entry terbaru, cek kick (20) + ban (22),
+    // dan cocokkan by target.id (lebih akurat kalau ada multiple leave).
     let action = 'keluar';
+    const AUDIT_WINDOW_MS = 5 * 1000;
     try {
-        const audits = await guild.fetchAuditLogs({ limit: 1, type: 20 }); // MEMBER_KICK
-        const kickEntry = audits.entries.first();
-        if (kickEntry && kickEntry.target.id === user.id && (Date.now() - kickEntry.createdTimestamp) < 5000) {
+        const audits = await guild.fetchAuditLogs({ limit: 10, type: 20 }); // MEMBER_KICK
+        const kickEntry = audits.entries.find(e =>
+            e.target?.id === user.id &&
+            (Date.now() - e.createdTimestamp) < AUDIT_WINDOW_MS
+        );
+        if (kickEntry) {
             action = 'dikeluarkan (kick)';
+        } else {
+            // Cek juga ban (type 22)
+            const banAudits = await guild.fetchAuditLogs({ limit: 10, type: 22 }).catch(() => null);
+            const banEntry = banAudits?.entries?.find(e =>
+                e.target?.id === user.id &&
+                (Date.now() - e.createdTimestamp) < AUDIT_WINDOW_MS
+            );
+            if (banEntry) {
+                action = 'di-ban';
+            }
         }
-    } catch (_) { /* abaikan */ }
+    } catch (_) { /* abaikan — mungkin tidak punya ViewAuditLog permission */ }
 
     const vars = {
         user: `<@${user.id}>`,

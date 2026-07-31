@@ -76,7 +76,10 @@ async function logAudit(client, data) {
         const auditChannelId = config.channels['audit-log'];
         if (!auditChannelId) return false; // belum di-set, silent skip
 
-        const channel = client.channels.cache.get(auditChannelId);
+        // P3-7 FIX: pakai fetch (fallback ke API) bukan cache.get,
+        // supaya channel yang belum ter-cache tetap bisa diakses.
+        const channel = client.channels.cache.get(auditChannelId)
+            || await client.channels.fetch(auditChannelId).catch(() => null);
         if (!channel) return false;
 
         const label = ACTION_LABELS[data.action] || data.action;

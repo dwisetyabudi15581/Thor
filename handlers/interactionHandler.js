@@ -14,7 +14,7 @@ const { scheduleRoleRemoval } = require('../utils/roleScheduler');
 const { getPanelByMessage, getPanel } = require('../utils/selfRoleManager');
 const { buildPanelEmbed, buildPanelComponents } = require('../utils/selfRolePanelBuilder');
 const { getSession, deleteSession, buildEmbed: buildSessionEmbed, parseColor } = require('../utils/embedBuilderSessions');
-const { get: getGiveaway, addParticipant: gwAddParticipant, removeParticipant: gwRemoveParticipant, end: endGiveaway, pickWinners, formatTimeLeft } = require('../utils/giveawayManager');
+const { get: getGiveaway, addParticipant: gwAddParticipant, removeParticipant: gwRemoveParticipant, end: endGiveaway, pickWinners } = require('../utils/giveawayManager');
 const { get: getPoll, vote: votePoll, getByMessage: getPollByMessage, getTotalVotes: getPollTotalVotes, remove: removePoll } = require('../utils/pollManager');
 const { create: createPoll, setMessageId: setPollMessageId } = require('../utils/pollManager');
 const { logAudit } = require('../utils/auditLog');
@@ -124,8 +124,9 @@ module.exports = async (interaction) => {
             }
 
             const topic = interaction.channel.topic || '';
-            const productMatch = topic.match(/Product: (.+?) \|/);
-            const productName = productMatch ? productMatch[1] : 'Unknown';
+            // P3-12 FIX: pakai [^|]+? supaya label yang mengandung " | " tidak ter-truncate.
+            const productMatch = topic.match(/Product:\s*([^|]+?)\s*\|/);
+            const productName = productMatch ? productMatch[1].trim() : 'Unknown';
             const isTransaction = productName !== 'Bantuan/Lapor';
 
             // Untuk tiket transaksi: tombol "Tidak Jadi Beli" (close tanpa role) + "Batal Tutup"
@@ -178,8 +179,9 @@ module.exports = async (interaction) => {
 
             // Parse topic untuk validasi
             const topic = interaction.channel.topic || '';
-            const productMatch = topic.match(/Product: (.+?) \|/);
-            const productName = productMatch ? productMatch[1] : null;
+            // P3-12 FIX: pakai [^|]+? supaya label yang mengandung " | " tidak ter-truncate.
+            const productMatch = topic.match(/Product:\s*([^|]+?)\s*\|/);
+            const productName = productMatch ? productMatch[1].trim() : null;
             if (!productName || productName === 'Bantuan/Lapor') {
                 return interaction.reply({ content: '❌ Tombol Set Key hanya untuk tiket transaksi.', flags: MessageFlags.Ephemeral });
             }
@@ -228,12 +230,14 @@ module.exports = async (interaction) => {
 
             // Parse topic
             const topic = interaction.channel.topic || '';
+            // P3-12 FIX: pakai `([^|]+?)` (bukan `(.+?)`) supaya label yang mengandung
+            // " | " tidak ter-truncate prematur. Trim hasil untuk hilangkan spasi.
             const userIdMatch = topic.match(/UserID: (\d+)/);
-            const productMatch = topic.match(/Product: (.+?) \|/);
-            const priceMatch = topic.match(/Price: (.+)/);
+            const productMatch = topic.match(/Product:\s*([^|]+?)\s*\|/);
+            const priceMatch = topic.match(/Price:\s*(.+)$/);
             const userId = userIdMatch ? userIdMatch[1] : null;
-            const productName = productMatch ? productMatch[1] : 'Unknown';
-            const price = priceMatch ? priceMatch[1] : 'Unknown';
+            const productName = productMatch ? productMatch[1].trim() : 'Unknown';
+            const price = priceMatch ? priceMatch[1].trim() : 'Unknown';
 
             if (!userId) {
                 return interaction.editReply({ content: '❌ Gagal parse UserID dari topic channel.' });
@@ -325,6 +329,17 @@ module.exports = async (interaction) => {
             try {
                 const { recordPurchase, parsePrice } = require('../utils/statsManager');
                 recordPurchase(userId, parsePrice(price));
+            } catch (_) {}
+
+            // === 5.6. P1-10 FIX: audit log untuk SET_KEY via ticket modal ===
+            try {
+                await logAudit(interaction.client, {
+                    action: 'SET_KEY',
+                    actorId: interaction.user.id,
+                    actorTag: interaction.user.tag,
+                    details: `Set key (ticket) untuk <@${member.id}> — produk: **${product.label}**, role: ${role.name}`,
+                    guildId: interaction.guild.id
+                });
             } catch (_) {}
 
             // === 6. Hapus channel tiket ===
@@ -921,6 +936,17 @@ async function handleEmbedBuilderModal(interaction) {
             return interaction.editReply({ content: `❌ Gagal kirim ke ${targetChannel}: ${err.message}` });
         }
 
+        // P1-10 FIX: audit log untuk EMBED_BUILDER_SEND (sebelumnya missing).
+        try {
+            await logAudit(interaction.client, {
+                action: 'EMBED_BUILDER_SEND',
+                actorId: interaction.user.id,
+                actorTag: interaction.user.tag,
+                details: `Kirim embed (builder) ke ${targetChannel}: ${session.data.title ? `**${session.data.title}**` : '_(no title)_'}`,
+                guildId: interaction.guild.id
+            });
+        } catch (_) {}
+
         // Hapus draft message
         try {
             const channel = interaction.guild.channels.cache.get(session.channelId);
@@ -1196,6 +1222,10 @@ async function handlePollModalCreate(interaction) {
             return interaction.reply({ content: `❌ Gagal kirim poll ke ${channel}. Cek permission bot. Entry di-rollback.`, flags: MessageFlags.Ephemeral });
         }
         setPollMessageId(poll.id, msg.id);
+        // P1-10 FIX: tambah audit log untuk POLL_CREATE (sebelumnya missing).
+        try {
+            await logAudit(interaction.client, { action: 'POLL_CREATE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Buat poll **${question}** (${poll.options.length} options, ${multiple ? 'multi' : 'single'}-vote) di ${channel}`, guildId: interaction.guild.id });
+        } catch (_) {}
         return interaction.reply({ content: `✅ Poll dibuat di ${channel}!\n🆔 \`${poll.id}\`\n💡 Tutup pakai \`/poll close id:${poll.id}\``, flags: MessageFlags.Ephemeral });
     } catch (err) {
         console.error('Poll modal create error:', err);

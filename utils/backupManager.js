@@ -207,10 +207,12 @@ function startAutoBackup(client) {
     if (client) console.log(`💾 Auto-backup saat start: ${initial.backupName} (${initial.filesCopied} files, ${(initial.totalSize / 1024).toFixed(1)} KB)`);
 
     // Backup tiap 24 jam
+    // P3-10 FIX: .unref() supaya interval tidak block process exit.
     const interval = setInterval(() => {
         const result = createBackup();
         if (client) console.log(`💾 Auto-backup berkala: ${result.backupName} (${result.filesCopied} files)`);
     }, BACKUP_INTERVAL_MS);
+    if (typeof interval.unref === 'function') interval.unref();
 
     return {
         stop: () => clearInterval(interval)

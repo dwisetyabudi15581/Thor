@@ -178,6 +178,12 @@ function getServerStats() {
 
 /**
  * Parse price string ke number. Handle "Rp 25.000", "25000", "25.000", "25k", "2.5M"
+ *
+ * P2-13 FIX: sebelumnya `.replace(/\./g, '').replace(/,/g, '.')` ambigu:
+ *   - "25,000" (US thousand) → "25.000" → parseFloat → 25 (SALAH, harusnya 25000)
+ *   - "Rp. 50.000" (ID thousand) → "50000" → OK
+ *   - "2,5M" (ID decimal) → "2.5M" → 2.5 × 1000000 = OK
+ * Sekarang: deteksi format berdasarkan keberadaan dot & comma bersamaan.
  */
 function parsePrice(priceStr) {
     if (typeof priceStr === 'number') return priceStr;
@@ -186,7 +192,47 @@ function parsePrice(priceStr) {
     let multiplier = 1;
     if (s.endsWith('k')) { multiplier = 1000; s = s.slice(0, -1); }
     else if (s.endsWith('m')) { multiplier = 1000000; s = s.slice(0, -1); }
-    s = s.replace(/\./g, '').replace(/,/g, '.');
+
+    const hasDot = s.includes('.');
+    const hasComma = s.includes(',');
+
+    if (hasDot && hasComma) {
+        // Ada keduanya → pakai posisi terakhir untuk tentukan decimal.
+        // Mis. "1,234.56" (US) → comma=thousand, dot=decimal
+        // Mis. "1.234,56" (EU/ID) → dot=thousand, comma=decimal
+        if (s.lastIndexOf('.') > s.lastIndexOf(',')) {
+            // US: dot=decimal, comma=thousand → hapus comma, biarkan dot
+            s = s.replace(/,/g, '');
+        } else {
+            // EU/ID: dot=thousand, comma=decimal → hapus dot, ganti comma jadi dot
+            s = s.replace(/\./g, '').replace(/,/g, '.');
+        }
+    } else if (hasComma) {
+        // Hanya comma. Asumsi: thousand separator (lebih umum di ID).
+        // Mis. "25,000" → 25000
+        // Tapi "2,5" → ambiguous, treat as decimal (2.5).
+        const parts = s.split(',');
+        if (parts.length === 2 && parts[1].length <= 2) {
+            // Comma sebagai decimal (mis. "2,5")
+            s = s.replace(/,/g, '.');
+        } else {
+            // Comma sebagai thousand separator
+            s = s.replace(/,/g, '');
+        }
+    } else if (hasDot) {
+        // Hanya dot. Asumsi: thousand separator (format ID).
+        // Mis. "50.000" → 50000
+        // Tapi "2.5" → ambiguous, treat as decimal (2.5).
+        const parts = s.split('.');
+        if (parts.length === 2 && parts[1].length <= 2) {
+            // Dot sebagai decimal (mis. "2.5")
+            // biarkan
+        } else {
+            // Dot sebagai thousand separator
+            s = s.replace(/\./g, '');
+        }
+    }
+
     const n = parseFloat(s);
     return isNaN(n) ? 0 : Math.round(n * multiplier);
 }
