@@ -240,9 +240,20 @@ function buildGlobalControlPanel(options = {}) {
         `📊 **Limit:** ${limitStr}\n` +
         `${channelInfo.locked ? '🔒' : '🔓'} **Status:** ${lockStr}\n\n`;
 
+    // v3.8.3: tampilkan list SEMUA owner aktif (bukan cuma 1)
     if (sorted.length > 1) {
-        description += `ℹ️ Ada **${sorted.length}** voice aktif di server ini.\n`;
-        description += `Kalau kamu owner salah satunya, pakai **dropdown "Switch Channel"** di bawah untuk pilih channel kamu.\n\n`;
+        description += `📋 **Semua voice aktif (${sorted.length}):**\n`;
+        for (let i = 0; i < Math.min(sorted.length, 10); i++) {
+            const o = sorted[i];
+            const isCurrent = i === 0;
+            const mc = o.voiceChannel?.members?.size || 0;
+            description += `${isCurrent ? '➡️' : '•'} **${o.channelInfo.name}** — <@${o.channelInfo.ownerId}> (${mc} member${o.channelInfo.locked ? ', 🔒' : ''})\n`;
+        }
+        if (sorted.length > 10) {
+            description += `• ... dan ${sorted.length - 10} lainnya\n`;
+        }
+        description += `\n💡 **Auto-detect:** Klik tombol kontrol (Rename/Kick/dll) — bot otomatis pakai channel yang kamu owner-inya dan sedang kamu tinggali.\n`;
+        description += `💡 Pakai dropdown "Switch Channel" untuk pindah tampilan ke channel lain.\n\n`;
     }
 
     description +=

@@ -370,6 +370,10 @@ async function handleCreateTempVoice(newState) {
         // Register ke manager
         tempVoiceManager.registerChannel(guild.id, newChannel.id, member.id, member.user.tag, newChannel.name);
 
+        // v3.8.3: auto-set focusedOwner ke creator supaya panel langsung tampilkan
+        // channel mereka. Fokus akan auto-expire setelah 5 menit atau saat mereka leave.
+        tempVoiceManager.setFocusedOwner(guild.id, member.id);
+
         // Pindahkan member ke channel baru
         try {
             await member.voice.setChannel(newChannel.id);
