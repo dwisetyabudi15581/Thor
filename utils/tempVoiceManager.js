@@ -188,13 +188,22 @@ function getChannel(guildId, channelId) {
 
 /**
  * Update field channel (locked, limit, name, ownerId).
+ * v3.9.8 FIX: whitelist field yang boleh di-update. Sebelumnya pakai Object.assign
+ * yang blindly merge any key — caller bisa overwrite createdAt, inject field aneh,
+ * atau (kalau ada bug di caller) corrupt struktur entry.
  */
 function updateChannel(guildId, channelId, updates) {
     const all = load();
     if (!all[guildId]?.channels?.[channelId]) return null;
-    Object.assign(all[guildId].channels[channelId], updates);
+    const ALLOWED_FIELDS = ['locked', 'limit', 'name', 'ownerId', 'ownerTag'];
+    const target = all[guildId].channels[channelId];
+    for (const k of ALLOWED_FIELDS) {
+        if (k in updates) {
+            target[k] = updates[k];
+        }
+    }
     save(all);
-    return all[guildId].channels[channelId];
+    return target;
 }
 
 /**

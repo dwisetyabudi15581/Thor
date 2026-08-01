@@ -41,7 +41,10 @@ setInterval(() => {
 }, CLEANUP_INTERVAL_MS).unref?.();
 
 function genId() {
-    return `emb_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    // v3.9.8 FIX: naikkan random suffix dari 4 char ke 8 char.
+    // Sebelumnya cuma 4 char base36 (~20 bit) — collision risk kalau 2 session
+    // dibuat di ms yang sama. Sekarang 8 char (~41 bit) + timestamp, sangat aman.
+    return `emb_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
 function createDefaultData() {

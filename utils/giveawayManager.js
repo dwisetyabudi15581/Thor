@@ -157,6 +157,14 @@ function reroll(id) {
         if (gw.participantIds.length === 0) return { winnerId: null, gw };
         const fallbackIdx = Math.floor(Math.random() * gw.participantIds.length);
         const winnerId = gw.participantIds[fallbackIdx];
+        // v3.9.8 FIX: persist reused winner juga supaya /stats tidak double-count
+        // kalau admin reroll berkali-kali (sebelumnya reused winner gak masuk
+        // winnerIds → next reroll bisa pick orang yang sama lagi).
+        if (!gw.winnerIds) gw.winnerIds = [];
+        if (!gw.winnerIds.includes(winnerId)) {
+            gw.winnerIds.push(winnerId);
+            save(list);
+        }
         return { winnerId, gw, reused: true };
     }
 
@@ -211,10 +219,14 @@ function formatTimeLeft(ms) {
     const hours = Math.floor((ms % 86400000) / 3600000);
     const mins = Math.floor((ms % 3600000) / 60000);
     const secs = Math.floor((ms % 60000) / 1000);
-    if (days > 0) return `${days}h ${hours}j ${mins}m`;
-    if (hours > 0) return `${hours}j ${mins}m ${secs}d`;
-    if (mins > 0) return `${mins}m ${secs}d`;
-    return `${secs}d`;
+    // v3.9.8 FIX: pakai singkatan yang tidak ambigu (sebelumnya campur ID/EN:
+    // "1h 2j 3m" → h=hari=day vs h=hour=jam, confusing buat maintainer & user).
+    // Sekarang: d=day(hari), j=jam(hour), m=menit(minute), d=detik(second) →
+    // d dan d bentrok! Pakai: hr=hour, min=minute, d=day, dtk=second.
+    if (days > 0) return `${days}hr ${hours}j ${mins}m`;
+    if (hours > 0) return `${hours}j ${mins}m ${secs}dtk`;
+    if (mins > 0) return `${mins}m ${secs}dtk`;
+    return `${secs}dtk`;
 }
 
 module.exports = {

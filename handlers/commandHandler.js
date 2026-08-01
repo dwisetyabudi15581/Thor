@@ -1194,14 +1194,25 @@ module.exports = async (interaction) => {
         );
 
         // Kirim draft message
-        const draftMsg = await interaction.channel.send({
-            content: `🛠️ **Embed Builder Draft** — dimulai oleh <@${interaction.user.id}>\n` +
-                `Preview real-time di bawah. Klik dropdown untuk edit bagian, atau tombol untuk preview/send/cancel.\n` +
-                `💡 **Tips:** Pilih **💬 Message (plain text)** di dropdown untuk menambah teks di luar embed (cocok untuk @everyone ping atau teks pengantar).\n` +
-                `🆔 Session: \`${session.id}\``,
-            embeds: [previewEmbed],
-            components: [selectRow, actionRow]
-        });
+        // v3.9.8 FIX: wrap di try/catch. Sebelumnya kalau send gagal (bot gak
+        // punya SendMessages/EmbedLinks), session tetap ke-create di storage
+        // tapi gak ada draft message → orphan session forever di /embed-list.
+        let draftMsg;
+        try {
+            draftMsg = await interaction.channel.send({
+                content: `🛠️ **Embed Builder Draft** — dimulai oleh <@${interaction.user.id}>\n` +
+                    `Preview real-time di bawah. Klik dropdown untuk edit bagian, atau tombol untuk preview/send/cancel.\n` +
+                    `💡 **Tips:** Pilih **💬 Message (plain text)** di dropdown untuk menambah teks di luar embed (cocok untuk @everyone ping atau teks pengantar).\n` +
+                    `🆔 Session: \`${session.id}\``,
+                embeds: [previewEmbed],
+                components: [selectRow, actionRow]
+            });
+        } catch (err) {
+            console.error('Gagal kirim embed builder draft:', err);
+            // Cleanup session orphan supaya tidak numpuk di /embed-list.
+            try { deleteSession(session.id); } catch (_) {}
+            return safeEditReply(interaction,{ content: `❌ Gagal kirim draft message ke channel ini. Cek permission bot (Send Messages + Embed Links).` });
+        }
 
         // Simpan messageId ke session
         session.messageId = draftMsg.id;
@@ -1301,8 +1312,24 @@ module.exports = async (interaction) => {
     // ====================================================
     if (interaction.commandName === 'backup-now') {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-        const result = createBackup();
-        await logAudit(interaction.client, { action: 'BACKUP_NOW', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Backup manual: \`${result.backupName}\` (${result.filesCopied} files, ${formatBackupSize(result.totalSize)})`, guildId: interaction.guild.id });
+        // v3.9.8 FIX: wrap createBackup di try/catch. Sebelumnya kalau throw
+        // (disk full, permission error), outer catch di index.js lihat
+        // interaction.deferred=true → skip reply → admin lihat "Thinking..." 15 menit.
+        let result;
+        try {
+            result = createBackup();
+        } catch (err) {
+            console.error('Backup-now gagal:', err);
+            return safeEditReply(interaction,{ content: `❌ Gagal buat backup: ${err.message}` });
+        }
+        if (!result.ok) {
+            return safeEditReply(interaction,{ content: `❌ Backup gagal total: ${result.errors.join('; ')}` });
+        }
+        try {
+            await logAudit(interaction.client, { action: 'BACKUP_NOW', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Backup manual: \`${result.backupName}\` (${result.filesCopied} files, ${formatBackupSize(result.totalSize)})`, guildId: interaction.guild.id });
+        } catch (auditErr) {
+            console.warn(`⚠️ Gagal log audit backup (backup tetap dibuat): ${auditErr.message}`);
+        }
         return safeEditReply(interaction,{
             content: `💾 **Backup berhasil dibuat!**\n\n` +
                 `📁 Nama: \`${result.backupName}\`\n` +

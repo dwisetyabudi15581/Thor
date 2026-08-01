@@ -48,12 +48,13 @@ const SCHEDULER = {
     STATS_FLUSH_INTERVAL_MS: 30 * 1000,      // 30 detik — flush stats cache ke disk
     AUTO_BACKUP_INTERVAL_MS: 24 * 60 * 60 * 1000, // 24 jam
     MAX_BACKUPS_KEPT: 7,
-    AUDIT_LOG_WINDOW_MS: 5 * 1000,           // 5 detik — window untuk deteksi kick/ban via audit log
-    AUDIT_LOG_FETCH_LIMIT: 10,               // fetch 10 entry terbaru (lebih akurat dari limit 1)
+    AUDIT_LOG_WINDOW_MS: 10 * 1000,          // v3.9.8: naikkan dari 5s ke 10s — lebih toleran latency Discord
+    AUDIT_LOG_FETCH_LIMIT: 5,                // v3.9.8: turunkan dari 10 ke 5 — pakai type filter, lebih efisien
     EMBED_SESSION_TTL_MS: 60 * 60 * 1000,    // 1 jam — TTL session embed builder
     EMBED_SESSION_CLEANUP_MS: 10 * 60 * 1000, // 10 menit — interval cleanup
-    PROCESSED_INTERACTIONS_TTL_MS: 5 * 60 * 1000, // 5 menit — TTL tracker duplicate interaction
-    INTERACTION_DEDUP_CLEANUP_MS: 5 * 60 * 1000
+    // v3.9.8: naikkan dari 5 menit ke 15 menit — match Discord interaction token lifetime
+    PROCESSED_INTERACTIONS_TTL_MS: 15 * 60 * 1000,
+    INTERACTION_DEDUP_CLEANUP_MS: 60 * 1000  // v3.9.8: cleanup tiap 1 menit (per-entry prune, bukan bulk clear)
 };
 
 // === Warn thresholds ===

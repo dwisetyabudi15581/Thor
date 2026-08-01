@@ -51,7 +51,10 @@ function savePanels(list) {
 }
 
 function genId() {
-    return `sr_${Math.random().toString(36).slice(2, 8)}`;
+    // v3.9.8 FIX: tambah Date.now() untuk kurangi collision risk.
+    // Sebelumnya cuma 6 char base36 (~31 bit entropy → ~46k panels untuk 50% collision chance).
+    // Sekarang: timestamp + 6 char random, aman untuk puluhan ribu panel.
+    return `sr_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
 /**

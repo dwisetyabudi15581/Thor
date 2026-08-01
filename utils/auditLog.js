@@ -123,17 +123,40 @@ async function logAudit(client, data) {
 
     // v3.9.2: retry sekali kalau send gagal karena transient error (rate limit,
     // network blip, dll). Error non-retryable (permission, 4xx) tidak di-retry.
+    // v3.9.8 FIX: sebelumnya `code === 0` (catch-all untuk error tanpa code/status)
+    // juga di-retry. Ini salah — TypeError/ReferenceError (programming bug) gak
+    // akan berhasil di-retry, hanya buang waktu 500ms. Sekarang: hanya retry
+    // kalau code/status mengindikasikan network/Discord transient error.
+    const TRANSIENT_ERROR_NAMES = new Set([
+        'ConnectTimeoutError', 'WebSocketClosedError',
+        'FetchError',  // undici fetch errors (network)
+    ]);
+    const TRANSIENT_ERROR_CODES = new Set([
+        'ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'EAI_AGAIN', 'ENOTFOUND',
+        'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_SOCKET'
+    ]);
+    function isRetryableAuditError(err) {
+        const code = err.code || err.status || 0;
+        // Discord 5xx (server error) — retry
+        if (code >= 500 && code < 600) return true;
+        // Rate limit — retry
+        if (code === 429) return true;
+        // Known network error codes (Node.js / undici) — retry
+        if (typeof err.code === 'string' && TRANSIENT_ERROR_CODES.has(err.code)) return true;
+        // Known network error names — retry
+        if (TRANSIENT_ERROR_NAMES.has(err.name)) return true;
+        return false;
+    }
+
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
         try {
             await channel.send({ embeds: [embed] });
             return true;
         } catch (err) {
             const code = err.code || err.status || 0;
-            // Discord 5xx errors, network errors, rate limit → retry.
-            // 4xx (kecuali 429 rate limit) → tidak retry (pasti gagal lagi).
-            const isRetryable = code >= 500 || code === 429 || code === 0;
+            const isRetryable = isRetryableAuditError(err);
             if (attempt < MAX_ATTEMPTS && isRetryable) {
-                console.warn(`⚠️ Audit log attempt ${attempt} gagal (code ${code}), retry dalam ${RETRY_DELAY_MS}ms...`);
+                console.warn(`⚠️ Audit log attempt ${attempt} gagal (code ${code}, ${err.name || 'unknown'}), retry dalam ${RETRY_DELAY_MS}ms...`);
                 await sleep(RETRY_DELAY_MS);
                 continue;
             }
