@@ -3,26 +3,26 @@ const {
     MessageFlags, StringSelectMenuBuilder, PermissionFlagsBits,
     ModalBuilder, TextInputBuilder, TextInputStyle
 } = require('discord.js');
-const { createTicket, closeTicket, sendInvoice, getTicketMeta } = require('../utils/ticketManager');
-const { getConfig, setField } = require('../utils/configManager');
-const { isAdmin: checkIsAdmin } = require('../utils/permissions');
+const { createTicket, closeTicket, sendInvoice, getTicketMeta } = require('../src/data/ticketManager');
+const { getConfig, setField } = require('../src/data/configManager');
+const { isAdmin: checkIsAdmin } = require('../src/infra/permissions');
 const {
     addKey, getActiveKeysByUserAndRole, hasPermanentKey,
     getMaxExpireAtByUserAndRole, formatRemaining
-} = require('../utils/keyManager');
-const { scheduleRoleRemoval } = require('../utils/roleScheduler');
-const { getPanelByMessage, getPanel } = require('../utils/selfRoleManager');
-const { buildPanelEmbed, buildPanelComponents } = require('../utils/selfRolePanelBuilder');
-const { getSession, deleteSession, buildEmbed: buildSessionEmbed, parseColor } = require('../utils/embedBuilderSessions');
-const { get: getGiveaway, addParticipant: gwAddParticipant, removeParticipant: gwRemoveParticipant, end: endGiveaway, pickWinners } = require('../utils/giveawayManager');
-const { get: getPoll, vote: votePoll, getByMessage: getPollByMessage, getTotalVotes: getPollTotalVotes, remove: removePoll, getPollSession, deletePollSession } = require('../utils/pollManager');
-const { create: createPoll, setMessageId: setPollMessageId } = require('../utils/pollManager');
-const { logAudit } = require('../utils/auditLog');
+} = require('../src/data/keyManager');
+const { scheduleRoleRemoval } = require('../src/data/roleScheduler');
+const { getPanelByMessage, getPanel } = require('../src/data/selfRoleManager');
+const { buildPanelEmbed, buildPanelComponents } = require('../src/ui/selfRolePanelBuilder');
+const { getSession, deleteSession, buildEmbed: buildSessionEmbed, parseColor } = require('../src/ui/embedBuilderSessions');
+const { get: getGiveaway, addParticipant: gwAddParticipant, removeParticipant: gwRemoveParticipant, end: endGiveaway, pickWinners } = require('../src/data/giveawayManager');
+const { get: getPoll, vote: votePoll, getByMessage: getPollByMessage, getTotalVotes: getPollTotalVotes, remove: removePoll, getPollSession, deletePollSession } = require('../src/data/pollManager');
+const { create: createPoll, setMessageId: setPollMessageId } = require('../src/data/pollManager');
+const { logAudit } = require('../src/infra/auditLog');
 // v3.9.2 FIX: per-user lock untuk mencegah TOCTOU race condition
 // kalau user double-click tombol Discord (giveaway join/leave, poll vote).
-const { withLock: withUserLock } = require('../utils/userLock');
+const { withLock: withUserLock } = require('../src/infra/userLock');
 // v3.9.4: safeEditReply — fallback ke followUp kalau original ephemeral reply sudah di-dismiss user.
-const { safeEditReply } = require('../utils/safeReply');
+const { safeEditReply } = require('../src/infra/safeReply');
 
 // P1-6 FIX: track interaction yang sudah diproses untuk hindari double-processing.
 // Sebelumnya modal submit lewat guard `replied/deferred` → bisa double-reply.
@@ -358,7 +358,7 @@ module.exports = async (interaction) => {
 
             // === 5.5. Track purchase untuk stats/leaderboard ===
             try {
-                const { recordPurchase, parsePrice } = require('../utils/statsManager');
+                const { recordPurchase, parsePrice } = require('../src/data/statsManager');
                 // v3.9.4: scoped per guild
                 recordPurchase(interaction.guild.id, userId, parsePrice(price));
             } catch (_) {}
@@ -1630,7 +1630,7 @@ async function handlePollModalCreate(interaction) {
  * Return array of { guild, channel, channelInfo, channelId }.
  */
 async function findAllOwnerVoiceChannels(interaction) {
-    const tempVoiceManager = require('../utils/tempVoiceManager');
+    const tempVoiceManager = require('../src/data/tempVoiceManager');
     const userId = interaction.user.id;
     const results = [];
 
@@ -1796,7 +1796,7 @@ async function handleTempVoiceRenameSubmit(interaction) {
             return safeEditReply(interaction,{ content: `❌ Gagal rename: ${err.message}` });
         }
 
-        const tempVoiceManager = require('../utils/tempVoiceManager');
+        const tempVoiceManager = require('../src/data/tempVoiceManager');
         tempVoiceManager.updateChannel(guild.id, channelId, { name: newName.slice(0, 100) });
 
         // v3.8.1: refresh panel global supaya nama baru ter-update
@@ -1826,7 +1826,7 @@ async function handleTempVoiceKickMenu(interaction) {
             return interaction.reply({ content: check.reason, flags: MessageFlags.Ephemeral });
         }
         const found = check.found;
-        const { buildKickSelectMenu } = require('../utils/tempVoiceControlPanel');
+        const { buildKickSelectMenu } = require('../src/ui/tempVoiceControlPanel');
         const selectMenu = buildKickSelectMenu(found.channel, found.channelInfo.ownerId);
         if (!selectMenu) {
             return interaction.reply({ content: '❌ Tidak ada member lain di voice kamu saat ini.', flags: MessageFlags.Ephemeral });
@@ -1953,7 +1953,7 @@ async function handleTempVoiceLimitSubmit(interaction) {
             return safeEditReply(interaction,{ content: `❌ Gagal atur limit: ${err.message}` });
         }
 
-        const tempVoiceManager = require('../utils/tempVoiceManager');
+        const tempVoiceManager = require('../src/data/tempVoiceManager');
         tempVoiceManager.updateChannel(found.guild.id, found.channelId, { limit });
 
         // v3.8.1: refresh panel global supaya limit ter-update
@@ -1990,7 +1990,7 @@ async function handleTempVoiceLockToggle(interaction) {
             return safeEditReply(interaction,{ content: check.reason });
         }
         const found = check.found;
-        const tempVoiceManager = require('../utils/tempVoiceManager');
+        const tempVoiceManager = require('../src/data/tempVoiceManager');
         const { PermissionFlagsBits: PFB } = require('discord.js');
         // v3.8.5: toggle based on current state (panel hanya punya 1 tombol Lock)
         const willLock = !found.channelInfo.locked;
@@ -2037,7 +2037,7 @@ async function handleTempVoiceTransferMenu(interaction) {
             return interaction.reply({ content: check.reason, flags: MessageFlags.Ephemeral });
         }
         const found = check.found;
-        const { buildTransferSelectMenu } = require('../utils/tempVoiceControlPanel');
+        const { buildTransferSelectMenu } = require('../src/ui/tempVoiceControlPanel');
         const selectMenu = buildTransferSelectMenu(found.channel, found.channelInfo.ownerId);
         if (!selectMenu) {
             return interaction.reply({ content: '❌ Tidak ada member lain di voice kamu saat ini.', flags: MessageFlags.Ephemeral });
@@ -2074,7 +2074,7 @@ async function handleTempVoiceTransferExecute(interaction) {
             return safeEditReply(interaction,{ content: '❌ Member tersebut sudah tidak ada di voice kamu.' });
         }
 
-        const tempVoiceManager = require('../utils/tempVoiceManager');
+        const tempVoiceManager = require('../src/data/tempVoiceManager');
         const { PermissionFlagsBits: PFB } = require('discord.js');
 
         // Update permission: lepas owner lama, beri owner baru
@@ -2144,7 +2144,7 @@ async function handleTempVoiceDelete(interaction) {
             return safeEditReply(interaction,{ content: check.reason });
         }
         const found = check.found;
-        const tempVoiceManager = require('../utils/tempVoiceManager');
+        const tempVoiceManager = require('../src/data/tempVoiceManager');
 
         try {
             await found.channel.delete('Dihapus oleh owner via control panel');
@@ -2183,8 +2183,8 @@ async function handleTempVoiceInfo(interaction) {
             return interaction.reply({ content: '❌ Hanya bisa dipakai di server.', flags: MessageFlags.Ephemeral });
         }
 
-        const tempVoiceManager = require('../utils/tempVoiceManager');
-        const { buildInfoRoomEmbed } = require('../utils/tempVoiceControlPanel');
+        const tempVoiceManager = require('../src/data/tempVoiceManager');
+        const { buildInfoRoomEmbed } = require('../src/ui/tempVoiceControlPanel');
         const config = tempVoiceManager.getGuildConfig(interaction.guild.id);
 
         if (!config?.channels || Object.keys(config.channels).length === 0) {
@@ -2288,7 +2288,7 @@ async function handleTempVoiceSwitchSelect(interaction) {
             return safeEditReply(interaction,{ content: '❌ Hanya bisa dipakai di server.' });
         }
 
-        const tempVoiceManager = require('../utils/tempVoiceManager');
+        const tempVoiceManager = require('../src/data/tempVoiceManager');
         const selectedChannelId = interaction.values[0];
         const channelInfo = tempVoiceManager.getChannel(interaction.guild.id, selectedChannelId);
 
@@ -2302,7 +2302,7 @@ async function handleTempVoiceSwitchSelect(interaction) {
         }
 
         // Tampilkan info room (ephemeral)
-        const { buildInfoRoomEmbed } = require('../utils/tempVoiceControlPanel');
+        const { buildInfoRoomEmbed } = require('../src/ui/tempVoiceControlPanel');
         const { embed } = buildInfoRoomEmbed(channelInfo, voiceChannel, interaction.guild.name);
 
         return safeEditReply(interaction,{ embeds: [embed] });
@@ -2329,7 +2329,7 @@ async function handleTempVoiceChannelSelect(interaction) {
             return safeEditReply(interaction,{ content: '❌ Hanya bisa dipakai di server.' });
         }
 
-        const tempVoiceManager = require('../utils/tempVoiceManager');
+        const tempVoiceManager = require('../src/data/tempVoiceManager');
         const value = interaction.values[0];
         const [action, channelId] = value.split(':');
 
@@ -2369,7 +2369,7 @@ async function handleTempVoiceChannelSelect(interaction) {
                 });
             }
             case 'kick': {
-                const { buildKickSelectMenu } = require('../utils/tempVoiceControlPanel');
+                const { buildKickSelectMenu } = require('../src/ui/tempVoiceControlPanel');
                 const selectMenu = buildKickSelectMenu(voiceChannel, channelInfo.ownerId);
                 if (!selectMenu) {
                     return safeEditReply(interaction,{ content: '❌ Tidak ada member lain di channel itu.' });
@@ -2387,7 +2387,7 @@ async function handleTempVoiceChannelSelect(interaction) {
                 });
             }
             case 'transfer': {
-                const { buildTransferSelectMenu } = require('../utils/tempVoiceControlPanel');
+                const { buildTransferSelectMenu } = require('../src/ui/tempVoiceControlPanel');
                 const selectMenu = buildTransferSelectMenu(voiceChannel, channelInfo.ownerId);
                 if (!selectMenu) {
                     return safeEditReply(interaction,{ content: '❌ Tidak ada member lain di channel itu.' });
@@ -2419,11 +2419,11 @@ async function handleTempVoiceChannelSelect(interaction) {
  */
 async function handleResetConfigConfirm(interaction) {
     try {
-        const { saveConfig, DEFAULTS } = require('../utils/configManager');
-        const { logAudit } = require('../utils/auditLog');
+        const { saveConfig, DEFAULTS } = require('../src/data/configManager');
+        const { logAudit } = require('../src/infra/auditLog');
 
         // Verify admin permission (defense-in-depth, even though slash command already gated)
-        const { isAdmin } = require('../utils/permissions');
+        const { isAdmin } = require('../src/infra/permissions');
         if (!isAdmin(interaction.member)) {
             return interaction.update({
                 content: '❌ Kamu tidak punya permission admin. Reset dibatalkan.',
@@ -2501,7 +2501,7 @@ async function handleRestoreBackupConfirm(interaction) {
         }
 
         // Verify admin permission (defense-in-depth, even though slash command already gated)
-        const { isAdmin } = require('../utils/permissions');
+        const { isAdmin } = require('../src/infra/permissions');
         if (!isAdmin(interaction.member)) {
             return interaction.update({
                 content: '❌ Kamu tidak punya permission admin. Restore dibatalkan.',
@@ -2509,8 +2509,8 @@ async function handleRestoreBackupConfirm(interaction) {
             });
         }
 
-        const { restoreBackup } = require('../utils/backupManager');
-        const { logAudit } = require('../utils/auditLog');
+        const { restoreBackup } = require('../src/data/backupManager');
+        const { logAudit } = require('../src/infra/auditLog');
 
         const result = restoreBackup(name);
         if (!result.ok) {

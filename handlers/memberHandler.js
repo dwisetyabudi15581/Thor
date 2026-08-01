@@ -1,5 +1,5 @@
 const { EmbedBuilder, AuditLogEvent } = require('discord.js');
-const { getConfig, fillTemplate } = require('../utils/configManager');
+const { getConfig, fillTemplate } = require('../src/data/configManager');
 
 /**
  * Member join:
@@ -18,7 +18,7 @@ async function onMemberAdd(member) {
 
     // Track join untuk stats
     try {
-        const { recordJoin } = require('../utils/statsManager');
+        const { recordJoin } = require('../src/data/statsManager');
         // v3.9.4: scoped per guild
         recordJoin(guild.id, user.id);
     } catch (_) {}

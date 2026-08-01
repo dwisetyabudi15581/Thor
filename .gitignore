@@ -1,6 +1,15 @@
+# === Dependencies ===
 node_modules/
+
+# === Environment variables (SENSITIVE — never commit) ===
 .env
 .env.bak
+.env.local
+.env.*.local
+
+# === Runtime data files (JSON persistence) ===
+# v3.9.9: file data JSON tetap di root folder (backward compat) — kalau
+# mau dipindah ke data/ nanti, update path di src/data/*.js juga.
 config.json
 scheduledRoles.json
 keys.json
@@ -11,5 +20,25 @@ polls.json
 scheduledAnnouncements.json
 stats.json
 tempVoice.json
+tickets.json
+
+# === Backup folder ===
 backups/
+
+# === Logs ===
 *.log
+npm-debug.log*
+
+# === IDE / Editor ===
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# === OS ===
+Thumbs.db
+
+# === Test coverage ===
+coverage/
+.nyc_output/

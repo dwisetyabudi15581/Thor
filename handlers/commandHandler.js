@@ -1,22 +1,22 @@
 const { PermissionFlagsBits, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder, MessageFlags, StringSelectMenuBuilder, ChannelType, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
-const { getConfig, saveConfig, setField, DEFAULTS } = require('../utils/configManager');
-const { Embeds } = require('../utils/embedBuilder');
-const { isAdmin: checkIsAdmin } = require('../utils/permissions');
-const { addKey, getActiveKeysByUserAndRole, findAllByUser, formatKeysForUser, removeAllKeysByUser, getStats: getKeyStats, getStatsByGuild: getKeyStatsByGuild } = require('../utils/keyManager');
-const { scheduleRoleRemoval, removeActiveByUserAndRole, findAllByUser: findAllSchedulesByUser, removeAllByUser: removeAllSchedulesByUser, getRemainingDays, getAllActive: getAllScheduledActive, getActiveByGuild: getScheduledActiveByGuild } = require('../utils/roleScheduler');
-const { createPanel, addRoleToPanel, removeRoleFromPanel, getPanel, getPanelsByGuild, deletePanel, setMessageId, deletePanel: deleteSelfRolePanel } = require('../utils/selfRoleManager');
-const { buildPanelEmbed, buildPanelComponents } = require('../utils/selfRolePanelBuilder');
-const { createSession, buildEmbed, getSessionsByUser, deleteSessionByOwner } = require('../utils/embedBuilderSessions');
-const { logAudit } = require('../utils/auditLog');
-const { createBackup, listBackups, restoreBackup, formatSize: formatBackupSize } = require('../utils/backupManager');
-const { create: createGiveaway, setMessageId: setGiveawayMessageId, getByGuild: getGiveawaysByGuild, get: getGiveaway, end: endGiveaway, reroll: rerollGiveaway, pickWinners, remove: removeGiveaway } = require('../utils/giveawayManager');
-const { create: createScheduledAnn, getByGuild: getScheduledAnnsByGuild, get: getScheduledAnn, markSent: markScheduledAnnSent, remove: removeScheduledAnn, parseTime: parseAnnTime } = require('../utils/scheduledAnnouncements');
-const { addWarn, getWarns, getWarnCount, removeWarn, clearWarns, markActionTaken, DEFAULT_THRESHOLDS: WARN_THRESHOLDS } = require('../utils/warnManager');
-const { getStats: getUserStats, getTopUsers: getTopUsersStats, getServerStats: getServerStatsAll, parsePrice: parsePriceNum, recordPurchase: trackPurchase } = require('../utils/statsManager');
-const { create: createPoll, setMessageId: setPollMessageId, get: getPoll, getByGuild: getPollsByGuild, close: closePoll, getTotalVotes: getPollTotalVotes } = require('../utils/pollManager');
+const { getConfig, saveConfig, setField, DEFAULTS } = require('../src/data/configManager');
+const { Embeds } = require('../src/ui/embedBuilder');
+const { isAdmin: checkIsAdmin } = require('../src/infra/permissions');
+const { addKey, getActiveKeysByUserAndRole, findAllByUser, formatKeysForUser, removeAllKeysByUser, getStats: getKeyStats, getStatsByGuild: getKeyStatsByGuild } = require('../src/data/keyManager');
+const { scheduleRoleRemoval, removeActiveByUserAndRole, findAllByUser: findAllSchedulesByUser, removeAllByUser: removeAllSchedulesByUser, getRemainingDays, getAllActive: getAllScheduledActive, getActiveByGuild: getScheduledActiveByGuild } = require('../src/data/roleScheduler');
+const { createPanel, addRoleToPanel, removeRoleFromPanel, getPanel, getPanelsByGuild, deletePanel, setMessageId, deletePanel: deleteSelfRolePanel } = require('../src/data/selfRoleManager');
+const { buildPanelEmbed, buildPanelComponents } = require('../src/ui/selfRolePanelBuilder');
+const { createSession, buildEmbed, getSessionsByUser, deleteSessionByOwner } = require('../src/ui/embedBuilderSessions');
+const { logAudit } = require('../src/infra/auditLog');
+const { createBackup, listBackups, restoreBackup, formatSize: formatBackupSize } = require('../src/data/backupManager');
+const { create: createGiveaway, setMessageId: setGiveawayMessageId, getByGuild: getGiveawaysByGuild, get: getGiveaway, end: endGiveaway, reroll: rerollGiveaway, pickWinners, remove: removeGiveaway } = require('../src/data/giveawayManager');
+const { create: createScheduledAnn, getByGuild: getScheduledAnnsByGuild, get: getScheduledAnn, markSent: markScheduledAnnSent, remove: removeScheduledAnn, parseTime: parseAnnTime } = require('../src/data/scheduledAnnouncements');
+const { addWarn, getWarns, getWarnCount, removeWarn, clearWarns, markActionTaken, DEFAULT_THRESHOLDS: WARN_THRESHOLDS } = require('../src/data/warnManager');
+const { getStats: getUserStats, getTopUsers: getTopUsersStats, getServerStats: getServerStatsAll, parsePrice: parsePriceNum, recordPurchase: trackPurchase } = require('../src/data/statsManager');
+const { create: createPoll, setMessageId: setPollMessageId, get: getPoll, getByGuild: getPollsByGuild, close: closePoll, getTotalVotes: getPollTotalVotes } = require('../src/data/pollManager');
 // v3.9.4: safeEditReply — fallback ke followUp kalau original ephemeral reply sudah di-dismiss user.
 // Dipakai di command yang deferReply → long task → editReply (user bisa sempat tutup ephemeral).
-const { safeEditReply } = require('../utils/safeReply');
+const { safeEditReply } = require('../src/infra/safeReply');
 
 module.exports = async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
@@ -266,7 +266,7 @@ module.exports = async (interaction) => {
         // P2-10 FIX: validasi panjang sesuai Discord embed limits.
         // Sebelumnya: admin bisa set teks sepanjang apapun → saat embed dikirim,
         // `setTitle` / `setDescription` throw error → silent failure.
-        const { EMBED_LIMITS } = require('../utils/constants');
+        const { EMBED_LIMITS } = require('../src/infra/constants');
         const isTitle = tipe.endsWith('Title');
         const limit = isTitle ? EMBED_LIMITS.TITLE : EMBED_LIMITS.DESCRIPTION;
         const limitLabel = isTitle ? 'title (max 256)' : 'body (max 4096)';
@@ -439,7 +439,7 @@ module.exports = async (interaction) => {
         saveConfig(config);
         // v3.9.2: invalidate permissions cache kalau admin role dihapus
         if (tipe === 'admin') {
-            try { require('../utils/permissions').invalidateAdminRoleCache(); } catch (_) {}
+            try { require('../src/infra/permissions').invalidateAdminRoleCache(); } catch (_) {}
         }
         await logAudit(interaction.client, { action: 'REMOVE_ROLE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Hapus role **${tipe}** dari config (sebelumnya: <@&${current}>)`, guildId: interaction.guild.id });
         return safeEditReply(interaction,{ content: `✅ Role **${tipe}** berhasil dihapus dari config.\n\n💡 Untuk set ulang, pakai: \`/set-role ${tipe} @role\`` });
@@ -682,7 +682,7 @@ module.exports = async (interaction) => {
         //    /set-key slash command skip — inkonsistensi jejak transaksi).
         let invoiceSent = false;
         try {
-            const { sendInvoice } = require('../utils/ticketManager');
+            const { sendInvoice } = require('../src/data/ticketManager');
             // Buat pseudo-channel dari guild untuk akses invoiceChannel.
             // sendInvoice mengambil channel dari channel.guild.channels.cache,
             // jadi kita oper interaction.channel (channel command dijalankan).
@@ -1051,7 +1051,7 @@ module.exports = async (interaction) => {
         // Parse color
         let color = 0x5865F2; // default blurple
         if (colorStr) {
-            const { parseColor } = require('../utils/embedBuilderSessions');
+            const { parseColor } = require('../src/ui/embedBuilderSessions');
             const parsed = parseColor(colorStr);
             if (parsed === null) {
                 return safeEditReply(interaction,{ content: `❌ Color tidak valid: \`${colorStr}\`. Pakai format hex 6 digit, mis. \`#FF0000\` atau \`FF0000\`.` });
@@ -1062,7 +1062,7 @@ module.exports = async (interaction) => {
         // v3.9.3: validate Discord embed length limits sebelum setTitle/setDescription.
         // Discord API akan throw RangeError kalau title > 256 atau description > 4096,
         // yang sebelumnya ditangkap outer try-catch sebagai "Terjadi error" generik.
-        const { EMBED_LIMITS } = require('../utils/constants');
+        const { EMBED_LIMITS } = require('../src/infra/constants');
         if (title.length > EMBED_LIMITS.TITLE) {
             return safeEditReply(interaction,{ content: `❌ Title terlalu panjang (${title.length} char, maks ${EMBED_LIMITS.TITLE}).` });
         }
@@ -1554,7 +1554,7 @@ module.exports = async (interaction) => {
             // (meski winnerIds akhirnya numpuk, user lihat 2 "you won" message).
             // Lock di-scope per giveaway ID supaya admin berbeda tidak saling block
             // untuk giveaway berbeda, tapi 2 click ke giveaway yang sama di-serialize.
-            const { withLock: withUserLock } = require('../utils/userLock');
+            const { withLock: withUserLock } = require('../src/infra/userLock');
             const result = await withUserLock('gw_reroll', gw.id, async () => rerollGiveaway(id));
             if (!result) return safeEditReply(interaction,{ content: `❌ Giveaway \`${id}\` tidak ditemukan atau belum berakhir. (Atau reroll lain sedang jalan — coba lagi sebentar.)` });
             if (!result.winnerId) return safeEditReply(interaction,{ content: '❌ Tidak ada peserta untuk di-reroll.' });
@@ -1606,7 +1606,7 @@ module.exports = async (interaction) => {
         // Parse color
         let colorNum = 0x5865F2;
         if (color) {
-            const { parseColor } = require('../utils/embedBuilderSessions');
+            const { parseColor } = require('../src/ui/embedBuilderSessions');
             const parsed = parseColor(color);
             if (parsed === null) {
                 return safeEditReply(interaction,{ content: `❌ Color tidak valid: \`${color}\`. Pakai format hex 6 digit, mis. \`#FF0000\` atau \`FF0000\`.` });
@@ -1618,7 +1618,7 @@ module.exports = async (interaction) => {
         // Embedded announce dikirim saat scheduled time; kalau title/description
         // kelebihan, EmbedBuilder akan throw saat processScheduledAnnouncement
         // jalan → announce gagal terkirim dan entry stuck di scheduledAnns.json.
-        const { EMBED_LIMITS } = require('../utils/constants');
+        const { EMBED_LIMITS } = require('../src/infra/constants');
         if (title.length > EMBED_LIMITS.TITLE) {
             return safeEditReply(interaction,{ content: `❌ Title terlalu panjang (${title.length} char, maks ${EMBED_LIMITS.TITLE}).` });
         }
@@ -1961,7 +1961,7 @@ module.exports = async (interaction) => {
             // yang bisa overflow 100-char Discord limit kalau question panjang
             // (esp. setelah encodeURIComponent — spasi jadi %20, dll).
             // Sekarang customId = `poll_modal_create:${sessionId}` (~50 char, aman).
-            const { createPollSession } = require('../utils/pollManager');
+            const { createPollSession } = require('../src/data/pollManager');
             const sessionId = createPollSession({
                 userId: interaction.user.id,
                 channelId: channel.id,
@@ -2034,8 +2034,8 @@ module.exports = async (interaction) => {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const { ChannelType } = require('discord.js');
-        const tempVoiceManager = require('../utils/tempVoiceManager');
-        const { buildGlobalControlPanel } = require('../utils/tempVoiceControlPanel');
+        const tempVoiceManager = require('../src/data/tempVoiceManager');
+        const { buildGlobalControlPanel } = require('../src/ui/tempVoiceControlPanel');
 
         const guild = interaction.guild;
 
@@ -2152,7 +2152,7 @@ module.exports = async (interaction) => {
     if (interaction.commandName === 'tempvoice-remove') {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-        const tempVoiceManager = require('../utils/tempVoiceManager');
+        const tempVoiceManager = require('../src/data/tempVoiceManager');
         const config = tempVoiceManager.getGuildConfig(interaction.guild.id);
         if (!config) {
             return safeEditReply(interaction,{ content: 'ℹ️ Temp voice belum di-setup di guild ini.' });
@@ -2246,7 +2246,7 @@ module.exports = async (interaction) => {
         const message = rawMessage.replace(/\\n/g, '\n');
 
         // === Validasi panjang pesan (Discord limit 2000 char) ===
-        const { DISCORD_LIMITS } = require('../utils/constants');
+        const { DISCORD_LIMITS } = require('../src/infra/constants');
         if (message.length > DISCORD_LIMITS.MESSAGE_CONTENT) {
             return safeEditReply(interaction, {
                 content: `❌ Pesan terlalu panjang (${message.length} char, maks ${DISCORD_LIMITS.MESSAGE_CONTENT} char).\n\n` +

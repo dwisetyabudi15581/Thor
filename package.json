@@ -1,11 +1,14 @@
 {
   "name": "mlbb-community-bot",
-  "version": "3.9.8",
+  "version": "3.9.9",
   "description": "Bot setup server Mobile Legends Community - Welcome/Goodbye, Verify, Ticket, Invoice, Key-driven VIP, Self-Role, Temp Voice, Announce & Embed Builder, Backup, Giveaway, Scheduled Announcements, Warn, Stats/Leaderboard, Poll, fully configurable from Discord",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js"
+    "dev": "nodemon index.js",
+    "test": "node --test \"tests/**/*.test.js\"",
+    "test:unit": "node --test \"tests/unit/**/*.test.js\"",
+    "test:integration": "node --test \"tests/integration/**/*.test.js\""
   },
   "dependencies": {
     "discord.js": "^14.14.1",
