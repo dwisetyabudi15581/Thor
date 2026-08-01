@@ -73,7 +73,7 @@ module.exports = async function (interaction) {
             .sort((a, b) => b.since - a.since);
 
         if (afkUsers.length === 0) {
-            return interaction.reply({ content: '✅ Tidak ada member yang AFK saat ini.', flags: MessageFlags.Ephemeral });
+            return interaction.editReply({ content: '✅ Tidak ada member yang AFK saat ini.' });
         }
 
         const lines = afkUsers.slice(0, 25).map((u, i) => {

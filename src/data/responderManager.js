@@ -14,8 +14,9 @@
  *       "createdAt": 1735689600000,
  *       "useCount": 0,
  *       "lastUsedAt": null,
- *       "cooldownMs": 3000,             // anti-spam: same trigger gak reply 2x dalam 3s
- *       "lastFiredAt": null             // internal: untuk cooldown check
+ *       "cooldownMs": 3000,             // anti-spam: same trigger gak reply 2x dalam 3s PER USER
+ *       "lastFiredAt": null,            // legacy: timestamp global terakhir (tidak dipakai lagi, kept for backward compat)
+ *       "userCooldowns": {}             // v3.9.14: { [userId]: timestamp } per-user cooldown
  *     }
  *   ]
  * }
@@ -81,7 +82,8 @@ function addResponder(guildId, data) {
         useCount: 0,
         lastUsedAt: null,
         cooldownMs: data.cooldownMs || 3000,
-        lastFiredAt: null
+        lastFiredAt: null,            // legacy, kept for backward compat
+        userCooldowns: {}             // v3.9.14: per-user cooldown map
     };
     all[guildId].push(entry);
     save(all);
@@ -105,11 +107,16 @@ function removeResponder(guildId, trigger) {
  * Cari responder yang match dengan message.
  * Trigger dianggap match kalau message (lowercased) dimulai dengan trigger.
  *
+ * v3.9.14: cooldown sekarang PER-USER (bukan global per-trigger).
+ * Sebelumnya: user A trigger responder → user B trigger dalam cooldown → B tidak dapat reply.
+ * Sekarang: setiap user punya cooldown terpisah.
+ *
  * @param {string} guildId
  * @param {string} messageContent
+ * @param {string} [userId]  v3.9.14: userId untuk per-user cooldown check
  * @returns {Object|null} responder entry atau null kalau gak match / cooldown aktif
  */
-function findMatch(guildId, messageContent) {
+function findMatch(guildId, messageContent, userId) {
     const responders = getGuildResponders(guildId);
     if (responders.length === 0) return null;
 
@@ -120,9 +127,18 @@ function findMatch(guildId, messageContent) {
         const trig = r.trigger.toLowerCase();
         // Match kalau message == trigger ATAU message diikuti spasi (mis. "!sosmed" match "!sosmed halo")
         if (lower === trig || lower.startsWith(trig + ' ') || lower.startsWith(trig + '\n')) {
-            // Cooldown check — anti-spam
-            if (r.lastFiredAt && (now - r.lastFiredAt) < (r.cooldownMs || 3000)) {
-                return null;  // cooldown aktif, skip
+            // v3.9.14: per-user cooldown check
+            const cooldownMs = r.cooldownMs || 3000;
+            if (userId && r.userCooldowns && r.userCooldowns[userId]) {
+                const lastFired = r.userCooldowns[userId];
+                if ((now - lastFired) < cooldownMs) {
+                    return null;  // cooldown aktif untuk user ini, skip
+                }
+            } else if (!userId && r.lastFiredAt) {
+                // Fallback: kalau caller tidak pass userId, pakai legacy global cooldown
+                if ((now - r.lastFiredAt) < cooldownMs) {
+                    return null;
+                }
             }
             return r;
         }
@@ -132,15 +148,27 @@ function findMatch(guildId, messageContent) {
 
 /**
  * Tandai responder sudah dipakai (update useCount + lastFiredAt).
+ * v3.9.14: tambah parameter userId untuk track per-user cooldown.
  */
-function markUsed(guildId, responderId) {
+function markUsed(guildId, responderId, userId) {
     const all = load();
     if (!all[guildId]) return;
     const r = all[guildId].find(x => x.id === responderId);
     if (!r) return;
     r.useCount = (r.useCount || 0) + 1;
     r.lastUsedAt = Date.now();
-    r.lastFiredAt = Date.now();
+    r.lastFiredAt = Date.now();  // legacy, kept for backward compat
+    // v3.9.14: track per-user cooldown
+    if (userId) {
+        if (!r.userCooldowns || typeof r.userCooldowns !== 'object') r.userCooldowns = {};
+        r.userCooldowns[userId] = Date.now();
+        // Cleanup: keep only recent entries (last 100 users) supaya file gak bengkak
+        const entries = Object.entries(r.userCooldowns);
+        if (entries.length > 100) {
+            entries.sort((a, b) => b[1] - a[1]);
+            r.userCooldowns = Object.fromEntries(entries.slice(0, 100));
+        }
+    }
     save(all);
 }
 

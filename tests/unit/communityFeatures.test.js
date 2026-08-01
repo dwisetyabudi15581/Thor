@@ -85,6 +85,31 @@ test('responderManager: case-insensitive trigger match', () => {
     removeResponder('test_guild_case', '!SOSMED');
 });
 
+test('responderManager: v3.9.14 per-user cooldown (different users not blocked)', () => {
+    const { addResponder, findMatch, removeResponder, markUsed } = require('../../src/data/responderManager');
+    addResponder('test_guild_usercd', {
+        trigger: '!cdtest',
+        reply: 'Test reply',
+        createdBy: 'u', createdByTag: 'U',
+        cooldownMs: 5000
+    });
+
+    // User A triggers
+    const matchA = findMatch('test_guild_usercd', '!cdtest', 'userA');
+    assert.ok(matchA);
+    markUsed('test_guild_usercd', matchA.id, 'userA');
+
+    // User B triggers within cooldown period — should still get reply (per-user cooldown)
+    const matchB = findMatch('test_guild_usercd', '!cdtest', 'userB');
+    assert.ok(matchB, 'User B should get reply even if User A just triggered (per-user cooldown)');
+
+    // User A triggers again within cooldown — should be blocked
+    const matchA2 = findMatch('test_guild_usercd', '!cdtest', 'userA');
+    assert.strictEqual(matchA2, null, 'User A should be on cooldown');
+
+    removeResponder('test_guild_usercd', '!cdtest');
+});
+
 // ============ AUTOMOD MANAGER ============
 
 test('automodManager: getDefaultConfig returns valid structure', () => {
@@ -244,7 +269,7 @@ test('levelManager: getTopUsers returns sorted list', () => {
     assert.strictEqual(top[2].userId, 'user_low');
 });
 
-test('levelManager: getRoleForLevel returns correct role', () => {
+test('levelManager: getRoleForLevel returns array of roles for stacking (v3.9.14)', () => {
     const { getRoleForLevel } = require('../../src/data/levelManager');
     const config = {
         levelRoles: [
@@ -252,11 +277,11 @@ test('levelManager: getRoleForLevel returns correct role', () => {
             { level: 50, roleId: 'role_50' }
         ]
     };
-    assert.strictEqual(getRoleForLevel(5, config), null);     // below any threshold
-    assert.strictEqual(getRoleForLevel(10, config), 'role_10');
-    assert.strictEqual(getRoleForLevel(30, config), 'role_10');  // still role_10 (highest <= 30)
-    assert.strictEqual(getRoleForLevel(50, config), 'role_50');
-    assert.strictEqual(getRoleForLevel(100, config), 'role_50'); // still role_50
+    assert.deepStrictEqual(getRoleForLevel(5, config), []);                       // below any threshold
+    assert.deepStrictEqual(getRoleForLevel(10, config), ['role_10']);             // cap level 10
+    assert.deepStrictEqual(getRoleForLevel(30, config), ['role_10']);             // still only role_10 (level 50 not yet capped)
+    assert.deepStrictEqual(getRoleForLevel(50, config), ['role_10', 'role_50']);  // STACKING: dapat keduanya
+    assert.deepStrictEqual(getRoleForLevel(100, config), ['role_10', 'role_50']); // tetap keduanya
 });
 
 // ============ CONFIG MANAGER — leveling config ============

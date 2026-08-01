@@ -669,13 +669,13 @@ function getCommands() {
                 { type: 5, name: 'block_links', description: 'Block semua link?', required: false },
                 { type: 3, name: 'block_words', description: 'Kata yang di-block (comma-separated, mis. kata1,kata2)', required: false },
                 { type: 3, name: 'word_action', description: 'Action untuk word filter', required: false, choices: [
-                    { name: 'Delete only', value: 'delete' },
+                    { name: 'Delete only', value: 'delete_only' },
                     { name: 'Warn', value: 'warn' },
                     { name: 'Mute 10 menit', value: 'mute_10m' }
                 ]},
                 { type: 4, name: 'max_mentions', description: 'Max mention per message (default: 5)', required: false },
                 { type: 3, name: 'mention_action', description: 'Action untuk mass-mention', required: false, choices: [
-                    { name: 'Delete only', value: 'delete' },
+                    { name: 'Delete only', value: 'delete_only' },
                     { name: 'Warn', value: 'warn' },
                     { name: 'Mute 10 menit', value: 'mute_10m' }
                 ]}

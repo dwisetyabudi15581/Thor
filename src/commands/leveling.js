@@ -141,6 +141,10 @@ module.exports = async function (interaction) {
 
     // === RANK (lihat level sendiri / user lain) ===
     if (interaction.commandName === 'rank') {
+        // v3.9.14: deferReply dulu supaya gak timeout kalau disk I/O lambat
+        // (levelManager.getUser baca levels.json sync dari disk)
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
         const targetUser = interaction.options.getUser('user') || interaction.user;
         const userData = levelManager.getUser(interaction.guild.id, targetUser.id);
 
@@ -167,7 +171,7 @@ module.exports = async function (interaction) {
             )
             .setFooter({ text: `Leveling ${config.leveling?.enabled ? 'enabled' : 'disabled'} | XP/msg: ${config.leveling?.xpPerMessage || 15}` });
 
-        return interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
+        return safeEditReply(interaction, { embeds: [embed] });
     }
 
     // === LEADERBOARD LEVEL (public) ===

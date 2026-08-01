@@ -84,12 +84,12 @@ module.exports = async function (interaction) {
             .setColor(config.enabled ? 0x57F287 : 0x95A5A6)
             .addFields(
                 { name: '✅ Status', value: config.enabled ? 'Enabled ✅' : 'Disabled ❌', inline: true },
-                { name: '⚡ Spam Detection', value: `${config.spamThreshold} msg dalam ${config.spamWindowMs / 1000}s → ${config.spamAction}`, inline: false },
-                { name: '🔗 Link Blocking', value: config.blockLinks ? `Yes (allowed: ${config.linkAllowedChannels.length} ch, ${config.linkAllowedRoles.length} role)` : 'No', inline: false },
-                { name: '📝 Word Filter', value: config.blockWords.length > 0 ? config.blockWords.map(w => `\`${w}\``).join(', ') : '_(none)_', inline: false },
-                { name: '👥 Mention Limit', value: `Max ${config.maxMentions} mentions → ${config.mentionAction}`, inline: false }
+                { name: '⚡ Spam Detection', value: `${config.spamThreshold} msg dalam ${(config.spamWindowMs || 10000) / 1000}s → ${config.spamAction || 'mute_10m'}`, inline: false },
+                { name: '🔗 Link Blocking', value: config.blockLinks ? `Yes (allowed: ${config.linkAllowedChannels?.length || 0} ch, ${config.linkAllowedRoles?.length || 0} role)` : 'No', inline: false },
+                { name: '📝 Word Filter', value: (config.blockWords?.length || 0) > 0 ? config.blockWords.map(w => `\`${w}\``).join(', ') : '_(none)_', inline: false },
+                { name: '👥 Mention Limit', value: `Max ${config.maxMentions || 5} mentions → ${config.mentionAction || 'warn'}`, inline: false }
             )
-            .setFooter({ text: `Updated: ${new Date(config.updatedAt).toLocaleString('id-ID')}` });
+            .setFooter({ text: `Updated: ${config.updatedAt ? new Date(config.updatedAt).toLocaleString('id-ID') : 'unknown'}` });
 
         return safeEditReply(interaction, { embeds: [embed] });
     }

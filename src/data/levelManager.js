@@ -176,24 +176,24 @@ function getLevelRoles(config) {
 
 /**
  * Cek role apa yang harus di-assign saat user cap level tertentu.
- * Return roleId atau null.
+ * v3.9.14 FIX: sekarang return array of roleIds (semua role dengan level ≤ user level),
+ * supaya role stacking works (mis. user level 50 dapat @Active level 10 DAN @Veteran level 50).
+ * Backward compatible: kalau caller expect string, ambil elemen pertama.
+ *
+ * @param {number} level
+ * @param {Object} config
+ * @returns {string[]} array of roleIds (kosong kalau tidak ada yang match)
  */
 function getRoleForLevel(level, config) {
     const roles = getLevelRoles(config);
-    // Cari role dengan level <= user level tertinggi
-    let bestRole = null;
-    let bestLevel = 0;
-    for (const r of roles) {
-        if (r.level <= level && r.level > bestLevel) {
-            bestRole = r.roleId;
-            bestLevel = r.level;
-        }
-    }
-    return bestRole;
+    // Ambil semua role dengan level <= user level, urut ascending by level
+    return roles
+        .filter(r => r.level <= level)
+        .sort((a, b) => a.level - b.level)
+        .map(r => r.roleId);
 }
 
 module.exports = {
-    setAFK: null,  // bukan AFK, ini leveling
     getUser,
     addXp,
     getTopUsers,

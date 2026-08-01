@@ -9,10 +9,9 @@
  * Urutan eksekusi: anti-spam (delete dulu kalau perlu) → auto-responder → AFK clear → XP gain.
  */
 
-const { Events, EmbedBuilder, PermissionFlagsBits } = require('discord.js');
+const { Events, EmbedBuilder } = require('discord.js');
 const { incrementMessages: trackMessage } = require('../../data/statsManager');
 const { getConfig } = require('../../data/configManager');
-const { isAdmin: checkIsAdmin } = require('../../infra/permissions');
 
 // Data managers untuk fitur baru
 const responderManager = require('../../data/responderManager');
@@ -31,8 +30,13 @@ async function onMessageCreate(message) {
         } catch (_) {}
 
         // === v3.9.13: Hook 4 fitur community ===
+        // Urutan: automod (delete dulu kalau perlu) → auto-responder → AFK → leveling.
+        // Penting: kalau automod menghapus message, hook berikutnya di-skip karena
+        // message.reply akan throw "Unknown Message" (10008) — error itu tertelan
+        // silently, jadi auto-responder / AFK reply tampak "tidak berfungsi".
         try {
-            await hookAutoMod(message);
+            const deleted = await hookAutoMod(message);
+            if (deleted) return; // skip hook lainnya — message sudah di-delete
             await hookAutoResponder(message);
             await hookAfkSystem(message);
             await hookLeveling(message);
@@ -52,10 +56,10 @@ async function onMessageCreate(message) {
  */
 async function hookAutoMod(message) {
     const config = automodManager.getGuildConfig(message.guild.id);
-    if (!config || !config.enabled) return;
+    if (!config || !config.enabled) return false;
 
     // Admin always whitelisted
-    if (automodManager.isUserWhitelisted(message.member, config)) return;
+    if (automodManager.isUserWhitelisted(message.member, config)) return false;
 
     const content = message.content || '';
     let shouldDelete = false;
@@ -100,13 +104,15 @@ async function hookAutoMod(message) {
         }
     }
 
-    if (!shouldDelete) return;
+    if (!shouldDelete) return false;
 
     // Apply action
+    let deleted = false;
     try {
         // Delete message dulu
         if (shouldDelete) {
             await message.delete().catch(() => {});
+            deleted = true;
         }
 
         // Apply further action (warn/mute/kick)
@@ -141,6 +147,7 @@ async function hookAutoMod(message) {
     } catch (err) {
         console.warn(`⚠️ Auto-mod apply error: ${err.message}`);
     }
+    return deleted;
 }
 
 /**
@@ -148,7 +155,8 @@ async function hookAutoMod(message) {
  * Kalau message diawali dengan trigger keyword, bot auto-reply.
  */
 async function hookAutoResponder(message) {
-    const responder = responderManager.findMatch(message.guild.id, message.content);
+    // v3.9.14: pass userId supaya cooldown jadi per-user (bukan global per-trigger)
+    const responder = responderManager.findMatch(message.guild.id, message.content, message.author.id);
     if (!responder) return;
 
     // Don't trigger responder if message is in a thread about ticket (avoid noise)
@@ -164,7 +172,7 @@ async function hookAutoResponder(message) {
         } else {
             await message.reply({ content: responder.reply, allowedMentions: { parse: [] } });
         }
-        responderManager.markUsed(message.guild.id, responder.id);
+        responderManager.markUsed(message.guild.id, responder.id, message.author.id);
     } catch (err) {
         console.warn(`⚠️ Auto-responder error: ${err.message}`);
     }
@@ -177,8 +185,42 @@ async function hookAutoResponder(message) {
  */
 async function hookAfkSystem(message) {
     // 3a. Clear AFK sender kalau dia lagi AFK
+    let senderWasAFK = false;
     if (afkManager.isAFK(message.guild.id, message.author.id)) {
         afkManager.clearAFK(message.guild.id, message.author.id);
+        senderWasAFK = true;
+    }
+
+    // 3b. Kumpulkan AFK reply untuk mention user yang AFK
+    const afkReplies = [];
+    if (message.mentions?.users && message.mentions.users.size > 0) {
+        for (const [userId, user] of message.mentions.users) {
+            if (userId === message.author.id) continue;  // skip self-mention
+            if (user.bot) continue;
+
+            const afkData = afkManager.getAFK(message.guild.id, userId);
+            if (afkData) {
+                const duration = afkManager.formatDuration(afkData.since);
+                afkReplies.push(`💤 <@${userId}> sedang AFK: **${afkData.reason}** *(${duration})*`);
+            }
+        }
+    }
+
+    // v3.9.14 FIX: gabung welcome-back + AFK reply jadi 1 message (avoid double-reply noise)
+    // Kalau sender AFK dan ada AFK mention reply, gabung supaya hanya 1 message.
+    if (senderWasAFK && afkReplies.length > 0) {
+        try {
+            const reply = await message.reply({
+                content: `👋 Welcome back, ${message.author}! Status AFK kamu sudah di-clear.\n\n${afkReplies.join('\n')}`,
+                allowedMentions: { users: [] }
+            });
+            setTimeout(() => reply.delete().catch(() => {}), 30000);
+        } catch (_) {}
+        return;
+    }
+
+    // Hanya sender AFK (tanpa AFK mention)
+    if (senderWasAFK) {
         try {
             const welcomeBack = await message.reply({
                 content: `👋 Welcome back, ${message.author}! Status AFK kamu sudah di-clear.`,
@@ -187,23 +229,10 @@ async function hookAfkSystem(message) {
             // Auto-delete welcome back message after 5 seconds (avoid clutter)
             setTimeout(() => welcomeBack.delete().catch(() => {}), 5000);
         } catch (_) {}
+        return;
     }
 
-    // 3b. Reply kalau mention user yang AFK
-    if (!message.mentions?.users || message.mentions.users.size === 0) return;
-
-    const afkReplies = [];
-    for (const [userId, user] of message.mentions.users) {
-        if (userId === message.author.id) continue;  // skip self-mention
-        if (user.bot) continue;
-
-        const afkData = afkManager.getAFK(message.guild.id, userId);
-        if (afkData) {
-            const duration = afkManager.formatDuration(afkData.since);
-            afkReplies.push(`💤 <@${userId}> sedang AFK: **${afkData.reason}** *(${duration})*`);
-        }
-    }
-
+    // Hanya AFK mention reply (sender tidak AFK)
     if (afkReplies.length > 0) {
         try {
             const reply = await message.reply({
@@ -246,19 +275,21 @@ async function hookLeveling(message) {
         } catch (_) {}
     }
 
-    // Auto-assign role kalau ada level role untuk level ini
-    const roleId = levelManager.getRoleForLevel(newLevel, config);
-    if (roleId && message.member) {
-        try {
-            if (!message.member.roles.cache.has(roleId)) {
-                await message.member.roles.add(roleId);
-                console.log(`📊 Auto-assign role ${roleId} to ${message.author.tag} (level ${newLevel})`);
+    // Auto-assign role kalau ada level role untuk level ini (v3.9.14: support stacking)
+    const roleIds = levelManager.getRoleForLevel(newLevel, config);
+    if (roleIds.length > 0 && message.member) {
+        // Tentukan role yang belum dimiliki user (yang baru saja di-cap)
+        const toAdd = roleIds.filter(id => !message.member.roles.cache.has(id));
+        if (toAdd.length > 0) {
+            try {
+                await message.member.roles.add(toAdd);
+                console.log(`📊 Auto-assign ${toAdd.length} role(s) to ${message.author.tag} (level ${newLevel}): ${toAdd.join(', ')}`);
                 try {
                     await message.author.send(`🎉 Kamu dapat role baru di **${message.guild.name}** karena cap Level ${newLevel}!`);
                 } catch (_) {}
+            } catch (err) {
+                console.warn(`⚠️ Gagal auto-assign level role: ${err.message}`);
             }
-        } catch (err) {
-            console.warn(`⚠️ Gagal auto-assign level role: ${err.message}`);
         }
     }
 }

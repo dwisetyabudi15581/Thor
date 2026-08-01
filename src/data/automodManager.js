@@ -11,9 +11,9 @@
  *     "linkAllowedChannels": [],    // channel ID yang boleh link
  *     "linkAllowedRoles": [],       // role ID yang boleh post link
  *     "blockWords": [],             // kata yang di-block (case-insensitive)
- *     "wordAction": "delete",       // "delete" | "warn" | "mute_10m"
+ *     "wordAction": "delete_only", // "delete_only" | "warn" | "mute_10m"
  *     "maxMentions": 5,             // maks mention per message
- *     "mentionAction": "warn",      // "delete" | "warn" | "mute_10m"
+ *     "mentionAction": "warn",      // "delete_only" | "warn" | "mute_10m"
  *     "enabled": true,
  *     "createdAt": ...,
  *     "updatedAt": ...
@@ -48,7 +48,14 @@ function save(data) {
 
 function getGuildConfig(guildId) {
     const all = load();
-    return all[guildId] || null;
+    const cfg = all[guildId];
+    if (!cfg) return null;
+    // v3.9.14 backward compat: normalisasi legacy value 'delete' → 'delete_only'
+    // (sebelumnya wordAction/mentionAction pakai 'delete', spamAction pakai 'delete_only').
+    // Sekarang semua pakai 'delete_only' supaya konsisten.
+    if (cfg.wordAction === 'delete') cfg.wordAction = 'delete_only';
+    if (cfg.mentionAction === 'delete') cfg.mentionAction = 'delete_only';
+    return cfg;
 }
 
 function getDefaultConfig() {
@@ -60,7 +67,7 @@ function getDefaultConfig() {
         linkAllowedChannels: [],
         linkAllowedRoles: [],
         blockWords: [],
-        wordAction: 'delete',
+        wordAction: 'delete_only',
         maxMentions: 5,
         mentionAction: 'warn',
         enabled: true,
