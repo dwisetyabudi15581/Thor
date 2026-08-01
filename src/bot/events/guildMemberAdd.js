@@ -5,7 +5,7 @@
  */
 
 const { Events } = require('discord.js');
-const { onMemberAdd } = require('../../../handlers/memberHandler');
+const { onMemberAdd } = require('../memberHandler');
 
 async function onEvent(member) {
     try {

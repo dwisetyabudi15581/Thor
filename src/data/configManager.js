@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { safeWriteJSON } = require('../infra/safeWrite');
 
-const configPath = path.join(__dirname, '..', 'config.json');
+const configPath = path.join(__dirname, '..', '..', 'data', 'config.json');
 
 // Default structure (digunakan kalau config.json kosong / rusak / format lama)
 const DEFAULTS = {

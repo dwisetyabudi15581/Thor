@@ -3,7 +3,7 @@
  */
 
 const { Events } = require('discord.js');
-const { onMemberRemove } = require('../../../handlers/memberHandler');
+const { onMemberRemove } = require('../memberHandler');
 
 async function onEvent(member) {
     try {

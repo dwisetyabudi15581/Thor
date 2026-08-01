@@ -8,8 +8,9 @@ node_modules/
 .env.*.local
 
 # === Runtime data files (JSON persistence) ===
-# v3.9.9: file data JSON tetap di root folder (backward compat) — kalau
-# mau dipindah ke data/ nanti, update path di src/data/*.js juga.
+# v3.9.10: file data JSON sekarang di data/ folder (sebelumnya di root).
+# Kalau file lama masih ada di root (pre-v3.9.10), tetap di-ignore.
+data/*.json
 config.json
 scheduledRoles.json
 keys.json

@@ -1,0 +1,325 @@
+/**
+ * Domain: config
+ * Slash commands: /setup-verify, /setup-ticket, /set-role, /set-channel,
+ *                 /set-message, /remove-role, /remove-channel, /list-messages,
+ *                 /reset-message, /reset-config, /config-show
+ *
+ * Dipisah dari handlers/commandHandler.js (v3.9.9 refactor).
+ * Behavior: kelola config bot (roles, channels, messages) + setup panel verifikasi/tiket.
+ */
+
+const {
+    EmbedBuilder,
+    ButtonBuilder,
+    ButtonStyle,
+    ActionRowBuilder,
+    MessageFlags,
+    getConfig,
+    saveConfig,
+    setField,
+    DEFAULTS,
+    Embeds,
+    logAudit,
+    safeEditReply,
+    invalidateAdminRoleCache,
+    getKeyStatsByGuild,
+    getScheduledActiveByGuild,
+    getPanelsByGuild,
+    getSessionsByUser,
+    EMBED_LIMITS
+} = require('./_shared');
+
+module.exports = async function (interaction) {
+    const embeds = new Embeds(interaction.client);
+    const config = getConfig();
+
+    // === SETUP VERIFY ===
+    if (interaction.commandName === 'setup-verify') {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+        // Kalau role verified belum di-set, minta admin set dulu
+        if (!config.roles.verified) {
+            return safeEditReply(interaction,{ content: '❌ Role Verified belum di-set. Pakai `/set-role verified @role` dulu.' });
+        }
+
+        const embed = new EmbedBuilder()
+            .setTitle(config.messages.verifyTitle)
+            .setDescription(
+                config.messages.verifyBody.replace(/\{server\}/g, interaction.guild.name)
+            )
+            .setColor(0x2ECC71)
+            .setFooter({ text: interaction.client.user.username, iconURL: interaction.client.user.displayAvatarURL({ dynamic: true }) })
+            .setTimestamp();
+
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId('btn_verify')
+                .setLabel('Verifikasi Saya')
+                .setEmoji('✅')
+                .setStyle(ButtonStyle.Success)
+        );
+
+        await interaction.channel.send({ embeds: [embed], components: [row] });
+        return safeEditReply(interaction,{ content: '✅ Panel verifikasi dipasang!' });
+    }
+
+    // === SETUP TICKET ===
+    if (interaction.commandName === 'setup-ticket') {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+        if (!config.products || config.products.length === 0) {
+            return safeEditReply(interaction,{ content: '❌ Belum ada produk. Pakai `/add-product` dulu.' });
+        }
+
+        const priceList = config.products.map(p => `• **${p.label}** — ${p.price}`).join('\n');
+
+        const embed = new EmbedBuilder()
+            .setTitle(config.messages.ticketTitle)
+            .setDescription(
+                config.messages.ticketBody + '\n\n' +
+                '**💰 PRICE LIST KEY 💰**\n' +
+                priceList
+            )
+            .setColor(0xE67E22)
+            .setFooter({ text: interaction.client.user.username, iconURL: interaction.client.user.displayAvatarURL({ dynamic: true }) })
+            .setTimestamp();
+
+        const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('ticket_trade').setLabel('Beli Key / Transaksi').setEmoji('🛒').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId('ticket_help').setLabel('Bantuan Staff').setEmoji('📞').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('ticket_report').setLabel('Laporkan Member').setEmoji('⚠️').setStyle(ButtonStyle.Danger)
+        );
+
+        await interaction.channel.send({ embeds: [embed], components: [row] });
+        return safeEditReply(interaction,{ content: '✅ Panel tiket dipasang!' });
+    }
+
+    // === SET ROLE ===
+    if (interaction.commandName === 'set-role') {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        const tipe = interaction.options.getString('tipe');
+        const role = interaction.options.getRole('role');
+        setField(`roles.${tipe}`, role.id);
+        await logAudit(interaction.client, { action: 'SET_ROLE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Role **${tipe}** diatur ke ${role.name} (\`${role.id}\`)`, guildId: interaction.guild.id });
+        return safeEditReply(interaction,{ content: `✅ Role **${tipe}** diatur ke ${role} (\`${role.id}\`)` });
+    }
+
+    // === SET CHANNEL ===
+    if (interaction.commandName === 'set-channel') {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        const tipe = interaction.options.getString('tipe');
+        const channel = interaction.options.getChannel('channel');
+        setField(`channels.${tipe}`, channel.id);
+        await logAudit(interaction.client, { action: 'SET_CHANNEL', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Channel **${tipe}** diatur ke #${channel.name} (\`${channel.id}\`)`, guildId: interaction.guild.id });
+        return safeEditReply(interaction,{ content: `✅ Channel **${tipe}** diatur ke ${channel} (\`${channel.id}\`)` });
+    }
+
+    // === SET MESSAGE ===
+    if (interaction.commandName === 'set-message') {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        const tipe = interaction.options.getString('tipe');
+        const teks = interaction.options.getString('teks');
+
+        // P2-10 FIX: validasi panjang sesuai Discord embed limits.
+        // Sebelumnya: admin bisa set teks sepanjang apapun → saat embed dikirim,
+        // `setTitle` / `setDescription` throw error → silent failure.
+        const isTitle = tipe.endsWith('Title');
+        const limit = isTitle ? EMBED_LIMITS.TITLE : EMBED_LIMITS.DESCRIPTION;
+        const limitLabel = isTitle ? 'title (max 256)' : 'body (max 4096)';
+        if (teks.length > limit) {
+            return safeEditReply(interaction,{
+                content: `❌ Teks terlalu panjang untuk **${tipe}**.\n\n📏 Panjang: **${teks.length}** char\n🎯 Limit: **${limit}** char (${limitLabel})\n💡 Potong ${teks.length - limit} char lagi.`
+            });
+        }
+        setField(`messages.${tipe}`, teks);
+        await logAudit(interaction.client, { action: 'SET_MESSAGE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Set pesan **${tipe}** (${teks.length} char)`, guildId: interaction.guild.id });
+        return safeEditReply(interaction,{
+            content: `✅ Pesan **${tipe}** diperbarui.\n\nPreview:\n\`\`\`\n${teks}\n\`\`\`\nVariabel tersedia: \`{user}\` \`{username}\` \`{server}\` \`{count}\` \`{action}\``
+        });
+    }
+
+    // === CONFIG SHOW (v3.1 — comprehensive view) ===
+    if (interaction.commandName === 'config-show') {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+        const fmt = (id, type) => id ? `<${type}:${id}> (\`${id}\`)` : '❌ belum di-set';
+
+        // --- Stats: VIP Keys ---
+        // v3.9.4: scoped per guild — sebelumnya getKeyStats() return global count.
+        const keyStats = getKeyStatsByGuild(interaction.guild.id);
+        const keyLines = [
+            `• Total key tersimpan: **${keyStats.total}**`,
+            `• Aktif: **${keyStats.active}**${keyStats.permanent > 0 ? ` (termasuk ${keyStats.permanent} permanen)` : ''}`,
+            keyStats.expired > 0
+                ? `• ⚠️ Expired (menunggu scheduler bersihkan): **${keyStats.expired}**`
+                : `• Expired: **0** ✅`
+        ];
+
+        // --- Stats: Scheduled Role Removals ---
+        // v3.9.4: scoped per guild — sebelumnya getAllScheduledActive() return global list.
+        const scheduled = getScheduledActiveByGuild(interaction.guild.id);
+        let nextDueStr = '—';
+        if (scheduled.length > 0) {
+            const next = scheduled.reduce((a, b) => (a.expireAt < b.expireAt ? a : b));
+            const msLeft = next.expireAt - Date.now();
+            if (msLeft > 0) {
+                const days = Math.floor(msLeft / 86400000);
+                const hours = Math.floor((msLeft % 86400000) / 3600000);
+                nextDueStr = days > 0 ? `${days}h ${hours}j lagi` : `${hours}j lagi`;
+            } else {
+                nextDueStr = 'akan dieksekusi loop berikutnya';
+            }
+        }
+        const schedLines = [
+            `• Total jadwal aktif: **${scheduled.length}**`,
+            `• Eksekusi berikutnya: **${nextDueStr}**`,
+            `• Loop scheduler: setiap 60 detik`
+        ];
+
+        // --- Stats: Self-Role Panels (guild ini) ---
+        const panels = getPanelsByGuild(interaction.guild.id);
+        const panelLines = panels.length > 0
+            ? panels.map(p => `  • **${p.title}** — ${p.type === 'button' ? '🔘 Button' : '📋 Select'} | ${p.exclusive ? '🔒 Eksklusif' : '✅ Multi'} | ${p.roles.length} role`).join('\n')
+            : '_(belum ada panel — pakai `/setup-selfrole`)_';
+        const panelSummary = `${panels.length} panel terdaftar di guild ini:\n${panelLines}`;
+
+        // --- Stats: Embed Builder Sessions (milik user ini) ---
+        const mySessions = getSessionsByUser(interaction.user.id);
+        const sessionLine = mySessions.length > 0
+            ? `**${mySessions.length} session aktif** (milik kamu) — pakai \`/embed-list\` untuk lihat detail`
+            : '_(tidak ada session aktif — pakai `/embed-builder` untuk mulai)_';
+
+        // --- Products detail (dengan role + days mapping) ---
+        const productLines = config.products.length > 0
+            ? config.products.map(p => {
+                const roleStr = p.roleId ? `<@&${p.roleId}>` : '❌ belum di-map';
+                const daysStr = p.days === 0 || !p.days ? '♾️ permanen' : `${p.days} hari`;
+                return `• **${p.label}** (\`${p.value}\`) — ${p.price}\n  → Role: ${roleStr} | Durasi: ${daysStr}`;
+            }).join('\n')
+            : '_(belum ada produk — pakai `/add-product`)_';
+
+        const embed = embeds.info('⚙️ KONFIGURASI BOT', 'Berikut setting bot saat ini (v3.1 — key-driven VIP + self-role + embed builder):')
+            .addFields(
+                { name: '🎭 Roles', value: [
+                    `• Verified: ${fmt(config.roles.verified, '@&')}`,
+                    `• Unverified: ${fmt(config.roles.unverified, '@&')}`,
+                    `• Admin: ${fmt(config.roles.admin, '@&')}`
+                ].join('\n'), inline: false },
+                { name: '📢 Channels', value: [
+                    `• Welcome: ${fmt(config.channels.welcome, '#')}`,
+                    `• Goodbye: ${fmt(config.channels.goodbye, '#')}`,
+                    `• Invoice: ${fmt(config.channels.invoice, '#')}`
+                ].join('\n'), inline: false },
+                { name: `📦 Produk (${config.products.length})`, value: productLines, inline: false },
+                { name: '🔑 VIP Keys (Key-Driven Model)', value: keyLines.join('\n'), inline: false },
+                { name: '⏰ Scheduled Role Removals', value: schedLines.join('\n'), inline: false },
+                { name: `🎭 Self-Role Panels (${panels.length})`, value: panelSummary, inline: false },
+                { name: '🛠️ Embed Builder Sessions', value: sessionLine, inline: false }
+            );
+        return safeEditReply(interaction,{ embeds: [embed] });
+    }
+
+    // === REMOVE ROLE ===
+    if (interaction.commandName === 'remove-role') {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        const tipe = interaction.options.getString('tipe');
+        const current = config.roles[tipe];
+        if (!current) {
+            return safeEditReply(interaction,{ content: `ℹ️ Role **${tipe}** memang belum di-set, tidak ada yang perlu dihapus.` });
+        }
+        delete config.roles[tipe];
+        saveConfig(config);
+        // v3.9.2: invalidate permissions cache kalau admin role dihapus
+        if (tipe === 'admin') {
+            try { invalidateAdminRoleCache(); } catch (_) {}
+        }
+        await logAudit(interaction.client, { action: 'REMOVE_ROLE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Hapus role **${tipe}** dari config (sebelumnya: <@&${current}>)`, guildId: interaction.guild.id });
+        return safeEditReply(interaction,{ content: `✅ Role **${tipe}** berhasil dihapus dari config.\n\n💡 Untuk set ulang, pakai: \`/set-role ${tipe} @role\`` });
+    }
+
+    // === REMOVE CHANNEL ===
+    if (interaction.commandName === 'remove-channel') {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        const tipe = interaction.options.getString('tipe');
+        const current = config.channels[tipe];
+        if (!current) {
+            return safeEditReply(interaction,{ content: `ℹ️ Channel **${tipe}** memang belum di-set, tidak ada yang perlu dihapus.` });
+        }
+        delete config.channels[tipe];
+        saveConfig(config);
+        await logAudit(interaction.client, { action: 'REMOVE_CHANNEL', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Hapus channel **${tipe}** dari config (sebelumnya: <#${current}>)`, guildId: interaction.guild.id });
+        return safeEditReply(interaction,{ content: `✅ Channel **${tipe}** berhasil dihapus dari config.\n\n💡 Untuk set ulang, pakai: \`/set-channel ${tipe} #channel\`` });
+    }
+
+    // === LIST MESSAGES ===
+    if (interaction.commandName === 'list-messages') {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        const fields = [];
+        const labels = {
+            welcomeTitle: '👋 Welcome Title',
+            welcomeBody: '👋 Welcome Body',
+            goodbyeTitle: '👋 Goodbye Title',
+            goodbyeBody: '👋 Goodbye Body',
+            verifyTitle: '✅ Verify Title',
+            verifyBody: '✅ Verify Body',
+            ticketTitle: '🎫 Ticket Title',
+            ticketBody: '🎫 Ticket Body'
+        };
+        for (const [key, label] of Object.entries(labels)) {
+            const val = config.messages[key] || '(kosong)';
+            // Potong teks panjang supaya muat di field Discord (1024 char)
+            const truncated = val.length > 500 ? val.slice(0, 500) + '...' : val;
+            fields.push({ name: label, value: '```\n' + truncated + '\n```', inline: false });
+        }
+        const embed = embeds.info('📝 DAFTAR PESAN EMBED', 'Berikut semua teks pesan saat ini. Pakai `/set-message` untuk ubah, `/reset-message` untuk kembalikan ke default.')
+            .addFields(fields);
+        return safeEditReply(interaction,{ embeds: [embed] });
+    }
+
+    // === RESET MESSAGE ===
+    if (interaction.commandName === 'reset-message') {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        const tipe = interaction.options.getString('tipe');
+
+        if (tipe === 'ALL') {
+            config.messages = { ...DEFAULTS.messages };
+            saveConfig(config);
+            await logAudit(interaction.client, { action: 'RESET_MESSAGE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Reset SEMUA pesan ke default`, guildId: interaction.guild.id });
+            return safeEditReply(interaction,{ content: '✅ **SEMUA pesan** berhasil direset ke default.' });
+        }
+
+        const before = config.messages[tipe];
+        config.messages[tipe] = DEFAULTS.messages[tipe];
+        saveConfig(config);
+        await logAudit(interaction.client, { action: 'RESET_MESSAGE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Reset pesan **${tipe}** ke default`, guildId: interaction.guild.id });
+        return safeEditReply(interaction,{
+            content: `✅ Pesan **${tipe}** berhasil direset ke default.\n\n**Sebelumnya:**\n\`\`\`\n${before}\n\`\`\`\n**Sekarang:**\n\`\`\`\n${config.messages[tipe]}\n\`\`\``
+        });
+    }
+
+    // === RESET CONFIG (hapus semua) — v3.9.0: dengan tombol konfirmasi 2-step ===
+    // Sebelumnya: 1 klik /reset-config → semua config hilang, tidak bisa undo.
+    // Sekarang: tampilkan tombol konfirmasi dulu, admin harus klik "Ya, Reset"
+    // untuk benar-benar reset. Mencegah fat-finger / misclick.
+    if (interaction.commandName === 'reset-config') {
+        const confirmBtn = new ButtonBuilder()
+            .setCustomId('reset_config_confirm')
+            .setLabel('⚠️ Ya, Reset Total')
+            .setStyle(ButtonStyle.Danger);
+        const cancelBtn = new ButtonBuilder()
+            .setCustomId('reset_config_cancel')
+            .setLabel('Batal')
+            .setStyle(ButtonStyle.Secondary);
+
+        const row = new ActionRowBuilder().addComponents(confirmBtn, cancelBtn);
+
+        return interaction.reply({
+            content: '🚨 **KONFIRMASI RESET CONFIG**\n\n' +
+                'Peringatan: ini akan menghapus **SEMUA** pengaturan (roles, channels, products, messages).\n' +
+                'Tidak bisa di-undo!\n\n' +
+                'Klik tombol di bawah untuk konfirmasi:',
+            components: [row],
+            flags: MessageFlags.Ephemeral
+        });
+    }
+};

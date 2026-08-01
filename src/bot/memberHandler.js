@@ -1,29 +1,34 @@
-const { EmbedBuilder, AuditLogEvent } = require('discord.js');
-const { getConfig, fillTemplate } = require('../src/data/configManager');
-
 /**
- * Member join:
- * 1. Beri role Unverified otomatis
- * 2. Kirim embed welcome ke channel welcome (pakai template pesan)
+ * Member Handler — welcome/goodbye + auto-role unverified.
  *
- * v3.9.0 FIX: skip bot account (sebelumnya bot yang join juga dapat role unverified + welcome ping).
+ * Dipanggil oleh:
+ *   - src/bot/events/guildMemberAdd.js
+ *   - src/bot/events/guildMemberRemove.js
+ *
+ * Logic:
+ *   - onMemberAdd: beri role Unverified + kirim welcome embed ke channel welcome.
+ *   - onMemberRemove: cek audit log (kick/ban vs leave sukarela) + kirim goodbye embed.
+ *
+ * v3.9.0 FIX: skip bot account.
+ * v3.9.8 FIX: AuditLogEvent enum (bukan magic number 20/22), 10s window (was 5s),
+ *   separate fetchAuditLogs for kick & ban (more accurate, less data).
  */
+
+const { EmbedBuilder, AuditLogEvent } = require('discord.js');
+const { getConfig, fillTemplate } = require('../data/configManager');
+
 async function onMemberAdd(member) {
     const { guild, user } = member;
 
-    // v3.9.0: Skip bot account — bot tidak perlu welcome/verify
     if (user.bot) return;
 
     const config = getConfig();
 
-    // Track join untuk stats
     try {
-        const { recordJoin } = require('../src/data/statsManager');
-        // v3.9.4: scoped per guild
+        const { recordJoin } = require('../data/statsManager');
         recordJoin(guild.id, user.id);
     } catch (_) {}
 
-    // === 1. Beri role Unverified ===
     if (config.roles.unverified) {
         const unverifiedRole = guild.roles.cache.get(config.roles.unverified);
         if (unverifiedRole) {
@@ -38,7 +43,6 @@ async function onMemberAdd(member) {
         }
     }
 
-    // === 2. Kirim Welcome Message ===
     if (config.channels.welcome) {
         const welcomeChannel = guild.channels.cache.get(config.channels.welcome);
         if (welcomeChannel) {
@@ -68,23 +72,9 @@ async function onMemberAdd(member) {
     }
 }
 
-/**
- * Member keluar:
- * - Deteksi kick vs leave sukarela via audit log
- * - Kirim embed goodbye ke channel goodbye (pakai template pesan)
- *
- * v3.9.0 FIX:
- *   1. Skip bot account.
- *   2. Single fetchAuditLogs call (sebelumnya 2x — kick + ban terpisah).
- *      Diskripsi: ambil 10 entry terbaru tanpa type filter, filter client-side.
- *      Hemat 1 API call per member leave + lebih sedikit rate limit pressure.
- *   3. Kalau fetchAuditLogs throw karena missing ViewAuditLog permission,
- *      log warning sekali (bukan silent catch) supaya admin sadar.
- */
 async function onMemberRemove(member) {
     const { guild, user } = member;
 
-    // v3.9.0: Skip bot account
     if (user.bot) return;
 
     const config = getConfig();
@@ -96,11 +86,8 @@ async function onMemberRemove(member) {
         return;
     }
 
-    // Cek audit log - apakah di-kick atau di-ban?
-    // v3.9.0: single fetchAuditLogs call, filter client-side untuk kick (20) dan ban (22).
-    // v3.9.8: pakai AuditLogEvent enum (bukan magic number 20/22) supaya lebih readable.
     let action = 'keluar';
-    const AUDIT_WINDOW_MS = 10 * 1000;  // v3.9.8: naikkan dari 5s ke 10s (lebih toleran latency)
+    const AUDIT_WINDOW_MS = 10 * 1000;
     try {
         const audits = await guild.fetchAuditLogs({
             type: AuditLogEvent.MemberKick,
@@ -113,7 +100,6 @@ async function onMemberRemove(member) {
         if (kickEntry) {
             action = 'dikeluarkan (kick)';
         } else {
-            // Cek ban terpisah (kalau tidak ada kick)
             const banAudits = await guild.fetchAuditLogs({
                 type: AuditLogEvent.MemberBanAdd,
                 limit: 5
@@ -127,8 +113,6 @@ async function onMemberRemove(member) {
             }
         }
     } catch (err) {
-        // v3.9.0: log warning (bukan silent) supaya admin sadar kalau bot kekurangan permission.
-        // Tapi jangan spam — hanya log sekali per event dengan pesan singkat.
         console.warn(`⚠️ Tidak bisa akses audit log untuk goodbye <@${user.id}>: ${err.message?.slice(0, 80)}. ` +
             `Pastikan bot punya permission View Audit Log.`);
     }

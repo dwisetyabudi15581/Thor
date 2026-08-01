@@ -33,7 +33,7 @@ const fs = require('fs');
 const path = require('path');
 const { safeWriteJSON } = require('../infra/safeWrite');
 
-const filePath = path.join(__dirname, '..', 'warns.json');
+const filePath = path.join(__dirname, '..', '..', 'data', 'warns.json');
 
 const DEFAULT_THRESHOLDS = {
     mute1h: 3,    // 3 warnings → mute 1 jam

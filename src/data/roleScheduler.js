@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { safeWriteJSON } = require('../infra/safeWrite');
 
-const scheduledPath = path.join(__dirname, '..', 'scheduledRoles.json');
+const scheduledPath = path.join(__dirname, '..', '..', 'data', 'scheduledRoles.json');
 
 /**
  * File structure: scheduledRoles.json

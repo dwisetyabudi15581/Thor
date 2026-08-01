@@ -32,7 +32,7 @@ const fs = require('fs');
 const path = require('path');
 const { safeWriteJSON } = require('../infra/safeWrite');
 
-const filePath = path.join(__dirname, '..', 'tempVoice.json');
+const filePath = path.join(__dirname, '..', '..', 'data', 'tempVoice.json');
 
 function load() {
     try {

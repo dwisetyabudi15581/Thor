@@ -31,9 +31,12 @@
 const fs = require('fs');
 const path = require('path');
 
-const rootDir = path.join(__dirname, '..');
+const rootDir = path.join(__dirname, '..', '..');
+const dataDir = path.join(rootDir, 'data');
 const backupsDir = path.join(rootDir, 'backups');
 
+// v3.9.10: file JSON data sekarang ada di data/ folder (sebelumnya di root).
+// FILES_TO_BACKUP tetap list nama file, tapi path prefix pakai dataDir.
 const FILES_TO_BACKUP = [
     'config.json',
     'keys.json',
@@ -47,6 +50,11 @@ const FILES_TO_BACKUP = [
     'tempVoice.json',
     'tickets.json'
 ];
+
+// v3.9.10: helper untuk resolve path file data (ke data/ folder).
+function dataFilePath(file) {
+    return path.join(dataDir, file);
+}
 
 const MAX_BACKUPS = 7;
 const BACKUP_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
@@ -84,7 +92,7 @@ function createBackup() {
     const result = { ok: true, backupName: name, filesCopied: 0, totalSize: 0, errors: [] };
 
     for (const file of FILES_TO_BACKUP) {
-        const src = path.join(rootDir, file);
+        const src = dataFilePath(file);
         const dst = path.join(targetDir, file);
         try {
             if (fs.existsSync(src)) {
@@ -246,7 +254,7 @@ function _restoreBackupImpl(name) {
     const preRestoreDir = path.join(backupsDir, preRestoreName);
     fs.mkdirSync(preRestoreDir, { recursive: true });
     for (const file of FILES_TO_BACKUP) {
-        const src = path.join(rootDir, file);
+        const src = dataFilePath(file);
         if (fs.existsSync(src)) {
             try { fs.copyFileSync(src, path.join(preRestoreDir, file)); } catch (_) {}
         }
@@ -256,7 +264,7 @@ function _restoreBackupImpl(name) {
     const result = { ok: true, filesRestored: 0, errors: [], preRestoreName };
     for (const file of FILES_TO_BACKUP) {
         const src = path.join(srcDir, file);
-        const dst = path.join(rootDir, file);
+        const dst = dataFilePath(file);
         try {
             if (fs.existsSync(src)) {
                 fs.copyFileSync(src, dst);

@@ -27,6 +27,38 @@
 const { Client, GatewayIntentBits, Partials } = require('discord.js');
 require('dotenv').config();
 
+// === MIGRATE LEGACY JSON FILES to data/ folder (v3.9.10) ===
+// Sebelum v3.9.10, file JSON (config.json, keys.json, dll) disimpan di root folder.
+// Sekarang dipindah ke data/ folder supaya root bersih (hanya source code).
+// Migration ini jalan sekali saat startup — kalau file lama ada di root, pindahkan.
+// Aman: kalau file sudah ada di data/, file root diabaikan (data/ adalah source of truth).
+(() => {
+    const fs = require('fs');
+    const path = require('path');
+    const rootDir = __dirname;
+    const dataDir = path.join(rootDir, 'data');
+    const LEGACY_FILES = [
+        'config.json', 'keys.json', 'scheduledRoles.json', 'selfRoles.json',
+        'giveaways.json', 'warns.json', 'polls.json', 'scheduledAnnouncements.json',
+        'stats.json', 'tempVoice.json', 'tickets.json'
+    ];
+    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+    let migrated = 0;
+    for (const f of LEGACY_FILES) {
+        const oldPath = path.join(rootDir, f);
+        const newPath = path.join(dataDir, f);
+        if (fs.existsSync(oldPath) && !fs.existsSync(newPath)) {
+            try {
+                fs.renameSync(oldPath, newPath);
+                migrated++;
+            } catch (err) {
+                console.warn(`⚠️ Gagal migrate ${f} ke data/: ${err.message}`);
+            }
+        }
+    }
+    if (migrated > 0) console.log(`📦 Migrated ${migrated} legacy JSON file(s) from root → data/ folder.`);
+})();
+
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,

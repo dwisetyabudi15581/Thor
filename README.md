@@ -2,7 +2,7 @@
 
 Bot Discord untuk komunitas Mobile Legends: Bang Bang. Welcome/Goodbye, verifikasi, tiket transaksi, key-driven VIP role, self-role, temp voice, giveaway, scheduled announcements, embed builder, backup, warn system, stats/leaderboard, poll — semua configurable dari Discord.
 
-> **Version:** 3.9.9 — refactored to professional folder structure.
+> **Version:** 3.9.10 — full per-domain refactor, no legacy code, 71 passing tests.
 > See [docs/ADMIN_GUIDE.md](./docs/ADMIN_GUIDE.md) untuk panduan admin.
 
 ---
@@ -11,9 +11,12 @@ Bot Discord untuk komunitas Mobile Legends: Bang Bang. Welcome/Goodbye, verifika
 
 ```
 Thor/
-├── index.js                      # Entry point — login + wire events (slim)
+├── index.js                      # Entry point — slim (95 lines): login + wire events + data migration
+├── .github/
+│   └── workflows/ci.yml          # GitHub Actions: lint + test on push/PR
 ├── src/
 │   ├── bot/
+│   │   ├── memberHandler.js      # Welcome/Goodbye logic
 │   │   └── events/               # Discord event handlers (1 file per event)
 │   │       ├── ready.js
 │   │       ├── interactionCreate.js
@@ -21,11 +24,35 @@ Thor/
 │   │       ├── guildMemberRemove.js
 │   │       ├── messageCreate.js
 │   │       └── voiceStateUpdate.js
-│   ├── commands/                 # Slash command handlers (per-domain)
+│   ├── commands/                 # Slash command handlers — PER DOMAIN
 │   │   ├── index.js              # Router: commandName → handler
-│   │   └── registry.js           # Slash command definitions (Discord API schema)
-│   ├── interactions/             # Button/select/modal handlers (per-domain)
-│   │   └── index.js              # Router: customId prefix → handler
+│   │   ├── registry.js           # Slash command definitions (Discord API schema)
+│   │   ├── _shared.js            # Shared imports for all domain handlers
+│   │   ├── help.js               (145 lines)
+│   │   ├── config.js             (325 lines) — set-role, set-channel, config-show, etc.
+│   │   ├── products.js           (155 lines) — add-product, set-product-role, etc.
+│   │   ├── keys.js               (263 lines) — set-key, list-keys, clear-schedule
+│   │   ├── selfrole.js           (228 lines)
+│   │   ├── announce.js           (281 lines) — announce, announce-schedule
+│   │   ├── embed.js              (181 lines) — embed-builder, embed-list
+│   │   ├── backup.js             (130 lines) — backup-now, restore-backup
+│   │   ├── giveaway.js           (205 lines)
+│   │   ├── warn.js               (188 lines)
+│   │   ├── stats.js              (112 lines) — stats, leaderboard, my-stats
+│   │   ├── poll.js               (157 lines)
+│   │   ├── tempvoice.js          (199 lines)
+│   │   └── send-message.js       (139 lines)
+│   ├── interactions/             # Button/select/modal handlers — PER DOMAIN
+│   │   ├── index.js              # Router: customId prefix → handler
+│   │   ├── _dedup.js             # Interaction dedup (15-min TTL, per-entry prune)
+│   │   ├── verify.js             # btn_verify
+│   │   ├── ticket.js             # ticket_*, modal_set_key
+│   │   ├── selfrole.js           # sr_btn:, sr_sel:
+│   │   ├── embed.js              # emb_*, modal_emb_*
+│   │   ├── giveaway.js           # gw_join:, gw_leave:
+│   │   ├── poll.js               # poll_vote:, modal_poll_create
+│   │   ├── tempvoice.js          # tv_*, modal_tv_* (14 helper functions)
+│   │   └── backup.js             # reset_config_confirm, restore_backup_confirm
 │   ├── data/                     # JSON persistence layer
 │   │   ├── configManager.js
 │   │   ├── keyManager.js
@@ -53,22 +80,27 @@ Thor/
 │       ├── permissions.js        # isAdmin check + cache
 │       ├── constants.js          # Magic numbers / Discord limits
 │       └── auditLog.js           # Audit log to Discord channel
-├── handlers/                     # ⚠️ LEGACY — being migrated to src/commands/ + src/interactions/
-│   ├── commandHandler.js         # 2259 lines — will be split per-domain
-│   ├── interactionHandler.js     # 2488 lines — will be split per-domain
-│   └── memberHandler.js
-├── utils/                        # ⚠️ SHIM — re-export from src/ for backward compat (will be removed)
+├── data/                         # Runtime JSON files (gitignored)
+│   ├── config.json
+│   ├── keys.json
+│   └── ...
 ├── docs/
-│   ├── README.md
+│   ├── README.md                 # Original README (legacy, kept for reference)
 │   └── ADMIN_GUIDE.md
 ├── tests/
 │   ├── unit/
-│   │   ├── parsePrice.test.js
-│   │   ├── parseTime.test.js
-│   │   ├── safeWrite.test.js
-│   │   └── userLock.test.js
-│   └── integration/              # (planned)
+│   │   ├── parsePrice.test.js        (14 tests)
+│   │   ├── parseTime.test.js         (11 tests)
+│   │   ├── safeWrite.test.js         (10 tests)
+│   │   ├── userLock.test.js          (9 tests)
+│   │   ├── keyManager.test.js        (7 tests)
+│   │   ├── backupManager.test.js     (8 tests)
+│   │   ├── commandsRouter.test.js    (5 tests)
+│   │   └── interactionsRouter.test.js (7 tests)
+│   └── integration/              # (placeholder for future)
 ├── .env.example
+├── .eslintrc.json
+├── .prettierrc.json
 ├── .gitignore
 ├── package.json
 └── package-lock.json
@@ -106,22 +138,42 @@ npm start
 npm run dev
 ```
 
+### Upgrade dari versi lama (pre-v3.9.10)
+
+Bot akan otomatis migrate file JSON dari root folder ke `data/` folder saat startup pertama kali. Tidak perlu intervensi manual.
+
 ---
 
 ## 🧪 Testing
 
 ```bash
-# Run semua tests
+# Run semua tests (71 tests, ~1 detik)
 npm test
 
 # Run hanya unit tests
 npm run test:unit
 
-# Run hanya integration tests (planned)
-npm run test:integration
+# Lint check
+npm run lint
+
+# Format check
+npm run format:check
 ```
 
 Tests pakai built-in `node:test` (Node.js v18+), tidak perlu install dependency tambahan.
+
+### Test coverage
+
+| Layer | Tests | Apa yang diproteksi |
+|-------|-------|---------------------|
+| `parsePrice` | 14 | Admin input harga (`Rp 50.000`, `25k`, `1.5m`) → stats terhitung benar |
+| `parseTime` | 11 | Schedule announce `2026-13-40 99:99` → di-reject |
+| `safeWrite` | 10 | Bot crash tengah write JSON → file tetap utuh (atomic) |
+| `userLock` | 9 | User double-click tombol → gak double-process (TOCTOU guard) |
+| `keyManager` | 7 | Duplicate key rejected, guild-scoped findAllByUser, permanen key detection |
+| `backupManager` | 8 | Backup/restore cycle, path traversal rejection, formatSize |
+| `commandsRouter` | 5 | Permission check (admin vs public), unknown command handling |
+| `interactionsRouter` | 7 | Dedup, prefix routing, slash command ignored, unknown customId safe |
 
 ---
 
@@ -131,9 +183,12 @@ Tests pakai built-in `node:test` (Node.js v18+), tidak perlu install dependency 
 |--------|-----------|
 | `npm start` | Jalankan bot |
 | `npm run dev` | Jalankan dengan nodemon (auto-restart) |
-| `npm test` | Run semua tests |
+| `npm test` | Run semua tests (71 tests) |
 | `npm run test:unit` | Run unit tests saja |
-| `npm run test:integration` | Run integration tests saja |
+| `npm run lint` | ESLint check |
+| `npm run lint:fix` | ESLint auto-fix |
+| `npm run format` | Prettier format all files |
+| `npm run format:check` | Prettier check (CI mode) |
 
 ---
 
@@ -160,6 +215,29 @@ Lihat [docs/ADMIN_GUIDE.md](./docs/ADMIN_GUIDE.md) untuk panduan lengkap.
 - **Backup otomatis**: Bot membuat backup JSON setiap 24 jam + saat start. Maks 7 backup disimpan.
 - **Restore backup**: `/restore-backup name:<nama>` — bikin safety backup otomatis sebelum restore.
 - **Atomic write**: Semua file JSON ditulis via `safeWriteJSON` (write-to-tmp + rename) untuk cegah corrupt on crash.
+- **CI/CD pipeline**: GitHub Actions auto-run tests + lint di setiap push & PR. Merge yang break tests akan ditandai failed.
+
+---
+
+## 🏗️ Architecture
+
+Bot mengikuti pola **event-driven + domain-driven**:
+
+1. **Entry point** (`index.js`) — slim, hanya login + wire events + data migration
+2. **Event handlers** (`src/bot/events/`) — 1 file per Discord event, delegasi ke domain
+3. **Command router** (`src/commands/index.js`) — cek permission, dispatch ke domain handler
+4. **Interaction router** (`src/interactions/index.js`) — dedup + dispatch by customId prefix
+5. **Domain handlers** (`src/commands/<domain>.js`, `src/interactions/<domain>.js`) — business logic per fitur
+6. **Data layer** (`src/data/`) — JSON persistence, atomic write, schema migrations
+7. **UI builders** (`src/ui/`) — embed & panel constructors
+8. **Infrastructure** (`src/infra/`) — cross-cutting concerns (lock, audit, safe write, permissions)
+
+### Prinsip design
+- **Single Responsibility**: tiap file punya 1 alasan untuk berubah
+- **Domain-driven**: fitur (giveaway, poll, ticket, dll) terpisah jelas
+- **Backward compatible**: data migration otomatis saat struktur berubah
+- **Defensive**: TOCTOU guards, atomic writes, retry logic, error classification
+- **Testable**: pure functions & small files = mudah di-unit-test
 
 ---
 
@@ -182,6 +260,12 @@ Lihat [docs/ADMIN_GUIDE.md](./docs/ADMIN_GUIDE.md) untuk panduan lengkap.
 ### Data hilang setelah restart
 - Cek folder `backups/` — ada auto-backup tiap 24 jam
 - Restore via `/restore-backup name:<nama_backup>`
+- File data JSON ada di `data/` folder (sebelum v3.9.10 ada di root — auto-migrate saat startup)
+
+### Tests fail
+- Pastikan Node.js v18+
+- Run `npm install` dulu
+- Run `npm test` — kalau ada fail, lihat pesan error spesifik
 
 ---
 

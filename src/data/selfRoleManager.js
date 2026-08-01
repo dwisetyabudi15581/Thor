@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { safeWriteJSON } = require('../infra/safeWrite');
 
-const selfRolesPath = path.join(__dirname, '..', 'selfRoles.json');
+const selfRolesPath = path.join(__dirname, '..', '..', 'data', 'selfRoles.json');
 
 /**
  * File structure: selfRoles.json

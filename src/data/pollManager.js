@@ -23,7 +23,7 @@ const fs = require('fs');
 const path = require('path');
 const { safeWriteJSON } = require('../infra/safeWrite');
 
-const filePath = path.join(__dirname, '..', 'polls.json');
+const filePath = path.join(__dirname, '..', '..', 'data', 'polls.json');
 
 function load() {
     try {

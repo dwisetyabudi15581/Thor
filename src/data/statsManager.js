@@ -38,7 +38,7 @@ const fs = require('fs');
 const path = require('path');
 const { safeWriteJSON } = require('../infra/safeWrite');
 
-const filePath = path.join(__dirname, '..', 'stats.json');
+const filePath = path.join(__dirname, '..', '..', 'data', 'stats.json');
 const FLUSH_INTERVAL_MS = 30 * 1000; // 30 detik
 
 // === In-memory cache ===

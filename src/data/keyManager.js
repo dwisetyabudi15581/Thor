@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { safeWriteJSON } = require('../infra/safeWrite');
 
-const keysPath = path.join(__dirname, '..', 'keys.json');
+const keysPath = path.join(__dirname, '..', '..', 'data', 'keys.json');
 
 /**
  * File structure: keys.json

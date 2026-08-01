@@ -30,7 +30,7 @@ const closeTicketLocks = new Set();
 // topic tetap di-set untuk human-readable info, tapi tidak dipakai sebagai
 // sumber kebenaran. Backward compat: kalau channelId tidak ada di tickets.json,
 // fallback ke topic parsing (untuk tiket lama yang dibuat sebelum v3.9.1).
-const ticketsPath = path.join(__dirname, '..', 'tickets.json');
+const ticketsPath = path.join(__dirname, '..', '..', 'data', 'tickets.json');
 
 function loadTickets() {
     try {
