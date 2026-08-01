@@ -5,6 +5,16 @@ Semua perubahan penting pada bot ini akan didokumentasikan di file ini.
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), dan
 versi mengikuti [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.7] — 2026-08-01
+
+### CRITICAL
+- **Fix `ExpectedConstraintError` saat klik Send di Embed Builder** — label TextInput `'Pesan di luar embed (opsional, support @everyone / \\n)'` panjangnya 54 char, melebihi batas Discord 45 char untuk `setLabel`. Akibatnya `showModal()` throw synchronously, button interaction tidak di-acknowledge, dan user lihat "The application did not respond". Fix: label dipersingkat ke 41 char `'Pesan di luar embed (opsional, support @)'`. Placeholder juga dipersingkat dari 105 → 87 char (limit 100).
+- **Fix `InteractionNotReplied` cascading error** — root cause dari error di atas. Saat `showModal()` gagal, kadang Discord masih fire modal submit event (dari modal lama yang cached di client). `handleEmbedBuilderModal` lalu `deferReply()` yang gagal senyap (`.catch(() => {})`), lalu `safeEditReply` → `editReply` throw `InteractionNotReplied` karena interaction belum di-acknowledge. Fix: `safeEditReply` sekarang detect `InteractionNotReplied` dan fallback ke `interaction.reply()`. Juga, `.catch(() => {})` di deferReply diganti dengan `.catch(err => console.warn(...))` supaya failure tidak gaib.
+
+### MEDIUM
+- Fix placeholder `emb_modal_message` yang panjangnya 100 char (tepat di limit Discord). Dipersingkat ke 63 char untuk safety margin.
+- Audit semua `setLabel` dan `setPlaceholder` calls di codebase — tidak ada lagi yang melebihi batas Discord (45 char untuk label, 100 char untuk placeholder).
+
 ## [3.9.6] — 2026-08-01
 
 ### Added

@@ -219,7 +219,10 @@ module.exports = async (interaction) => {
         // === MODAL SET KEY SUBMIT — FULL FLOW ===
         // ====================================================
         if (interaction.isModalSubmit() && interaction.customId.startsWith('modal_set_key:')) {
-            await interaction.deferReply({ flags: MessageFlags.Ephemeral }).catch(()=>{});
+            // v3.9.7: log deferReply failure (sama seperti embed builder modal)
+            await interaction.deferReply({ flags: MessageFlags.Ephemeral }).catch(err => {
+                console.warn(`[Set Key Modal] deferReply gagal untuk ${interaction.customId}: ${err.message}`);
+            });
 
             const productValue = interaction.customId.split(':')[1];
             const keyValue = interaction.components[0]?.components?.[0]?.value?.trim() || '';
@@ -426,11 +429,11 @@ module.exports = async (interaction) => {
                 new ActionRowBuilder().addComponents(
                     new TextInputBuilder()
                         .setCustomId('message')
-                        .setLabel('Pesan di luar embed (opsional, support @everyone / \\n)')
+                        .setLabel('Pesan di luar embed (opsional, support @)')
                         .setStyle(TextInputStyle.Paragraph)
                         .setRequired(false)
                         .setMaxLength(2000)
-                        .setPlaceholder('Kosongkan = kirim embed saja. Isi = kirim teks + embed.\nSupport @everyone, @here, <@&role_id>, <@user_id>')
+                        .setPlaceholder('Kosongkan = embed saja. Isi = teks + embed.\nSupport @everyone, @here, <@&role>, <@user>')
                         .setValue(currentMessage)
                 )
             );
@@ -902,7 +905,7 @@ async function handleEmbedBuilderEdit(interaction) {
                 .setStyle(TextInputStyle.Paragraph)
                 .setRequired(false)
                 .setMaxLength(2000)
-                .setPlaceholder('Halo semua! Cek pengumuman di bawah ya ⬇️\nSupport newline, @everyone, @here, <@&role_id>, <@user_id>')
+                .setPlaceholder('Teks pengantar di luar embed.\nSupport @everyone, @here, mention')
                 .setValue(d.content || '')
         ));
         return interaction.showModal(modal);
@@ -983,7 +986,13 @@ async function handleEmbedBuilderModal(interaction) {
         return interaction.reply({ content: '❌ Hanya pembuat yang bisa edit draft ini.', flags: MessageFlags.Ephemeral });
     }
 
-    await interaction.deferReply({ flags: MessageFlags.Ephemeral }).catch(() => {});
+    // v3.9.7: log deferReply failure supaya tidak gaib. Kalau deferReply gagal
+    // (mis. interaction token expired karena modal terbuka >15 menit),
+    // safeEditReply akan fallback ke reply() otomatis. Tapi kita tetap log
+    // supaya admin tau kenapa konfirmasi ephemeral mungkin tidak muncul.
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral }).catch(err => {
+        console.warn(`[Embed Builder Modal] deferReply gagal untuk ${interaction.customId}: ${err.message}`);
+    });
 
     const d = session.data;
     // Discord.js v14: ModalSubmitInteraction.components adalah array of ActionRowModalData.

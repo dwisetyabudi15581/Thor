@@ -12,6 +12,9 @@
  * Solusi:
  * - `safeEditReply` mencoba editReply; kalau dapat 10008/10062, fallback ke
  *   `followUp` (yang bikin pesan baru di channel yang sama).
+ * - v3.9.7: kalau dapat `InteractionNotReplied` (deferReply gagal secara
+ *   senyap — mis. interaction token expired saat modal masih terbuka),
+ *   fallback ke `reply()` supaya pesan error tetap sampai ke user.
  * - `safeFollowUp` sama, tapi untuk followUp yang dipakai langsung tanpa
  *   editReply dulu.
  *
@@ -37,6 +40,14 @@ const { MessageFlags } = require('discord.js');
 const IGNORABLE_REPLY_CODES = new Set([10008, 10062, 40060]);
 
 /**
+ * Discord.js error codes (string, bukan angka) yang juga "safe to ignore"
+ * dalam konteks editReply:
+ * - 'InteractionNotReplied': deferReply gagal (mis. token expired saat modal
+ *   terbuka >15 menit), jadi editReply tidak bisa jalan. Fallback ke reply().
+ */
+const IGNORABLE_REPLY_STRING_CODES = new Set(['InteractionNotReplied']);
+
+/**
  * Edit interaction reply dengan fallback ke followUp kalau original hilang.
  *
  * @param {import('discord.js').BaseInteraction} interaction
@@ -47,6 +58,26 @@ async function safeEditReply(interaction, options) {
     try {
         return await interaction.editReply(options);
     } catch (err) {
+        // v3.9.7: InteractionNotReplied — deferReply gagal senyap (mis. token
+        // expired). Interaction belum di-acknowledge sama sekali, jadi kita
+        // masih bisa reply() (selama token belum expired total).
+        if (err.code === 'InteractionNotReplied') {
+            try {
+                // Default ke ephemeral karena semua caller safeEditReply di
+                // codebase ini pakai deferReply ephemeral. Kalau options sudah
+                // specify flags, hormati itu.
+                const replyOptions = { ...options };
+                if (replyOptions.flags === undefined) {
+                    replyOptions.flags = MessageFlags.Ephemeral;
+                }
+                return await interaction.reply(replyOptions);
+            } catch (_) {
+                // reply() juga gagal — kemungkinan token benar-benar expired.
+                // Tidak ada yang bisa dilakukan; silent return.
+                return null;
+            }
+        }
+
         if (!IGNORABLE_REPLY_CODES.has(err.code)) {
             throw err; // unexpected error — re-throw supaya caller tau
         }
