@@ -5,6 +5,15 @@ Semua perubahan penting pada bot ini akan didokumentasikan di file ini.
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), dan
 versi mengikuti [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.5] — 2026-08-01
+
+### Added
+- **NEW `/send-message` command** — kirim plain text message ke text channel (pelengkap `/announce` yang kirim embed). Cocok untuk pengumuman kasual, chat bot, atau teks yang tidak perlu styling embed.
+  - Options: `channel` (text channel, required), `message` (string, required, maks 2000 char, support `\n` untuk newline), `mention` (opsional: `@everyone`/`@here`/`<@&ROLE_ID>`/`<@USER_ID>`)
+  - Validasi ketat: channel harus `GuildText` (bukan voice/category/forum), cek permission bot `SendMessages`, mention divalidasi dengan regex yang sama seperti `/announce` (mencegah injection mention yang tidak diinginkan)
+  - Audit log: action `SEND_MESSAGE` dicatat dengan channel, mention, dan panjang pesan
+  - Reply ephemeral dengan preview pesan yang sudah dikirim (potong jika > 1500 char)
+
 ## [3.9.4] — 2026-08-01
 
 ### CRITICAL

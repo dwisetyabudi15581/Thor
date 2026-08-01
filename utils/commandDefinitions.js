@@ -500,6 +500,21 @@ function getCommands() {
             name: 'tempvoice-remove',
             description: 'Hapus setup temp voice dari guild (kategori + semua channel terkait dihapus)',
             defaultMemberPermissions: PermissionFlagsBits.ManageGuild
+        },
+
+        // === SEND MESSAGE (plain text ke channel) ===
+        // v3.9.5: pelengkap /announce (yang kirim embed). /send-message kirim
+        // plain text biasa — cocok untuk pengumuman kasual, chat bot, atau
+        // teks yang tidak perlu styling embed.
+        {
+            name: 'send-message',
+            description: 'Kirim plain text message ke text channel (support \\n & mention)',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
+            options: [
+                { type: 7, name: 'channel', description: 'Channel tujuan (harus text channel)', required: true },
+                { type: 3, name: 'message', description: 'Isi pesan (support \\n untuk newline). Maks 2000 char.', required: true },
+                { type: 3, name: 'mention', description: 'Mention: @everyone, @here, atau <@&role_id> / <@user_id>', required: false }
+            ]
         }
     ];
 }
