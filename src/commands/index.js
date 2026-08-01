@@ -60,6 +60,11 @@ const sendMessageHandler = require('./send-message');
 // v3.9.11 Phase 2 & 3: new domains
 const categoriesHandler  = require('./categories');
 const panelsHandler      = require('./panels');
+// v3.9.13: new community features
+const responderHandler   = require('./responder');
+const automodHandler     = require('./automod');
+const afkHandler         = require('./afk');
+const levelingHandler    = require('./leveling');
 
 const DOMAIN_HANDLERS = {
     help: helpHandler,
@@ -78,7 +83,12 @@ const DOMAIN_HANDLERS = {
     'send-message': sendMessageHandler,
     // v3.9.11 Phase 2 & 3
     categories: categoriesHandler,
-    panels: panelsHandler
+    panels: panelsHandler,
+    // v3.9.13
+    responder: responderHandler,
+    automod: automodHandler,
+    afk: afkHandler,
+    leveling: levelingHandler
 };
 
 // Mapping commandName → domain key (di DOMAIN_HANDLERS).
@@ -169,11 +179,36 @@ const COMMAND_TO_DOMAIN = {
     // v3.9.11 Phase 1 & 3: panels (verify button, multi-panel ticket, transcript)
     'set-verify-button': 'panels',
     'setup-ticket-panel': 'panels',
-    'set-transcript-channel': 'panels'
+    'set-transcript-channel': 'panels',
+
+    // v3.9.13: Auto-Responder
+    'add-responder': 'responder',
+    'list-responder': 'responder',
+    'remove-responder': 'responder',
+
+    // v3.9.13: Anti-Spam & Auto-Mod
+    'set-automod': 'automod',
+    'automod-show': 'automod',
+    'automod-toggle': 'automod',
+    'add-link-whitelist': 'automod',
+
+    // v3.9.13: AFK System
+    'afk': 'afk',
+    'afk-clear': 'afk',
+    'afk-list': 'afk',
+
+    // v3.9.13: Leveling System
+    'setup-leveling': 'leveling',
+    'add-level-role': 'leveling',
+    'list-level-roles': 'leveling',
+    'remove-level-role': 'leveling',
+    'rank': 'leveling',
+    'leaderboard-level': 'leveling'
 };
 
 // Command yang boleh dipakai member biasa (bukan admin).
-const PUBLIC_COMMANDS = ['leaderboard', 'my-stats'];
+// v3.9.13: tambah afk, afk-clear, rank, leaderboard-level (public community features)
+const PUBLIC_COMMANDS = ['leaderboard', 'my-stats', 'afk', 'afk-clear', 'rank', 'leaderboard-level'];
 
 /**
  * Router utama — dipanggil dari index.js saat InteractionCreate (chatInputCommand).

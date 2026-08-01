@@ -1,0 +1,205 @@
+/**
+ * Leveling Manager — XP per message + level + auto-role on level up.
+ *
+ * File: data/levels.json
+ * {
+ *   "<guildId>:<userId>": {
+ *     "xp": 1250,
+ *     "level": 5,
+ *     "lastMessageAt": 1735689600000,    // untuk cooldown anti-spam XP
+ *     "totalXp": 1250,                   // total XP yang pernah didapat (tidak berkurang)
+ *     "guildId": "...",
+ *     "userId": "..."
+ *   }
+ * }
+ *
+ * Level config di config.json (config.leveling):
+ * {
+ *   "leveling": {
+ *     "enabled": true,
+ *     "xpPerMessage": 15,
+ *     "cooldownMs": 60000,               // 1 menit antara XP gain
+ *     "announceLevelUp": true,           // ping user di channel saat level up
+ *     "levelUpChannel": null             // null = channel tempat user chat. ID = specific channel
+ *   },
+ *   "levelRoles": [                      // auto-assign role saat cap level
+ *     { "level": 10, "roleId": "123" },
+ *     { "level": 50, "roleId": "456" }
+ *   ]
+ * }
+ *
+ * Level formula: level N requires totalXp = 100 * N * (N+1) / 2 = 50 * N * (N+1)
+ *   Level 1: 100 XP
+ *   Level 2: 300 XP
+ *   Level 5: 1500 XP
+ *   Level 10: 5500 XP
+ *   Level 50: 127500 XP
+ */
+
+const fs = require('fs');
+const path = require('path');
+const { safeWriteJSON } = require('../infra/safeWrite');
+
+const filePath = path.join(__dirname, '..', '..', 'data', 'levels.json');
+
+function load() {
+    try {
+        if (!fs.existsSync(filePath)) return {};
+        return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    } catch (err) {
+        console.warn('⚠️ levels.json rusak:', err.message);
+        return {};
+    }
+}
+
+function save(data) {
+    safeWriteJSON(filePath, data);
+}
+
+function keyFor(guildId, userId) {
+    return `${guildId}:${userId}`;
+}
+
+/**
+ * Hitung XP yang dibutuhkan untuk mencapai level tertentu.
+ * Total XP cumulative dari level 0 ke level N.
+ */
+function xpForLevel(level) {
+    return 50 * level * (level + 1);
+}
+
+/**
+ * Hitung level dari total XP.
+ * Inverse of xpForLevel: 50 * L * (L+1) = totalXp
+ * L^2 + L - 2*totalXp/50 = 0  →  L = (-1 + sqrt(1 + 4*totalXp/50)) / 2
+ */
+function levelFromXp(totalXp) {
+    if (totalXp < 100) return 0;  // quick check: < 100 XP = level 0
+    const level = Math.floor((-1 + Math.sqrt(1 + 4 * totalXp / 50)) / 2);
+    return Math.max(0, level);
+}
+
+/**
+ * XP yang dibutuhkan untuk naik dari level saat ini ke level berikutnya.
+ */
+function xpToNextLevel(currentLevel) {
+    return xpForLevel(currentLevel + 1) - xpForLevel(currentLevel);
+}
+
+/**
+ * Get user level data.
+ */
+function getUser(guildId, userId) {
+    const all = load();
+    const k = keyFor(guildId, userId);
+    return all[k] || {
+        xp: 0,         // XP di level saat ini (reset tiap level up)
+        level: 0,
+        lastMessageAt: null,
+        totalXp: 0,
+        guildId,
+        userId
+    };
+}
+
+/**
+ * Tambah XP ke user. Return { leveledUp: boolean, newLevel: number, oldLevel: number }.
+ *
+ * @param {string} guildId
+ * @param {string} userId
+ * @param {number} xpGain - XP yang akan ditambahkan
+ * @param {Object} config - config.leveling (untuk cek cooldown)
+ * @returns {{ leveledUp, newLevel, oldLevel, user }}
+ */
+function addXp(guildId, userId, xpGain, config) {
+    const all = load();
+    const k = keyFor(guildId, userId);
+    const now = Date.now();
+    const cooldownMs = config?.cooldownMs || 60000;
+
+    if (!all[k]) {
+        all[k] = {
+            xp: 0,
+            level: 0,
+            lastMessageAt: null,
+            totalXp: 0,
+            guildId,
+            userId
+        };
+    }
+
+    const user = all[k];
+
+    // Cooldown check — kalau masih dalam cooldown, skip XP gain
+    if (user.lastMessageAt && (now - user.lastMessageAt) < cooldownMs) {
+        return { leveledUp: false, newLevel: user.level, oldLevel: user.level, user, onCooldown: true };
+    }
+
+    const oldLevel = user.level;
+    user.totalXp = (user.totalXp || 0) + xpGain;
+    user.xp = user.totalXp - xpForLevel(oldLevel);
+    user.lastMessageAt = now;
+
+    // Cek level up
+    const newLevel = levelFromXp(user.totalXp);
+    user.level = newLevel;
+    const leveledUp = newLevel > oldLevel;
+
+    if (leveledUp) {
+        user.xp = user.totalXp - xpForLevel(newLevel);
+    }
+
+    save(all);
+
+    return { leveledUp, newLevel, oldLevel, user, onCooldown: false };
+}
+
+/**
+ * Get top N users by level/XP.
+ */
+function getTopUsers(guildId, limit = 10) {
+    const all = load();
+    const prefix = `${guildId}:`;
+    return Object.entries(all)
+        .filter(([k]) => k.startsWith(prefix))
+        .map(([k, data]) => ({ userId: data.userId, level: data.level, totalXp: data.totalXp || 0, xp: data.xp || 0 }))
+        .sort((a, b) => b.totalXp - a.totalXp)
+        .slice(0, limit);
+}
+
+/**
+ * Get level roles dari config (untuk auto-assign).
+ */
+function getLevelRoles(config) {
+    return config?.levelRoles || [];
+}
+
+/**
+ * Cek role apa yang harus di-assign saat user cap level tertentu.
+ * Return roleId atau null.
+ */
+function getRoleForLevel(level, config) {
+    const roles = getLevelRoles(config);
+    // Cari role dengan level <= user level tertinggi
+    let bestRole = null;
+    let bestLevel = 0;
+    for (const r of roles) {
+        if (r.level <= level && r.level > bestLevel) {
+            bestRole = r.roleId;
+            bestLevel = r.level;
+        }
+    }
+    return bestRole;
+}
+
+module.exports = {
+    setAFK: null,  // bukan AFK, ini leveling
+    getUser,
+    addXp,
+    getTopUsers,
+    getLevelRoles,
+    getRoleForLevel,
+    xpForLevel,
+    levelFromXp,
+    xpToNextLevel
+};

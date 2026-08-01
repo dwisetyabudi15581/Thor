@@ -1,109 +1,106 @@
-# Thor — MLBB Community Bot
+# 🤖 Community Bot — All-in-One Discord Bot
 
-Bot Discord untuk komunitas Mobile Legends: Bang Bang. Welcome/Goodbye, verifikasi, tiket transaksi, key-driven VIP role, self-role, temp voice, giveaway, scheduled announcements, embed builder, backup, warn system, stats/leaderboard, poll — semua configurable dari Discord.
+Bot Discord serbaguna untuk komunitas apapun — gaming, content creator, online community, server jualan, dll. Penuh fitur: welcome/goodbye, verifikasi, tiket transaksi (multi-kategori), key-driven VIP role, self-role, temp voice, giveaway, scheduled announcements, embed builder, backup, warn system, stats/leaderboard, poll, **auto-responder, anti-spam & auto-mod, AFK system, leveling system**.
 
-> **Version:** 3.9.10 — full per-domain refactor, no legacy code, 71 passing tests.
+> **Version:** 3.9.13 — 60+ slash commands, 94+ tests passing, fully configurable from Discord.
 > See [docs/ADMIN_GUIDE.md](./docs/ADMIN_GUIDE.md) untuk panduan admin.
+
+---
+
+## ✨ Fitur Utama
+
+### 🎫 Ticket Panel (Multi-Category)
+- Panel tiket dengan tombol dinamis per kategori (bukan hardcoded)
+- Support kategori produk: key, jasa, topup, dll — bebas di-CRUD dari Discord
+- Multi-panel: pasang panel berbeda dengan subset kategori berbeda di channel berbeda
+- Auto-transcript: simpan chat history tiket sebelum close
+- Tombol "Set Key" hanya muncul untuk produk yang `requiresKey: true`
+
+### 💬 Auto-Responder (v3.9.13)
+- Set trigger keyword (`!sosmed`, `!jadwal`, dll) → bot auto-reply
+- Support plain text atau embed
+- Cooldown anti-spam per trigger
+
+### 🛡️ Anti-Spam & Auto-Mod (v3.9.13)
+- Spam detection (N messages in window → action)
+- Link blocking (with channel/role whitelist)
+- Word filter (kata kasar, dll)
+- Mass-mention block
+- Action: delete only, warn, mute, atau kick
+
+### 💤 AFK System (v3.9.13)
+- User set AFK dengan reason
+- Bot auto-reply saat ada yang mention user AFK
+- Auto-clear saat user kirim pesan lagi
+- `/afk-list` untuk admin lihat semua yang AFK
+
+### 📊 Leveling System (v3.9.13)
+- XP per message (dengan cooldown anti-spam)
+- Level up announcement + auto-assign role reward
+- `/rank` untuk lihat level sendiri
+- `/leaderboard-level` top 10 member
+
+### 🔐 Verifikasi Panel
+- Button customizable (label, emoji, style)
+- Auto-give role Verified, auto-remove role Unverified
+
+### 🎭 Self-Role Panel
+- Member ambil/lepas role sendiri
+- Per-role button style (Primary/Secondary/Success/Danger)
+- Conditional role: butuh prerequisite role dulu (tier system)
+- Mode exclusive (1 role saja) atau multi
+
+### 🎤 Temp Voice
+- Member join trigger channel → otomatis bikin voice pribadi
+- Panel kontrol: rename, kick, limit, lock, transfer, delete
+- Auto-transfer ownership saat owner leave
+- Auto-delete saat channel kosong
+
+### 📦 Produk & Key Manager
+- Produk dengan kategori & `requiresKey` flag
+- Key-driven VIP role (MAX EXTEND model)
+- Auto-expire role sesuai durasi key
+- Guild-scoped (cross-guild safe)
+
+### 🎉 Giveaway, Poll, Warn, Stats
+- Giveaway dengan required role, multiple winners, reroll
+- Poll dengan live bar chart, toggle vote
+- Warn system dengan auto-action (3=mute, 5=mute 1d, 7=kick)
+- Stats leaderboard (messages, purchases, totalSpent, giveawaysWon)
+
+### 📢 Announce & Embed Builder
+- `/announce` quick embed
+- `/send-message` plain text
+- `/embed-builder` interactive builder dengan live preview
+
+### 💾 Backup System
+- Auto-backup tiap 24 jam + saat start
+- Manual backup via `/backup-now`
+- Restore dengan safety backup otomatis
+- Maks 7 backup tersimpan
 
 ---
 
 ## 📁 Struktur Folder
 
 ```
-Thor/
-├── index.js                      # Entry point — slim (95 lines): login + wire events + data migration
-├── .github/
-│   └── workflows/ci.yml          # GitHub Actions: lint + test on push/PR
+Community Bot/
+├── index.js                      # Entry point (slim)
+├── .github/workflows/ci.yml      # GitHub Actions: lint + test
 ├── src/
-│   ├── bot/
-│   │   ├── memberHandler.js      # Welcome/Goodbye logic
-│   │   └── events/               # Discord event handlers (1 file per event)
-│   │       ├── ready.js
-│   │       ├── interactionCreate.js
-│   │       ├── guildMemberAdd.js
-│   │       ├── guildMemberRemove.js
-│   │       ├── messageCreate.js
-│   │       └── voiceStateUpdate.js
-│   ├── commands/                 # Slash command handlers — PER DOMAIN
-│   │   ├── index.js              # Router: commandName → handler
-│   │   ├── registry.js           # Slash command definitions (Discord API schema)
-│   │   ├── _shared.js            # Shared imports for all domain handlers
-│   │   ├── help.js               (145 lines)
-│   │   ├── config.js             (325 lines) — set-role, set-channel, config-show, etc.
-│   │   ├── products.js           (155 lines) — add-product, set-product-role, etc.
-│   │   ├── keys.js               (263 lines) — set-key, list-keys, clear-schedule
-│   │   ├── selfrole.js           (228 lines)
-│   │   ├── announce.js           (281 lines) — announce, announce-schedule
-│   │   ├── embed.js              (181 lines) — embed-builder, embed-list
-│   │   ├── backup.js             (130 lines) — backup-now, restore-backup
-│   │   ├── giveaway.js           (205 lines)
-│   │   ├── warn.js               (188 lines)
-│   │   ├── stats.js              (112 lines) — stats, leaderboard, my-stats
-│   │   ├── poll.js               (157 lines)
-│   │   ├── tempvoice.js          (199 lines)
-│   │   └── send-message.js       (139 lines)
-│   ├── interactions/             # Button/select/modal handlers — PER DOMAIN
-│   │   ├── index.js              # Router: customId prefix → handler
-│   │   ├── _dedup.js             # Interaction dedup (15-min TTL, per-entry prune)
-│   │   ├── verify.js             # btn_verify
-│   │   ├── ticket.js             # ticket_*, modal_set_key
-│   │   ├── selfrole.js           # sr_btn:, sr_sel:
-│   │   ├── embed.js              # emb_*, modal_emb_*
-│   │   ├── giveaway.js           # gw_join:, gw_leave:
-│   │   ├── poll.js               # poll_vote:, modal_poll_create
-│   │   ├── tempvoice.js          # tv_*, modal_tv_* (14 helper functions)
-│   │   └── backup.js             # reset_config_confirm, restore_backup_confirm
-│   ├── data/                     # JSON persistence layer
-│   │   ├── configManager.js
-│   │   ├── keyManager.js
-│   │   ├── roleScheduler.js
-│   │   ├── ticketManager.js
-│   │   ├── selfRoleManager.js
-│   │   ├── giveawayManager.js
-│   │   ├── pollManager.js
-│   │   ├── warnManager.js
-│   │   ├── statsManager.js
-│   │   ├── scheduledAnnouncements.js
-│   │   ├── tempVoiceManager.js
-│   │   └── backupManager.js
+│   ├── bot/events/               # Discord event handlers
+│   ├── commands/                 # Slash command handlers (per-domain, 20+ files)
+│   ├── interactions/             # Button/select/modal handlers (per-domain)
+│   ├── data/                     # JSON persistence layer (15+ managers)
 │   ├── services/                 # Business logic
-│   │   └── schedulerTasks.js
-│   ├── ui/                       # UI builders (embeds, panels)
-│   │   ├── embedBuilder.js
-│   │   ├── embedBuilderSessions.js
-│   │   ├── selfRolePanelBuilder.js
-│   │   └── tempVoiceControlPanel.js
-│   └── infra/                    # Infrastructure helpers
-│       ├── safeWrite.js          # Atomic JSON write (tmp+rename)
-│       ├── safeReply.js          # Edit-reply with followUp fallback
-│       ├── userLock.js           # TOCTOU race condition guard
-│       ├── permissions.js        # isAdmin check + cache
-│       ├── constants.js          # Magic numbers / Discord limits
-│       └── auditLog.js           # Audit log to Discord channel
+│   ├── ui/                       # Embed/panel builders
+│   └── infra/                    # safeWrite, safeReply, userLock, permissions, dll
 ├── data/                         # Runtime JSON files (gitignored)
-│   ├── config.json
-│   ├── keys.json
-│   └── ...
-├── docs/
-│   ├── README.md                 # Original README (legacy, kept for reference)
-│   └── ADMIN_GUIDE.md
-├── tests/
-│   ├── unit/
-│   │   ├── parsePrice.test.js        (14 tests)
-│   │   ├── parseTime.test.js         (11 tests)
-│   │   ├── safeWrite.test.js         (10 tests)
-│   │   ├── userLock.test.js          (9 tests)
-│   │   ├── keyManager.test.js        (7 tests)
-│   │   ├── backupManager.test.js     (8 tests)
-│   │   ├── commandsRouter.test.js    (5 tests)
-│   │   └── interactionsRouter.test.js (7 tests)
-│   └── integration/              # (placeholder for future)
+├── docs/                         # README + ADMIN_GUIDE
+├── tests/unit/                   # 94+ passing tests
 ├── .env.example
 ├── .eslintrc.json
-├── .prettierrc.json
-├── .gitignore
-├── package.json
-└── package-lock.json
+└── .prettierrc.json
 ```
 
 ---
@@ -134,24 +131,17 @@ cp .env.example .env
 # 4. Jalankan bot
 npm start
 
-# Untuk development (auto-restart on save):
+# Untuk development:
 npm run dev
 ```
-
-### Upgrade dari versi lama (pre-v3.9.10)
-
-Bot akan otomatis migrate file JSON dari root folder ke `data/` folder saat startup pertama kali. Tidak perlu intervensi manual.
 
 ---
 
 ## 🧪 Testing
 
 ```bash
-# Run semua tests (71 tests, ~1 detik)
+# Run semua tests
 npm test
-
-# Run hanya unit tests
-npm run test:unit
 
 # Lint check
 npm run lint
@@ -162,19 +152,6 @@ npm run format:check
 
 Tests pakai built-in `node:test` (Node.js v18+), tidak perlu install dependency tambahan.
 
-### Test coverage
-
-| Layer | Tests | Apa yang diproteksi |
-|-------|-------|---------------------|
-| `parsePrice` | 14 | Admin input harga (`Rp 50.000`, `25k`, `1.5m`) → stats terhitung benar |
-| `parseTime` | 11 | Schedule announce `2026-13-40 99:99` → di-reject |
-| `safeWrite` | 10 | Bot crash tengah write JSON → file tetap utuh (atomic) |
-| `userLock` | 9 | User double-click tombol → gak double-process (TOCTOU guard) |
-| `keyManager` | 7 | Duplicate key rejected, guild-scoped findAllByUser, permanen key detection |
-| `backupManager` | 8 | Backup/restore cycle, path traversal rejection, formatSize |
-| `commandsRouter` | 5 | Permission check (admin vs public), unknown command handling |
-| `interactionsRouter` | 7 | Dedup, prefix routing, slash command ignored, unknown customId safe |
-
 ---
 
 ## 📜 Scripts
@@ -183,89 +160,77 @@ Tests pakai built-in `node:test` (Node.js v18+), tidak perlu install dependency 
 |--------|-----------|
 | `npm start` | Jalankan bot |
 | `npm run dev` | Jalankan dengan nodemon (auto-restart) |
-| `npm test` | Run semua tests (71 tests) |
-| `npm run test:unit` | Run unit tests saja |
+| `npm test` | Run semua tests |
 | `npm run lint` | ESLint check |
-| `npm run lint:fix` | ESLint auto-fix |
 | `npm run format` | Prettier format all files |
-| `npm run format:check` | Prettier check (CI mode) |
 
 ---
 
-## 🔧 Konfigurasi
-
-Setelah bot online, gunakan slash command di Discord untuk konfigurasi:
+## 🔧 Konfigurasi Awal (Setelah Bot Online)
 
 1. `/set-role admin @role` — set role admin bot
-2. `/set-role verified @role` — set role untuk member terverifikasi
+2. `/set-role verified @role` — set role member terverifikasi
 3. `/set-role unverified @role` — set role default member baru
-4. `/set-channel welcome #channel` — channel untuk welcome message
-5. `/set-channel goodbye #channel` — channel untuk goodbye message
-6. `/set-channel invoice #channel` — channel untuk invoice/testimoni
-7. `/add-product label value price duration` — tambah produk VIP key
-8. `/set-product-role value:@role days:30` — map produk ke role + durasi
+4. `/set-channel welcome #channel` — channel welcome message
+5. `/set-channel goodbye #channel` — channel goodbye message
+6. `/set-channel invoice #channel` — channel invoice/testimoni
+7. `/set-channel audit-log #channel` — channel audit log (catat admin action)
+8. `/setup-verify` — pasang panel verifikasi
+9. `/setup-ticket` — pasang panel tiket
 
-Lihat [docs/ADMIN_GUIDE.md](./docs/ADMIN_GUIDE.md) untuk panduan lengkap.
+### Untuk fitur baru (v3.9.13):
+
+**Auto-Responder:**
+```
+/add-responder trigger:"!sosmed" reply:"Instagram: @server\nTikTok: @server"
+```
+
+**Anti-Spam:**
+```
+/set-automod spam_threshold:5 spam_action:mute_10m block_links:true
+/automod-toggle enabled:true
+```
+
+**AFK:**
+```
+/afk reason:"Makan dulu"
+```
+
+**Leveling:**
+```
+/setup-leveling enabled:true xp_per_message:15
+/add-level-role level:10 role:@Active
+```
 
 ---
 
 ## 🛡️ Keamanan
 
-- **Token Discord & GitHub**: Jangan pernah commit ke git atau share di chat publik. Selalu pakai `.env`.
-- **Backup otomatis**: Bot membuat backup JSON setiap 24 jam + saat start. Maks 7 backup disimpan.
-- **Restore backup**: `/restore-backup name:<nama>` — bikin safety backup otomatis sebelum restore.
-- **Atomic write**: Semua file JSON ditulis via `safeWriteJSON` (write-to-tmp + rename) untuk cegah corrupt on crash.
-- **CI/CD pipeline**: GitHub Actions auto-run tests + lint di setiap push & PR. Merge yang break tests akan ditandai failed.
-
----
-
-## 🏗️ Architecture
-
-Bot mengikuti pola **event-driven + domain-driven**:
-
-1. **Entry point** (`index.js`) — slim, hanya login + wire events + data migration
-2. **Event handlers** (`src/bot/events/`) — 1 file per Discord event, delegasi ke domain
-3. **Command router** (`src/commands/index.js`) — cek permission, dispatch ke domain handler
-4. **Interaction router** (`src/interactions/index.js`) — dedup + dispatch by customId prefix
-5. **Domain handlers** (`src/commands/<domain>.js`, `src/interactions/<domain>.js`) — business logic per fitur
-6. **Data layer** (`src/data/`) — JSON persistence, atomic write, schema migrations
-7. **UI builders** (`src/ui/`) — embed & panel constructors
-8. **Infrastructure** (`src/infra/`) — cross-cutting concerns (lock, audit, safe write, permissions)
-
-### Prinsip design
-- **Single Responsibility**: tiap file punya 1 alasan untuk berubah
-- **Domain-driven**: fitur (giveaway, poll, ticket, dll) terpisah jelas
-- **Backward compatible**: data migration otomatis saat struktur berubah
-- **Defensive**: TOCTOU guards, atomic writes, retry logic, error classification
-- **Testable**: pure functions & small files = mudah di-unit-test
+- **Token Discord & GitHub**: Jangan commit ke git. Pakai `.env`.
+- **Atomic write**: Semua file JSON ditulis via `safeWriteJSON` (tmp+rename) — anti corrupt.
+- **TOCTOU guards**: `userLock` cegah double-process saat user double-click.
+- **CI/CD**: GitHub Actions auto-run tests di setiap push.
+- **Auto-backup**: Tiap 24 jam + saat bot start.
 
 ---
 
 ## 🆘 Troubleshooting
 
 ### Bot tidak online
-- Cek `DISCORD_TOKEN` di `.env` (harus valid, bukan expired)
+- Cek `DISCORD_TOKEN` di `.env`
 - Cek bot sudah di-invite ke server dengan ID `GUILD_ID`
-- Lihat log: `❌ Gagal login ke Discord: <pesan error>`
 
 ### Slash command tidak muncul
-- Pastikan `GUILD_ID` di `.env` benar (bot harus member guild itu)
-- Restart bot (registrasi command instan untuk guild)
-- Kalau tanpa `GUILD_ID`, command global butuh ~1 jam propagasi
+- Pastikan `GUILD_ID` benar (bot harus member guild itu)
+- Restart bot (registrasi instan untuk guild)
 
 ### Permission error
-- Pastikan role bot **di atas** role yang akan dikelola (Server Settings → Roles)
-- Bot butuh permission: `Manage Roles`, `Manage Channels`, `Send Messages`, `Embed Links`, `View Audit Log`, `Moderate Members`
-
-### Data hilang setelah restart
-- Cek folder `backups/` — ada auto-backup tiap 24 jam
-- Restore via `/restore-backup name:<nama_backup>`
-- File data JSON ada di `data/` folder (sebelum v3.9.10 ada di root — auto-migrate saat startup)
+- Role bot harus **di atas** role yang dikelola
+- Bot butuh: `Manage Roles`, `Manage Channels`, `Send Messages`, `Embed Links`, `View Audit Log`, `Moderate Members`
 
 ### Tests fail
 - Pastikan Node.js v18+
 - Run `npm install` dulu
-- Run `npm test` — kalau ada fail, lihat pesan error spesifik
 
 ---
 

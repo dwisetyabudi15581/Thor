@@ -34,6 +34,15 @@ const DEFAULTS = {
         { id: 'help',     label: 'Bantuan Staff', emoji: '📞', style: 'Secondary', requiresKey: false, isDefault: true },
         { id: 'report',   label: 'Laporkan Member', emoji: '⚠️', style: 'Danger', requiresKey: false, isDefault: true }
     ],
+    // v3.9.13: Leveling system config
+    leveling: {
+        enabled: false,           // default off — admin harus enable via /setup-leveling
+        xpPerMessage: 15,
+        cooldownMs: 60000,        // 1 menit anti-spam XP
+        announceLevelUp: true,
+        levelUpChannel: null      // null = channel tempat user chat
+    },
+    levelRoles: [],                // [{ level: 10, roleId: "123" }, ...]
     colors: {
         success: 3066993,
         danger: 15158332,
@@ -97,6 +106,7 @@ function getConfig() {
 
     // === MERGE dengan DEFAULTS (deep untuk messages) ===
     // v3.9.11: tambah merge untuk verifyButton & ticketCategories
+    // v3.9.13: tambah merge untuk leveling & levelRoles
     const config = {
         roles: { ...DEFAULTS.roles, ...(raw.roles || {}) },
         channels: { ...DEFAULTS.channels, ...(raw.channels || {}) },
@@ -106,6 +116,8 @@ function getConfig() {
         ticketCategories: Array.isArray(raw.ticketCategories) && raw.ticketCategories.length > 0
             ? raw.ticketCategories
             : DEFAULTS.ticketCategories,
+        leveling: { ...DEFAULTS.leveling, ...(raw.leveling || {}) },
+        levelRoles: Array.isArray(raw.levelRoles) ? raw.levelRoles : DEFAULTS.levelRoles,
         products: Array.isArray(raw.products) ? raw.products : DEFAULTS.products
     };
 

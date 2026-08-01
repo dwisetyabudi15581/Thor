@@ -621,6 +621,151 @@ function getCommands() {
                 { type: 3, name: 'message', description: 'Isi pesan (support \\n untuk newline). Maks 2000 char.', required: true },
                 { type: 3, name: 'mention', description: 'Mention: @everyone, @here, atau <@&role_id> / <@user_id>', required: false }
             ]
+        },
+
+        // === v3.9.13: AUTO-RESPONDER ===
+        {
+            name: 'add-responder',
+            description: 'Tambah auto-responder: trigger keyword → auto reply',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
+            options: [
+                { type: 3, name: 'trigger', description: 'Keyword trigger (mis. !sosmed). Case-insensitive, maks 50 char.', required: true, min_length: 1, max_length: 50 },
+                { type: 3, name: 'reply', description: 'Teks reply (support \\n). Maks 2000 char.', required: true, min_length: 1, max_length: 2000 },
+                { type: 3, name: 'reply_type', description: 'Tipe reply (default: text)', required: false, choices: [
+                    { name: 'Plain text', value: 'text' },
+                    { name: 'Embed', value: 'embed' }
+                ]},
+                { type: 4, name: 'cooldown', description: 'Cooldown dalam detik (anti-spam, default: 3)', required: false }
+            ]
+        },
+        {
+            name: 'list-responder',
+            description: 'Lihat semua auto-responder terdaftar',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild
+        },
+        {
+            name: 'remove-responder',
+            description: 'Hapus auto-responder berdasarkan trigger',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
+            options: [
+                { type: 3, name: 'trigger', description: 'Trigger yang akan dihapus', required: true }
+            ]
+        },
+
+        // === v3.9.13: ANTI-SPAM & AUTO-MOD ===
+        {
+            name: 'set-automod',
+            description: 'Konfigurasi auto-mod (spam, link, word filter, mention limit)',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
+            options: [
+                { type: 4, name: 'spam_threshold', description: 'Jumlah pesan dalam window = spam (default: 5)', required: false },
+                { type: 3, name: 'spam_action', description: 'Action untuk spammer', required: false, choices: [
+                    { name: 'Delete only', value: 'delete_only' },
+                    { name: 'Warn', value: 'warn' },
+                    { name: 'Mute 10 menit', value: 'mute_10m' },
+                    { name: 'Mute 1 jam', value: 'mute_1h' },
+                    { name: 'Kick', value: 'kick' }
+                ]},
+                { type: 5, name: 'block_links', description: 'Block semua link?', required: false },
+                { type: 3, name: 'block_words', description: 'Kata yang di-block (comma-separated, mis. kata1,kata2)', required: false },
+                { type: 3, name: 'word_action', description: 'Action untuk word filter', required: false, choices: [
+                    { name: 'Delete only', value: 'delete' },
+                    { name: 'Warn', value: 'warn' },
+                    { name: 'Mute 10 menit', value: 'mute_10m' }
+                ]},
+                { type: 4, name: 'max_mentions', description: 'Max mention per message (default: 5)', required: false },
+                { type: 3, name: 'mention_action', description: 'Action untuk mass-mention', required: false, choices: [
+                    { name: 'Delete only', value: 'delete' },
+                    { name: 'Warn', value: 'warn' },
+                    { name: 'Mute 10 menit', value: 'mute_10m' }
+                ]}
+            ]
+        },
+        {
+            name: 'automod-show',
+            description: 'Lihat konfigurasi auto-mod saat ini',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild
+        },
+        {
+            name: 'automod-toggle',
+            description: 'Enable/disable auto-mod',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
+            options: [
+                { type: 5, name: 'enabled', description: 'Enable atau disable?', required: true }
+            ]
+        },
+        {
+            name: 'add-link-whitelist',
+            description: 'Tambah channel/role ke whitelist link (boleh post link)',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
+            options: [
+                { type: 7, name: 'channel', description: 'Channel yang boleh post link', required: false },
+                { type: 8, name: 'role', description: 'Role yang boleh post link', required: false }
+            ]
+        },
+
+        // === v3.9.13: AFK SYSTEM ===
+        {
+            name: 'afk',
+            description: 'Set status AFK (bot auto-reply saat di-mention)',
+            options: [
+                { type: 3, name: 'reason', description: 'Alasan AFK (mis. "Makan dulu, 30 menit")', required: false }
+            ]
+        },
+        {
+            name: 'afk-clear',
+            description: 'Clear status AFK kamu'
+        },
+        {
+            name: 'afk-list',
+            description: 'Lihat semua member yang sedang AFK',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild
+        },
+
+        // === v3.9.13: LEVELING SYSTEM ===
+        {
+            name: 'setup-leveling',
+            description: 'Enable/disable leveling system + config XP',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
+            options: [
+                { type: 5, name: 'enabled', description: 'Enable atau disable leveling?', required: true },
+                { type: 4, name: 'xp_per_message', description: 'XP per message (default: 15)', required: false },
+                { type: 4, name: 'cooldown', description: 'Cooldown dalam detik (default: 60)', required: false },
+                { type: 5, name: 'announce_levelup', description: 'Announce saat user level up? (default: true)', required: false }
+            ]
+        },
+        {
+            name: 'add-level-role',
+            description: 'Tambah role reward untuk level tertentu (auto-assign saat cap level)',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
+            options: [
+                { type: 4, name: 'level', description: 'Level yang harus dicap (mis. 10)', required: true },
+                { type: 8, name: 'role', description: 'Role yang akan di-assign', required: true }
+            ]
+        },
+        {
+            name: 'list-level-roles',
+            description: 'Lihat semua level role reward',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild
+        },
+        {
+            name: 'remove-level-role',
+            description: 'Hapus role reward untuk level tertentu',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
+            options: [
+                { type: 4, name: 'level', description: 'Level yang akan dihapus role-nya', required: true }
+            ]
+        },
+        {
+            name: 'rank',
+            description: 'Lihat level & XP kamu (atau user lain)',
+            options: [
+                { type: 6, name: 'user', description: 'User yang ingin dicek (default: kamu)', required: false }
+            ]
+        },
+        {
+            name: 'leaderboard-level',
+            description: 'Top 10 member dengan level tertinggi (public)'
         }
     ];
 }
