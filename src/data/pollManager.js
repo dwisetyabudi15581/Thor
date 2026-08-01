@@ -160,13 +160,19 @@ function getByGuild(guildId) {
 /**
  * Vote option. Kalau multiple=false, otomatis unvote option lain dulu.
  * Kalau user sudah vote option yang sama, unvote (toggle).
- * @returns {Object|null} updated poll, atau null kalau poll tidak ada
+ *
+ * v3.9.15 FIX: return shape konsisten — selalu return poll object (atau null kalau tidak ada).
+ * Sebelumnya, kalau poll.closed, return { closed: true } tanpa field poll lainnya →
+ * caller yang akses result.options[optionIndex] dapat TypeError.
+ * Sekarang return poll object itu sendiri; caller bisa cek result.closed.
+ *
+ * @returns {Object|null} poll object (cek .closed untuk lihat status), atau null kalau poll tidak ada
  */
 function vote(id, userId, optionIndex) {
     const list = load();
     const poll = list.find(p => p.id === id);
     if (!poll) return null;
-    if (poll.closed) return { closed: true };
+    if (poll.closed) return poll;  // v3.9.15: kembalikan poll object utuh, bukan { closed: true }
     // P2-8 FIX: Number.isInteger check — sebelumnya NaN lolos check
     // karena (NaN < 0) = false dan (NaN >= length) = false.
     if (!Number.isInteger(optionIndex) || optionIndex < 0 || optionIndex >= poll.options.length) return null;

@@ -106,10 +106,20 @@ function createBackup() {
         }
     }
 
-    // v3.9.8 FIX: set ok=false kalau ada error. Sebelumnya `ok` selalu true
-    // meski semua file gagal di-copy → caller mengira backup sukses.
-    if (result.errors.length > 0 && result.filesCopied === 0) {
-        result.ok = false;
+    // v3.9.15 FIX: tingkatkan accuracy status backup.
+    // File yang TIDAK ada (existsSync=false) BUKAN error — feature belum dipakai.
+    // Yang dihitung error: file ada tapi gagal di-copy (permission, disk full, dst).
+    // Logic:
+    //   - errors.length === 0 → sukses (semua file yang exist berhasil di-copy) → ok=true
+    //   - errors.length > 0 && filesCopied > 0 → partial failure → ok=false, partial=true
+    //   - errors.length > 0 && filesCopied === 0 → total failure → ok=false
+    if (result.errors.length > 0) {
+        if (result.filesCopied === 0) {
+            result.ok = false;
+        } else {
+            result.ok = false;
+            result.partial = true;
+        }
     }
 
     // Auto-clean backup lama

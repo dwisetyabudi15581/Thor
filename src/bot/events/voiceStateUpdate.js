@@ -64,8 +64,16 @@ async function onVoiceStateUpdate(oldState, newState) {
                         tempVoiceManager.unregisterChannel(guildId, oldChannelId);
                         console.log(`🎤 Temp voice ${oldChannelId} dihapus (kosong).`);
                     } catch (err) {
-                        if (err.code !== 10003) {
-                            console.warn(`⚠️ Gagal hapus temp voice ${oldChannelId}:`, err.message);
+                        // v3.9.15 FIX: bedakan Discord error (numeric code) vs non-Discord error.
+                        // Sebelumnya, `err.code !== 10003` salah klasifikasi non-Discord error
+                        // (TypeError, RangeError, dll — yang err.code = undefined) sebagai
+                        // "gagal hapus" padahal root cause-nya programming bug yang tertutup.
+                        if (err.code === 10003) {
+                            // Unknown Channel — sudah di-delete sebelumnya, OK
+                        } else if (typeof err.code === 'number') {
+                            console.warn(`⚠️ Gagal hapus temp voice ${oldChannelId} (Discord code ${err.code}):`, err.message);
+                        } else {
+                            console.error(`❌ Non-Discord error saat hapus temp voice ${oldChannelId}:`, err);
                         }
                         tempVoiceManager.unregisterChannel(guildId, oldChannelId);
                     }

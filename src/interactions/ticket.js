@@ -193,19 +193,46 @@ module.exports = async function (interaction) {
     }
 
     if (interaction.isButton() && (interaction.customId === 'ticket_close_abort' || interaction.customId === 'ticket_close_abort2')) {
-        return interaction.update({ content: '❌ Penutupan tiket dibatalkan.', embeds: [], components: [] });
+        // v3.9.15 FIX: wrap interaction.update dalam try/catch. Kalau ephemeral sudah di-dismiss
+        // (10008) atau token expired (10062), fallback ke reply ephemeral.
+        try {
+            return await interaction.update({ content: '❌ Penutupan tiket dibatalkan.', embeds: [], components: [] });
+        } catch (err) {
+            if (err.code === 10008 || err.code === 10062) {
+                return interaction.reply({ content: '❌ Penutupan tiket dibatalkan.', flags: MessageFlags.Ephemeral }).catch(() => {});
+            }
+            console.warn('ticket_close_abort update error:', err.message);
+            if (!interaction.replied) {
+                return interaction.reply({ content: '❌ Penutupan tiket dibatalkan.', flags: MessageFlags.Ephemeral }).catch(() => {});
+            }
+        }
     }
 
     if (interaction.isButton() && interaction.customId === 'ticket_close_success') {
         // Hanya untuk tiket help/report (selesai)
-        await interaction.deferUpdate();
+        // v3.9.15 FIX: wrap deferUpdate dalam try/catch. closeTicket punya internal try/catch
+        // jadi channel tetap ke-delete meski deferUpdate gagal.
+        try {
+            await interaction.deferUpdate();
+        } catch (err) {
+            if (err.code !== 10008 && err.code !== 10062) {
+                console.warn('ticket_close_success deferUpdate error:', err.message);
+            }
+        }
         await closeTicket(interaction.channel, interaction.user, true);
         return;
     }
 
     if (interaction.isButton() && interaction.customId === 'ticket_close_cancel_trans') {
         // Tutup tiket transaksi tanpa memberi key (batal beli)
-        await interaction.deferUpdate();
+        // v3.9.15 FIX: wrap deferUpdate dalam try/catch (sama seperti ticket_close_success)
+        try {
+            await interaction.deferUpdate();
+        } catch (err) {
+            if (err.code !== 10008 && err.code !== 10062) {
+                console.warn('ticket_close_cancel_trans deferUpdate error:', err.message);
+            }
+        }
         await closeTicket(interaction.channel, interaction.user, false);
         return;
     }
@@ -326,14 +353,23 @@ module.exports = async function (interaction) {
         }
 
         // === 3. Schedule role removal (MAX EXTEND) ===
-        const scheduleResult = scheduleRoleRemoval({
-            userId: member.id,
-            roleId: role.id,
-            guildId: guild.id,
-            days: product.days || 0,
-            expireAt: keyEntry.expireAt,
-            productName: product.label
-        });
+        // v3.9.15 FIX: wrap dalam try/catch. Sebelumnya, kalau scheduleRoleRemoval throw
+        // (disk error / EACCES), error propagate ke outer catch. Padahal key + role sudah
+        // tersimpan. Admin klik "Set Key" lagi → addKey jalan 2x (duplicate key).
+        let scheduleResult;
+        try {
+            scheduleResult = scheduleRoleRemoval({
+                userId: member.id,
+                roleId: role.id,
+                guildId: guild.id,
+                days: product.days || 0,
+                expireAt: keyEntry.expireAt,
+                productName: product.label
+            });
+        } catch (schedErr) {
+            console.error(`⚠️ Gagal scheduleRoleRemoval saat set-key (key + role tetap tersimpan): ${schedErr.message}`);
+            scheduleResult = { extended: false, permanent: false, error: schedErr.message };
+        }
 
         // === 4. DM member ===
         let dmSent = false;

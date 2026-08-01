@@ -104,7 +104,12 @@ function scheduleRoleRemoval(data) {
     let newExpireAt;
     let permanent = false;
 
-    if (data.expireAt !== undefined && data.expireAt !== null) {
+    // v3.9.15 FIX: treat expireAt <= 0 sebagai permanen (bukan timestamp valid).
+    // Sebelumnya, expireAt=0 lolos check (!== undefined && !== null) → newExpireAt = 0
+    // → dianggap "sudah expire" → scheduler langsung hapus role dalam 60 detik.
+    // Misal: produk dengan days=0 yang somehow resolve ke expireAt=0 → role VIP
+    // dihapus otomatis segera setelah diberikan. Silent data loss.
+    if (data.expireAt !== undefined && data.expireAt !== null && data.expireAt > 0) {
         // Langsung pakai expireAt yang diberikan
         newExpireAt = data.expireAt;
     } else {

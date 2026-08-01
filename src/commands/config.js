@@ -76,7 +76,16 @@ module.exports = async function (interaction) {
         // Discord ButtonBuilder.setEmoji otomatis handle keduanya.
         const row = new ActionRowBuilder().addComponents(verifyBtn);
 
-        await interaction.channel.send({ embeds: [embed], components: [row] });
+        // v3.9.15 FIX: wrap channel.send dalam try/catch. Sebelumnya, kalau gagal
+        // (bot kekurangan Send Messages / Embed Links), error propagate ke top-level
+        // handler → admin lihat "Terjadi error" generik, tidak tahu akar masalahnya.
+        try {
+            await interaction.channel.send({ embeds: [embed], components: [row] });
+        } catch (sendErr) {
+            return safeEditReply(interaction, {
+                content: `❌ Gagal kirim panel verifikasi: ${sendErr.message}\n\nPastikan bot punya permission **Send Messages** dan **Embed Links** di channel ini.`
+            });
+        }
         return safeEditReply(interaction,{ content: '✅ Panel verifikasi dipasang!' });
     }
 
@@ -181,7 +190,14 @@ module.exports = async function (interaction) {
             rows.push(fallbackRow);
         }
 
-        await interaction.channel.send({ embeds: [embed], components: rows });
+        // v3.9.15 FIX: wrap channel.send dalam try/catch (sama seperti setup-verify)
+        try {
+            await interaction.channel.send({ embeds: [embed], components: rows });
+        } catch (sendErr) {
+            return safeEditReply(interaction, {
+                content: `❌ Gagal kirim panel tiket: ${sendErr.message}\n\nPastikan bot punya permission **Send Messages** dan **Embed Links** di channel ini.`
+            });
+        }
         return safeEditReply(interaction,{ content: `✅ Panel tiket dipasang! (${categories.length} kategori aktif)` });
     }
 

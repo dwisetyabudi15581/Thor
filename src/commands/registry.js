@@ -226,13 +226,14 @@ function getCommands() {
         // === REMOVE CHANNEL (hapus channel dari config) ===
         {
             name: 'remove-channel',
-            description: 'Hapus channel dari config (invoice / welcome / goodbye)',
+            description: 'Hapus channel dari config (invoice / welcome / goodbye / audit-log)',
             defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
             options: [
                 { type: 3, name: 'tipe', description: 'Pilih tipe channel yang dihapus', required: true, choices: [
                     { name: 'Invoice', value: 'invoice' },
                     { name: 'Welcome', value: 'welcome' },
-                    { name: 'Goodbye', value: 'goodbye' }
+                    { name: 'Goodbye', value: 'goodbye' },
+                    { name: 'Audit Log', value: 'audit-log' }
                 ]}
             ]
         },

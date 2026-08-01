@@ -39,6 +39,14 @@ module.exports = async function (interaction) {
             return safeEditReply(interaction,{ content: `❌ Gagal buat backup: ${err.message}` });
         }
         if (!result.ok) {
+            // v3.9.15: differentiate total vs partial failure supaya admin tahu severity
+            if (result.partial) {
+                return safeEditReply(interaction, {
+                    content: `⚠️ **Backup PARTIAL!** Hanya ${result.filesCopied} file berhasil disalin (sebagian gagal).\n\n` +
+                        `❌ Error:\n\`\`\`\n${result.errors.join('\n')}\n\`\`\`\n` +
+                        `💡 Backup tetap dibuat dengan file yang berhasil — tapi **tidak lengkap**. Cek disk space & permission file \`data/\`.`
+                });
+            }
             return safeEditReply(interaction,{ content: `❌ Backup gagal total: ${result.errors.join('; ')}` });
         }
         try {

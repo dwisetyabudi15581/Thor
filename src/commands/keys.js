@@ -57,15 +57,26 @@ module.exports = async function (interaction) {
         }
 
         // 1. Simpan key
-        const keyEntry = addKey({
-            key: keyValue,
-            userId: member.id,
-            username: member.user.tag,
-            roleId: role.id,
-            productName: product.label,
-            days: product.days || 0,
-            guildId: interaction.guild.id  // v3.9.3: simpan guildId supaya cross-guild wipe akurat
-        });
+        // v3.9.15 FIX: wrap addKey dalam try/catch. Sebelumnya, kalau addKey throw
+        // (disk error / EACCES / file corrupt), error propagate ke top-level handler →
+        // admin lihat "Terjadi error" generik, tidak tahu penyebabnya.
+        let keyEntry;
+        try {
+            keyEntry = addKey({
+                key: keyValue,
+                userId: member.id,
+                username: member.user.tag,
+                roleId: role.id,
+                productName: product.label,
+                days: product.days || 0,
+                guildId: interaction.guild.id  // v3.9.3: simpan guildId supaya cross-guild wipe akurat
+            });
+        } catch (keyErr) {
+            console.error('addKey gagal:', keyErr);
+            return safeEditReply(interaction, {
+                content: `❌ Gagal simpan key ke database: ${keyErr.message}\n\nCek disk space dan permission file \`data/keys.json\`. Role belum diberikan, schedule belum dibuat.`
+            });
+        }
 
         // 2. Beri role
         try {
@@ -73,18 +84,34 @@ module.exports = async function (interaction) {
                 await member.roles.add(role);
             }
         } catch (err) {
-            return safeEditReply(interaction,{ content: `❌ Gagal add role ${role}. Pastikan role bot ada di ATAS role tersebut.\nKey tetap disimpan.` });
+            return safeEditReply(interaction,{
+                content: `❌ Gagal add role ${role}. Pastikan role bot ada di ATAS role tersebut.\n\n` +
+                    `⚠️ **Key disimpan TANPA role.** Setelah role bot diperbaiki, admin bisa:\n` +
+                    `• Add role manual ke member, atau\n` +
+                    `• Hapus key ini via \`/clear-schedule clear_keys:true\` lalu re-set key.`
+            });
         }
 
         // 3. Schedule (MAX EXTEND)
-        const schedResult = scheduleRoleRemoval({
-            userId: member.id,
-            roleId: role.id,
-            guildId: guild.id,
-            days: product.days || 0,
-            expireAt: keyEntry.expireAt,
-            productName: product.label
-        });
+        // v3.9.15 FIX: wrap scheduleRoleRemoval dalam try/catch. Sebelumnya, kalau throw,
+        // error propagate ke top-level handler padahal key + role sudah terpasang.
+        // Member dapat role VIP permanent (tidak auto-expire) tapi admin tidak sadar.
+        let schedResult;
+        let scheduleWarning = '';
+        try {
+            schedResult = scheduleRoleRemoval({
+                userId: member.id,
+                roleId: role.id,
+                guildId: guild.id,
+                days: product.days || 0,
+                expireAt: keyEntry.expireAt,
+                productName: product.label
+            });
+        } catch (schedErr) {
+            console.error('scheduleRoleRemoval gagal:', schedErr);
+            schedResult = { extended: false, permanent: false };
+            scheduleWarning = `\n⚠️ **Schedule auto-expire gagal dibuat:** ${schedErr.message}. Role tidak akan auto-expire — admin harus lepas manual.`;
+        }
 
         // 4. DM member
         let dmSent = false;
@@ -146,7 +173,8 @@ module.exports = async function (interaction) {
                 `⏰ Expire: ${expireStr}\n` +
                 `${schedResult.extended ? '↳ Schedule di-extend (MAX EXTEND).' : (schedResult.permanent ? '↳ Permanen, schedule lama dihapus.' : '↳ Schedule baru dibuat.')}\n` +
                 `${dmSent ? '📬 DM terkirim.' : '⚠️ DM gagal (DM ditutup).'}\n` +
-                `${invoiceSent ? '🧾 Invoice terkirim.' : '⚠️ Invoice tidak terkirim (channel invoice belum di-set).'}`
+                `${invoiceSent ? '🧾 Invoice terkirim.' : '⚠️ Invoice tidak terkirim (channel invoice belum di-set).'}` +
+                scheduleWarning
         });
     }
 

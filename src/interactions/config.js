@@ -32,50 +32,70 @@ const VALID_TYPES = new Set([
 module.exports = async function (interaction) {
     // === MODAL: edit_message:<tipe> ===
     if (interaction.isModalSubmit() && interaction.customId.startsWith('modal_edit_message:')) {
-        const tipe = interaction.customId.split(':')[1];
+        // v3.9.15 FIX: bungkus seluruh body dalam try/catch.
+        // Sebelumnya, kalau setField() atau logAudit() throw (disk error / EACCES),
+        // error propagate ke top-level handler → admin lihat "Terjadi error" generik
+        // padahal config mungkin sudah tersimpan (setField OK) tapi logAudit gagal.
+        try {
+            const tipe = interaction.customId.split(':')[1];
 
-        // Validate tipe (defense-in-depth — admin bisa attempt customId manipulation)
-        if (!VALID_TYPES.has(tipe)) {
+            // Validate tipe (defense-in-depth — admin bisa attempt customId manipulation)
+            if (!VALID_TYPES.has(tipe)) {
+                return interaction.reply({
+                    content: `❌ Tipe pesan \`${tipe}\` tidak valid.`,
+                    flags: MessageFlags.Ephemeral
+                });
+            }
+
+            const newText = interaction.fields.getTextInputValue('message_text');
+            if (!newText || newText.trim().length === 0) {
+                return interaction.reply({
+                    content: '❌ Teks tidak boleh kosong.',
+                    flags: MessageFlags.Ephemeral
+                });
+            }
+
+            // Validate length
+            const isTitle = tipe.endsWith('Title');
+            const limit = isTitle ? EMBED_LIMITS.TITLE : EMBED_LIMITS.DESCRIPTION;
+            if (newText.length > limit) {
+                return interaction.reply({
+                    content: `❌ Teks terlalu panjang (${newText.length} char, maks ${limit} char untuk ${isTitle ? 'title' : 'body'}).`,
+                    flags: MessageFlags.Ephemeral
+                });
+            }
+
+            // Apply perubahan
+            const oldValue = getConfig().messages?.[tipe];
+            setField(`messages.${tipe}`, newText);
+
+            // logAudit async — kalau gagal, config sudah tersimpan. Tetap reply sukses,
+            // tapi log warning supaya admin bisa lihat di console.
+            try {
+                await logAudit(interaction.client, {
+                    action: 'SET_MESSAGE',
+                    actorId: interaction.user.id,
+                    actorTag: interaction.user.tag,
+                    details: `Edit pesan **${tipe}** via modal (${newText.length} char, sebelumnya ${oldValue?.length || 0} char)`,
+                    guildId: interaction.guild.id
+                });
+            } catch (auditErr) {
+                console.warn(`⚠️ logAudit gagal saat edit-message (config tetap tersimpan): ${auditErr.message}`);
+            }
+
+            // Reply dengan preview
             return interaction.reply({
-                content: `❌ Tipe pesan \`${tipe}\` tidak valid.`,
+                content: `✅ Pesan **${tipe}** diperbarui via modal editor.\n\n**Preview:**\n\`\`\`\n${newText.slice(0, 1500)}${newText.length > 1500 ? '\n...(dipotong untuk preview)' : ''}\n\`\`\``,
                 flags: MessageFlags.Ephemeral
             });
+        } catch (err) {
+            console.error('config modal error:', err);
+            if (!interaction.replied && !interaction.deferred) {
+                return interaction.reply({
+                    content: `❌ Gagal menyimpan perubahan: ${err.message}`,
+                    flags: MessageFlags.Ephemeral
+                }).catch(() => {});
+            }
         }
-
-        const newText = interaction.fields.getTextInputValue('message_text');
-        if (!newText || newText.trim().length === 0) {
-            return interaction.reply({
-                content: '❌ Teks tidak boleh kosong.',
-                flags: MessageFlags.Ephemeral
-            });
-        }
-
-        // Validate length
-        const isTitle = tipe.endsWith('Title');
-        const limit = isTitle ? EMBED_LIMITS.TITLE : EMBED_LIMITS.DESCRIPTION;
-        if (newText.length > limit) {
-            return interaction.reply({
-                content: `❌ Teks terlalu panjang (${newText.length} char, maks ${limit} char untuk ${isTitle ? 'title' : 'body'}).`,
-                flags: MessageFlags.Ephemeral
-            });
-        }
-
-        // Apply perubahan
-        const oldValue = getConfig().messages?.[tipe];
-        setField(`messages.${tipe}`, newText);
-
-        await logAudit(interaction.client, {
-            action: 'SET_MESSAGE',
-            actorId: interaction.user.id,
-            actorTag: interaction.user.tag,
-            details: `Edit pesan **${tipe}** via modal (${newText.length} char, sebelumnya ${oldValue?.length || 0} char)`,
-            guildId: interaction.guild.id
-        });
-
-        // Reply dengan preview
-        return interaction.reply({
-            content: `✅ Pesan **${tipe}** diperbarui via modal editor.\n\n**Preview:**\n\`\`\`\n${newText.slice(0, 1500)}${newText.length > 1500 ? '\n...(dipotong untuk preview)' : ''}\n\`\`\``,
-            flags: MessageFlags.Ephemeral
-        });
     }
 };

@@ -522,13 +522,19 @@ async function handleEmbedBuilderModal(interaction) {
         let targetChannel = null;
 
         // Parse: <#123> or 123 or #name
+        // v3.9.15 FIX: tambah fetch API fallback untuk channel yang belum ter-cache
+        // (channel baru dibuat setelah bot start, atau guild besar dengan cache parsial).
         const mentionMatch = channelInput.match(/^<#(\d+)>$/);
         if (mentionMatch) {
-            targetChannel = interaction.guild.channels.cache.get(mentionMatch[1]);
+            targetChannel = interaction.guild.channels.cache.get(mentionMatch[1])
+                || await interaction.guild.channels.fetch(mentionMatch[1]).catch(() => null);
         } else if (/^\d+$/.test(channelInput)) {
-            targetChannel = interaction.guild.channels.cache.get(channelInput);
+            targetChannel = interaction.guild.channels.cache.get(channelInput)
+                || await interaction.guild.channels.fetch(channelInput).catch(() => null);
         } else {
             const name = channelInput.replace(/^#/, '');
+            // Untuk name lookup, fetch tidak bisa by name — pakai fetch all aktif? Expensive.
+            // Cache lookup sudah cukup untuk name-based.
             targetChannel = interaction.guild.channels.cache.find(c => c.name === name);
         }
 

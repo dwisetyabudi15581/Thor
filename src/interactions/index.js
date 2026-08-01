@@ -7,7 +7,7 @@
  * Prefix mapping (semua prefix di sini SEKARANG punya handler aktif —
  * fallback ke legacy `handlers/interactionHandler.js` DIHAPUS):
  *   - btn_verify                              → verify.js      (exact match)
- *   - ticket_, select_product, modal_set_key: → ticket.js
+ *   - ticket_cat:, ticket_, select_product, modal_set_key: → ticket.js
  *   - sr_btn:, sr_sel:                        → selfrole.js
  *   - emb_edit:, emb_preview:, emb_send:,
  *     emb_cancel:, emb_modal_                 → embed.js
@@ -47,6 +47,9 @@ const PREFIX_TO_DOMAIN = [
     { prefix: 'select_product', domain: 'ticket' },
     { prefix: 'modal_set_key:', domain: 'ticket' },
     { prefix: 'modal_edit_message:', domain: 'config' },
+    // v3.9.15: ticket_cat: di-explicit-kan sebelum ticket_ supaya routing jelas
+    // dan tidak bergantung pada fallback ticket_ (fragile untuk refactor masa depan).
+    { prefix: 'ticket_cat:', domain: 'ticket' },
     { prefix: 'ticket_', domain: 'ticket' },
     { prefix: 'sr_btn:', domain: 'selfrole' },
     { prefix: 'sr_sel:', domain: 'selfrole' },

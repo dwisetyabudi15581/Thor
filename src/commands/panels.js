@@ -167,7 +167,14 @@ module.exports = async function (interaction) {
         }
         if (btnCount > 0) rows.push(currentRow);
 
-        await interaction.channel.send({ embeds: [embed], components: rows });
+        // v3.9.15 FIX: wrap channel.send dalam try/catch (sama seperti setup-verify/setup-ticket)
+        try {
+            await interaction.channel.send({ embeds: [embed], components: rows });
+        } catch (sendErr) {
+            return safeEditReply(interaction, {
+                content: `❌ Gagal kirim panel tiket multi-panel: ${sendErr.message}\n\nPastikan bot punya permission **Send Messages** dan **Embed Links** di channel ini.`
+            });
+        }
         return safeEditReply(interaction, {
             content: `✅ Panel tiket dipasang! (${categoriesToShow.length} kategori ditampilkan)\n\n` +
                 `Kategori: ${categoriesToShow.map(c => `\`${c.id}\``).join(', ')}`

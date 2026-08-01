@@ -143,7 +143,7 @@ module.exports = async function (interaction) {
             return safeEditReply(interaction,{ content: `✅ <@${user.id}> tidak punya warning.` });
         }
         const lines = warns.map((w, i) => {
-            const date = new Date(w.createdAt);
+            // v3.9.15: hapus dead variable `date` (sebelumnya dideklarasi tapi tidak dipakai)
             return `\`${i + 1}.\` 🆔 \`${w.id}\`\n   📝 ${w.reason}\n   👤 Oleh: ${w.warnedByTag} | ⏰ <t:${Math.floor(w.createdAt / 1000)}:R>${w.actionTaken ? ` | ⚡ ${w.actionTaken}` : ''}`;
         }).join('\n\n');
         const embed = new EmbedBuilder()

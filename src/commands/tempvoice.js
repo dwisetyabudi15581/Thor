@@ -38,27 +38,41 @@ module.exports = async function (interaction) {
         // Kalau sudah ada setup, langsung re-kirim panel ke control channel yang ada
         if (existingConfig?.controlChannelId && existingConfig?.creatorChannelId) {
             const existingControlChannel = guild.channels.cache.get(existingConfig.controlChannelId);
-            if (existingControlChannel) {
-                // Hapus panel lama kalau ada
-                if (existingConfig.controlMessageId) {
-                    try {
-                        const oldMsg = await existingControlChannel.messages.fetch(existingConfig.controlMessageId).catch(() => null);
-                        if (oldMsg) await oldMsg.delete().catch(()=>{});
-                    } catch (_) {}
-                }
-                // Kirim panel baru
-                const { embed, components } = buildGlobalControlPanel({
-                    activeOwners: [],
-                    guildName: guild.name
+            // v3.9.15 FIX: kalau control channel lama sudah terhapus, JANGAN fall-through
+            // ke setup baru (akan bikin orphan category + channels). Beri pesan jelas.
+            if (!existingControlChannel) {
+                return safeEditReply(interaction, {
+                    content: `❌ Control channel lama (ID: \`${existingConfig.controlChannelId}\`) sudah terhapus dari server.\n\n` +
+                        `Jalankan \`/tempvoice-remove\` dulu untuk cleanup config lama, lalu \`/setup-tempvoice\` lagi.`
                 });
-                const panelMsg = await existingControlChannel.send({ embeds: [embed], components }).catch(err => null);
-                if (panelMsg) {
-                    tempVoiceManager.setControlMessageId(guild.id, panelMsg.id);
-                    return safeEditReply(interaction,{
-                        content: `✅ **Panel temp voice di-refresh!**\n\n🎛️ ${panelMsg.url}\n\n💡 Setup yang sudah ada tetap dipakai (kategori + trigger + control channel).`
-                    });
-                }
             }
+            // Hapus panel lama kalau ada
+            if (existingConfig.controlMessageId) {
+                try {
+                    const oldMsg = await existingControlChannel.messages.fetch(existingConfig.controlMessageId).catch(() => null);
+                    if (oldMsg) await oldMsg.delete().catch(()=>{});
+                } catch (_) {}
+            }
+            // Kirim panel baru
+            const { embed, components } = buildGlobalControlPanel({
+                activeOwners: [],
+                guildName: guild.name
+            });
+            const panelMsg = await existingControlChannel.send({ embeds: [embed], components }).catch(err => {
+                console.warn('Gagal refresh panel temp voice:', err?.message || err);
+                return null;
+            });
+            // v3.9.15 FIX: kalau send gagal, return error — JANGAN fall-through ke setup baru
+            if (!panelMsg) {
+                return safeEditReply(interaction, {
+                    content: `❌ Gagal refresh panel ke ${existingControlChannel}. Cek permission bot (**Send Messages** + **Embed Links**).\n\n` +
+                        `Setup yang ada tidak diubah.`
+                });
+            }
+            tempVoiceManager.setControlMessageId(guild.id, panelMsg.id);
+            return safeEditReply(interaction, {
+                content: `✅ **Panel temp voice di-refresh!**\n\n🎛️ ${panelMsg.url}\n\n💡 Setup yang sudah ada tetap dipakai (kategori + trigger + control channel).`
+            });
         }
 
         // === Setup baru: bikin kategori + 2 channel ===

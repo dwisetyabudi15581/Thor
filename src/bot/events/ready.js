@@ -111,7 +111,10 @@ async function onReady(client) {
         // Guard overlap: skip tick kalau sebelumnya belum selesai (anti double-DM).
         // Setiap item di-wrap try/catch sendiri (1 throw gak abort sisa loop).
         let schedulerRunning = false;
-        setInterval(async () => {
+        // v3.9.15 FIX: simpan reference + .unref() supaya interval tidak block graceful shutdown.
+        // Sebelumnya, kalau gracefulShutdown gagal reach process.exit (Promise.race hang /
+        // client.destroy throw), interval keep Node.js event loop alive → zombie process.
+        const schedulerInterval = setInterval(async () => {
             if (schedulerRunning) {
                 console.log('⏭️ Scheduler tick di-skip (iterasi sebelumnya masih jalan).');
                 return;
@@ -148,6 +151,7 @@ async function onReady(client) {
                 schedulerRunning = false;
             }
         }, 60 * 1000);
+        if (typeof schedulerInterval.unref === 'function') schedulerInterval.unref();
     } catch (err) {
         console.error('Error re-schedule role:', err);
     }
