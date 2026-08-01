@@ -1,10 +1,9 @@
-# 🤖 Thor Bot v3.9.2
+# 🤖 Thor Bot v3.9.7
 
 Bot Discord untuk manajemen server community — dengan **temp voice system**, **model key-driven VIP** (MAX EXTEND), **self-role fleksibel**, **audit log lengkap**, dan berbagai fitur engagement (giveaway, poll, leaderboard, dll).
 
 > **v3.9.x — Stability & Security Hardening**
 > Patch fokus pada data integrity, race condition, dan validasi input.
-> Lihat [CHANGELOG.md](./CHANGELOG.md) untuk detail perubahan tiap versi.
 
 ## ✨ Fitur Utama
 
@@ -243,10 +242,7 @@ Thor/
 ├── .env.example                      # Template env (copy ke .env)
 ├── .gitignore
 ├── README.md                         # File ini
-├── CHANGELOG.md                      # Riwayat perubahan versi
 ├── ADMIN_GUIDE.md                    # Panduan detail untuk admin server
-├── CHANGES_v3.9.0.md                 # Detail changelog v3.9.0
-├── CHANGES_v3.9.1.md                 # Detail changelog v3.9.1
 ├── handlers/
 │   ├── commandHandler.js             # Slash command handler (47 commands)
 │   ├── interactionHandler.js         # Button/select/modal handler (termasuk temp voice)
@@ -277,56 +273,6 @@ Thor/
     └── embedBuilderSessions.js       # Session manager /embed-builder
 ```
 
-## 🔄 Changelog (Ringkas)
+## 📚 Dokumentasi
 
-Lihat [CHANGELOG.md](./CHANGELOG.md) untuk detail perubahan per versi.
-
-### v3.9.2 — Race condition & docs hardening
-- Per-user lock untuk giveaway join/leave & poll vote (anti double-click TOCTOU)
-- TTL cache 30s untuk admin role check (kurangi disk I/O)
-- Retry 1x dengan delay 500ms untuk audit log (anti transient error)
-- Validasi panjang title/description/field di embed builder (defense-in-depth)
-- Update package.json version, README, ADMIN_GUIDE, tambah CHANGELOG.md
-- Tambah `.env.example` dengan catatan keamanan
-
-### v3.9.1 — Security & race condition hardening
-- Mask key di audit log (sebelumnya bocor 8 char pertama)
-- 2-step confirmation untuk `/restore-backup`
-- Poll modal customId pakai session store (anti 100-char overflow)
-- Tiket metadata pindah dari channel topic ke `tickets.json` (anti spoof)
-- Validasi mention ketat di `/announce` & `/announce-schedule`
-- Hapus hardcoded `@everyone` ping di giveaway creation
-- `Math.max(...spread)` diganti loop di keyManager (anti RangeError)
-- Restore lock + path traversal guard di backupManager
-- `statsManager.reload()` di-call setelah restore (anti stale cache)
-- Range validation `parseTime` di scheduledAnnouncements
-
-### v3.9.0 — Critical bug fixes & data integrity
-- Atomic write (`safeWriteJSON`) untuk semua 9 JSON store
-- `/clear-schedule` di-scope per guild
-- 2-step confirmation untuk `/reset-config`
-- Exclusive mode di self-role select
-- Prototype pollution guard di `configManager.setField`
-- `warnManager` keyed by `(guildId, userId)` + auto-migration
-- `processExpiredRole` tidak hapus schedule pada transient error
-- Ghost loop fix untuk recurring announcements
-- Skip bots + single audit log fetch di memberHandler
-
-### v3.8.5 — Temp Voice Global Panel
-- Panel global: menampilkan daftar semua voice aktif
-- Tambah button Info Room — lihat detail voice room (ephemeral)
-- Switch select: semua user bisa lihat info room
-- Lock button: toggle otomatis
-- Buat voice hanya via join trigger channel
-
-### v3.7 — Stability & Code Quality Release
-- Refactor besar: index.js dipecah jadi 3 file
-- Audit log coverage: 14 action missing ditambahkan
-- Bug fix race condition tiket, validasi input
-
-### v3.6 — Temp Voice removed (reworked di v3.8.5)
-### v3.5 — Critical bug fixes (statsManager caching, scheduler overlap guard)
-### v3.2 — audit, backup, giveaway, scheduled ann, warn, stats, poll
-### v3.0 — key-driven + self-role
-### v2.0 — Welcome/Goodbye, Verify, Ticket, Invoice, fully configurable
-### v1.0 — Versi awal
+- **[ADMIN_GUIDE.md](./ADMIN_GUIDE.md)** — panduan lengkap untuk admin server (setup, operasional harian, troubleshooting, best practices)

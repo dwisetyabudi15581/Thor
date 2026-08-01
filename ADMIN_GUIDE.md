@@ -1,4 +1,4 @@
-# 📖 ADMIN GUIDE — MLBB Community Bot v3.9.2
+# 📖 ADMIN GUIDE — MLBB Community Bot v3.9.7
 
 Panduan lengkap untuk admin server Discord yang menjalankan bot ini. Cocok untuk admin baru yang baru pertama kali setup, maupun admin yang sudah ada untuk referensi harian.
 
@@ -488,13 +488,39 @@ Akan tampil semua backup termasuk safety backup `pre-restore_*` (kalau pernah re
 
 ## 10. Apa yang Baru di v3.9.x
 
+### v3.9.7 — Embed Builder hotfix
+- Fix crash tombol **Send** di embed builder (`ExpectedConstraintError` label > 45 char)
+- Fix `InteractionNotReplied` saat modal submit handler fallback
+
+### v3.9.6 — Embed Builder: plain text message
+- Tambah opsi **💬 Message (plain text)** di dropdown embed builder — kirim teks pengantar di luar embed (support `@everyone`, `@here`, mention, `\n`, maks 2000 char)
+- Modal Send sekarang pre-fill message supaya admin bisa edit cepat sebelum kirim
+- Validasi mention ketat di message (sama seperti `/announce`)
+
+### v3.9.5 — Reliability
+- Tambah `/send-message` — kirim plain text message ke channel (support `\n` & mention)
+- `/embed-list` sekarang menampilkan summary message (panjang char)
+
+### v3.9.4 — Comprehensive bug fix round
+- **CRITICAL**: `stats.json` cross-guild data leak (terlewat dari v3.9.0) — sekarang composite key `${guildId}:${userId}`
+- **CRITICAL**: `safeEditReply` helper dengan `followUp` fallback untuk 10008/10062/40060 (Unknown Message / interaction expired)
+- HIGH: ticket close + set key pakai `getTicketMeta` (anti spoof via channel topic)
+- HIGH: Temp voice orphan cleanup saat create gagal
+- HIGH: Warn auto-action hanya mark action kalau API call sukses
+- HIGH: Auto-transfer voice ownership filter bot account
+- HIGH: `restoreBackup` invalidate permissions cache
+- HIGH: `/config-show` pakai variant guild-scoped
+
+### v3.9.3 — Cross-guild keyManager fix
+- **CRITICAL**: `removeAllKeysByUser` cross-guild wipe (sejak v3.9.0) — sekarang scoped per guild
+- `/announce` & `/announce-schedule` validate title (256) & description (4096)
+
 ### v3.9.2 — Race condition & docs hardening
 - **Per-user lock** untuk giveaway join/leave & poll vote — mencegah double-click TOCTOU
 - **TTL cache 30s** untuk admin role check — kurangi disk I/O di setiap interaction
 - **Retry 1x** dengan delay 500ms untuk audit log — anti transient error (rate limit, network blip)
 - **Validasi panjang** title/description/field di embed builder (defense-in-depth)
-- **Dokumentasi**: update README.md, ADMIN_GUIDE.md, tambah CHANGELOG.md, perbaiki `.env.example`
-- **Versi**: package.json di-update ke 3.9.2
+- Tambah `.env.example` dengan catatan keamanan
 
 ### v3.9.1 — Security & race condition hardening
 - **Mask key di audit log** — sebelumnya bocor 8 char pertama key
@@ -518,8 +544,6 @@ Akan tampil semua backup termasuk safety backup `pre-restore_*` (kalau pernah re
 - **`processExpiredRole` tidak hapus schedule** pada transient error
 - **Ghost loop fix** untuk recurring announcements saat channel dihapus
 - **Skip bots + single audit log fetch** di memberHandler
-
-Lihat [CHANGELOG.md](./CHANGELOG.md) dan `CHANGES_v3.9.0.md` / `CHANGES_v3.9.1.md` untuk detail teknis lengkap.
 
 ---
 
