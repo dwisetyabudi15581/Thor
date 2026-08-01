@@ -50,6 +50,22 @@ async function handleSelfRoleButton(interaction) {
         return interaction.reply({ content: '❌ Role tidak ditemukan di server.', flags: MessageFlags.Ephemeral });
     }
 
+    // v3.9.11 Phase 3: conditional role check.
+    // Kalau role punya requiresRoleId, user harus sudah punya role itu untuk bisa ambil.
+    const roleConfig = panel.roles.find(r => r.roleId === roleId);
+    if (roleConfig?.requiresRoleId) {
+        const member = interaction.member;
+        if (!member.roles.cache.has(roleConfig.requiresRoleId)) {
+            const reqRole = interaction.guild.roles.cache.get(roleConfig.requiresRoleId);
+            const reqName = reqRole ? reqRole.name : `<@&${roleConfig.requiresRoleId}>`;
+            return interaction.reply({
+                content: `❌ Kamu butuh role **${reqName}** untuk bisa mengambil role ini.\n\n` +
+                    `💡 Ambil role ${reqName} dulu lewat panel self-role yang sesuai.`,
+                flags: MessageFlags.Ephemeral
+            });
+        }
+    }
+
     const member = interaction.member;
     const hasRole = member.roles.cache.has(roleId);
 
@@ -159,8 +175,21 @@ async function handleSelfRoleSelect(interaction) {
     }
 
     // === Mode MULTI (default) — logic lama ===
-    const toAdd = panelRoleIds.filter(rid => selectedIds.has(rid) && !member.roles.cache.has(rid));
-    const toRemove = panelRoleIds.filter(rid => !selectedIds.has(rid) && member.roles.cache.has(rid));
+    // v3.9.11 Phase 3: filter out roles yang user gak qualified (requiresRoleId).
+    // Kalau user pilih role yang butuh prerequisite tapi belum punya, skip & warn.
+    const skippedForPrereq = [];
+    const qualifiedSelectedIds = new Set();
+    for (const selId of selectedIds) {
+        const rConfig = panel.roles.find(r => r.roleId === selId);
+        if (rConfig?.requiresRoleId && !member.roles.cache.has(rConfig.requiresRoleId)) {
+            skippedForPrereq.push(selId);
+        } else {
+            qualifiedSelectedIds.add(selId);
+        }
+    }
+
+    const toAdd = panelRoleIds.filter(rid => qualifiedSelectedIds.has(rid) && !member.roles.cache.has(rid));
+    const toRemove = panelRoleIds.filter(rid => !qualifiedSelectedIds.has(rid) && member.roles.cache.has(rid));
 
     try {
         if (toRemove.length > 0) await member.roles.remove(toRemove);

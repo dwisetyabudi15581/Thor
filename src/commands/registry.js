@@ -73,9 +73,83 @@ function getCommands() {
                     { name: 'Verify Title', value: 'verifyTitle' },
                     { name: 'Verify Body', value: 'verifyBody' },
                     { name: 'Ticket Title', value: 'ticketTitle' },
-                    { name: 'Ticket Body', value: 'ticketBody' }
+                    { name: 'Ticket Body', value: 'ticketBody' },
+                    // v3.9.11 Phase 1: ticket price header configurable
+                    { name: 'Ticket Price Header', value: 'ticketPriceHeader' }
                 ]},
                 { type: 3, name: 'teks', description: 'Teks baru. Pakai {user} {username} {server} {count} {action}', required: true }
+            ]
+        },
+
+        // v3.9.11 Phase 1: verify button configurable
+        {
+            name: 'set-verify-button',
+            description: 'Kustomisasi tombol verifikasi (label, emoji, style)',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
+            options: [
+                { type: 3, name: 'label', description: 'Teks tombol (maks 80 char)', required: true, min_length: 1, max_length: 80 },
+                { type: 3, name: 'emoji', description: 'Emoji tombol (unicode atau custom <:name:id>)', required: false },
+                { type: 3, name: 'style', description: 'Warna tombol', required: false, choices: [
+                    { name: '🔵 Primary (Blurple)', value: 'Primary' },
+                    { name: '⚪ Secondary (Grey)', value: 'Secondary' },
+                    { name: '🟢 Success (Green)', value: 'Success' },
+                    { name: '🔴 Danger (Red)', value: 'Danger' }
+                ]}
+            ]
+        },
+
+        // v3.9.11 Phase 2: ticket category management
+        {
+            name: 'add-category',
+            description: 'Tambah kategori tiket baru (untuk panel tiket dinamis)',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
+            options: [
+                { type: 3, name: 'id', description: 'ID unik kategori (huruf/angka/_/-, maks 30 char)', required: true, min_length: 1, max_length: 30 },
+                { type: 3, name: 'label', description: 'Label tombol (maks 80 char)', required: true, min_length: 1, max_length: 80 },
+                { type: 3, name: 'emoji', description: 'Emoji tombol (unicode atau custom <:name:id>)', required: false },
+                { type: 3, name: 'style', description: 'Warna tombol', required: false, choices: [
+                    { name: '🔵 Primary (Blurple)', value: 'Primary' },
+                    { name: '⚪ Secondary (Grey)', value: 'Secondary' },
+                    { name: '🟢 Success (Green)', value: 'Success' },
+                    { name: '🔴 Danger (Red)', value: 'Danger' }
+                ]},
+                { type: 5, name: 'requires_key', description: 'Apakah kategori ini butuh tombol Set Key? (default: true)', required: false }
+            ]
+        },
+
+        {
+            name: 'list-categories',
+            description: 'Lihat semua kategori tiket yang terdaftar',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild
+        },
+
+        {
+            name: 'remove-category',
+            description: 'Hapus kategori tiket dari config',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
+            options: [
+                { type: 3, name: 'id', description: 'ID kategori yang akan dihapus', required: true }
+            ]
+        },
+
+        // v3.9.11 Phase 3: multi-panel ticket
+        {
+            name: 'setup-ticket-panel',
+            description: 'Pasang panel tiket dengan subset kategori (multi-panel support)',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
+            options: [
+                { type: 3, name: 'title', description: 'Judul embed panel (override config default)', required: false },
+                { type: 3, name: 'categories', description: 'Koma-separated category IDs yang mau ditampilkan (kosongkan = semua)', required: false }
+            ]
+        },
+
+        // v3.9.11 Phase 3: ticket transcript
+        {
+            name: 'set-transcript-channel',
+            description: 'Set channel untuk auto-save transcript tiket sebelum close',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
+            options: [
+                { type: 7, name: 'channel', description: 'Channel text untuk transcript', required: true }
             ]
         },
 
@@ -88,7 +162,10 @@ function getCommands() {
                 { type: 3, name: 'label', description: 'Nama produk (mis. 7 Days)', required: true },
                 { type: 3, name: 'value', description: 'ID unik (mis. 7d)', required: true },
                 { type: 3, name: 'price', description: 'Harga (mis. Rp. 50.000)', required: true },
-                { type: 3, name: 'duration', description: 'Opsional. Keterangan durasi (mis. 7 Hari). Kosong = pakai label.', required: false }
+                { type: 3, name: 'duration', description: 'Opsional. Keterangan durasi (mis. 7 Hari). Kosong = pakai label.', required: false },
+                // v3.9.11 Phase 2: category & requires_key
+                { type: 3, name: 'category', description: 'Kategori produk (default: mlbb_key). Lihat /list-categories untuk daftar.', required: false },
+                { type: 5, name: 'requires_key', description: 'Apakah produk ini butuh Set Key? (default: true untuk kategori key)', required: false }
             ]
         },
         {
@@ -252,7 +329,16 @@ function getCommands() {
                 { type: 8, name: 'role', description: 'Role yang akan ditambahkan ke panel', required: true },
                 { type: 3, name: 'label', description: 'Label tombol / option (maks 80 char)', required: true },
                 { type: 3, name: 'emoji', description: 'Emoji (opsional, mis. 🔔)', required: false },
-                { type: 3, name: 'description', description: 'Deskripsi (opsional, hanya untuk select menu)', required: false }
+                { type: 3, name: 'description', description: 'Deskripsi (opsional, hanya untuk select menu)', required: false },
+                // v3.9.11 Phase 3: per-role button style
+                { type: 3, name: 'style', description: 'Warna tombol (default: Secondary)', required: false, choices: [
+                    { name: '🔵 Primary (Blurple)', value: 'Primary' },
+                    { name: '⚪ Secondary (Grey)', value: 'Secondary' },
+                    { name: '🟢 Success (Green)', value: 'Success' },
+                    { name: '🔴 Danger (Red)', value: 'Danger' }
+                ]},
+                // v3.9.11 Phase 3: conditional role (requiresRoleId)
+                { type: 8, name: 'requires_role', description: 'Role yang harus dimiliki user sebelum bisa ambil role ini (opsional)', required: false }
             ]
         },
         {

@@ -16,8 +16,22 @@ const DEFAULTS = {
         verifyTitle: '✅ VERIFIKASI SERVER',
         verifyBody: 'Selamat datang di **{server}**!\n\nKlik tombol di bawah untuk diverifikasi dan mendapatkan akses penuh ke seluruh channel.',
         ticketTitle: '🎫 SISTEM TIKET & PRICE LIST',
-        ticketBody: 'Butuh bantuan atau ingin membeli key?\n\nKlik tombol di bawah untuk memulai transaksi atau menghubungi staff.'
+        ticketBody: 'Butuh bantuan atau ingin membeli key?\n\nKlik tombol di bawah untuk memulai transaksi atau menghubungi staff.',
+        // v3.9.11 Phase 1: ticket header configurable (sebelumnya hardcoded "PRICE LIST KEY")
+        ticketPriceHeader: '💰 PRICE LIST 💰'
     },
+    // v3.9.11 Phase 1: verify button configurable (sebelumnya hardcoded label/emoji/style)
+    verifyButton: {
+        label: 'Verifikasi Saya',
+        emoji: '✅',
+        style: 'Success'  // Primary | Secondary | Success | Danger
+    },
+    // v3.9.11 Phase 2: ticket categories (default 5 kategori built-in)
+    ticketCategories: [
+        { id: 'mlbb_key', label: 'Beli Key',     emoji: '🔑', style: 'Primary',   requiresKey: true,  isDefault: true },
+        { id: 'help',     label: 'Bantuan Staff', emoji: '📞', style: 'Secondary', requiresKey: false, isDefault: true },
+        { id: 'report',   label: 'Laporkan Member', emoji: '⚠️', style: 'Danger', requiresKey: false, isDefault: true }
+    ],
     colors: {
         success: 3066993,
         danger: 15158332,
@@ -80,11 +94,16 @@ function getConfig() {
     }
 
     // === MERGE dengan DEFAULTS (deep untuk messages) ===
+    // v3.9.11: tambah merge untuk verifyButton & ticketCategories
     const config = {
         roles: { ...DEFAULTS.roles, ...(raw.roles || {}) },
         channels: { ...DEFAULTS.channels, ...(raw.channels || {}) },
         messages: { ...DEFAULTS.messages, ...(raw.messages || {}) },
         colors: { ...DEFAULTS.colors, ...(raw.colors || {}) },
+        verifyButton: { ...DEFAULTS.verifyButton, ...(raw.verifyButton || {}) },
+        ticketCategories: Array.isArray(raw.ticketCategories) && raw.ticketCategories.length > 0
+            ? raw.ticketCategories
+            : DEFAULTS.ticketCategories,
         products: Array.isArray(raw.products) ? raw.products : DEFAULTS.products
     };
 

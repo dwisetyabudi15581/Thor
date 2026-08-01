@@ -28,12 +28,11 @@ module.exports = async function (interaction) {
         const price = interaction.options.getString('price');
         // duration opsional - kalau tidak diisi, TIDAK disimpan sama sekali
         const duration = interaction.options.getString('duration');
+        // v3.9.11 Phase 2: category & requires_key
+        const category = interaction.options.getString('category');
+        const requiresKeyOpt = interaction.options.getBoolean('requires_key');
 
         // v3.9.8 FIX: validate `value` — dipakai di customId modal_set_key:${value}
-        // dan dipisah dengan `:` di handler. Kalau value mengandung `:`, customId
-        // jadi `modal_set_key:VIP:30d` → split(':')[1] return "VIP" (bukan "VIP:30d")
-        // → product gak ketemu → "❌ Produk value VIP tidak ditemukan."
-        // Juga enforce length <= 50 supaya customId tidak exceed 100 char (Discord limit).
         if (!value || !/^[a-zA-Z0-9_-]{1,50}$/.test(value)) {
             return safeEditReply(interaction,{ content: '❌ `value` hanya boleh huruf/angka/_/-, maks 50 karakter, tanpa spasi/kolom/titik dua.' });
         }
@@ -45,16 +44,39 @@ module.exports = async function (interaction) {
             return safeEditReply(interaction,{ content: '❌ Maksimal 25 produk (batas dropdown Discord).' });
         }
 
+        // v3.9.11 Phase 2: validate category exists (kalau di-specify)
+        const finalCategory = category || 'mlbb_key';
+        const categories = config.ticketCategories || [];
+        const categoryExists = categories.some(c => c.id === finalCategory);
+        if (!categoryExists && category) {
+            // Kalau admin specify category yang gak ada, tolak.
+            return safeEditReply(interaction,{ content: `❌ Kategori \`${category}\` tidak ditemukan. Pakai /list-categories untuk lihat daftar, atau /add-category untuk bikin baru.` });
+        }
+
+        // v3.9.11 Phase 2: determine requiresKey
+        // - Kalau explicitly set via option, pakai itu.
+        // - Kalau tidak, default berdasarkan category config (kalau category punya requiresKey field).
+        let finalRequiresKey;
+        if (requiresKeyOpt !== null) {
+            finalRequiresKey = requiresKeyOpt;
+        } else {
+            const catConfig = categories.find(c => c.id === finalCategory);
+            finalRequiresKey = catConfig?.requiresKey !== undefined ? catConfig.requiresKey : true;
+        }
+
         // Hanya simpan duration kalau diisi
         const newProduct = { label, value, price };
         if (duration) newProduct.duration = duration;
+        newProduct.category = finalCategory;
+        newProduct.requiresKey = finalRequiresKey;
 
         config.products.push(newProduct);
         saveConfig(config);
 
         const durationInfo = duration ? ` (durasi: ${duration})` : ' (tanpa duration)';
-        await logAudit(interaction.client, { action: 'ADD_PRODUCT', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Tambah produk: **${label}** (\`${value}\`) — ${price}${durationInfo}`, guildId: interaction.guild.id });
-        return safeEditReply(interaction,{ content: `✅ Produk ditambahkan: **${label}** — ${price}${durationInfo}` });
+        const catInfo = ` | kategori: ${finalCategory} | requiresKey: ${finalRequiresKey ? 'yes' : 'no'}`;
+        await logAudit(interaction.client, { action: 'ADD_PRODUCT', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Tambah produk: **${label}** (\`${value}\`) — ${price}${durationInfo}${catInfo}`, guildId: interaction.guild.id });
+        return safeEditReply(interaction,{ content: `✅ Produk ditambahkan: **${label}** — ${price}${durationInfo}\n📦 Kategori: \`${finalCategory}\` | 🔑 Requires Key: ${finalRequiresKey ? 'Yes' : 'No'}` });
     }
 
     // === REMOVE PRODUCT ===

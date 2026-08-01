@@ -92,6 +92,9 @@ module.exports = async function (interaction) {
         const label = interaction.options.getString('label');
         const emoji = interaction.options.getString('emoji') || '';
         const description = interaction.options.getString('description') || '';
+        // v3.9.11 Phase 3: per-role style & conditional role
+        const style = interaction.options.getString('style');
+        const requiresRole = interaction.options.getRole('requires_role');
 
         const panel = getPanel(panelId);
         if (!panel) {
@@ -105,7 +108,10 @@ module.exports = async function (interaction) {
             roleId: role.id,
             label,
             emoji,
-            description
+            description,
+            // v3.9.11 Phase 3
+            style: style || 'Secondary',
+            requiresRoleId: requiresRole?.id || null
         });
         if (!result.ok) {
             return safeEditReply(interaction,{ content: `❌ ${result.error}` });

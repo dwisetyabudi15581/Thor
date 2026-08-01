@@ -51,13 +51,27 @@ module.exports = async function (interaction) {
             .setFooter({ text: interaction.client.user.username, iconURL: interaction.client.user.displayAvatarURL({ dynamic: true }) })
             .setTimestamp();
 
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId('btn_verify')
-                .setLabel('Verifikasi Saya')
-                .setEmoji('✅')
-                .setStyle(ButtonStyle.Success)
-        );
+        // v3.9.11 Phase 1: verify button configurable (label/emoji/style dari config.verifyButton).
+        const btnConfig = config.verifyButton || {};
+        const styleMap = {
+            Primary: ButtonStyle.Primary,
+            Secondary: ButtonStyle.Secondary,
+            Success: ButtonStyle.Success,
+            Danger: ButtonStyle.Danger
+        };
+        const btnStyle = styleMap[btnConfig.style] || ButtonStyle.Success;
+        const btnEmoji = btnConfig.emoji || '✅';
+        const btnLabel = btnConfig.label || 'Verifikasi Saya';
+
+        const verifyBtn = new ButtonBuilder()
+            .setCustomId('btn_verify')
+            .setLabel(btnLabel.slice(0, 80))
+            .setEmoji(btnEmoji)
+            .setStyle(btnStyle);
+
+        // v3.9.11 Phase 1: emoji bisa berupa custom emoji ID (<:name:id>) atau unicode.
+        // Discord ButtonBuilder.setEmoji otomatis handle keduanya.
+        const row = new ActionRowBuilder().addComponents(verifyBtn);
 
         await interaction.channel.send({ embeds: [embed], components: [row] });
         return safeEditReply(interaction,{ content: '✅ Panel verifikasi dipasang!' });
@@ -67,31 +81,79 @@ module.exports = async function (interaction) {
     if (interaction.commandName === 'setup-ticket') {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-        if (!config.products || config.products.length === 0) {
-            return safeEditReply(interaction,{ content: '❌ Belum ada produk. Pakai `/add-product` dulu.' });
-        }
+        // v3.9.11 Phase 2: auto-migrate produk lama (tambah category & requiresKey default).
+        // Dilakukan di configManager getConfig(), tapi kita pastikan di sini juga.
+        let productsWithCategory = (config.products || []).map(p => ({
+            ...p,
+            category: p.category || 'mlbb_key',
+            requiresKey: p.requiresKey !== undefined ? p.requiresKey : true
+        }));
 
-        const priceList = config.products.map(p => `• **${p.label}** — ${p.price}`).join('\n');
+        // v3.9.11 Phase 2: gunakan config.ticketCategories untuk render tombol dinamis.
+        // Kalau belum ada kategori (config lama), pakai default 3 tombol (legacy behavior).
+        const categories = config.ticketCategories || [];
+        const styleMap = {
+            Primary: ButtonStyle.Primary,
+            Secondary: ButtonStyle.Secondary,
+            Success: ButtonStyle.Success,
+            Danger: ButtonStyle.Danger
+        };
+
+        // Build price list — gabungkan semua produk, group by category (Phase 2 will group better)
+        const priceList = productsWithCategory.length > 0
+            ? productsWithCategory.map(p => `• **${p.label}** — ${p.price}`).join('\n')
+            : '_(belum ada produk — pakai `/add-product`)_';
+
+        // v3.9.11 Phase 1: ticket header configurable (sebelumnya hardcoded "PRICE LIST KEY")
+        const priceHeader = config.messages?.ticketPriceHeader || '💰 PRICE LIST 💰';
 
         const embed = new EmbedBuilder()
             .setTitle(config.messages.ticketTitle)
             .setDescription(
                 config.messages.ticketBody + '\n\n' +
-                '**💰 PRICE LIST KEY 💰**\n' +
+                `**${priceHeader}**\n` +
                 priceList
             )
             .setColor(0xE67E22)
             .setFooter({ text: interaction.client.user.username, iconURL: interaction.client.user.displayAvatarURL({ dynamic: true }) })
             .setTimestamp();
 
-        const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('ticket_trade').setLabel('Beli Key / Transaksi').setEmoji('🛒').setStyle(ButtonStyle.Primary),
-            new ButtonBuilder().setCustomId('ticket_help').setLabel('Bantuan Staff').setEmoji('📞').setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId('ticket_report').setLabel('Laporkan Member').setEmoji('⚠️').setStyle(ButtonStyle.Danger)
-        );
+        // v3.9.11 Phase 2: render tombol dari config.ticketCategories.
+        // Discord limit: 5 button per ActionRow, max 5 rows (25 button total).
+        // Kalau kategori > 5, bagi ke multiple rows.
+        const rows = [];
+        let currentRow = new ActionRowBuilder();
+        let btnCount = 0;
 
-        await interaction.channel.send({ embeds: [embed], components: [row] });
-        return safeEditReply(interaction,{ content: '✅ Panel tiket dipasang!' });
+        for (const cat of categories.slice(0, 25)) {
+            if (btnCount === 5) {
+                rows.push(currentRow);
+                currentRow = new ActionRowBuilder();
+                btnCount = 0;
+            }
+            const btnStyle = styleMap[cat.style] || ButtonStyle.Primary;
+            const btn = new ButtonBuilder()
+                .setCustomId(`ticket_cat:${cat.id}`)
+                .setLabel((cat.label || cat.id).slice(0, 80))
+                .setEmoji(cat.emoji || '🎫')
+                .setStyle(btnStyle);
+            currentRow.addComponents(btn);
+            btnCount++;
+        }
+        if (btnCount > 0) rows.push(currentRow);
+
+        // Fallback kalau categories kosong: pakai tombol legacy (ticket_trade, ticket_help, ticket_report)
+        if (rows.length === 0) {
+            const fallbackRow = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('ticket_trade').setLabel('Beli Key / Transaksi').setEmoji('🛒').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId('ticket_help').setLabel('Bantuan Staff').setEmoji('📞').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('ticket_report').setLabel('Laporkan Member').setEmoji('⚠️').setStyle(ButtonStyle.Danger)
+            );
+            rows.push(fallbackRow);
+        }
+
+        await interaction.channel.send({ embeds: [embed], components: rows });
+        return safeEditReply(interaction,{ content: `✅ Panel tiket dipasang! (${categories.length} kategori aktif)` });
     }
 
     // === SET ROLE ===
@@ -263,7 +325,9 @@ module.exports = async function (interaction) {
             verifyTitle: '✅ Verify Title',
             verifyBody: '✅ Verify Body',
             ticketTitle: '🎫 Ticket Title',
-            ticketBody: '🎫 Ticket Body'
+            ticketBody: '🎫 Ticket Body',
+            // v3.9.11 Phase 1: ticket price header configurable
+            ticketPriceHeader: '🎫 Ticket Price Header'
         };
         for (const [key, label] of Object.entries(labels)) {
             const val = config.messages[key] || '(kosong)';

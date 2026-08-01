@@ -8,11 +8,24 @@ const { EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder, StringSelect
  * Custom ID format:
  * - Button: sr_btn:<panelId>:<roleId>
  * - Select : sr_sel:<panelId>
+ *
+ * v3.9.11 Phase 3: per-role button style (Primary/Secondary/Success/Danger).
+ * v3.9.11 Phase 3: conditional role (requiresRoleId) — role disembunyikan dari
+ *   user yang belum punya requiresRoleId. Filter dilakukan di interaction handler,
+ *   bukan di sini (karena builder tidak punya context user).
  */
 
 const MAX_BUTTONS_PER_ROW = 5;
 const MAX_ROWS = 5; // batas Discord: 5 ActionRow per message
 const MAX_BUTTONS = MAX_BUTTONS_PER_ROW * MAX_ROWS; // 25
+
+// v3.9.11 Phase 3: map style string → ButtonStyle enum
+const STYLE_MAP = {
+    Primary: ButtonStyle.Primary,
+    Secondary: ButtonStyle.Secondary,
+    Success: ButtonStyle.Success,
+    Danger: ButtonStyle.Danger
+};
 
 function buildPanelEmbed(panel, client) {
     const modeText = panel.exclusive
@@ -24,7 +37,9 @@ function buildPanelEmbed(panel, client) {
         : panel.roles.map(r => {
             const emojiStr = r.emoji ? `${r.emoji} ` : '';
             const descStr = r.description ? ` — ${r.description}` : '';
-            return `• ${emojiStr}**${r.label}** <@&${r.roleId}>${descStr}`;
+            // v3.9.11 Phase 3: tampilkan badge kalau role butuh prerequisite
+            const reqStr = r.requiresRoleId ? ` _(butuh <@&${r.requiresRoleId}>)_` : '';
+            return `• ${emojiStr}**${r.label}** <@&${r.roleId}>${descStr}${reqStr}`;
         }).join('\n');
 
     const embed = new EmbedBuilder()
@@ -47,6 +62,8 @@ function buildPanelEmbed(panel, client) {
  *
  * Untuk mode exclusive + select, set minValues=1, maxValues=1.
  * Untuk mode multi + select, set minValues=0, maxValues=roles.length.
+ *
+ * v3.9.11 Phase 3: pakai per-role style (default Secondary kalau gak di-set).
  */
 function buildPanelComponents(panel) {
     if (panel.roles.length === 0) return [];
@@ -73,10 +90,12 @@ function buildPanelComponents(panel) {
         const row = new ActionRowBuilder();
         for (let j = i; j < Math.min(i + MAX_BUTTONS_PER_ROW, total); j++) {
             const r = panel.roles[j];
+            // v3.9.11 Phase 3: pakai per-role style, default Secondary
+            const btnStyle = STYLE_MAP[r.style] || ButtonStyle.Secondary;
             const btn = new ButtonBuilder()
                 .setCustomId(`sr_btn:${panel.id}:${r.roleId}`)
                 .setLabel(r.label)
-                .setStyle(ButtonStyle.Secondary);
+                .setStyle(btnStyle);
             if (r.emoji) {
                 try { btn.setEmoji(r.emoji); } catch (_) { /* emoji invalid, skip */ }
             }
@@ -87,4 +106,5 @@ function buildPanelComponents(panel) {
     return rows;
 }
 
-module.exports = { buildPanelEmbed, buildPanelComponents };
+module.exports = { buildPanelEmbed, buildPanelComponents, STYLE_MAP };
+

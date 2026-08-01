@@ -57,6 +57,9 @@ const statsHandler       = require('./stats');
 const pollHandler        = require('./poll');
 const tempvoiceHandler   = require('./tempvoice');
 const sendMessageHandler = require('./send-message');
+// v3.9.11 Phase 2 & 3: new domains
+const categoriesHandler  = require('./categories');
+const panelsHandler      = require('./panels');
 
 const DOMAIN_HANDLERS = {
     help: helpHandler,
@@ -72,7 +75,10 @@ const DOMAIN_HANDLERS = {
     stats: statsHandler,
     poll: pollHandler,
     tempvoice: tempvoiceHandler,
-    'send-message': sendMessageHandler
+    'send-message': sendMessageHandler,
+    // v3.9.11 Phase 2 & 3
+    categories: categoriesHandler,
+    panels: panelsHandler
 };
 
 // Mapping commandName → domain key (di DOMAIN_HANDLERS).
@@ -151,7 +157,17 @@ const COMMAND_TO_DOMAIN = {
     'tempvoice-remove': 'tempvoice',
 
     // send-message
-    'send-message': 'send-message'
+    'send-message': 'send-message',
+
+    // v3.9.11 Phase 2: categories
+    'add-category': 'categories',
+    'list-categories': 'categories',
+    'remove-category': 'categories',
+
+    // v3.9.11 Phase 1 & 3: panels (verify button, multi-panel ticket, transcript)
+    'set-verify-button': 'panels',
+    'setup-ticket-panel': 'panels',
+    'set-transcript-channel': 'panels'
 };
 
 // Command yang boleh dipakai member biasa (bukan admin).

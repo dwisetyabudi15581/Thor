@@ -115,7 +115,12 @@ function addRoleToPanel(panelId, roleData) {
         roleId: roleData.roleId,
         label: (roleData.label || 'Role').slice(0, 80),
         emoji: roleData.emoji || '',
-        description: (roleData.description || '').slice(0, 100)
+        description: (roleData.description || '').slice(0, 100),
+        // v3.9.11 Phase 3: per-role button style customization.
+        style: ['Primary', 'Secondary', 'Success', 'Danger'].includes(roleData.style) ? roleData.style : 'Secondary',
+        // v3.9.11 Phase 3: conditional role — hanya muncul kalau user sudah punya role ini.
+        // Kalau null/undefined, role tersedia untuk semua user.
+        requiresRoleId: roleData.requiresRoleId || null
     });
     savePanels(list);
     return { ok: true, panel };

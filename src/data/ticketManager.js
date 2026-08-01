@@ -49,7 +49,7 @@ function saveTickets(data) {
 /**
  * Simpan metadata tiket baru.
  * @param {string} channelId
- * @param {Object} meta - { userId, productName, price, guildId, createdAt }
+ * @param {Object} meta - { userId, productName, price, guildId, createdAt, category?, requiresKey?, deliveryFields? }
  */
 function setTicketMeta(channelId, meta) {
     const all = loadTickets();
@@ -58,7 +58,13 @@ function setTicketMeta(channelId, meta) {
         productName: meta.productName,
         price: meta.price,
         guildId: meta.guildId,
-        createdAt: meta.createdAt || Date.now()
+        createdAt: meta.createdAt || Date.now(),
+        // v3.9.11 Phase 2: simpan category untuk dispatch di interaction handler.
+        category: meta.category || null,
+        // v3.9.11 Phase 2: requiresKey flag (kalau true, ticket tampilkan tombol Set Key).
+        requiresKey: meta.requiresKey !== undefined ? meta.requiresKey : null,
+        // v3.9.11 Phase 3: deliveryFields — data yang user isi di modal form.
+        deliveryFields: meta.deliveryFields || null
     };
     saveTickets(all);
 }
@@ -165,7 +171,12 @@ async function createTicket(interaction, product) {
             return interaction.editReply({ content: '❌ Role Admin belum di-set. Pakai `/set-role admin @role` dulu.' });
         }
 
-        const isTransaction = product.label !== 'Bantuan/Lapor';
+        // v3.9.11 Phase 1: hapus magic string 'Bantuan/Lapor'.
+        // Sebelumnya: `product.label !== 'Bantuan/Lapor'` — fragile kalau admin rename produk.
+        // Sekarang: pakai field `category` di product (Phase 2) atau fallback `isHelp: true` flag.
+        // Untuk backward compat: kalau product gak punya category, treat sebagai transaksi
+        // kecuali kalau product dikirim dari tombol ticket_help/ticket_report (yang set isHelp=true).
+        const isTransaction = !(product.isHelp === true || product.category === 'help' || product.category === 'report');
 
         // Buat kategori kalau belum ada
         let category = guild.channels.cache.find(c => c.name === '🎫 TICKETS' && c.type === ChannelType.GuildCategory);
@@ -190,12 +201,15 @@ async function createTicket(interaction, product) {
         });
 
         // v3.9.1: simpan metadata tiket ke tickets.json (sumber kebenaran).
+        // v3.9.11 Phase 2: simpan category & requiresKey juga.
         setTicketMeta(ticketChannel.id, {
             userId: user.id,
             productName: product.label,
             price: product.price,
             guildId: guild.id,
-            createdAt: Date.now()
+            createdAt: Date.now(),
+            category: product.category || (isTransaction ? 'mlbb_key' : 'help'),
+            requiresKey: product.requiresKey !== undefined ? product.requiresKey : isTransaction
         });
 
         const ticketEmbed = new EmbedBuilder()
@@ -261,7 +275,10 @@ async function createTicket(interaction, product) {
 async function sendInvoice(channel, userId, productName, price, closer) {
     const config = getConfig();
     if (!config.channels.invoice) return false;
-    if (productName === 'Bantuan/Lapor') return false;
+    // v3.9.11 Phase 1: hapus magic string 'Bantuan/Lapor'.
+    // Sekarang: kirim invoice untuk semua produk transaksi (bukan help/report).
+    // Caller bertanggung jawab skip sendInvoice untuk non-transaction ticket.
+    if (!productName || productName === 'Unknown') return false;
 
     const invoiceChannel = channel.guild.channels.cache.get(config.channels.invoice);
     if (!invoiceChannel) return false;
@@ -281,6 +298,118 @@ async function sendInvoice(channel, userId, productName, price, closer) {
         .setTimestamp();
 
     await invoiceChannel.send({ content: `✅ Transaksi sukses oleh <@${userId}>!`, embeds: [invoiceEmbed] });
+    return true;
+}
+
+/**
+ * v3.9.11 Phase 3: Save transcript tiket ke channel transcript.
+ *
+ * Fetch semua messages di channel tiket, format jadi text, kirim ke channel
+ * transcript yang sudah di-set via /set-transcript-channel.
+ *
+ * Limit Discord: 1 message = 2000 char. Kalau transcript > 2000 char,
+ * bagi jadi multiple messages.
+ *
+ * @param {Channel} ticketChannel - channel tiket yang akan di-close
+ * @param {Object} meta - metadata tiket dari tickets.json
+ * @param {User} closer - admin yang close
+ * @param {boolean} isSuccess - true kalau transaksi sukses
+ */
+async function saveTranscript(ticketChannel, meta, closer, isSuccess) {
+    const config = getConfig();
+    const transcriptChannelId = config.channels?.transcript;
+    if (!transcriptChannelId) return false;
+
+    const transcriptChannel = ticketChannel.guild?.channels?.cache?.get(transcriptChannelId);
+    if (!transcriptChannel) return false;
+
+    // Fetch semua messages (limit 100 — cukup untuk mayoritas ticket)
+    let messages;
+    try {
+        messages = await ticketChannel.messages.fetch({ limit: 100 });
+    } catch (err) {
+        console.warn(`⚠️ Gagal fetch messages untuk transcript: ${err.message}`);
+        return false;
+    }
+
+    // Sort oldest-first supaya transcript terbaca kronologis
+    const sorted = [...messages.values()].sort((a, b) => a.createdTimestamp - b.createdTimestamp);
+
+    // Build transcript text
+    const lines = [];
+    lines.push(`╔═══════════════════════════════════════════`);
+    lines.push(`║ 🎫 TIKET TRANSCRIPT`);
+    lines.push(`╠═══════════════════════════════════════════`);
+    lines.push(`║ 📌 Channel: #${ticketChannel.name} (\`${ticketChannel.id}\`)`);
+    lines.push(`║ 👤 User: <@${meta?.userId || 'unknown'}> (${meta?.userId || 'unknown'})`);
+    lines.push(`║ 📦 Produk: ${meta?.productName || 'unknown'}`);
+    lines.push(`║ 💰 Harga: ${meta?.price || 'unknown'}`);
+    lines.push(`║ 🏷️ Kategori: ${meta?.category || 'unknown'}`);
+    lines.push(`║ ✅ Status: ${isSuccess ? 'Sukses' : 'Dibatalkan'}`);
+    lines.push(`║ 🔒 Ditutup oleh: ${closer?.tag || 'unknown'} (\`${closer?.id || 'unknown'}\`)`);
+    lines.push(`║ 📅 Dibuat: ${meta?.createdAt ? new Date(meta.createdAt).toLocaleString('id-ID') : 'unknown'}`);
+    lines.push(`║ 📅 Ditutup: ${new Date().toLocaleString('id-ID')}`);
+    lines.push(`╚═══════════════════════════════════════════`);
+    lines.push('');
+    lines.push('--- CHAT HISTORY ---');
+
+    for (const msg of sorted) {
+        // Skip message dari bot yang cuma embed panel (panjang & gak relevan)
+        if (msg.author.bot && msg.embeds.length > 0 && msg.content === '') continue;
+
+        const time = new Date(msg.createdTimestamp).toLocaleString('id-ID');
+        const author = msg.author?.tag || 'unknown';
+        const content = msg.content || '_(embed/attachment — tidak ditampilkan)_';
+        lines.push(`[${time}] ${author}: ${content}`);
+    }
+
+    lines.push('--- END OF TRANSCRIPT ---');
+
+    // Kirim sebagai embed summary + multiple text chunks kalau perlu
+    const transcriptText = lines.join('\n');
+    const CHUNK_SIZE = 1900;  // sedikit di bawah 2000 untuk safety
+
+    const embed = new EmbedBuilder()
+        .setTitle(`🎫 Ticket Transcript — ${meta?.productName || 'Unknown'}`)
+        .setColor(isSuccess ? 0x57F287 : 0xED4245)
+        .addFields(
+            { name: '👤 User', value: `<@${meta?.userId || 'unknown'}>`, inline: true },
+            { name: '📦 Produk', value: meta?.productName || 'unknown', inline: true },
+            { name: '💰 Harga', value: meta?.price || 'unknown', inline: true },
+            { name: '🏷️ Kategori', value: meta?.category || 'unknown', inline: true },
+            { name: '🔒 Ditutup oleh', value: closer?.tag || 'unknown', inline: true },
+            { name: '✅ Status', value: isSuccess ? 'Sukses' : 'Dibatalkan', inline: true }
+        )
+        .setFooter({ text: `Channel: ${ticketChannel.name} | ${new Date().toLocaleString('id-ID')}` })
+        .setTimestamp();
+
+    await transcriptChannel.send({ embeds: [embed] });
+
+    // Kirim transcript text dalam code blocks (chunked kalau perlu)
+    const chunks = [];
+    if (transcriptText.length <= CHUNK_SIZE) {
+        chunks.push(transcriptText);
+    } else {
+        // Pecah per baris, gabung sampai mendekati CHUNK_SIZE
+        let current = '';
+        for (const line of lines) {
+            if ((current + '\n' + line).length > CHUNK_SIZE) {
+                chunks.push(current);
+                current = line;
+            } else {
+                current = current ? current + '\n' + line : line;
+            }
+        }
+        if (current) chunks.push(current);
+    }
+
+    for (let i = 0; i < chunks.length; i++) {
+        const header = chunks.length > 1 ? `\n[Part ${i + 1}/${chunks.length}]\n` : '';
+        await transcriptChannel.send({
+            content: `${header}\`\`\`\n${chunks[i]}\n\`\`\``
+        });
+    }
+
     return true;
 }
 
@@ -324,6 +453,19 @@ async function closeTicket(channel, closer, isSuccess) {
         const userId = meta?.userId || null;
         const productName = meta?.productName || 'Unknown';
         const price = meta?.price || 'Unknown';
+
+        // v3.9.11 Phase 3: auto-save transcript ke channel transcript (kalau di-set).
+        // Dilakukan SEBELUM delete channel supaya messages masih bisa di-fetch.
+        // Failure tidak block close — log warning saja.
+        const config = getConfig();
+        const transcriptChannelId = config.channels?.transcript;
+        if (transcriptChannelId) {
+            try {
+                await saveTranscript(channel, meta, closer, isSuccess);
+            } catch (transcriptErr) {
+                console.warn(`⚠️ Gagal save transcript untuk ticket ${channelId}:`, transcriptErr.message);
+            }
+        }
 
         // Kirim invoice kalau sukses & bukan tiket help/report
         // FIX v3.7.1: invoice failure tidak boleh block close — log warning saja.

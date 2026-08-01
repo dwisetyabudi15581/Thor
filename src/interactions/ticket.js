@@ -40,7 +40,69 @@ module.exports = async function (interaction) {
     const config = getConfig();
 
     // ====================================================
-    // === TIKET: TOMBOL TRANSAKSI → DROPDOWN PRODUK ===
+    // === v3.9.11 Phase 2: TIKET KATEGORI BUTTON → DROPDOWN PRODUK FILTERED ===
+    // === customId: ticket_cat:<categoryId>                ===
+    // ====================================================
+    // Saat user klik tombol kategori di panel tiket dinamis, tampilkan dropdown
+    // produk yang hanya punya category == categoryId. Kalau kategori adalah help/report
+    // (requiresKey=false, bukan transaksi), langsung buat tiket tanpa pilih produk.
+    if (interaction.isButton() && interaction.customId.startsWith('ticket_cat:')) {
+        const categoryId = interaction.customId.split(':')[1];
+        const categories = config.ticketCategories || [];
+        const catConfig = categories.find(c => c.id === categoryId);
+
+        if (!catConfig) {
+            return interaction.reply({ content: `❌ Kategori \`${categoryId}\` tidak ditemukan di config.`, flags: MessageFlags.Ephemeral });
+        }
+
+        // Cek verified role (sama seperti tombol lain)
+        if (config.roles.verified && !interaction.member.roles.cache.has(config.roles.verified)) {
+            return interaction.reply({ content: '❌ Verifikasi dulu!', flags: MessageFlags.Ephemeral });
+        }
+
+        // Kategori help/report → langsung buat ticket tanpa produk
+        if (catConfig.requiresKey === false && (categoryId === 'help' || categoryId === 'report')) {
+            const label = categoryId === 'help' ? 'Bantuan Staff' : 'Laporkan Member';
+            const product = { label, duration: '-', price: '-', isHelp: true, category: categoryId };
+            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+            return createTicket(interaction, product);
+        }
+
+        // Kategori transaksi → filter produk berdasarkan category
+        const productsInCat = (config.products || []).filter(p => {
+            const pCat = p.category || 'mlbb_key';
+            return pCat === categoryId;
+        });
+
+        if (productsInCat.length === 0) {
+            return interaction.reply({
+                content: `❌ Belum ada produk di kategori **${catConfig.label}**.\n\n` +
+                    `💡 Admin: pakai \`/add-product category:${categoryId}\` untuk tambah produk ke kategori ini.`,
+                flags: MessageFlags.Ephemeral
+            });
+        }
+
+        // Build dropdown menu
+        const selectMenu = new ActionRowBuilder().addComponents(
+            new StringSelectMenuBuilder()
+                .setCustomId('select_product')
+                .setPlaceholder(`Pilih produk — ${catConfig.label}...`)
+                .addOptions(productsInCat.map(p => ({
+                    label: p.label,
+                    description: p.price,
+                    value: p.value,
+                    emoji: catConfig.emoji || '🎫'
+                })))
+        );
+        return interaction.reply({
+            content: `Silakan pilih produk di kategori **${catConfig.label}** ${catConfig.emoji || ''}:`,
+            components: [selectMenu],
+            flags: MessageFlags.Ephemeral
+        });
+    }
+
+    // ====================================================
+    // === TIKET: TOMBOL TRANSAKSI → DROPDOWN PRODUK (LEGACY) ===
     // ====================================================
     if (interaction.isButton() && interaction.customId === 'ticket_trade') {
         if (!config.roles.verified || !interaction.member.roles.cache.has(config.roles.verified)) {
@@ -78,8 +140,15 @@ module.exports = async function (interaction) {
             const selectedValue = interaction.values[0];
             product = config.products.find(p => p.value === selectedValue);
             if (!product) return safeEditReply(interaction,{ content: '❌ Produk tidak ditemukan.' });
+        } else if (interaction.customId === 'ticket_help') {
+            // v3.9.11 Phase 1: pakai isHelp flag, bukan magic string label.
+            product = { label: 'Bantuan Staff', duration: '-', price: '-', isHelp: true, category: 'help' };
+        } else if (interaction.customId === 'ticket_report') {
+            product = { label: 'Laporkan Member', duration: '-', price: '-', isHelp: true, category: 'report' };
         } else {
-            product = { label: 'Bantuan/Lapor', duration: '-', price: '-' };
+            // v3.9.11 Phase 3: multi-panel ticket — customId `ticket_cat:<categoryId>`
+            // akan di-handle di sini. Untuk sekarang, fallback ke help.
+            product = { label: 'Bantuan', duration: '-', price: '-', isHelp: true, category: 'help' };
         }
         return createTicket(interaction, product);
     }
@@ -97,7 +166,10 @@ module.exports = async function (interaction) {
         // Sebelumnya, kalau admin edit channel topic / topic ke-truncate, productName salah.
         const meta = getTicketMeta(interaction.channel.id, interaction.channel?.topic || '');
         const productName = meta?.productName || 'Unknown';
-        const isTransaction = productName !== 'Bantuan/Lapor';
+        const productCategory = meta?.category || null;
+        // v3.9.11 Phase 1: hapus magic string 'Bantuan/Lapor'. Pakai category field.
+        const isTransaction = productCategory !== 'help' && productCategory !== 'report'
+            && productName !== 'Bantuan Staff' && productName !== 'Laporkan Member' && productName !== 'Bantuan/Lapor';
 
         // Untuk tiket transaksi: tombol "Tidak Jadi Beli" (close tanpa role) + "Batal Tutup"
         // Untuk tiket help/report: tombol "Selesai" (close sukses) + "Tutup Tanpa Selesai" + "Batal Tutup"
@@ -150,7 +222,10 @@ module.exports = async function (interaction) {
         // v3.9.4 FIX: pakai getTicketMeta (sumber utama tickets.json) bukan parse topic langsung.
         const meta = getTicketMeta(interaction.channel.id, interaction.channel?.topic || '');
         const productName = meta?.productName || null;
-        if (!productName || productName === 'Bantuan/Lapor') {
+        const productCategory = meta?.category || null;
+        // v3.9.11 Phase 1: hapus magic string 'Bantuan/Lapor'. Pakai category field.
+        if (!productName || productCategory === 'help' || productCategory === 'report'
+            || productName === 'Bantuan Staff' || productName === 'Laporkan Member' || productName === 'Bantuan/Lapor') {
             return interaction.reply({ content: '❌ Tombol Set Key hanya untuk tiket transaksi.', flags: MessageFlags.Ephemeral });
         }
 
