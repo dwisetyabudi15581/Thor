@@ -5,6 +5,18 @@ Semua perubahan penting pada bot ini akan didokumentasikan di file ini.
 Format mengikuti [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), dan
 versi mengikuti [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.9.6] — 2026-08-01
+
+### Added
+- **Embed Builder: opsi "💬 Message (plain text)"** — kini embed builder bisa kirim plain text message + embed dalam 1 message Discord. Cocok untuk teks pengantar (mis. "Halo semua, cek pengumuman di bawah ⬇️"), @everyone / @here ping yang harus berada di content (bukan di embed) supaya trigger ping, atau mention role/user spesifik.
+  - Pilih opsi "Message (plain text)" di dropdown builder → buka modal input teks (maks 2000 char, support `\n` newline).
+  - Saat klik **Send**, modal kirim sekarang punya 2 field: channel + message. Field message di-pre-fill dengan teks yang sudah diset, bisa di-edit cepat sebelum kirim.
+  - Preview ephemeral menampilkan plain text message (di code block) + embed, supaya admin bisa lihat bagaimana keduanya akan tampil saat dikirim.
+  - Validasi mention sama ketatnya dengan `/announce` dan `/send-message`: hanya `@everyone`/`@here`/`<@&ROLE_ID>`/`<@USER_ID>` yang diperbolehkan. Mention format lain (mis. `@halo`, `@admin`) akan ditolak dengan pesan error yang menjelaskan format valid.
+  - Audit log `EMBED_BUILDER_SEND` sekarang include info `+message (X char)` kalau message ikut dikirim.
+  - `/embed-list` sekarang menampilkan indikator `msg (X char)` di summary session.
+  - Tips di control panel draft diupdate supaya admin tahu fitur message tersedia.
+
 ## [3.9.5] — 2026-08-01
 
 ### Added

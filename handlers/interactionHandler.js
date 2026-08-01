@@ -384,7 +384,13 @@ module.exports = async (interaction) => {
                 return interaction.reply({ content: '❌ Session builder sudah tidak ada (mungkin bot restart).', flags: MessageFlags.Ephemeral });
             }
             const embed = buildSessionEmbed(session);
-            return interaction.reply({ content: '👁️ **Preview:**', embeds: [embed], flags: MessageFlags.Ephemeral });
+            // v3.9.6: tampilkan plain text message di preview ephemeral supaya
+            // admin bisa lihat bagaimana message + embed akan terlihat saat dikirim.
+            // Kalau tidak ada message, behavior lama (preview embed saja).
+            const previewContent = session.data.content
+                ? `👁️ **Preview:**\n\n💬 **Plain text message:**\n\`\`\`\n${session.data.content}\n\`\`\`\n📋 **Embed:**`
+                : '👁️ **Preview:**';
+            return interaction.reply({ content: previewContent, embeds: [embed], flags: MessageFlags.Ephemeral });
         }
 
         if (interaction.isButton() && interaction.customId.startsWith('emb_send:')) {
@@ -399,7 +405,11 @@ module.exports = async (interaction) => {
             if (!session.data.title && !session.data.description) {
                 return interaction.reply({ content: '❌ Embed minimal harus punya **Title** atau **Description** sebelum dikirim.', flags: MessageFlags.Ephemeral });
             }
-            // Buka modal untuk input channel target
+            // v3.9.6: kirim bisa dengan atau tanpa plain text message.
+            // Message sudah diset via opsi "Message (plain text)" di dropdown.
+            // Tampilkan di modal supaya admin bisa lihat & edit cepat sebelum kirim.
+            const currentMessage = session.data.content || '';
+            // Buka modal untuk input channel target + optional override message
             const modal = new ModalBuilder()
                 .setCustomId(`emb_modal_send:${sessionId}`)
                 .setTitle('Kirim Embed ke Channel');
@@ -412,6 +422,16 @@ module.exports = async (interaction) => {
                         .setRequired(true)
                         .setPlaceholder('#announcements atau 123456789012345678')
                         .setMaxLength(100)
+                ),
+                new ActionRowBuilder().addComponents(
+                    new TextInputBuilder()
+                        .setCustomId('message')
+                        .setLabel('Pesan di luar embed (opsional, support @everyone / \\n)')
+                        .setStyle(TextInputStyle.Paragraph)
+                        .setRequired(false)
+                        .setMaxLength(2000)
+                        .setPlaceholder('Kosongkan = kirim embed saja. Isi = kirim teks + embed.\nSupport @everyone, @here, <@&role_id>, <@user_id>')
+                        .setValue(currentMessage)
                 )
             );
             return interaction.showModal(modal);
@@ -866,6 +886,28 @@ async function handleEmbedBuilderEdit(interaction) {
         return interaction.showModal(modal);
     }
 
+    // === MESSAGE (plain text di luar embed) — v3.9.6 ===
+    // Teks biasa yang dikirim bersama embed (di field `content` message Discord,
+    // bukan di dalam embed). Cocok untuk teks yang nggak perlu styling embed,
+    // atau untuk mention @everyone / @here / role yang harus berada di content
+    // (bukan di embed) supaya trigger ping.
+    if (action === 'message') {
+        const modal = new ModalBuilder()
+            .setCustomId(`emb_modal_message:${sessionId}`)
+            .setTitle('Set Message (Plain Text)');
+        modal.addComponents(new ActionRowBuilder().addComponents(
+            new TextInputBuilder()
+                .setCustomId('value')
+                .setLabel('Pesan di luar embed (kosongkan untuk hapus)')
+                .setStyle(TextInputStyle.Paragraph)
+                .setRequired(false)
+                .setMaxLength(2000)
+                .setPlaceholder('Halo semua! Cek pengumuman di bawah ya ⬇️\nSupport newline, @everyone, @here, <@&role_id>, <@user_id>')
+                .setValue(d.content || '')
+        ));
+        return interaction.showModal(modal);
+    }
+
     // === ADD FIELD (normal / inline) ===
     if (action === 'add_field' || action === 'add_field_inline') {
         if (d.fields.length >= 25) {
@@ -1030,6 +1072,17 @@ async function handleEmbedBuilderModal(interaction) {
         }
     }
 
+    // === MESSAGE (plain text di luar embed) — v3.9.6 ===
+    else if (modalType === 'emb_modal_message') {
+        const val = getFieldValue(0);
+        // v3.9.6: validate Discord message content limit (2000 char).
+        // Modal setMaxLength sudah batasi, tapi defense-in-depth tetap cek.
+        if (val && val.length > 2000) {
+            return safeEditReply(interaction, { content: `❌ Message terlalu panjang (${val.length} char, maks 2000).` });
+        }
+        d.content = val || null;
+    }
+
     // === ADD FIELD ===
     else if (modalType === 'emb_modal_field') {
         const inline = parts[2] === '1';
@@ -1056,6 +1109,11 @@ async function handleEmbedBuilderModal(interaction) {
     // === SEND TO CHANNEL ===
     else if (modalType === 'emb_modal_send') {
         const channelInput = getFieldValue(0);
+        // v3.9.6: ambil message dari modal (bisa di-edit admin sebelum kirim).
+        // Kalau kosong, fallback ke session.data.content (yang sudah diset via opsi "Message").
+        let messageInput = getFieldValue(1);
+        const messageText = messageInput || session.data.content || '';
+
         let targetChannel = null;
 
         // Parse: <#123> or 123 or #name
@@ -1070,23 +1128,79 @@ async function handleEmbedBuilderModal(interaction) {
         }
 
         if (!targetChannel) {
-            return safeEditReply(interaction,{ content: `❌ Channel tidak ditemukan: \`${channelInput}\`. Pakai #mention atau channel ID.` });
+            return safeEditReply(interaction, { content: `❌ Channel tidak ditemukan: \`${channelInput}\`. Pakai #mention atau channel ID.` });
         }
+
+        // v3.9.6: validate message length (Discord limit 2000 char)
+        if (messageText.length > 2000) {
+            return safeEditReply(interaction, {
+                content: `❌ Message terlalu panjang (${messageText.length} char, maks 2000). Persingkat teks atau hapus mention.`
+            });
+        }
+
+        // v3.9.6: detect & validate mentions di message (sama ketatnya dengan /announce & /send-message).
+        // Hanya format berikut yang diperbolehkan:
+        //   - @everyone / everyone
+        //   - @here / here
+        //   - <@&ROLE_ID>      (role mention)
+        //   - <@USER_ID>       (user mention)
+        //   - <@!USER_ID>      (user mention, old format)
+        // Selain itu → reject. Mencegah admin nggak sengaja kirim teks dengan
+        // mention format aneh yang bisa trigger ping yang tidak diinginkan.
+        //
+        // Strategi: scan message untuk semua token mention yang ada, validasi satu per satu.
+        // Kalau ada yang tidak valid → reject dengan pesan error yang menjelaskan format valid.
+        if (messageText) {
+            const mentionRegex = /@everyone|@here|<@!?\d{17,20}>|<@&\d{17,20}>|@\w+/g;
+            const foundMentions = messageText.match(mentionRegex) || [];
+            const invalidMentions = [];
+            for (const m of foundMentions) {
+                const lower = m.toLowerCase();
+                if (lower === '@everyone' || lower === '@here') continue;
+                if (/^<@&\d{17,20}>$/.test(m)) continue;       // role mention
+                if (/^<@!?\d{17,20}>$/.test(m)) continue;       // user mention
+                // Kalau sampai sini, berarti `@\w+` match tapi bukan format valid
+                // (mis. "@halo", "@admin", "@semua") → reject
+                invalidMentions.push(m);
+            }
+            if (invalidMentions.length > 0) {
+                return safeEditReply(interaction, {
+                    content: `❌ Mention tidak valid di message: \`${invalidMentions.join('`, `')}\`\n\n` +
+                        'Format mention yang didukung:\n' +
+                        '• `@everyone` atau `@here`\n' +
+                        '• `<@&ROLE_ID>` (mention role — ketik `@rolename` di Discord lalu copy)\n' +
+                        '• `<@USER_ID>` (mention user — ketik `@username` di Discord lalu copy)\n\n' +
+                        'Tip: mention seperti `@halo` atau `@admin` (tanpa ID) tidak akan trigger ping di Discord, ' +
+                        'tapi kami tolak di sini supaya admin tidak salah kirim mention yang nggak sengaja.'
+                });
+            }
+        }
+
+        // v3.9.6: unescape \\n → \n (Discord modal otomatis escape backslash di input user)
+        const finalMessage = messageText.replace(/\\n/g, '\n');
 
         const embed = buildSessionEmbed(session);
         try {
-            await targetChannel.send({ embeds: [embed] });
+            // Kirim dengan content (plain text) + embeds.
+            // allowedMentions parse: biarkan Discord parse mention normal
+            // (everyone, roles, users) — sudah divalidasi di atas.
+            await targetChannel.send({
+                content: finalMessage || undefined,
+                embeds: [embed],
+                allowedMentions: { parse: ['everyone', 'roles', 'users'] }
+            });
         } catch (err) {
-            return safeEditReply(interaction,{ content: `❌ Gagal kirim ke ${targetChannel}: ${err.message}` });
+            return safeEditReply(interaction, { content: `❌ Gagal kirim ke ${targetChannel}: ${err.message}` });
         }
 
         // P1-10 FIX: audit log untuk EMBED_BUILDER_SEND (sebelumnya missing).
+        // v3.9.6: include info message (panjang + ada/tidak) di audit log.
         try {
             await logAudit(interaction.client, {
                 action: 'EMBED_BUILDER_SEND',
                 actorId: interaction.user.id,
                 actorTag: interaction.user.tag,
-                details: `Kirim embed (builder) ke ${targetChannel}: ${session.data.title ? `**${session.data.title}**` : '_(no title)_'}`,
+                details: `Kirim embed (builder) ke ${targetChannel}: ${session.data.title ? `**${session.data.title}**` : '_(no title)_'}${finalMessage ? ` | +message (${finalMessage.length} char)` : ''}`,
                 guildId: interaction.guild.id
             });
         } catch (_) {}
@@ -1100,7 +1214,9 @@ async function handleEmbedBuilderModal(interaction) {
             }
         } catch (_) {}
         deleteSession(sessionId);
-        return safeEditReply(interaction,{ content: `✅ Embed terkirim ke ${targetChannel}! Draft dihapus.` });
+        return safeEditReply(interaction, {
+            content: `✅ ${finalMessage ? 'Message + ' : ''}Embed terkirim ke ${targetChannel}! Draft dihapus.`
+        });
     }
 
     // Refresh draft dengan embed terbaru

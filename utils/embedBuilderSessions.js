@@ -13,7 +13,8 @@
  *   data: {
  *     title, description, color (number), image {url}, thumbnail {url},
  *     footer {text, iconURL?}, author {name, iconURL?},
- *     fields: [{name, value, inline}], timestamp (boolean)
+ *     fields: [{name, value, inline}], timestamp (boolean),
+ *     content: string | null  // v3.9.6: plain text message yang dikirim bersama embed
  *   },
  *   createdAt: timestamp
  * }
@@ -53,7 +54,8 @@ function createDefaultData() {
         footer: null,
         author: null,
         fields: [],
-        timestamp: true
+        timestamp: true,
+        content: null // v3.9.6: plain text message yang dikirim bersama embed (di luar embed)
     };
 }
 
@@ -174,6 +176,8 @@ function getStatusText(session) {
     lines.push(`Author: ${d.author ? '✅' : '❌'}`);
     lines.push(`Fields: ${d.fields.length}/25`);
     lines.push(`Timestamp: ${d.timestamp ? '✅' : '❌'}`);
+    // v3.9.6: tampilkan status plain text message (di luar embed)
+    lines.push(`Message: ${d.content ? `✅ (${d.content.length} char)` : '❌'}`);
     return lines.join('\n');
 }
 

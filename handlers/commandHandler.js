@@ -119,6 +119,7 @@ module.exports = async (interaction) => {
                     '💡 `/announce` cocok untuk pengumuman ber-style embed',
                     '💡 `/send-message` cocok untuk teks kasual / chat bot biasa tanpa embed',
                     '💡 `/embed-builder` cocok untuk embed kompleks (multi-field, footer, author, image)',
+                    '💡 `/embed-builder` sekarang support **💬 Message (plain text)** — bisa kirim teks pengantar + @everyone ping + embed dalam 1 message',
                     '💡 Bisa bikin banyak embed builder sekaligus — tiap draft independen, pakai `/embed-list` untuk kelola'
                 ].join('\n'), inline: false },
                 { name: '💾 Backup System (auto + manual)', value: [
@@ -1137,6 +1138,7 @@ module.exports = async (interaction) => {
                 .addOptions([
                     { label: 'Title',                 value: 'title',             emoji: '✏️', description: 'Judul embed (maks 256 char)' },
                     { label: 'Description',           value: 'description',       emoji: '📝', description: 'Isi utama embed (maks 4000 char)' },
+                    { label: 'Message (plain text)',  value: 'message',           emoji: '💬', description: 'Teks di luar embed (maks 2000 char, support \\n)' },
                     { label: 'Color',                 value: 'color',             emoji: '🎨', description: 'Warna hex (mis. #FF0000)' },
                     { label: 'Image',                 value: 'image',             emoji: '🖼️', description: 'URL gambar besar' },
                     { label: 'Thumbnail',             value: 'thumbnail',         emoji: '🖼️', description: 'URL gambar kecil (pojok kanan atas)' },
@@ -1160,6 +1162,7 @@ module.exports = async (interaction) => {
         const draftMsg = await interaction.channel.send({
             content: `🛠️ **Embed Builder Draft** — dimulai oleh <@${interaction.user.id}>\n` +
                 `Preview real-time di bawah. Klik dropdown untuk edit bagian, atau tombol untuk preview/send/cancel.\n` +
+                `💡 **Tips:** Pilih **💬 Message (plain text)** di dropdown untuk menambah teks di luar embed (cocok untuk @everyone ping atau teks pengantar).\n` +
                 `🆔 Session: \`${session.id}\``,
             embeds: [previewEmbed],
             components: [selectRow, actionRow]
@@ -1191,6 +1194,8 @@ module.exports = async (interaction) => {
             const summary = [];
             if (d.title) summary.push('title');
             if (d.description) summary.push('desc');
+            // v3.9.6: tampilkan message indicator di summary
+            if (d.content) summary.push(`msg (${d.content.length} char)`);
             if (d.fields && d.fields.length > 0) summary.push(`${d.fields.length} field${d.fields.length > 1 ? 's' : ''}`);
             if (d.image) summary.push('image');
             if (d.thumbnail) summary.push('thumb');
