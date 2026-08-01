@@ -64,6 +64,14 @@ function addKey(data) {
     const days = Number(data.days) || 0;
     const expireAt = days > 0 ? now + days * 24 * 60 * 60 * 1000 : null;
 
+    // v3.9.8 FIX: cek uniqueness key. Sebelumnya tidak ada cek → admin typo
+    // / copy-paste bisa bikin 2 entry dengan key sama, dan getActiveKeysByUserAndRole
+    // double-count (meski max() idempotent, tetap UX confusion + bisa bikin
+    // member redeem 2x kalau redemption logic pakai find-by-key).
+    if (data.key && list.some(k => k.key === data.key)) {
+        throw new Error(`Key "${data.key}" sudah ada di database (duplicate).`);
+    }
+
     const entry = {
         id: genId(),
         key: data.key,
@@ -83,9 +91,15 @@ function addKey(data) {
 
 /**
  * Ambil SEMUA key milik user tertentu (tanpa filter expired).
+ * v3.9.8: tambah optional guildId filter supaya /list-keys tidak bocor cross-guild.
  */
-function findAllByUser(userId) {
+function findAllByUser(userId, guildId) {
     const list = loadKeys();
+    if (guildId) {
+        // Filter key milik user ini di guild ini.
+        // Key tanpa guildId (schema lama, pre-v3.9.3) juga diikutsertakan (backward compat).
+        return list.filter(k => k.userId === userId && (k.guildId === guildId || !k.guildId));
+    }
     return list.filter(k => k.userId === userId);
 }
 

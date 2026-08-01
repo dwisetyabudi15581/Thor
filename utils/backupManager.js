@@ -98,8 +98,19 @@ function createBackup() {
         }
     }
 
+    // v3.9.8 FIX: set ok=false kalau ada error. Sebelumnya `ok` selalu true
+    // meski semua file gagal di-copy → caller mengira backup sukses.
+    if (result.errors.length > 0 && result.filesCopied === 0) {
+        result.ok = false;
+    }
+
     // Auto-clean backup lama
-    cleanOldBackups();
+    try {
+        cleanOldBackups();
+    } catch (err) {
+        // Tidak fatal — backup tetap dibuat, hanya cleanup yang gagal.
+        result.errors.push(`cleanOldBackups: ${err.message}`);
+    }
 
     return result;
 }
@@ -110,9 +121,20 @@ function createBackup() {
  */
 function cleanOldBackups() {
     ensureBackupsDir();
+    // v3.9.8 FIX: wrap statSync di try/catch. Sebelumnya, kalau directory
+    // dihapus antara readdirSync & statSync (race dengan process lain / admin
+    // manual delete), statSync throw → crash createBackup.
     const entries = fs.readdirSync(backupsDir, { withFileTypes: true })
         .filter(e => e.isDirectory())
-        .map(e => ({ name: e.name, mtime: fs.statSync(path.join(backupsDir, e.name)).mtime }))
+        .map(e => {
+            try {
+                const mtime = fs.statSync(path.join(backupsDir, e.name)).mtime;
+                return { name: e.name, mtime };
+            } catch (_) {
+                return null;
+            }
+        })
+        .filter(e => e !== null)
         .sort((a, b) => b.mtime - a.mtime); // terbaru di depan
 
     let removed = 0;
@@ -131,19 +153,29 @@ function cleanOldBackups() {
  */
 function listBackups() {
     ensureBackupsDir();
+    // v3.9.8 FIX: wrap statSync di try/catch supaya kalau ada directory yang
+    // dihapus race-condition, listBackups tidak crash.
     const entries = fs.readdirSync(backupsDir, { withFileTypes: true })
         .filter(e => e.isDirectory());
 
     return entries.map(e => {
         const dir = path.join(backupsDir, e.name);
-        const stat = fs.statSync(dir);
+        let stat;
+        try {
+            stat = fs.statSync(dir);
+        } catch (_) {
+            // Directory dihapus race — skip.
+            return null;
+        }
         let fileCount = 0;
         let totalSize = 0;
         try {
             const files = fs.readdirSync(dir);
             fileCount = files.length;
             for (const f of files) {
-                totalSize += fs.statSync(path.join(dir, f)).size;
+                try {
+                    totalSize += fs.statSync(path.join(dir, f)).size;
+                } catch (_) {}
             }
         } catch (_) {}
         return {
@@ -152,7 +184,9 @@ function listBackups() {
             fileCount,
             mtime: stat.mtime
         };
-    }).sort((a, b) => b.mtime - a.mtime);
+    })
+    .filter(e => e !== null)
+    .sort((a, b) => b.mtime - a.mtime);
 }
 
 /**
@@ -246,6 +280,15 @@ function _restoreBackupImpl(name) {
     try {
         const { invalidateAdminRoleCache } = require('./permissions');
         invalidateAdminRoleCache();
+    } catch (_) {}
+
+    // v3.9.8 FIX: invalidate selfRoleManager cache juga. Sebelumnya cache di
+    // configManager getConfig() baca fresh (no cache), tapi selfRoleManager
+    // beberapa operasi mungkin pakai data cache. Defensive invalidate.
+    try {
+        const selfRole = require('./selfRoleManager');
+        // Kalau ada invalidate function, panggil. Defensive: cek dulu.
+        if (typeof selfRole.invalidateCache === 'function') selfRole.invalidateCache();
     } catch (_) {}
 
     return result;

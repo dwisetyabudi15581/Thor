@@ -7,6 +7,9 @@ const { safeWriteJSON } = require('./safeWrite');
 // P2-2 FIX: per-user lock supaya tidak bisa buka 2 tiket bersamaan (race condition).
 // Sebelumnya: 2 klik tombol <100ms → kedua interaction lolos check existing ticket
 // (channel belum dibuat) → 2 tiket terbuat. Sekarang: lock per userId sampai selesai.
+//
+// v3.9.8 FIX: lock di-scope per `${guildId}:${userId}`. Sebelumnya key cuma `userId`,
+// jadi user yang ada di 2 guild bot gak bisa bikin ticket barengan di kedua guild.
 const ticketLocks = new Map();
 
 // FIX v3.7.1: per-channel close lock — cegah double-close race condition.
@@ -109,27 +112,49 @@ async function createTicket(interaction, product) {
     const config = getConfig();
 
     // P2-2 FIX: cek lock dulu — kalau sedang diproses, reject.
-    if (ticketLocks.has(user.id)) {
+    // v3.9.8: lock di-scope per guild supaya user di multi-guild bot gak saling block.
+    const lockKey = `${guild.id}:${user.id}`;
+    if (ticketLocks.has(lockKey)) {
         return interaction.editReply({ content: '⏳ Tiket kamu sedang dibuat, tunggu sebentar...' }).catch(()=>{});
     }
-    ticketLocks.set(user.id, true);
+    ticketLocks.set(lockKey, true);
 
     try {
         // Cek apakah user punya tiket aktif.
         // v3.9.1: cek dari tickets.json (sumber kebenaran), fallback ke topic scan
         // untuk tiket lama yang dibuat sebelum v3.9.1.
+        //
+        // v3.9.8 FIX:
+        //   1. Pakai tickets.json metadata sebagai sumber kebenaran — bahkan kalau
+        //      channel tidak ter-cache (bot baru start), tetap dianggap aktif.
+        //      Sebelumnya `cache.get(chId)` miss → duplicate ticket untuk user yang sama.
+        //   2. Fix false-positive `startsWith` — tambah separator ` |` supaya
+        //      user ID yang merupakan prefix dari user ID lain tidak false-match.
         const ticketsData = loadTickets();
         let existingTicket = null;
         // Cek via tickets.json dulu
         for (const [chId, meta] of Object.entries(ticketsData)) {
             if (meta.userId === user.id && meta.guildId === guild.id) {
                 const ch = guild.channels.cache.get(chId);
-                if (ch) { existingTicket = ch; break; }
+                if (ch) {
+                    existingTicket = ch;
+                    break;
+                } else {
+                    // v3.9.8: channel gak ter-cache, tapi metadata ada. Anggap aktif.
+                    // Fetch dari API untuk dapat object channel-nya.
+                    try {
+                        const fetched = await guild.channels.fetch(chId).catch(() => null);
+                        if (fetched) { existingTicket = fetched; break; }
+                        // Channel benar-benar hilang — cleanup metadata zombie.
+                        removeTicketMeta(chId);
+                    } catch (_) {}
+                }
             }
         }
         // Fallback: scan channel topic (tiket lama)
         if (!existingTicket) {
-            existingTicket = guild.channels.cache.find(c => c.topic && c.topic.startsWith(`Ticket UserID: ${user.id}`));
+            // v3.9.8: tambah ` |` supaya ID yang prefix dari ID lain tidak false-match.
+            existingTicket = guild.channels.cache.find(c => c.topic && c.topic.startsWith(`Ticket UserID: ${user.id} |`));
         }
         if (existingTicket) {
             return interaction.editReply({ content: `❌ Kamu sudah punya tiket aktif di ${existingTicket}!` });
@@ -224,7 +249,8 @@ async function createTicket(interaction, product) {
         await interaction.editReply({ content: '❌ Terjadi error saat membuat tiket. Cek izin bot!' }).catch(()=>{});
     } finally {
         // P2-2 FIX: pastikan lock dilepas walau ada error.
-        ticketLocks.delete(user.id);
+        // v3.9.8: gunakan lockKey scoped per guild.
+        ticketLocks.delete(`${guild.id}:${user.id}`);
     }
 }
 

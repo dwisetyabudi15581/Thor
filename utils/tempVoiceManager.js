@@ -228,6 +228,65 @@ function findChannelByOwner(guildId, userId) {
     return null;
 }
 
+/**
+ * v3.9.8: Reconcile registry dengan real state di Discord.
+ *
+ * Kenapa ini perlu:
+ *   - Bot crash setelah guild.channels.create tapi sebelum registerChannel →
+ *     channel Discord ada, tapi gak ada di tempVoice.json → orphan selamanya.
+ *   - Admin hapus channel manual tanpa via bot → entry registry tetap ada
+ *     (zombie) → refreshGlobalControlPanel tampil entry untuk channel hilang.
+ *   - Channel dipindahkan keluar dari category temp voice oleh admin →
+ *     bukan orphan tapi perlu di-unregister supaya panel bersih.
+ *
+ * Logic:
+ *   - Untuk tiap entry di registry: kalau channel tidak ada di guild (cache),
+ *     unregister (zombie cleanup).
+ *   - Untuk tiap voice channel di category temp voice yang TIDAK ada di
+ *     registry: skip (jangan auto-register — kita gak tau siapa ownernya).
+ *     Hanya log warning supaya admin sadar ada channel orphan.
+ *
+ * @param {Client} client
+ * @param {string} guildId
+ * @returns {{ zombiesRemoved: number, orphansDetected: number }}
+ */
+function reconcileGuild(client, guildId) {
+    const result = { zombiesRemoved: 0, orphansDetected: 0 };
+    const cfg = getGuildConfig(guildId);
+    if (!cfg?.channels) return result;
+
+    const guild = client.guilds?.cache?.get(guildId);
+    if (!guild) return result;
+
+    // 1. Cleanup zombie entries (channel tidak ada di Discord)
+    for (const channelId of Object.keys(cfg.channels)) {
+        const channel = guild.channels.cache.get(channelId);
+        if (!channel) {
+            unregisterChannel(guildId, channelId);
+            result.zombiesRemoved++;
+            console.log(`🧹 tempVoice reconcile: zombie entry ${channelId} dihapus (channel tidak ada).`);
+        }
+    }
+
+    // 2. Detect orphan channels (voice channel di category tapi gak ada di registry)
+    if (cfg.categoryId) {
+        const knownChannelIds = new Set(Object.keys(getGuildConfig(guildId)?.channels || {}));
+        const category = guild.channels.cache.get(cfg.categoryId);
+        if (category) {
+            for (const [, ch] of category.children?.cache || []) {
+                if (ch.type === 2 /* GuildVoice */ && !knownChannelIds.has(ch.id)) {
+                    // Skip kalau ini creator channel (trigger)
+                    if (ch.id === cfg.creatorChannelId) continue;
+                    result.orphansDetected++;
+                    console.warn(`⚠️ tempVoice reconcile: orphan voice channel ${ch.name} (${ch.id}) terdeteksi di category temp voice — tidak ada owner. Hapus manual atau via /tempvoice-remove.`);
+                }
+            }
+        }
+    }
+
+    return result;
+}
+
 module.exports = {
     setupGuild,
     removeGuild,
@@ -246,5 +305,6 @@ module.exports = {
     updateChannel,
     transferOwnership,
     isOwner,
-    findChannelByOwner
+    findChannelByOwner,
+    reconcileGuild
 };

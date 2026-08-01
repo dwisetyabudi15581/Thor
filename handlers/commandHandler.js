@@ -291,6 +291,15 @@ module.exports = async (interaction) => {
         // duration opsional - kalau tidak diisi, TIDAK disimpan sama sekali
         const duration = interaction.options.getString('duration');
 
+        // v3.9.8 FIX: validate `value` — dipakai di customId modal_set_key:${value}
+        // dan dipisah dengan `:` di handler. Kalau value mengandung `:`, customId
+        // jadi `modal_set_key:VIP:30d` → split(':')[1] return "VIP" (bukan "VIP:30d")
+        // → product gak ketemu → "❌ Produk value VIP tidak ditemukan."
+        // Juga enforce length <= 50 supaya customId tidak exceed 100 char (Discord limit).
+        if (!value || !/^[a-zA-Z0-9_-]{1,50}$/.test(value)) {
+            return safeEditReply(interaction,{ content: '❌ `value` hanya boleh huruf/angka/_/-, maks 50 karakter, tanpa spasi/kolom/titik dua.' });
+        }
+
         if (config.products.some(p => p.value === value)) {
             return safeEditReply(interaction,{ content: `❌ Produk dengan value \`${value}\` sudah ada.` });
         }
@@ -531,6 +540,14 @@ module.exports = async (interaction) => {
         const role = interaction.options.getRole('role');
         const days = interaction.options.getInteger('days');
 
+        // v3.9.8 FIX: validate days >= 0. Sebelumnya gak divalidasi — admin bisa
+        // input days: -5 → scheduleRoleRemoval compute expireAt = now + (-5)*86400000
+        // = 5 hari lalu → scheduler immediate process → member dapat role lalu
+        // ke-remove dalam 60 detik.
+        if (days == null || days < 0 || days > 3650) {
+            return safeEditReply(interaction,{ content: '❌ `days` harus antara 0 dan 3650. (0 = permanen, >0 = durasi hari).' });
+        }
+
         const product = config.products.find(p => p.value === value);
         if (!product) {
             return safeEditReply(interaction,{ content: `❌ Produk dengan value \`${value}\` tidak ditemukan. Pakai \`/list-products\` untuk lihat daftar.` });
@@ -714,9 +731,12 @@ module.exports = async (interaction) => {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         const user = interaction.options.getUser('user');
 
-        const allKeys = findAllByUser(user.id);
+        // v3.9.8 FIX: guild-scoped. Sebelumnya pakai findAllByUser(userId) yang
+        // return SEMUA key user di SEMUA guild → admin Guild A bisa lihat key
+        // user yang dibeli di Guild B (cross-guild information disclosure).
+        const allKeys = findAllByUser(user.id, interaction.guild.id);
         if (allKeys.length === 0) {
-            return safeEditReply(interaction,{ content: `📭 <@${user.id}> tidak punya key apa pun.` });
+            return safeEditReply(interaction,{ content: `📭 <@${user.id}> tidak punya key apa pun di server ini.` });
         }
 
         // Pisahkan jadi aktif & expired
@@ -775,6 +795,7 @@ module.exports = async (interaction) => {
         // Untuk safety, tidak otomatis lepas role di sini. Admin bisa lepas manual.
         // Tapi kalau clear_keys=true, berarti full reset VIP → lepas role yang ada di config produk
         let rolesRemoved = [];
+        let rolesFailed = [];  // v3.9.8: track role yang gagal dilepas
         if (clearKeys) {
             const guild = interaction.guild;
             const member = await guild.members.fetch(user.id).catch(() => null);
@@ -788,7 +809,13 @@ module.exports = async (interaction) => {
                             await member.roles.remove(rid);
                             const r = guild.roles.cache.get(rid);
                             rolesRemoved.push(r ? r.name : rid);
-                        } catch (_) {}
+                        } catch (err) {
+                            // v3.9.8 FIX: track failure. Sebelumnya catch swallow error
+                            // silent → admin told "Clear selesai" padahal role tetap nempel
+                            // selamanya (schedule sudah dihapus, gak akan auto-expire).
+                            const r = guild.roles.cache.get(rid);
+                            rolesFailed.push(r ? r.name : rid);
+                        }
                     }
                 }
             }
@@ -799,7 +826,8 @@ module.exports = async (interaction) => {
             `📋 Schedule dihapus (guild ini): **${removedSched}**\n` +
             (clearKeys
                 ? `🔑 Key dihapus (guild ini): **${removedKeys}**\n` +
-                  (rolesRemoved.length > 0 ? `🎭 Role dilepas: ${rolesRemoved.map(n => `\`${n}\``).join(', ')}\n` : '')
+                  (rolesRemoved.length > 0 ? `🎭 Role dilepas: ${rolesRemoved.map(n => `\`${n}\``).join(', ')}\n` : '') +
+                  (rolesFailed.length > 0 ? `⚠️ Role GAGAL dilepas (bot hierarki / permission): ${rolesFailed.map(n => `\`${n}\``).join(', ')} — LEPAS MANUAL!\n` : '')
                 : `ℹ️ Key TIDAK dihapus (clear_keys=false). Pakai \`clear_keys:true\` untuk reset total VIP.\n`);
 
         await logAudit(interaction.client, { action: 'CLEAR_SCHEDULE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Clear schedule <@${user.id}> di guild ${guildId}: ${removedSched} schedule${clearKeys ? ` + ${removedKeys} key${rolesRemoved.length > 0 ? ` + ${rolesRemoved.length} role` : ''}` : ' (tanpa key)'}`, guildId: interaction.guild.id });
@@ -1108,7 +1136,14 @@ module.exports = async (interaction) => {
 
         try {
             await targetChannel.send({ content, embeds: [embed] });
-            await logAudit(interaction.client, { action: 'ANNOUNCE_SEND', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Kirim announce ke ${targetChannel}: **${title}**${mention ? ` | mention: ${mention}` : ''}`, guildId: interaction.guild.id });
+            // v3.9.8 FIX: pisahkan logAudit dari send supaya kalau audit throw
+            // (audit channel hilang / DB write error), admin tidak diberi tahu
+            // "Gagal kirim ke channel" padahal announce sudah terkirim.
+            try {
+                await logAudit(interaction.client, { action: 'ANNOUNCE_SEND', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Kirim announce ke ${targetChannel}: **${title}**${mention ? ` | mention: ${mention}` : ''}`, guildId: interaction.guild.id });
+            } catch (auditErr) {
+                console.warn(`⚠️ Gagal log audit announce (announce tetap terkirim): ${auditErr.message}`);
+            }
             return safeEditReply(interaction,{
                 content: `✅ Announce terkirim ke ${targetChannel}!\n\n📋 **Preview:**`,
                 embeds: [embed]
@@ -1359,11 +1394,22 @@ module.exports = async (interaction) => {
             const durationMin = interaction.options.getInteger('duration');
             const requiredRole = interaction.options.getRole('required_role');
 
-            if (durationMin < 1) {
-                return safeEditReply(interaction,{ content: '❌ Durasi minimal 1 menit.' });
+            // v3.9.8 FIX: validate duration — sebelumnya `if (durationMin < 1)` lolos
+            // untuk undefined (undefined < 1 === false), endsAt jadi NaN, giveaway
+            // stuck active forever (NaN <= Date.now() selalu false).
+            if (!durationMin || durationMin < 1) {
+                return safeEditReply(interaction,{ content: '❌ Durasi wajib diisi, minimal 1 menit.' });
+            }
+            if (durationMin > 60 * 24 * 30) {  // 30 hari maks
+                return safeEditReply(interaction,{ content: '❌ Durasi maksimal 30 hari (43200 menit).' });
             }
             if (winners < 1 || winners > 20) {
                 return safeEditReply(interaction,{ content: '❌ Jumlah pemenang harus 1-20.' });
+            }
+            // v3.9.8 FIX: validate channel type — sebelumnya admin bisa pick voice/category
+            // channel, channel.send bisa gagal atau kirim ke text-in-voice overlay.
+            if (!channel || channel.type !== ChannelType.GuildText) {
+                return safeEditReply(interaction,{ content: '❌ Channel harus berupa text channel.' });
             }
 
             const endsAt = Date.now() + durationMin * 60000;
@@ -1475,13 +1521,27 @@ module.exports = async (interaction) => {
             if (!gw) return safeEditReply(interaction,{ content: `❌ Giveaway \`${id}\` tidak ditemukan.` });
             if (!gw.ended) return safeEditReply(interaction,{ content: `❌ Giveaway belum berakhir. End dulu pakai \`/giveaway end\`.` });
 
-            const result = rerollGiveaway(id);
-            if (!result) return safeEditReply(interaction,{ content: `❌ Giveaway \`${id}\` tidak ditemukan atau belum berakhir.` });
+            // v3.9.8 FIX: wrap reroll+announce di userLock. Sebelumnya, kalau admin
+            // double-click tombol reroll (atau interaction retry karena network blip),
+            // 2 handler jalan paralel → 2x announce, 2x DM winner, 2x winnerIds entry
+            // (meski winnerIds akhirnya numpuk, user lihat 2 "you won" message).
+            // Lock di-scope per giveaway ID supaya admin berbeda tidak saling block
+            // untuk giveaway berbeda, tapi 2 click ke giveaway yang sama di-serialize.
+            const { withLock: withUserLock } = require('../utils/userLock');
+            const result = await withUserLock('gw_reroll', gw.id, async () => rerollGiveaway(id));
+            if (!result) return safeEditReply(interaction,{ content: `❌ Giveaway \`${id}\` tidak ditemukan atau belum berakhir. (Atau reroll lain sedang jalan — coba lagi sebentar.)` });
             if (!result.winnerId) return safeEditReply(interaction,{ content: '❌ Tidak ada peserta untuk di-reroll.' });
 
             // Announce winner baru ke channel + DM + track stats
+            // v3.9.8: wrap di try/catch supaya announce failure tidak bikin admin
+            // retry (yang akan pick winner kedua kalinya). Reroll sudah persist winner,
+            // announce gagal tidak perlu abort.
             if (typeof interaction.client.announceRerollWinner === 'function') {
-                await interaction.client.announceRerollWinner(interaction.client, result.gw, result.winnerId);
+                try {
+                    await interaction.client.announceRerollWinner(interaction.client, result.gw, result.winnerId);
+                } catch (annErr) {
+                    console.warn(`⚠️ Reroll announce gagal (winner tetap tersimpan): ${annErr.message}`);
+                }
             }
 
             const reuseNote = result.reused ? ' _(semua peserta sudah pernah menang, fallback pick random)_' : '';
@@ -1646,6 +1706,21 @@ module.exports = async (interaction) => {
         // Cek hierarki: admin harus lebih tinggi dari target
         if (member.roles.highest.position >= interaction.member.roles.highest.position) {
             return safeEditReply(interaction,{ content: '❌ Kamu tidak bisa warn member dengan role setingkat/lebih tinggi dari kamu.' });
+        }
+
+        // v3.9.8 FIX: cek hierarki bot vs target juga. Sebelumnya cuma cek admin
+        // vs target. Kalau target punya role lebih tinggi dari bot, auto-action
+        // (timeout/kick) bakal throw "Missing Permissions" → auto-action gagal silent,
+        // admin tidak diberi tahu kalau bot kekurangan permission.
+        const botMember = interaction.guild.members.me;
+        if (botMember && member.roles.highest.position >= botMember.roles.highest.position) {
+            // Tidak block warn (record tetap dibuat), tapi kasih warning dulu
+            // supaya admin sadar auto-action bakal gagal.
+            return safeEditReply(interaction,{
+                content: `❌ Role bot (\`${botMember.roles.highest.name || 'top role'}\`) lebih rendah dari role tertinggi target (\`${member.roles.highest.name || 'top role'}\`).\n` +
+                    `Bot tidak akan bisa eksekusi auto-action (timeout/kick) kalau mencapai threshold.\n` +
+                    `Pindahkan role bot ke atas role target di Server Settings → Roles, lalu coba lagi.`
+            });
         }
 
         // v3.9.0: addWarn sekarang scoped per guild (guildId, userId, data)
@@ -1967,6 +2042,9 @@ module.exports = async (interaction) => {
         }
 
         // === Setup baru: bikin kategori + 2 channel ===
+        // v3.9.8 FIX: tambah rollback kalau salah satu step gagal. Sebelumnya,
+        // kalau creatorChannel create gagal setelah controlChannel dibuat,
+        // controlChannel orphan (tidak ter-register, tidak ter-cleanup).
         let category, controlChannel, creatorChannel;
         try {
             // Bikin kategori "🎤 TEMP VOICE"
@@ -1998,6 +2076,15 @@ module.exports = async (interaction) => {
             tempVoiceManager.setupGuild(guild.id, creatorChannel.id, category.id, controlChannel.id);
         } catch (err) {
             console.error('Error setup temp voice:', err);
+            // v3.9.8: rollback — hapus channel yang sudah dibuat tapi belum ter-register
+            // supaya tidak jadi orphan. Hapus yang pasti dibuat di try block ini saja.
+            if (controlChannel) {
+                try { await controlChannel.delete('Rollback: setup-tempvoice gagal'); } catch (_) {}
+            }
+            if (creatorChannel) {
+                try { await creatorChannel.delete('Rollback: setup-tempvoice gagal'); } catch (_) {}
+            }
+            // Category tidak dihapus karena mungkin sudah ada sebelumnya / dipakai oleh channel lain.
             return safeEditReply(interaction,{ content: `❌ Gagal setup temp voice: ${err.message}\n\nPastikan bot punya permission **Manage Channels** dan **Manage Roles**.` });
         }
 

@@ -57,7 +57,11 @@ function safeWriteJSON(filePath, data, opts = {}) {
  * @returns {void}
  */
 function safeWriteText(filePath, content) {
-    const tmpPath = `${filePath}.tmp`;
+    // v3.9.8 FIX: pakai tmp path yang unik per PID+timestamp supaya kalau bot
+    // dijalankan cluster mode (multi-worker) atau 2 instance share folder yang
+    // sama, 2 write paralel tidak saling overwrite .tmp (yang bisa silent loss).
+    // Untuk single-process (mayoritas case), behavior sama seperti sebelumnya.
+    const tmpPath = `${filePath}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2, 6)}.tmp`;
 
     // Write to tmp file first.
     // If this throws (disk full, permission), target file is untouched.
@@ -74,7 +78,13 @@ function safeWriteText(filePath, content) {
     // } catch (_) { /* best-effort fsync */ }
 
     // Atomic rename. On POSIX, this is a single inode-level operation.
-    fs.renameSync(tmpPath, filePath);
+    try {
+        fs.renameSync(tmpPath, filePath);
+    } catch (err) {
+        // v3.9.8: kalau rename gagal, cleanup .tmp supaya tidak numpuk.
+        try { fs.unlinkSync(tmpPath); } catch (_) {}
+        throw err;
+    }
 }
 
 /**
@@ -95,7 +105,8 @@ function safeWriteText(filePath, content) {
  */
 function safeWriteJSONWithBackup(filePath, data, opts = {}) {
     const bakPath = `${filePath}.bak`;
-    const tmpPath = `${filePath}.tmp`;
+    // v3.9.8: pakai tmp path unik per PID+timestamp (konsisten dengan safeWriteText).
+    const tmpPath = `${filePath}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2, 6)}.tmp`;
     const content = JSON.stringify(data, null, opts.spaces ?? 2);
 
     // 1. Write new content to .tmp (no risk to current file)
@@ -112,7 +123,13 @@ function safeWriteJSONWithBackup(filePath, data, opts = {}) {
     }
 
     // 3. Promote .tmp → final
-    fs.renameSync(tmpPath, filePath);
+    try {
+        fs.renameSync(tmpPath, filePath);
+    } catch (err) {
+        // v3.9.8: cleanup .tmp kalau rename gagal.
+        try { fs.unlinkSync(tmpPath); } catch (_) {}
+        throw err;
+    }
 }
 
 module.exports = {

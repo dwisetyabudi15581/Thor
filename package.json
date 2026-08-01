@@ -1,6 +1,6 @@
 {
   "name": "mlbb-community-bot",
-  "version": "3.9.7",
+  "version": "3.9.8",
   "description": "Bot setup server Mobile Legends Community - Welcome/Goodbye, Verify, Ticket, Invoice, Key-driven VIP, Self-Role, Temp Voice, Announce & Embed Builder, Backup, Giveaway, Scheduled Announcements, Warn, Stats/Leaderboard, Poll, fully configurable from Discord",
   "main": "index.js",
   "scripts": {

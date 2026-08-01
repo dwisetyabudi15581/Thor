@@ -194,8 +194,26 @@ function parseTime(input) {
     const isoMatch = input.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?$/);
     if (isoMatch) {
         const [, y, mo, d, h, mi, s] = isoMatch;
-        const dt = new Date(y, parseInt(mo) - 1, d, h, mi, s || 0);
+        const yearNum = parseInt(y, 10);
+        const monthNum = parseInt(mo, 10);
+        const dayNum = parseInt(d, 10);
+        const hourNum = parseInt(h, 10);
+        const minNum = parseInt(mi, 10);
+        const secNum = s ? parseInt(s, 10) : 0;
+        const dt = new Date(yearNum, monthNum - 1, dayNum, hourNum, minNum, secNum);
         if (isNaN(dt.getTime())) return null;
+
+        // v3.9.8 FIX: Date constructor auto-rolls invalid components (mis. month 13
+        // → January next year, day 40 → 9th of next month). Sebelumnya, "2026-13-40 99:99"
+        // silently menjadi valid date di tahun 2027. Sekarang: verify components match.
+        if (dt.getFullYear() !== yearNum ||
+            dt.getMonth() !== monthNum - 1 ||
+            dt.getDate() !== dayNum ||
+            dt.getHours() !== hourNum ||
+            dt.getMinutes() !== minNum) {
+            return null;
+        }
+
         const ts = dt.getTime();
         // v3.9.1: reject kalau di masa lalu ATAU lebih dari 5 tahun ke depan.
         if (ts < now) return null;

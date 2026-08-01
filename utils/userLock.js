@@ -22,7 +22,12 @@ const DEFAULT_TIMEOUT_MS = 5000; // 5 detik — seharusnya cukup untuk semua flo
  * @returns {boolean} true kalau berhasil acquire, false kalau masih di-pegang.
  */
 function acquire(scope, userId, timeoutMs = DEFAULT_TIMEOUT_MS) {
-    if (!scope || !userId) return true; // defensive — kalau invalid, biarkan lewat
+    // v3.9.8 FIX: sebelumnya return true (bypass lock) kalau scope/userId invalid.
+    // Ini "defensive" yang hide bug — bisa bikin race condition yang lock seharusnya
+    // cegah. Sekarang throw error supaya bug langsung keliatan di development.
+    if (!scope || !userId) {
+        throw new Error(`userLock.acquire: scope dan userId wajib diisi (got scope=${scope}, userId=${userId})`);
+    }
     const key = `${scope}:${userId}`;
     const now = Date.now();
     const existing = locks.get(key);

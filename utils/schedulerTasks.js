@@ -20,6 +20,14 @@ const { end: endGiveaway, pickWinners: pickGiveawayWinners } = require('./giveaw
 const { markSent: markAnnSent, remove: removeAnn } = require('./scheduledAnnouncements');
 const { recordGiveawayWin: trackGiveawayWin } = require('./statsManager');
 
+// v3.9.8 FIX: in-memory guard supaya giveaway/announcement yang sama tidak
+// diproses 2x paralel oleh scheduler tick. Sebelumnya, kalau satu
+// processGiveawayEnd butuh >60s (DM ke banyak winner, rate limit), tick
+// berikutnya pick winner KEDUA kalinya → 2x announce + 2x DM winner.
+const processingGiveaways = new Set();
+const processingAnns = new Set();
+const processingRoles = new Set();
+
 /**
  * Proses schedule yang sudah expired — MODEL KEY-DRIVEN dengan recheck.
  *
@@ -37,6 +45,14 @@ const { recordGiveawayWin: trackGiveawayWin } = require('./statsManager');
  * entry tetap ada untuk di-retry tick berikutnya.
  */
 async function processExpiredRole(client, entry) {
+    // v3.9.8 FIX: skip kalau entry ini lagi di-process tick sebelumnya.
+    // Sebelumnya, kalau processExpiredRole butuh >60s (Discord API lambat),
+    // tick berikutnya pick entry yang sama → 2x DM "role kamu dihapus".
+    if (processingRoles.has(entry.id)) {
+        console.log(`⏭️ processExpiredRole ${entry.id} di-skip (masih diproses tick sebelumnya).`);
+        return;
+    }
+    processingRoles.add(entry.id);
     try {
         const guild = await client.guilds.fetch(entry.guildId).catch(() => null);
         if (!guild) {
@@ -111,6 +127,9 @@ async function processExpiredRole(client, entry) {
         }
         console.error(`❌ Error process expired role ${entry.id} (permanent):`, err.message);
         removeEntry(entry.id);
+    } finally {
+        // v3.9.8: pastikan processing lock dilepas walau ada error / return.
+        processingRoles.delete(entry.id);
     }
 }
 
@@ -145,6 +164,15 @@ function isTransientDiscordError(err) {
  * Bisa diakses dari commandHandler via `client.processGiveawayEnd(gw, opts)`.
  */
 async function processGiveawayEnd(client, gw, options = {}) {
+    // v3.9.8 FIX: TOCTOU guard. Sebelumnya, kalau satu processGiveawayEnd
+    // butuh >60s (DM ke banyak winner, rate limit), tick berikutnya juga
+    // return gw ini di getEnding() (karena endGiveaway belum jalan) → pick
+    // winner KEDUA kalinya → 2x announce + 2x DM winner.
+    if (processingGiveaways.has(gw.id)) {
+        console.log(`⏭️ processGiveawayEnd ${gw.id} di-skip (masih diproses tick sebelumnya).`);
+        return;
+    }
+    processingGiveaways.add(gw.id);
     try {
         const { EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
         const guild = await client.guilds.fetch(gw.guildId).catch(() => null);
@@ -206,6 +234,9 @@ async function processGiveawayEnd(client, gw, options = {}) {
         console.log(`🎉 Giveaway ${gw.id} (${gw.prize}) berakhir. Winners: ${winnerIds.length}`);
     } catch (err) {
         console.error('Error processGiveawayEnd:', err);
+    } finally {
+        // v3.9.8: pastikan processing lock dilepas walau ada error / return.
+        processingGiveaways.delete(gw.id);
     }
 }
 
@@ -246,6 +277,14 @@ async function announceRerollWinner(client, gw, winnerId) {
  *   menumpuk dan ngabisin disk + scheduler time.
  */
 async function processScheduledAnnouncement(client, ann) {
+    // v3.9.8 FIX: TOCTOU guard. Sebelumnya, kalau processScheduledAnnouncement
+    // throw setelah kirim pesan tapi sebelum markSent, tick berikutnya kirim
+    // announcement yang sama → duplicate ping. Guard ini skip duplikat paralel.
+    if (processingAnns.has(ann.id)) {
+        console.log(`⏭️ processScheduledAnnouncement ${ann.id} di-skip (masih diproses tick sebelumnya).`);
+        return;
+    }
+    processingAnns.add(ann.id);
     try {
         const { EmbedBuilder } = require('discord.js');
         const guild = await client.guilds.fetch(ann.guildId).catch(() => null);
@@ -275,15 +314,23 @@ async function processScheduledAnnouncement(client, ann) {
         if (d.image) embed.setImage(d.image);
         if (d.thumbnail) embed.setThumbnail(d.thumbnail);
 
+        // v3.9.8 FIX: markSent DULU sebelum kirim, supaya kalau send throw,
+        // tick berikutnya tidak kirim ulang (yang bakal duplicate ping).
+        // Trade-off: kalau send gagal total, announcement dianggap "terkirim"
+        // padahal belum. Tapi ini lebih baik daripada duplicate ping.
+        markAnnSent(ann.id);
+
         await channel.send({
             content: d.mention || null,
             embeds: [embed]
         }).catch(err => console.warn('Gagal kirim scheduled ann:', err.message));
 
-        markAnnSent(ann.id);
         console.log(`📢 Scheduled announce ${ann.id} terkirim ke ${channel.name}.`);
     } catch (err) {
         console.error('Error processScheduledAnnouncement:', err);
+    } finally {
+        // v3.9.8: pastikan processing lock dilepas walau ada error / return.
+        processingAnns.delete(ann.id);
     }
 }
 

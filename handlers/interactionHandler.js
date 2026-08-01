@@ -26,21 +26,40 @@ const { safeEditReply } = require('../utils/safeReply');
 
 // P1-6 FIX: track interaction yang sudah diproses untuk hindari double-processing.
 // Sebelumnya modal submit lewat guard `replied/deferred` → bisa double-reply.
-const processedInteractions = new Set();
-const PROCESSED_TTL_MS = 5 * 60 * 1000; // cleanup setiap 5 menit
+//
+// v3.9.8 FIX: ganti bulk-clear dengan per-entry TTL. Sebelumnya Set di-clear
+// semua tiap 5 menit, jadi window 5-15 menit (Discord interaction token valid
+// 15 menit) bisa proses ulang interaction yang sama (race duplicate key/DM).
+// Sekarang: simpan { id, ts }, prune entry yang lebih tua dari 15 menit.
+const processedInteractions = new Map();
+const PROCESSED_TTL_MS = 15 * 60 * 1000; // 15 menit — match Discord interaction token lifetime
 
-// Periodic cleanup supaya Set tidak bengkak
+// Periodic cleanup supaya Map tidak bengkak
 setInterval(() => {
-    processedInteractions.clear();
-}, PROCESSED_TTL_MS).unref?.();
+    const now = Date.now();
+    let cleaned = 0;
+    for (const [id, ts] of processedInteractions) {
+        if (now - ts > PROCESSED_TTL_MS) {
+            processedInteractions.delete(id);
+            cleaned++;
+        }
+    }
+    if (cleaned > 0 && processedInteractions.size > 100) {
+        // Log hanya kalau cleanup menghapus banyak (defensive)
+        console.log(`🧹 processedInteractions: ${cleaned} entry di-prune.`);
+    }
+}, 60 * 1000).unref?.();
 
 module.exports = async (interaction) => {
     // P1-6 FIX: cek duplikat interaction ID dulu (defense-in-depth).
     // Discord kadang fire event yang sama 2x kalau ada retry.
-    if (processedInteractions.has(interaction.id)) {
+    // v3.9.8: kalau entry ada tapi udah lebih dari TTL, anggap belum diproses.
+    const now = Date.now();
+    const prevTs = processedInteractions.get(interaction.id);
+    if (prevTs && (now - prevTs) < PROCESSED_TTL_MS) {
         return;
     }
-    processedInteractions.add(interaction.id);
+    processedInteractions.set(interaction.id, now);
 
     // Guard: skip kalau interaction sudah replied/deferred (kecuali modal submit yang sah).
     // Modal submit yang sudah replied = ANGGAP SUDAH DIPROSES, jangan lanjut.
@@ -327,7 +346,15 @@ module.exports = async (interaction) => {
             }
 
             // === 5. Kirim invoice ke channel invoice ===
-            await sendInvoice(interaction.channel, userId, productName, price, interaction.user);
+            // v3.9.8 FIX: wrap sendInvoice di try/catch. Sebelumnya, kalau sendInvoice
+            // throw (channel invoice hilang / bot gak punya SendMessages), outer catch
+            // menyamarkan error. Padahal key + role + schedule + DM sudah terlanjur jalan.
+            // Admin lihat error → klik "Set Key" lagi → addKey jalan 2x (duplicate key).
+            try {
+                await sendInvoice(interaction.channel, userId, productName, price, interaction.user);
+            } catch (invoiceErr) {
+                console.warn(`⚠️ Gagal kirim invoice saat set-key (key tetap tersimpan): ${invoiceErr.message}`);
+            }
 
             // === 5.5. Track purchase untuk stats/leaderboard ===
             try {
@@ -347,11 +374,21 @@ module.exports = async (interaction) => {
                 });
             } catch (_) {}
 
+            // v3.9.8 FIX: balas ephemeral SEBELUM hapus channel. Sebelumnya, comment
+            // bilang "channel sudah dihapus, jadi tidak perlu editReply" — ini SALAH.
+            // Ephemeral reply terikat ke interaction token (bukan channel), jadi tetap
+            // valid setelah channel dihapus. Tanpa editReply, admin lihat "Thinking..."
+            // 15 menit sampai token expired.
+            try {
+                await safeEditReply(interaction, {
+                    content: `✅ Set Key sukses!\n\n👤 Member: <@${userId}>\n📦 Produk: ${product.label}\n🎭 Role: ${role.name}\n${dmSent ? '📬 DM terkirim.' : '⚠️ DM gagal.'}`
+                });
+            } catch (_) {}
+
             // === 6. Hapus channel tiket ===
             await interaction.channel.delete().catch(()=>{});
 
-            // === 7. Beri feedback ke admin (ephemeral — tapi channel sudah dihapus, jadi pesan ini akan hilang) ===
-            // Karena channel sudah dihapus, kita tidak perlu editReply. Cukup log.
+            // === 7. Log sukses (feedback ephemeral sudah dikirim di atas) ===
             console.log(`✅ Set Key sukses: ${member.user.tag} | produk=${product.label} | role=${role.name} | extend=${scheduleResult.extended} | permanen=${scheduleResult.permanent} | dm=${dmSent}`);
             return;
         }
@@ -2041,13 +2078,9 @@ async function handleTempVoiceTransferExecute(interaction) {
         const { PermissionFlagsBits: PFB } = require('discord.js');
 
         // Update permission: lepas owner lama, beri owner baru
+        // v3.9.8 FIX: GRANT owner baru DULU, baru REVOKE owner lama — supaya
+        // kalau grant gagal (rate limit / network), channel tidak jadi ownerless.
         try {
-            await found.channel.permissionOverwrites.edit(found.channelInfo.ownerId, {
-                [PFB.ManageChannels]: false,
-                [PFB.MoveMembers]: false,
-                [PFB.MuteMembers]: false,
-                [PFB.DeafenMembers]: false
-            });
             await found.channel.permissionOverwrites.edit(newOwnerId, {
                 [PFB.ViewChannel]: true,
                 [PFB.Connect]: true,
@@ -2056,11 +2089,28 @@ async function handleTempVoiceTransferExecute(interaction) {
                 [PFB.MuteMembers]: true,
                 [PFB.DeafenMembers]: true
             });
+            await found.channel.permissionOverwrites.edit(found.channelInfo.ownerId, {
+                [PFB.ManageChannels]: false,
+                [PFB.MoveMembers]: false,
+                [PFB.MuteMembers]: false,
+                [PFB.DeafenMembers]: false
+            });
         } catch (err) {
             return safeEditReply(interaction,{ content: `❌ Gagal update permission: ${err.message}` });
         }
 
         tempVoiceManager.transferOwnership(found.guild.id, found.channelId, newOwnerId, newOwner.user.tag);
+
+        // v3.9.8 FIX: DM owner baru (konsisten dengan auto-transfer di index.js).
+        // Sebelumnya owner baru gak diberi tahu → dia gak sadar dapat permission
+        // manage channel sampai coba pakai panel.
+        try {
+            await newOwner.send(
+                `🎁 **Kamu sekarang owner voice channel: ${found.channel.name}**\n\n` +
+                `Ownership dipindahkan ke kamu oleh <@${found.channelInfo.ownerId}>.\n\n` +
+                `🎛️ Kamu bisa kontrol channel ini lewat panel global temp voice.`
+            );
+        } catch (_) {}
 
         // v3.8.1: refresh panel global supaya owner baru ter-display
         if (typeof interaction.client.refreshGlobalControlPanel === 'function') {
@@ -2412,6 +2462,17 @@ async function handleResetConfigConfirm(interaction) {
         });
     } catch (err) {
         console.error('Reset config confirm error:', err);
+        // v3.9.8 FIX: kalau error 10008 (Unknown Message — ephemeral di-dismiss admin),
+        // interaction.update() akan throw. Fallback ke interaction.reply() ephemeral
+        // supaya admin tetap dapat konfirmasi bahwa reset sudah sukses (atau gagal).
+        const isUnknownMessage = err.code === 10008 || err.code === 10062;
+        if (isUnknownMessage && !interaction.replied) {
+            await interaction.reply({
+                content: '✅ Reset config berhasil (pesan konfirmasi sebelumnya sudah tidak bisa di-edit karena di-dismiss).',
+                flags: MessageFlags.Ephemeral
+            }).catch(()=>{});
+            return;
+        }
         if (interaction.deferred && !interaction.replied) {
             await safeEditReply(interaction,{ content: `❌ Gagal reset: ${err.message}` }).catch(()=>{});
         } else if (!interaction.replied) {
@@ -2478,6 +2539,16 @@ async function handleRestoreBackupConfirm(interaction) {
         });
     } catch (err) {
         console.error('Restore backup confirm error:', err);
+        // v3.9.8 FIX: sama seperti reset config — kalau 10008 (ephemeral dismissed),
+        // fallback ke reply() supaya admin tetap dapat konfirmasi.
+        const isUnknownMessage = err.code === 10008 || err.code === 10062;
+        if (isUnknownMessage && !interaction.replied) {
+            await interaction.reply({
+                content: '✅ Restore backup berhasil (pesan konfirmasi sebelumnya sudah tidak bisa di-edit karena di-dismiss). **RESTART bot sekarang** supaya data baru ke-load penuh.',
+                flags: MessageFlags.Ephemeral
+            }).catch(()=>{});
+            return;
+        }
         if (interaction.deferred && !interaction.replied) {
             await safeEditReply(interaction,{ content: `❌ Gagal restore: ${err.message}` }).catch(()=>{});
         } else if (!interaction.replied) {

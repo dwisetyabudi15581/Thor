@@ -387,13 +387,27 @@ function parsePrice(priceStr) {
     } else if (hasDot) {
         // Hanya dot. Asumsi: thousand separator (format ID).
         // Mis. "50.000" → 50000
-        // Tapi "2.5" → ambiguous, treat as decimal (2.5).
+        //
+        // v3.9.8 FIX: sebelumnya heuristic `parts[1].length <= 2` treat sebagai decimal.
+        // Ini bikin "1.50" (ID = 150) salah jadi 1.5, dan "100.00" (ID = 10000) salah jadi 100.
+        // Heuristic baru: treat sebagai decimal HANYA kalau parts[0] kecil (< 100) DAN
+        // parts[1] length 1-2. Mis. "2.5" → 2.5, "9.99" → 9.99. Tapi "1.50" → 150 (thousand),
+        // "100.00" → 10000 (thousand). Untuk Rupiah, harga integer jauh lebih umum daripada
+        // decimal, jadi default ke thousand separator kalau parts[0] >= 100.
         const parts = s.split('.');
-        if (parts.length === 2 && parts[1].length <= 2) {
-            // Dot sebagai decimal (mis. "2.5")
-            // biarkan
+        if (parts.length === 2 && parts[0] !== '' && parts[1].length > 0) {
+            const intPart = parseInt(parts[0], 10);
+            // Treat sebagai decimal hanya kalau int part kecil (< 100) dan
+            // fractional part reasonable (1-2 digit, bukan "00" yang exact).
+            if (!isNaN(intPart) && intPart < 100 && parts[1].length <= 2 && parts[1] !== '00') {
+                // Dot sebagai decimal (mis. "2.5", "9.99")
+                // biarkan
+            } else {
+                // Dot sebagai thousand separator
+                s = s.replace(/\./g, '');
+            }
         } else {
-            // Dot sebagai thousand separator
+            // Multiple dots (mis. "1.234.567") → thousand separator
             s = s.replace(/\./g, '');
         }
     }

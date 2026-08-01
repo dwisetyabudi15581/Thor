@@ -1,4 +1,4 @@
-const { EmbedBuilder } = require('discord.js');
+const { EmbedBuilder, AuditLogEvent } = require('discord.js');
 const { getConfig, fillTemplate } = require('../utils/configManager');
 
 /**
@@ -98,17 +98,33 @@ async function onMemberRemove(member) {
 
     // Cek audit log - apakah di-kick atau di-ban?
     // v3.9.0: single fetchAuditLogs call, filter client-side untuk kick (20) dan ban (22).
+    // v3.9.8: pakai AuditLogEvent enum (bukan magic number 20/22) supaya lebih readable.
     let action = 'keluar';
-    const AUDIT_WINDOW_MS = 5 * 1000;
+    const AUDIT_WINDOW_MS = 10 * 1000;  // v3.9.8: naikkan dari 5s ke 10s (lebih toleran latency)
     try {
-        const audits = await guild.fetchAuditLogs({ limit: 25 }); // no type filter, ambil semua
-        const entry = audits.entries.find(e =>
-            (e.action === 20 || e.action === 22) && // MEMBER_KICK or MEMBER_BAN_ADD
+        const audits = await guild.fetchAuditLogs({
+            type: AuditLogEvent.MemberKick,
+            limit: 5
+        });
+        const kickEntry = audits.entries.find(e =>
             e.target?.id === user.id &&
             (Date.now() - e.createdTimestamp) < AUDIT_WINDOW_MS
         );
-        if (entry) {
-            action = entry.action === 22 ? 'di-ban' : 'dikeluarkan (kick)';
+        if (kickEntry) {
+            action = 'dikeluarkan (kick)';
+        } else {
+            // Cek ban terpisah (kalau tidak ada kick)
+            const banAudits = await guild.fetchAuditLogs({
+                type: AuditLogEvent.MemberBanAdd,
+                limit: 5
+            });
+            const banEntry = banAudits.entries.find(e =>
+                e.target?.id === user.id &&
+                (Date.now() - e.createdTimestamp) < AUDIT_WINDOW_MS
+            );
+            if (banEntry) {
+                action = 'di-ban';
+            }
         }
     } catch (err) {
         // v3.9.0: log warning (bukan silent) supaya admin sadar kalau bot kekurangan permission.

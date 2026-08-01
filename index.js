@@ -31,11 +31,17 @@ const { processExpiredRole, processGiveawayEnd, processScheduledAnnouncement, at
 const tempVoiceManager = require('./utils/tempVoiceManager');
 
 // === ERROR HANDLER GLOBAL ===
+// v3.9.8 FIX: sebelumnya unhandledRejection & uncaughtException hanya di-log,
+// bot lanjut jalan dalam state rusak (event loop korup, partial JSON write,
+// schedule miss). Sekarang: uncaughtException → graceful shutdown supaya
+// process manager (pm2/systemd) restart bot ke state bersih.
+// unhandledRejection tetap di-log saja (lebih umum, biasanya bukan korup state).
 process.on('unhandledRejection', (reason) => {
     console.error('⚠️ Unhandled Rejection:', reason);
 });
 process.on('uncaughtException', (err) => {
-    console.error('⚠️ Uncaught Exception:', err);
+    console.error('⚠️ Uncaught Exception (will shutdown after log):', err);
+    gracefulShutdown('uncaughtException');
 });
 
 // === GUILD ID (untuk registrasi command instan ke server Anda) ===
@@ -118,6 +124,21 @@ client.once(Events.ClientReady, async (c) => {
         // === 4. Start AUTO-FLUSH stats cache (P0-1 fix) ===
         startStatsAutoFlush();
 
+        // v3.9.8: Reconcile temp voice registry dengan real state di Discord.
+        // Cleanup zombie entries (channel sudah dihapus admin) & detect orphan
+        // channels (channel ada tapi gak ada di registry — kemungkinan bot crash
+        // sebelum registerChannel jalan).
+        try {
+            for (const [gid] of c.guilds.cache) {
+                const r = tempVoiceManager.reconcileGuild(c, gid);
+                if (r.zombiesRemoved > 0 || r.orphansDetected > 0) {
+                    console.log(`🧹 Temp voice reconcile ${gid}: ${r.zombiesRemoved} zombie dihapus, ${r.orphansDetected} orphan terdeteksi.`);
+                }
+            }
+        } catch (err) {
+            console.warn('⚠️ Gagal reconcile temp voice:', err.message);
+        }
+
         // === v3.9.4: init statsManager dengan default guild untuk migrasi legacy entries ===
         // Kalau bot di 1 guild (mayoritas case), legacy entries (key tanpa `:`) akan di-assign ke guild ini.
         // Kalau bot multi-guild, pakai guild pertama yang ada di cache.
@@ -132,6 +153,11 @@ client.once(Events.ClientReady, async (c) => {
         // Sebelumnya: jika iterasi >60 detik (API Discord lambat),
         // iterasi berikutnya fire & proses entry yang sama → double DM.
         // Sekarang: pakai lock flag, skip iterasi kalau sebelumnya belum selesai.
+        //
+        // v3.9.8 FIX: setiap item di-wrap try/catch sendiri supaya 1 throw
+        // tidak abort sisa loop (sebelumnya 1 processExpiredRole throw →
+        // entry 1..N skip tick ini, dan processScheduledAnnouncement throw
+        // setelah kirim pesan tapi sebelum markSent → duplicate announce).
         let schedulerRunning = false;
         setInterval(async () => {
             if (schedulerRunning) {
@@ -141,24 +167,40 @@ client.once(Events.ClientReady, async (c) => {
             schedulerRunning = true;
             try {
                 // 1. Bersihkan key expired
-                const removed = removeExpiredKeys();
-                if (removed > 0) {
-                    console.log(`🧹 ${removed} key expired dihapus.`);
+                try {
+                    const removed = removeExpiredKeys();
+                    if (removed > 0) {
+                        console.log(`🧹 ${removed} key expired dihapus.`);
+                    }
+                } catch (err) {
+                    console.error('Scheduler: removeExpiredKeys error:', err.message);
                 }
                 // 2. Proses schedule expired (dengan recheck key)
                 const expiredNow = getExpired();
                 for (const entry of expiredNow) {
-                    await processExpiredRole(client, entry);
+                    try {
+                        await processExpiredRole(client, entry);
+                    } catch (err) {
+                        console.error(`Scheduler: processExpiredRole ${entry.id} error:`, err.message);
+                    }
                 }
                 // 3. Auto-end giveaways yang sudah waktunya
                 const endingGws = getEndingGiveaways();
                 for (const gw of endingGws) {
-                    await processGiveawayEnd(client, gw);
+                    try {
+                        await processGiveawayEnd(client, gw);
+                    } catch (err) {
+                        console.error(`Scheduler: processGiveawayEnd ${gw.id} error:`, err.message);
+                    }
                 }
                 // 4. Auto-send scheduled announcements yang sudah waktunya
                 const pendingAnns = getPendingAnns();
                 for (const ann of pendingAnns) {
-                    await processScheduledAnnouncement(client, ann);
+                    try {
+                        await processScheduledAnnouncement(client, ann);
+                    } catch (err) {
+                        console.error(`Scheduler: processScheduledAnnouncement ${ann.id} error:`, err.message);
+                    }
                 }
             } catch (err) {
                 console.error('Scheduler tick error:', err);
@@ -204,8 +246,16 @@ client.on(Events.InteractionCreate, async (interaction) => {
         // FIX v3.7.1: kalau transient, jangan coba reply (kemungkinan juga timeout).
         // Coba reply hanya kalau bukan transient DAN belum replied/deferred.
         // v3.9.4: jangan coba reply kalau ignorable reply error (interaction sudah invalid).
-        if (!isTransient && !isIgnorableReply && interaction.isRepliable() && !interaction.replied && !interaction.deferred) {
-            interaction.reply({ content: '❌ Terjadi error. Coba lagi sebentar.', flags: 64 }).catch(()=>{});
+        //
+        // v3.9.8 FIX: tambah branch untuk `interaction.deferred && !interaction.replied`.
+        // Sebelumnya, hampir semua command panggil deferReply dulu → kalau throw
+        // setelah defer, branch ini di-skip → user lihat "Thinking..." 15 menit.
+        if (!isTransient && !isIgnorableReply && interaction.isRepliable()) {
+            if (!interaction.replied && !interaction.deferred) {
+                interaction.reply({ content: '❌ Terjadi error. Coba lagi sebentar.', flags: 64 }).catch(()=>{});
+            } else if (interaction.deferred && !interaction.replied) {
+                interaction.editReply({ content: '❌ Terjadi error. Coba lagi sebentar.' }).catch(()=>{});
+            }
         }
     }
 });
@@ -279,7 +329,10 @@ client.on(Events.MessageCreate, async (message) => {
         if (message.author?.bot) return;
         if (!message.guild) return; // DM
         // v3.9.4: scoped per guild — sebelumnya bocor ke guild lain kalau bot multi-guild.
-        trackMessage(message.guild.id, message.author.id);
+        // v3.9.8: catch rejection dari trackMessage supaya tidak jadi unhandledRejection.
+        try {
+            trackMessage(message.guild.id, message.author.id);
+        } catch (e) { /* trackMessage seharusnya sync, defensive catch */ }
     } catch (_) {}
 });
 
@@ -292,6 +345,10 @@ client.on(Events.VoiceStateUpdate, async (oldState, newState) => {
     try {
         // Skip kalau bukan guild
         if (!newState.guild) return;
+
+        // v3.9.8 FIX: skip bot account — sebelumnya music bot yang join trigger
+        // channel "🔊 Buat Voice" bikin orphan voice channel dengan bot sebagai owner.
+        if (newState.member?.user?.bot) return;
 
         const guildId = newState.guild.id;
         const userId = newState.id;
@@ -394,14 +451,10 @@ async function handleAutoTransferOwnership(client, guildId, channelId, channelIn
 
         const { PermissionFlagsBits: PFB } = require('discord.js');
 
-        // Update permission: lepas owner lama, beri owner baru
+        // v3.9.8 FIX: GRANT owner baru DULU, baru REVOKE owner lama.
+        // Sebelumnya urutan terbalik — kalau grant gagal (rate-limit / network),
+        // channel jadi ownerless: owner lama gak bisa manage, owner baru juga gak.
         try {
-            await voiceChannel.permissionOverwrites.edit(oldOwnerId, {
-                [PFB.ManageChannels]: false,
-                [PFB.MoveMembers]: false,
-                [PFB.MuteMembers]: false,
-                [PFB.DeafenMembers]: false
-            });
             await voiceChannel.permissionOverwrites.edit(newOwner.id, {
                 [PFB.ViewChannel]: true,
                 [PFB.Connect]: true,
@@ -409,6 +462,12 @@ async function handleAutoTransferOwnership(client, guildId, channelId, channelIn
                 [PFB.MoveMembers]: true,
                 [PFB.MuteMembers]: true,
                 [PFB.DeafenMembers]: true
+            });
+            await voiceChannel.permissionOverwrites.edit(oldOwnerId, {
+                [PFB.ManageChannels]: false,
+                [PFB.MoveMembers]: false,
+                [PFB.MuteMembers]: false,
+                [PFB.DeafenMembers]: false
             });
         } catch (err) {
             console.warn(`⚠️ Gagal update permission saat auto-transfer: ${err.message}`);
@@ -490,16 +549,28 @@ async function handleCreateTempVoice(newState) {
             ]
         });
 
-        // Register ke manager
-        tempVoiceManager.registerChannel(guild.id, newChannel.id, member.id, member.user.tag, newChannel.name);
+        // v3.9.8 FIX: register ke manager di-wrap try/catch. Kalau gagal (file write
+        // error / disk full), hapus Discord channel supaya tidak jadi orphan.
+        try {
+            tempVoiceManager.registerChannel(guild.id, newChannel.id, member.id, member.user.tag, newChannel.name);
+        } catch (regErr) {
+            console.error(`❌ Gagal register temp voice ${newChannel.id}, hapus channel untuk cegah orphan:`, regErr.message);
+            try { await newChannel.delete('Register failed — cleanup orphan'); } catch (_) {}
+            return;
+        }
 
         // v3.8.5: panel global — tidak lagi pakai focused owner, langsung refresh panel
 
-        // Pindahkan member ke channel baru
+        // v3.9.8 FIX: kalau gagal pindahkan member, hapus channel baru + unregister
+        // supaya tidak orphan. Sebelumnya channel kosong tetap ter-register →
+        // tidak pernah ke-auto-delete (event leave tidak fire untuk channel kosong).
         try {
             await member.voice.setChannel(newChannel.id);
         } catch (err) {
-            console.warn(`⚠️ Gagal pindahkan member ke channel baru: ${err.message}`);
+            console.warn(`⚠️ Gagal pindahkan member ke channel baru: ${err.message}. Cleanup orphan channel.`);
+            try { await newChannel.delete('SetChannel failed — cleanup orphan'); } catch (_) {}
+            try { tempVoiceManager.unregisterChannel(guild.id, newChannel.id); } catch (_) {}
+            return;
         }
 
         // Refresh panel global supaya menampilkan kontrol untuk owner baru
@@ -576,13 +647,27 @@ async function refreshGlobalControlPanel(client, guildId) {
 client.refreshGlobalControlPanel = refreshGlobalControlPanel;
 
 // === P0-1 FIX: Graceful shutdown — flush stats cache sebelum exit ===
-function gracefulShutdown(signal) {
+// v3.9.8 FIX: bikin async supaya `shutdownStats()` (yang butuh write file ke disk)
+// benar-benar selesai sebelum process.exit. Sebelumnya shutdownStats() sync
+// tapi write file async → cache stats hilang setiap restart (P0-1 fix gak efektif).
+// Sekarang: kasih timeout 3 detik, kalau belum selesai juga force exit.
+async function gracefulShutdown(signal) {
     console.log(`\n⚠️ Received ${signal}, flushing stats & shutting down...`);
-    try { shutdownStats(); } catch (_) {}
+    try {
+        await Promise.race([
+            Promise.resolve(shutdownStats()),
+            new Promise(resolve => setTimeout(resolve, 3000))
+        ]);
+    } catch (_) {}
     try { client.destroy(); } catch (_) {}
     process.exit(0);
 }
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 
-client.login(process.env.DISCORD_TOKEN);
+// v3.9.8 FIX: catch login error (token invalid / undefined) supaya tidak
+// jadi unhandledRejection yang silent. Exit supaya process manager restart.
+client.login(process.env.DISCORD_TOKEN).catch(err => {
+    console.error('❌ Gagal login ke Discord:', err.message);
+    process.exit(1);
+});

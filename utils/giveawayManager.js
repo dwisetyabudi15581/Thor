@@ -124,6 +124,13 @@ function end(id, winnerIds = []) {
     const list = load();
     const gw = list.find(g => g.id === id);
     if (!gw) return null;
+    // v3.9.8 FIX: jadi idempotent. Sebelumnya, kalau end() dipanggil 2x (mis.
+    // manual /giveaway end setelah scheduler sudah end), winnerIds ditimpa dengan
+    // default [] → semua winner sebelumnya ter-wipe.
+    if (gw.ended && gw.winnerIds && gw.winnerIds.length > 0 && (!winnerIds || winnerIds.length === 0)) {
+        // Sudah ended dengan winner — jangan overwrite dengan empty.
+        return gw;
+    }
     gw.ended = true;
     gw.winnerIds = winnerIds;
     save(list);
