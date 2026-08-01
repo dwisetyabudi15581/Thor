@@ -98,6 +98,8 @@ const COMMAND_TO_DOMAIN = {
     'reset-message': 'config',
     'reset-config': 'config',
     'config-show': 'config',
+    // v3.9.12: modal editor untuk message config
+    'edit-message': 'config',
 
     // products
     'add-product': 'products',

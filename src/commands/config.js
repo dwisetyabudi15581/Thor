@@ -29,6 +29,9 @@ const {
     EMBED_LIMITS
 } = require('./_shared');
 
+// v3.9.12: ModalBuilder untuk /edit-message
+const { ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
+
 module.exports = async function (interaction) {
     const embeds = new Embeds(interaction.client);
     const config = getConfig();
@@ -99,21 +102,47 @@ module.exports = async function (interaction) {
             Danger: ButtonStyle.Danger
         };
 
-        // Build price list — gabungkan semua produk, group by category (Phase 2 will group better)
-        const priceList = productsWithCategory.length > 0
+        // v3.9.12: pakai fillTemplate dengan variabel ticket-specific.
+        // Variabel yang tersedia untuk ticketBody:
+        //   {server}            → nama guild
+        //   {price_list}        → semua produk (auto-generated)
+        //   {price_list:<cat>}  → produk filter by category
+        //   {price_header}      → config.messages.ticketPriceHeader
+        //   {categories_list}   → daftar kategori (untuk multi-panel info)
+        const { fillTemplate } = require('../data/configManager');
+
+        // Build price list per category
+        const priceListByCategory = {};
+        for (const cat of categories) {
+            const prods = productsWithCategory.filter(p => (p.category || 'mlbb_key') === cat.id);
+            priceListByCategory[cat.id] = prods.length > 0
+                ? prods.map(p => `• **${p.label}** — ${p.price}`).join('\n')
+                : `_(belum ada produk)_`;
+        }
+
+        // All-products price list (gabungan semua kategori)
+        const fullPriceList = productsWithCategory.length > 0
             ? productsWithCategory.map(p => `• **${p.label}** — ${p.price}`).join('\n')
             : '_(belum ada produk — pakai `/add-product`)_';
 
-        // v3.9.11 Phase 1: ticket header configurable (sebelumnya hardcoded "PRICE LIST KEY")
+        // Categories list (untuk info multi-panel)
+        const categoriesListStr = categories.length > 0
+            ? categories.map(c => `${c.emoji} **${c.label}** (\`${c.id}\`)`).join(' • ')
+            : '_(belum ada kategori)_';
+
         const priceHeader = config.messages?.ticketPriceHeader || '💰 PRICE LIST 💰';
+
+        const renderedBody = fillTemplate(config.messages.ticketBody, {
+            server: interaction.guild.name,
+            priceList: fullPriceList,
+            priceHeader,
+            categoriesList: categoriesListStr,
+            priceListByCategory
+        });
 
         const embed = new EmbedBuilder()
             .setTitle(config.messages.ticketTitle)
-            .setDescription(
-                config.messages.ticketBody + '\n\n' +
-                `**${priceHeader}**\n` +
-                priceList
-            )
+            .setDescription(renderedBody)
             .setColor(0xE67E22)
             .setFooter({ text: interaction.client.user.username, iconURL: interaction.client.user.displayAvatarURL({ dynamic: true }) })
             .setTimestamp();
@@ -174,6 +203,33 @@ module.exports = async function (interaction) {
         setField(`channels.${tipe}`, channel.id);
         await logAudit(interaction.client, { action: 'SET_CHANNEL', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Channel **${tipe}** diatur ke #${channel.name} (\`${channel.id}\`)`, guildId: interaction.guild.id });
         return safeEditReply(interaction,{ content: `✅ Channel **${tipe}** diatur ke ${channel} (\`${channel.id}\`)` });
+    }
+
+    // === EDIT MESSAGE (v3.9.12: modal editor — lebih flexible dari /set-message) ===
+    // Buka modal dengan textarea pre-filled dengan teks saat ini.
+    // Admin bisa edit multi-line dengan nyaman, lihat preview sebelum apply.
+    if (interaction.commandName === 'edit-message') {
+        const tipe = interaction.options.getString('tipe');
+        const currentValue = config.messages[tipe] || '';
+
+        const isTitle = tipe.endsWith('Title');
+        const maxLength = isTitle ? EMBED_LIMITS.TITLE : EMBED_LIMITS.DESCRIPTION;
+
+        const modal = new ModalBuilder()
+            .setCustomId(`modal_edit_message:${tipe}`)
+            .setTitle(`Edit ${tipe}`);
+
+        const input = new TextInputBuilder()
+            .setCustomId('message_text')
+            .setLabel(`Teks ${tipe} (maks ${maxLength} char)`)
+            .setStyle(isTitle ? TextInputStyle.Short : TextInputStyle.Paragraph)
+            .setValue(currentValue.slice(0, 4000))
+            .setMinLength(1)
+            .setMaxLength(Math.min(maxLength, 4000))
+            .setRequired(true);
+
+        modal.addComponents(new ActionRowBuilder().addComponents(input));
+        return interaction.showModal(modal);
     }
 
     // === SET MESSAGE ===

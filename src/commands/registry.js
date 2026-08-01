@@ -153,6 +153,26 @@ function getCommands() {
             ]
         },
 
+        // v3.9.12: /edit-message — modal editor untuk message config (multi-line, lebih flexible)
+        {
+            name: 'edit-message',
+            description: 'Edit teks pesan embed via modal (multi-line, lebih flexible dari /set-message)',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
+            options: [
+                { type: 3, name: 'tipe', description: 'Pilih pesan yang akan diedit', required: true, choices: [
+                    { name: 'Welcome Title', value: 'welcomeTitle' },
+                    { name: 'Welcome Body', value: 'welcomeBody' },
+                    { name: 'Goodbye Title', value: 'goodbyeTitle' },
+                    { name: 'Goodbye Body', value: 'goodbyeBody' },
+                    { name: 'Verify Title', value: 'verifyTitle' },
+                    { name: 'Verify Body', value: 'verifyBody' },
+                    { name: 'Ticket Title', value: 'ticketTitle' },
+                    { name: 'Ticket Body', value: 'ticketBody' },
+                    { name: 'Ticket Price Header', value: 'ticketPriceHeader' }
+                ]}
+            ]
+        },
+
         // === MANAJEMEN PRODUK ===
         {
             name: 'add-product',

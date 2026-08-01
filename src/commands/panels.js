@@ -111,20 +111,36 @@ module.exports = async function (interaction) {
             return categoryIds.has(pCat);
         });
 
+        // v3.9.12: pakai fillTemplate dengan variabel ticket-specific.
+        const { fillTemplate } = require('../data/configManager');
+
+        const priceListByCategory = {};
+        for (const cat of categoriesToShow) {
+            const prods = productsInCategories.filter(p => (p.category || 'mlbb_key') === cat.id);
+            priceListByCategory[cat.id] = prods.length > 0
+                ? prods.map(p => `• **${p.label}** — ${p.price}`).join('\n')
+                : `_(belum ada produk di kategori ini)_`;
+        }
+
         const priceList = productsInCategories.length > 0
             ? productsInCategories.map(p => `• **${p.label}** — ${p.price}`).join('\n')
             : '_(belum ada produk di kategori ini)_';
 
         const title = customTitle || config.messages.ticketTitle;
         const priceHeader = config.messages?.ticketPriceHeader || '💰 PRICE LIST 💰';
+        const categoriesListStr = categoriesToShow.map(c => `${c.emoji} **${c.label}**`).join(' • ');
+
+        const renderedBody = fillTemplate(config.messages.ticketBody, {
+            server: interaction.guild.name,
+            priceList,
+            priceHeader,
+            categoriesList: categoriesListStr,
+            priceListByCategory
+        });
 
         const embed = new EmbedBuilder()
             .setTitle(title)
-            .setDescription(
-                (config.messages.ticketBody || '') + '\n\n' +
-                `**${priceHeader}**\n` +
-                priceList
-            )
+            .setDescription(renderedBody)
             .setColor(0xE67E22)
             .setFooter({ text: interaction.client.user.username, iconURL: interaction.client.user.displayAvatarURL({ dynamic: true }) })
             .setTimestamp();

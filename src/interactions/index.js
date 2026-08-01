@@ -34,6 +34,7 @@ const giveawayDomain = require('./giveaway');
 const pollDomain = require('./poll');
 const tempvoiceDomain = require('./tempvoice');
 const backupDomain = require('./backup');
+const configDomain = require('./config');
 
 // Mapping customId prefix → domain.
 // Diurutkan dari paling spesifik ke paling umum (startsWith cocok dengan prefix
@@ -45,6 +46,7 @@ const PREFIX_TO_DOMAIN = [
     { prefix: 'btn_verify', domain: 'verify', exact: true },
     { prefix: 'select_product', domain: 'ticket' },
     { prefix: 'modal_set_key:', domain: 'ticket' },
+    { prefix: 'modal_edit_message:', domain: 'config' },
     { prefix: 'ticket_', domain: 'ticket' },
     { prefix: 'sr_btn:', domain: 'selfrole' },
     { prefix: 'sr_sel:', domain: 'selfrole' },
@@ -72,6 +74,7 @@ const DOMAIN_HANDLERS = {
     poll: pollDomain,
     tempvoice: tempvoiceDomain,
     backup: backupDomain,
+    config: configDomain,
 };
 
 /**

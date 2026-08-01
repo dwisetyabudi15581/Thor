@@ -16,7 +16,9 @@ const DEFAULTS = {
         verifyTitle: '✅ VERIFIKASI SERVER',
         verifyBody: 'Selamat datang di **{server}**!\n\nKlik tombol di bawah untuk diverifikasi dan mendapatkan akses penuh ke seluruh channel.',
         ticketTitle: '🎫 SISTEM TIKET & PRICE LIST',
-        ticketBody: 'Butuh bantuan atau ingin membeli key?\n\nKlik tombol di bawah untuk memulai transaksi atau menghubungi staff.',
+        // v3.9.12: ticket body sekarang support template variables.
+        // Variabel tersedia: {server}, {price_list}, {price_list:<category>}, {price_header}, {categories_list}
+        ticketBody: 'Butuh bantuan atau ingin membeli?\n\nKlik tombol kategori di bawah untuk memulai.\n\n**{price_header}**\n{price_list}',
         // v3.9.11 Phase 1: ticket header configurable (sebelumnya hardcoded "PRICE LIST KEY")
         ticketPriceHeader: '💰 PRICE LIST 💰'
     },
@@ -160,15 +162,47 @@ function setField(dotPath, value) {
 }
 
 /**
- * Ganti placeholder {user} {username} {server} {count} {action} dalam teks.
+ * Ganti placeholder template variables dalam teks.
+ *
+ * Variabel yang didukung:
+ *   - {user}          → mention user (mis. <@123>)
+ *   - {username}      → user tag (mis. User#1234)
+ *   - {server}        → nama guild
+ *   - {count}         → jumlah member
+ *   - {action}        → 'keluar' / 'di-ban' / 'dikeluarkan (kick)' (untuk goodbye)
+ *
+ * v3.9.12: Variabel tambahan untuk ticket body (dipakai di /setup-ticket):
+ *   - {price_list}        → daftar semua produk (auto-generated dari config.products)
+ *   - {price_list:<cat>}  → daftar produk filter by category (mis. {price_list:mlbb_key})
+ *   - {categories_list}   → daftar semua kategori tiket (auto-generated dari config.ticketCategories)
+ *   - {price_header}      → isi dari config.messages.ticketPriceHeader
  */
 function fillTemplate(text, vars = {}) {
-    return text
+    let result = text
         .replace(/\{user\}/g, vars.user || '')
         .replace(/\{username\}/g, vars.username || '')
         .replace(/\{server\}/g, vars.server || '')
         .replace(/\{count\}/g, vars.count || '0')
         .replace(/\{action\}/g, vars.action || 'keluar');
+
+    // v3.9.12: ticket-specific variables
+    if (vars.priceList !== undefined) {
+        result = result.replace(/\{price_list\}/g, vars.priceList);
+    }
+    if (vars.priceHeader !== undefined) {
+        result = result.replace(/\{price_header\}/g, vars.priceHeader);
+    }
+    if (vars.categoriesList !== undefined) {
+        result = result.replace(/\{categories_list\}/g, vars.categoriesList);
+    }
+    // {price_list:<categoryId>} — filtered by category
+    if (vars.priceListByCategory && typeof vars.priceListByCategory === 'object') {
+        result = result.replace(/\{price_list:([a-zA-Z0-9_-]+)\}/g, (match, catId) => {
+            return vars.priceListByCategory[catId] || `_(belum ada produk di kategori \`${catId}\`)_`;
+        });
+    }
+
+    return result;
 }
 
 module.exports = { getConfig, saveConfig, setField, fillTemplate, DEFAULTS };
