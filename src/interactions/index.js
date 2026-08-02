@@ -65,7 +65,7 @@ const PREFIX_TO_DOMAIN = [
     { prefix: 'tv_modal_', domain: 'tempvoice' },
     { prefix: 'tv_', domain: 'tempvoice' },
     { prefix: 'reset_config_', domain: 'backup' },
-    { prefix: 'restore_backup_', domain: 'backup' },
+    { prefix: 'restore_backup_', domain: 'backup' }
 ];
 
 const DOMAIN_HANDLERS = {
@@ -77,7 +77,7 @@ const DOMAIN_HANDLERS = {
     poll: pollDomain,
     tempvoice: tempvoiceDomain,
     backup: backupDomain,
-    config: configDomain,
+    config: configDomain
 };
 
 /**

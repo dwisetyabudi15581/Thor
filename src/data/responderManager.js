@@ -82,8 +82,8 @@ function addResponder(guildId, data) {
         useCount: 0,
         lastUsedAt: null,
         cooldownMs: data.cooldownMs || 3000,
-        lastFiredAt: null,            // legacy — gak dipake lagi, disimpen untuk backward compat
-        userCooldowns: {}             // map cooldown per-user
+        lastFiredAt: null, // legacy — gak dipake lagi, disimpen untuk backward compat
+        userCooldowns: {} // map cooldown per-user
     };
     all[guildId].push(entry);
     save(all);
@@ -129,12 +129,12 @@ function findMatch(guildId, messageContent, userId) {
             const cooldownMs = r.cooldownMs || 3000;
             if (cooldownMs > 0 && userId && r.userCooldowns && r.userCooldowns[userId]) {
                 const lastFired = r.userCooldowns[userId];
-                if ((now - lastFired) < cooldownMs) {
-                    return null;  // user ini masih cooldown, skip
+                if (now - lastFired < cooldownMs) {
+                    return null; // user ini masih cooldown, skip
                 }
             } else if (cooldownMs > 0 && !userId && r.lastFiredAt) {
                 // Fallback: kalau caller gak kirim userId, pakai cooldown global lama
-                if ((now - r.lastFiredAt) < cooldownMs) {
+                if (now - r.lastFiredAt < cooldownMs) {
                     return null;
                 }
             }
@@ -155,7 +155,7 @@ function markUsed(guildId, responderId, userId) {
     if (!r) return;
     r.useCount = (r.useCount || 0) + 1;
     r.lastUsedAt = Date.now();
-    r.lastFiredAt = Date.now();  // legacy — tetap diisi untuk jaga-jaga
+    r.lastFiredAt = Date.now(); // legacy — tetap diisi untuk jaga-jaga
     // Catat cooldown per-user
     if (userId) {
         if (!r.userCooldowns || typeof r.userCooldowns !== 'object') r.userCooldowns = {};

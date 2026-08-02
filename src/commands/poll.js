@@ -80,20 +80,25 @@ module.exports = async function (interaction) {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         const polls = getPollsByGuild(interaction.guild.id);
         if (polls.length === 0) {
-            return safeEditReply(interaction,{ content: '📭 Belum ada poll di guild ini.' });
+            return safeEditReply(interaction, { content: '📭 Belum ada poll di guild ini.' });
         }
-        const lines = polls.map(p => {
-            const status = p.closed ? '🔒 Closed' : '🟢 Active';
-            const total = getPollTotalVotes(p);
-            return `• ❓ **${p.question}** — ${status}\n  🆔 \`${p.id}\` | 👥 ${p.options.length} options | 🗳️ ${total} votes\n  📍 <#${p.channelId}> | ⏰ <t:${Math.floor(p.createdAt / 1000)}:R>`;
-        }).join('\n\n');
+        const lines = polls
+            .map(p => {
+                const status = p.closed ? '🔒 Closed' : '🟢 Active';
+                const total = getPollTotalVotes(p);
+                return `• ❓ **${p.question}** — ${status}\n  🆔 \`${p.id}\` | 👥 ${p.options.length} options | 🗳️ ${total} votes\n  📍 <#${p.channelId}> | ⏰ <t:${Math.floor(p.createdAt / 1000)}:R>`;
+            })
+            .join('\n\n');
         const embed = new EmbedBuilder()
             .setTitle('📊 DAFTAR POLL')
             .setDescription(`Total **${polls.length}** poll.\n\n${lines}`)
-            .setColor(0x5865F2)
-            .setFooter({ text: interaction.client.user.username, iconURL: interaction.client.user.displayAvatarURL({ dynamic: true }) })
+            .setColor(0x5865f2)
+            .setFooter({
+                text: interaction.client.user.username,
+                iconURL: interaction.client.user.displayAvatarURL({ dynamic: true })
+            })
             .setTimestamp();
-        return safeEditReply(interaction,{ embeds: [embed] });
+        return safeEditReply(interaction, { embeds: [embed] });
     }
 
     // --- /poll close ---
@@ -101,13 +106,20 @@ module.exports = async function (interaction) {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         const id = interaction.options.getString('id');
         const poll = getPoll(id);
-        if (!poll) return safeEditReply(interaction,{ content: `❌ Poll \`${id}\` tidak ditemukan.` });
-        if (poll.guildId !== interaction.guild.id) return safeEditReply(interaction,{ content: '❌ Poll ini bukan dari guild ini.' });
-        if (poll.closed) return safeEditReply(interaction,{ content: `❌ Poll sudah closed.` });
+        if (!poll) return safeEditReply(interaction, { content: `❌ Poll \`${id}\` tidak ditemukan.` });
+        if (poll.guildId !== interaction.guild.id)
+            return safeEditReply(interaction, { content: '❌ Poll ini bukan dari guild ini.' });
+        if (poll.closed) return safeEditReply(interaction, { content: `❌ Poll sudah closed.` });
         const updated = closePoll(id);
         await updatePollMessage(interaction, updated);
-        await logAudit(interaction.client, { action: 'POLL_CLOSE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Close poll \`${id}\` ("${poll.question}")`, guildId: interaction.guild.id });
-        return safeEditReply(interaction,{ content: `✅ Poll **${poll.question}** ditutup! Lihat hasil di channel.` });
+        await logAudit(interaction.client, {
+            action: 'POLL_CLOSE',
+            actorId: interaction.user.id,
+            actorTag: interaction.user.tag,
+            details: `Close poll \`${id}\` ("${poll.question}")`,
+            guildId: interaction.guild.id
+        });
+        return safeEditReply(interaction, { content: `✅ Poll **${poll.question}** ditutup! Lihat hasil di channel.` });
     }
 };
 
@@ -124,20 +136,22 @@ async function updatePollMessage(interaction, poll) {
         if (!msg) return;
 
         const total = getPollTotalVotes(poll);
-        const lines = poll.options.map((opt, i) => {
-            const pct = total > 0 ? Math.round((opt.votes.length / total) * 100) : 0;
-            const bar = '█'.repeat(Math.floor(pct / 10)).padEnd(10, '░');
-            return `${opt.emoji} **${opt.label}** — ${opt.votes.length} votes (${pct}%)\n\`${bar}\``;
-        }).join('\n\n');
+        const lines = poll.options
+            .map((opt, i) => {
+                const pct = total > 0 ? Math.round((opt.votes.length / total) * 100) : 0;
+                const bar = '█'.repeat(Math.floor(pct / 10)).padEnd(10, '░');
+                return `${opt.emoji} **${opt.label}** — ${opt.votes.length} votes (${pct}%)\n\`${bar}\``;
+            })
+            .join('\n\n');
 
         const embed = new EmbedBuilder()
             .setTitle(`📊 ${poll.question}`)
             .setDescription(
                 `${lines}\n\n` +
-                `🗳️ Total votes: **${total}**\n` +
-                `🔒 Status: **Closed** <t:${Math.floor(poll.closedAt / 1000)}:R>`
+                    `🗳️ Total votes: **${total}**\n` +
+                    `🔒 Status: **Closed** <t:${Math.floor(poll.closedAt / 1000)}:R>`
             )
-            .setColor(0x95A5A6)
+            .setColor(0x95a5a6)
             .setFooter({ text: `Poll by ${poll.creatorTag} | Closed` })
             .setTimestamp();
 

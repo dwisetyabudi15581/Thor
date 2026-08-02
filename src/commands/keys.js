@@ -40,20 +40,26 @@ module.exports = async function (interaction) {
 
         const product = config.products.find(p => p.value === value);
         if (!product) {
-            return safeEditReply(interaction,{ content: `❌ Produk value \`${value}\` tidak ditemukan. Pakai \`/list-products\` untuk lihat daftar.` });
+            return safeEditReply(interaction, {
+                content: `❌ Produk value \`${value}\` tidak ditemukan. Pakai \`/list-products\` untuk lihat daftar.`
+            });
         }
         if (!product.roleId) {
-            return safeEditReply(interaction,{ content: `❌ Produk **${product.label}** belum punya auto-role. Pakai \`/set-product-role\` dulu.` });
+            return safeEditReply(interaction, {
+                content: `❌ Produk **${product.label}** belum punya auto-role. Pakai \`/set-product-role\` dulu.`
+            });
         }
 
         const guild = interaction.guild;
         const member = await guild.members.fetch(user.id).catch(() => null);
         if (!member) {
-            return safeEditReply(interaction,{ content: `❌ User <@${user.id}> tidak ada di server.` });
+            return safeEditReply(interaction, { content: `❌ User <@${user.id}> tidak ada di server.` });
         }
         const role = guild.roles.cache.get(product.roleId);
         if (!role) {
-            return safeEditReply(interaction,{ content: `❌ Role ID \`${product.roleId}\` tidak ditemukan di guild.` });
+            return safeEditReply(interaction, {
+                content: `❌ Role ID \`${product.roleId}\` tidak ditemukan di guild.`
+            });
         }
 
         // 1. Simpan key ke database. Wrap try/catch biar error jelas ke admin
@@ -82,8 +88,9 @@ module.exports = async function (interaction) {
                 await member.roles.add(role);
             }
         } catch (err) {
-            return safeEditReply(interaction,{
-                content: `❌ Gagal add role ${role}. Pastikan role bot ada di ATAS role tersebut.\n\n` +
+            return safeEditReply(interaction, {
+                content:
+                    `❌ Gagal add role ${role}. Pastikan role bot ada di ATAS role tersebut.\n\n` +
                     `⚠️ **Key disimpan TANPA role.** Setelah role bot diperbaiki, admin bisa:\n` +
                     `• Add role manual ke member, atau\n` +
                     `• Hapus key ini via \`/clear-schedule clear_keys:true\` lalu re-set key.`
@@ -120,7 +127,8 @@ module.exports = async function (interaction) {
                 expireInfo = `Role akan otomatis dihapus setelah **${days} hari** (mengikuti sisa key terbanyak).`;
             }
             await member.send({
-                content: `🎁 **Key Baru!**\n\n` +
+                content:
+                    `🎁 **Key Baru!**\n\n` +
                     `Admin memberimu key untuk produk **${product.label}** di **${guild.name}**.\n\n` +
                     `🔑 **Key:**\n\`\`\`\n${keyValue}\n\`\`\`\n` +
                     `🎭 Role: ${role}\n⏰ ${expireInfo}`
@@ -136,7 +144,13 @@ module.exports = async function (interaction) {
             // sendInvoice mengambil channel dari channel.guild.channels.cache,
             // jadi kita oper interaction.channel (channel command dijalankan).
             if (interaction.channel && interaction.channel.guild) {
-                invoiceSent = await sendInvoice(interaction.channel, member.id, product.label, product.price, interaction.user);
+                invoiceSent = await sendInvoice(
+                    interaction.channel,
+                    member.id,
+                    product.label,
+                    product.price,
+                    interaction.user
+                );
             }
         } catch (err) {
             console.warn('Gagal kirim invoice dari /set-key:', err.message);
@@ -144,7 +158,9 @@ module.exports = async function (interaction) {
 
         // 6. Track purchase untuk stats
         // v3.9.4: scoped per guild
-        try { trackPurchase(interaction.guild.id, member.id, parsePriceNum(product.price)); } catch (_) {}
+        try {
+            trackPurchase(interaction.guild.id, member.id, parsePriceNum(product.price));
+        } catch (_) {}
 
         // 7. Audit log (P1-10 FIX: sebelumnya tidak ada logAudit untuk SET_KEY)
         // v3.9.1 FIX: jangan bocorkan key (bahkan sebagian) ke audit log channel.
@@ -159,15 +175,17 @@ module.exports = async function (interaction) {
             guildId: interaction.guild.id
         });
 
-        const expireStr = keyEntry.expireAt === null ? 'permanen' : `${Math.ceil((keyEntry.expireAt - Date.now()) / 86400000)} hari`;
-        return safeEditReply(interaction,{
-            content: `✅ **Set Key sukses!**\n\n` +
+        const expireStr =
+            keyEntry.expireAt === null ? 'permanen' : `${Math.ceil((keyEntry.expireAt - Date.now()) / 86400000)} hari`;
+        return safeEditReply(interaction, {
+            content:
+                `✅ **Set Key sukses!**\n\n` +
                 `👤 User: ${member}\n` +
                 `📦 Produk: ${product.label}\n` +
                 `🔑 Key: \`${keyValue}\`\n` +
                 `🎭 Role: ${role}\n` +
                 `⏰ Expire: ${expireStr}\n` +
-                `${schedResult.extended ? '↳ Schedule di-extend (MAX EXTEND).' : (schedResult.permanent ? '↳ Permanen, schedule lama dihapus.' : '↳ Schedule baru dibuat.')}\n` +
+                `${schedResult.extended ? '↳ Schedule di-extend (MAX EXTEND).' : schedResult.permanent ? '↳ Permanen, schedule lama dihapus.' : '↳ Schedule baru dibuat.'}\n` +
                 `${dmSent ? '📬 DM terkirim.' : '⚠️ DM gagal (DM ditutup).'}\n` +
                 `${invoiceSent ? '🧾 Invoice terkirim.' : '⚠️ Invoice tidak terkirim (channel invoice belum di-set).'}` +
                 scheduleWarning
@@ -186,7 +204,7 @@ module.exports = async function (interaction) {
         // user yang dibeli di Guild B (cross-guild information disclosure).
         const allKeys = findAllByUser(user.id, interaction.guild.id);
         if (allKeys.length === 0) {
-            return safeEditReply(interaction,{ content: `📭 <@${user.id}> tidak punya key apa pun di server ini.` });
+            return safeEditReply(interaction, { content: `📭 <@${user.id}> tidak punya key apa pun di server ini.` });
         }
 
         // Pisahkan jadi aktif & expired
@@ -213,11 +231,14 @@ module.exports = async function (interaction) {
         const embed = new EmbedBuilder()
             .setTitle(`🔑 Daftar Key — ${user.tag}`)
             .setDescription(`Total: **${allKeys.length}** key (${active.length} aktif, ${expired.length} expired)`)
-            .setColor(0x5865F2)
+            .setColor(0x5865f2)
             .addFields(fields)
-            .setFooter({ text: interaction.client.user.username, iconURL: interaction.client.user.displayAvatarURL({ dynamic: true }) })
+            .setFooter({
+                text: interaction.client.user.username,
+                iconURL: interaction.client.user.displayAvatarURL({ dynamic: true })
+            })
             .setTimestamp();
-        return safeEditReply(interaction,{ embeds: [embed] });
+        return safeEditReply(interaction, { embeds: [embed] });
     }
 
     // ====================================================
@@ -230,7 +251,7 @@ module.exports = async function (interaction) {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         const user = interaction.options.getUser('user');
         const clearKeys = interaction.options.getBoolean('clear_keys') || false;
-        const guildId = interaction.guild.id;  // v3.9.0: scope to this guild only
+        const guildId = interaction.guild.id; // v3.9.0: scope to this guild only
 
         // Hapus semua schedule milik user DI GUILD INI saja
         const removedSched = removeAllSchedulesByUser(user.id, guildId);
@@ -244,15 +265,13 @@ module.exports = async function (interaction) {
         // Opsional: lepas semua role yang terkait schedule?
         // Untuk safety, tidak otomatis lepas role di sini. Admin bisa lepas manual.
         // Tapi kalau clear_keys=true, berarti full reset VIP → lepas role yang ada di config produk
-        let rolesRemoved = [];
-        let rolesFailed = [];  // v3.9.8: track role yang gagal dilepas
+        const rolesRemoved = [];
+        const rolesFailed = []; // v3.9.8: track role yang gagal dilepas
         if (clearKeys) {
             const guild = interaction.guild;
             const member = await guild.members.fetch(user.id).catch(() => null);
             if (member) {
-                const productRoleIds = new Set(
-                    config.products.filter(p => p.roleId).map(p => p.roleId)
-                );
+                const productRoleIds = new Set(config.products.filter(p => p.roleId).map(p => p.roleId));
                 for (const rid of productRoleIds) {
                     if (member.roles.cache.has(rid)) {
                         try {
@@ -271,17 +290,28 @@ module.exports = async function (interaction) {
             }
         }
 
-        const msg = `🧹 **Clear selesai!**\n\n` +
+        const msg =
+            `🧹 **Clear selesai!**\n\n` +
             `👤 User: <@${user.id}>\n` +
             `📋 Schedule dihapus (guild ini): **${removedSched}**\n` +
             (clearKeys
                 ? `🔑 Key dihapus (guild ini): **${removedKeys}**\n` +
-                  (rolesRemoved.length > 0 ? `🎭 Role dilepas: ${rolesRemoved.map(n => `\`${n}\``).join(', ')}\n` : '') +
-                  (rolesFailed.length > 0 ? `⚠️ Role GAGAL dilepas (bot hierarki / permission): ${rolesFailed.map(n => `\`${n}\``).join(', ')} — LEPAS MANUAL!\n` : '')
+                  (rolesRemoved.length > 0
+                      ? `🎭 Role dilepas: ${rolesRemoved.map(n => `\`${n}\``).join(', ')}\n`
+                      : '') +
+                  (rolesFailed.length > 0
+                      ? `⚠️ Role GAGAL dilepas (bot hierarki / permission): ${rolesFailed.map(n => `\`${n}\``).join(', ')} — LEPAS MANUAL!\n`
+                      : '')
                 : `ℹ️ Key TIDAK dihapus (clear_keys=false). Pakai \`clear_keys:true\` untuk reset total VIP.\n`);
 
-        await logAudit(interaction.client, { action: 'CLEAR_SCHEDULE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Clear schedule <@${user.id}> di guild ${guildId}: ${removedSched} schedule${clearKeys ? ` + ${removedKeys} key${rolesRemoved.length > 0 ? ` + ${rolesRemoved.length} role` : ''}` : ' (tanpa key)'}`, guildId: interaction.guild.id });
+        await logAudit(interaction.client, {
+            action: 'CLEAR_SCHEDULE',
+            actorId: interaction.user.id,
+            actorTag: interaction.user.tag,
+            details: `Clear schedule <@${user.id}> di guild ${guildId}: ${removedSched} schedule${clearKeys ? ` + ${removedKeys} key${rolesRemoved.length > 0 ? ` + ${rolesRemoved.length} role` : ''}` : ' (tanpa key)'}`,
+            guildId: interaction.guild.id
+        });
 
-        return safeEditReply(interaction,{ content: msg });
+        return safeEditReply(interaction, { content: msg });
     }
 };

@@ -52,18 +52,25 @@ async function onInteractionCreate(interaction) {
         const isTransient = isTransientNetworkError(err);
         const isIgnorableReply = isIgnorableReplyError(err);
         if (isTransient) {
-            console.warn(`⚠️ Transient network error on interaction ${interaction.id}:`, err.code || err.name, '-', err.message?.slice(0, 100));
+            console.warn(
+                `⚠️ Transient network error on interaction ${interaction.id}:`,
+                err.code || err.name,
+                '-',
+                err.message?.slice(0, 100)
+            );
         } else if (isIgnorableReply) {
-            console.warn(`⚠️ Interaction ${interaction.id} reply gagal (code ${err.code}): ${err.message?.slice(0, 100)}`);
+            console.warn(
+                `⚠️ Interaction ${interaction.id} reply gagal (code ${err.code}): ${err.message?.slice(0, 100)}`
+            );
         } else {
             console.error('Interaction Error:', err);
         }
 
         if (!isTransient && !isIgnorableReply && interaction.isRepliable()) {
             if (!interaction.replied && !interaction.deferred) {
-                interaction.reply({ content: '❌ Terjadi error. Coba lagi sebentar.', flags: 64 }).catch(()=>{});
+                interaction.reply({ content: '❌ Terjadi error. Coba lagi sebentar.', flags: 64 }).catch(() => {});
             } else if (interaction.deferred && !interaction.replied) {
-                interaction.editReply({ content: '❌ Terjadi error. Coba lagi sebentar.' }).catch(()=>{});
+                interaction.editReply({ content: '❌ Terjadi error. Coba lagi sebentar.' }).catch(() => {});
             }
         }
     }

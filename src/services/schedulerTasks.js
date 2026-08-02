@@ -73,7 +73,9 @@ async function processExpiredRole(client, entry) {
 
         // === 1. Cek key PERMANEN ===
         if (hasPermanentKey(entry.userId, entry.roleId)) {
-            console.log(`♾️ ${member.user.tag}: schedule ${role?.name || entry.roleId} dihapus (ada key permanen). Role tetap.`);
+            console.log(
+                `♾️ ${member.user.tag}: schedule ${role?.name || entry.roleId} dihapus (ada key permanen). Role tetap.`
+            );
             removeEntry(entry.id);
             return;
         }
@@ -84,7 +86,9 @@ async function processExpiredRole(client, entry) {
             // Masih ada key aktif dengan sisa waktu → reschedule ke max
             updateExpireAt(entry.id, maxExpireAt);
             const days = Math.ceil((maxExpireAt - now) / 86400000);
-            console.log(`⏰ ${member.user.tag}: schedule ${role?.name || entry.roleId} di-reschedule ke ${days} hari lagi (mengikuti key terpanjang).`);
+            console.log(
+                `⏰ ${member.user.tag}: schedule ${role?.name || entry.roleId} di-reschedule ke ${days} hari lagi (mengikuti key terpanjang).`
+            );
             return;
         }
 
@@ -107,11 +111,16 @@ async function processExpiredRole(client, entry) {
                 // supaya tidak stuck forever.
                 const isTransient = isTransientDiscordError(err);
                 if (isTransient) {
-                    console.warn(`⚠️ Gagal hapus role ${entry.roleId} dari ${member.user.tag} (transient: ${err.code || err.name}). Akan di-retry tick berikutnya. Entry TIDAK dihapus.`);
+                    console.warn(
+                        `⚠️ Gagal hapus role ${entry.roleId} dari ${member.user.tag} (transient: ${err.code || err.name}). Akan di-retry tick berikutnya. Entry TIDAK dihapus.`
+                    );
                     return; // penting: jangan removeEntry
                 }
                 // Non-transient: log error, hapus entry supaya tidak loop forever.
-                console.error(`❌ Gagal hapus role ${entry.roleId} dari ${member.user.tag} (permanent: ${err.code || err.name}):`, err.message);
+                console.error(
+                    `❌ Gagal hapus role ${entry.roleId} dari ${member.user.tag} (permanent: ${err.code || err.name}):`,
+                    err.message
+                );
                 removeEntry(entry.id);
                 return;
             }
@@ -122,7 +131,9 @@ async function processExpiredRole(client, entry) {
         // Transient error (network blip) → biarkan tick berikutnya retry.
         const isTransient = isTransientDiscordError(err);
         if (isTransient) {
-            console.warn(`⚠️ Transient error di processExpiredRole ${entry.id} (${err.code || err.name}). Entry TIDAK dihapus, akan di-retry.`);
+            console.warn(
+                `⚠️ Transient error di processExpiredRole ${entry.id} (${err.code || err.name}). Entry TIDAK dihapus, akan di-retry.`
+            );
             return;
         }
         console.error(`❌ Error process expired role ${entry.id} (permanent):`, err.message);
@@ -144,7 +155,8 @@ function isTransientDiscordError(err) {
     const name = err.name || '';
 
     // Network / timeout
-    if (['ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'EAI_AGAIN', 'ENOTFOUND', 'UND_ERR_CONNECT_TIMEOUT'].includes(code)) return true;
+    if (['ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'EAI_AGAIN', 'ENOTFOUND', 'UND_ERR_CONNECT_TIMEOUT'].includes(code))
+        return true;
     if (['ConnectTimeoutError', 'WebSocketClosedError'].includes(name)) return true;
 
     // Discord 5xx (server error, transient)
@@ -179,7 +191,9 @@ async function processGiveawayEnd(client, gw, options = {}) {
         // Kalau guild gak ketemu (bot di-kick / guild di-delete), mark giveaway sebagai ended
         // biar gak di-pick ulang tiap tick. Sebelumnya ini bikin infinite retry loop 60-an.
         if (!guild) {
-            console.warn(`⚠️ Giveaway ${gw.id}: guild ${gw.guildId} tidak ditemukan, mark ended (bot di-kick / guild di-delete?).`);
+            console.warn(
+                `⚠️ Giveaway ${gw.id}: guild ${gw.guildId} tidak ditemukan, mark ended (bot di-kick / guild di-delete?).`
+            );
             endGiveaway(gw.id, []);
             return;
         }
@@ -187,7 +201,9 @@ async function processGiveawayEnd(client, gw, options = {}) {
         const channel = guild.channels.cache.get(gw.channelId);
         // Sama — kalau channel udah di-delete, mark ended biar gak infinite retry.
         if (!channel) {
-            console.warn(`⚠️ Giveaway ${gw.id}: channel ${gw.channelId} tidak ditemukan di guild ${gw.guildId}, mark ended.`);
+            console.warn(
+                `⚠️ Giveaway ${gw.id}: channel ${gw.channelId} tidak ditemukan di guild ${gw.guildId}, mark ended.`
+            );
             endGiveaway(gw.id, []);
             return;
         }
@@ -209,37 +225,59 @@ async function processGiveawayEnd(client, gw, options = {}) {
                 .setTitle('🎉 GIVEAWAY BERAKHIR!')
                 .setDescription(
                     `🎁 **Prize:** ${gw.prize}\n\n` +
-                    `🏆 **Pemenang:** ${winnersStr}\n` +
-                    `👥 **Peserta:** ${gw.participantIds.length}\n` +
-                    `⏰ **Berakhir:** <t:${Math.floor(gw.endsAt / 1000)}:R>\n\n` +
-                    (winnerIds.length > 0 ? '🎊 Selamat kepada pemenang! Host akan DM kalian untuk klaim hadiah.' : '_(Tidak ada peserta yang ikut)_')
+                        `🏆 **Pemenang:** ${winnersStr}\n` +
+                        `👥 **Peserta:** ${gw.participantIds.length}\n` +
+                        `⏰ **Berakhir:** <t:${Math.floor(gw.endsAt / 1000)}:R>\n\n` +
+                        (winnerIds.length > 0
+                            ? '🎊 Selamat kepada pemenang! Host akan DM kalian untuk klaim hadiah.'
+                            : '_(Tidak ada peserta yang ikut)_')
                 )
-                .setColor(winnerIds.length > 0 ? 0x57F287 : 0x95A5A6)
+                .setColor(winnerIds.length > 0 ? 0x57f287 : 0x95a5a6)
                 .setFooter({ text: `Host: ${gw.hostTag} | ID: ${gw.id}` })
                 .setTimestamp();
             const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId(`gw_join:${gw.id}`).setLabel('🎉 Join (Ended)').setStyle(ButtonStyle.Success).setDisabled(true),
-                new ButtonBuilder().setCustomId(`gw_leave:${gw.id}`).setLabel('🚪 Leave (Ended)').setStyle(ButtonStyle.Secondary).setDisabled(true)
+                new ButtonBuilder()
+                    .setCustomId(`gw_join:${gw.id}`)
+                    .setLabel('🎉 Join (Ended)')
+                    .setStyle(ButtonStyle.Success)
+                    .setDisabled(true),
+                new ButtonBuilder()
+                    .setCustomId(`gw_leave:${gw.id}`)
+                    .setLabel('🚪 Leave (Ended)')
+                    .setStyle(ButtonStyle.Secondary)
+                    .setDisabled(true)
             );
-            await msg.edit({ embeds: [embed], components: [row] }).catch(()=>{});
+            await msg.edit({ embeds: [embed], components: [row] }).catch(() => {});
         }
 
         // Announce winners
         if (winnerIds.length > 0) {
-            await channel.send({ content: `🎊 **GIVEAWAY WINNERS!** 🎊\n\nPrize: **${gw.prize}**\nPemenang: ${winnersStr}\n\nSelamat! 🎉` }).catch(()=>{});
+            await channel
+                .send({
+                    content: `🎊 **GIVEAWAY WINNERS!** 🎊\n\nPrize: **${gw.prize}**\nPemenang: ${winnersStr}\n\nSelamat! 🎉`
+                })
+                .catch(() => {});
 
             // DM winners
             for (const wid of winnerIds) {
                 const user = await client.users.fetch(wid).catch(() => null);
                 if (user) {
-                    await user.send(`🎊 **Selamat! Kamu menang giveaway!**\n\nPrize: **${gw.prize}**\nHost: ${gw.hostTag}\nServer: ${guild.name}\n\nHubungi host untuk klaim hadiahmu.`).catch(()=>{});
+                    await user
+                        .send(
+                            `🎊 **Selamat! Kamu menang giveaway!**\n\nPrize: **${gw.prize}**\nHost: ${gw.hostTag}\nServer: ${guild.name}\n\nHubungi host untuk klaim hadiahmu.`
+                        )
+                        .catch(() => {});
                 }
                 // Track giveaway win untuk leaderboard
                 // v3.9.4: scoped per guild — sebelumnya bocor ke guild lain.
-                try { trackGiveawayWin(gw.guildId, wid); } catch (_) {}
+                try {
+                    trackGiveawayWin(gw.guildId, wid);
+                } catch (_) {}
             }
         } else {
-            await channel.send({ content: `📭 Giveaway **${gw.prize}** berakhir tanpa pemenang (tidak ada peserta).` }).catch(()=>{});
+            await channel
+                .send({ content: `📭 Giveaway **${gw.prize}** berakhir tanpa pemenang (tidak ada peserta).` })
+                .catch(() => {});
         }
 
         console.log(`🎉 Giveaway ${gw.id} (${gw.prize}) berakhir. Winners: ${winnerIds.length}`);
@@ -262,18 +300,26 @@ async function announceRerollWinner(client, gw, winnerId) {
         const channel = guild.channels.cache.get(gw.channelId);
         if (!channel) return;
 
-        await channel.send({
-            content: `🎲 **REROLL!** Winner baru untuk giveaway **${gw.prize}**: <@${winnerId}>!\n\nSelamat! 🎉 Host akan DM kamu untuk klaim hadiah.`
-        }).catch(()=>{});
+        await channel
+            .send({
+                content: `🎲 **REROLL!** Winner baru untuk giveaway **${gw.prize}**: <@${winnerId}>!\n\nSelamat! 🎉 Host akan DM kamu untuk klaim hadiah.`
+            })
+            .catch(() => {});
 
         // DM winner baru
         const user = await client.users.fetch(winnerId).catch(() => null);
         if (user) {
-            await user.send(`🎊 **Selamat! Kamu menang giveaway (reroll)!**\n\nPrize: **${gw.prize}**\nHost: ${gw.hostTag}\nServer: ${guild.name}\n\nHubungi host untuk klaim hadiahmu.`).catch(()=>{});
+            await user
+                .send(
+                    `🎊 **Selamat! Kamu menang giveaway (reroll)!**\n\nPrize: **${gw.prize}**\nHost: ${gw.hostTag}\nServer: ${guild.name}\n\nHubungi host untuk klaim hadiahmu.`
+                )
+                .catch(() => {});
         }
         // Track stats
         // v3.9.4: scoped per guild
-        try { trackGiveawayWin(gw.guildId, winnerId); } catch (_) {}
+        try {
+            trackGiveawayWin(gw.guildId, winnerId);
+        } catch (_) {}
     } catch (err) {
         console.error('Error announceRerollWinner:', err);
     }
@@ -310,7 +356,9 @@ async function processScheduledAnnouncement(client, ann) {
         if (!channel) {
             // v3.9.0 FIX: channel sudah dihapus → REMOVE entry, jangan markSent
             // (karena markSent untuk recurring akan bikin entry baru yang juga gagal).
-            console.warn(`⚠️ Scheduled announce ${ann.id}: channel ${ann.channelId} tidak ditemukan di guild ${guild.name}, hapus entry.`);
+            console.warn(
+                `⚠️ Scheduled announce ${ann.id}: channel ${ann.channelId} tidak ditemukan di guild ${guild.name}, hapus entry.`
+            );
             removeAnn(ann.id);
             return;
         }
@@ -319,7 +367,7 @@ async function processScheduledAnnouncement(client, ann) {
         const embed = new EmbedBuilder()
             .setTitle(d.title)
             .setDescription(d.description.replace(/\\n/g, '\n'))
-            .setColor(d.color || 0x5865F2)
+            .setColor(d.color || 0x5865f2)
             .setFooter({ text: `Dijadwalkan oleh ${d.authorTag}` })
             .setTimestamp();
         if (d.image) embed.setImage(d.image);
@@ -331,10 +379,12 @@ async function processScheduledAnnouncement(client, ann) {
         // padahal belum. Tapi ini lebih baik daripada duplicate ping.
         markAnnSent(ann.id);
 
-        await channel.send({
-            content: d.mention || null,
-            embeds: [embed]
-        }).catch(err => console.warn('Gagal kirim scheduled ann:', err.message));
+        await channel
+            .send({
+                content: d.mention || null,
+                embeds: [embed]
+            })
+            .catch(err => console.warn('Gagal kirim scheduled ann:', err.message));
 
         console.log(`📢 Scheduled announce ${ann.id} terkirim ke ${channel.name}.`);
     } catch (err) {

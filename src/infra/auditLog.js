@@ -99,8 +99,9 @@ async function logAudit(client, data) {
     // Resolve channel (cache dulu, fallback fetch)
     let channel;
     try {
-        channel = client.channels.cache.get(auditChannelId)
-            || await client.channels.fetch(auditChannelId).catch(() => null);
+        channel =
+            client.channels.cache.get(auditChannelId) ||
+            (await client.channels.fetch(auditChannelId).catch(() => null));
     } catch (err) {
         console.warn('⚠️ Audit log: gagal resolve channel:', err.message);
         return false;
@@ -110,7 +111,7 @@ async function logAudit(client, data) {
     const label = ACTION_LABELS[data.action] || data.action;
     const embed = new EmbedBuilder()
         .setTitle(`🔧 AUDIT: ${label}`)
-        .setColor(0x2C2F33)
+        .setColor(0x2c2f33)
         .addFields(
             { name: '👤 Admin', value: `<@${data.actorId}> (\`${data.actorTag || data.actorId}\`)`, inline: true },
             { name: '🕐 Waktu', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true },
@@ -128,12 +129,18 @@ async function logAudit(client, data) {
     // akan berhasil di-retry, hanya buang waktu 500ms. Sekarang: hanya retry
     // kalau code/status mengindikasikan network/Discord transient error.
     const TRANSIENT_ERROR_NAMES = new Set([
-        'ConnectTimeoutError', 'WebSocketClosedError',
-        'FetchError',  // undici fetch errors (network)
+        'ConnectTimeoutError',
+        'WebSocketClosedError',
+        'FetchError' // undici fetch errors (network)
     ]);
     const TRANSIENT_ERROR_CODES = new Set([
-        'ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'EAI_AGAIN', 'ENOTFOUND',
-        'UND_ERR_CONNECT_TIMEOUT', 'UND_ERR_SOCKET'
+        'ETIMEDOUT',
+        'ECONNRESET',
+        'ECONNREFUSED',
+        'EAI_AGAIN',
+        'ENOTFOUND',
+        'UND_ERR_CONNECT_TIMEOUT',
+        'UND_ERR_SOCKET'
     ]);
     function isRetryableAuditError(err) {
         const code = err.code || err.status || 0;
@@ -156,11 +163,16 @@ async function logAudit(client, data) {
             const code = err.code || err.status || 0;
             const isRetryable = isRetryableAuditError(err);
             if (attempt < MAX_ATTEMPTS && isRetryable) {
-                console.warn(`⚠️ Audit log attempt ${attempt} gagal (code ${code}, ${err.name || 'unknown'}), retry dalam ${RETRY_DELAY_MS}ms...`);
+                console.warn(
+                    `⚠️ Audit log attempt ${attempt} gagal (code ${code}, ${err.name || 'unknown'}), retry dalam ${RETRY_DELAY_MS}ms...`
+                );
                 await sleep(RETRY_DELAY_MS);
                 continue;
             }
-            console.warn(`⚠️ Audit log gagal terkirim (attempt ${attempt}/${MAX_ATTEMPTS}, code ${code}):`, err.message);
+            console.warn(
+                `⚠️ Audit log gagal terkirim (attempt ${attempt}/${MAX_ATTEMPTS}, code ${code}):`,
+                err.message
+            );
             return false;
         }
     }

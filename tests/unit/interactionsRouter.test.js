@@ -24,8 +24,14 @@ function makeMockInteraction({ customId, type = 'button', id = `test-${Date.now(
         isButton: () => type === 'button',
         isStringSelectMenu: () => type === 'select',
         isModalSubmit: () => type === 'modal',
-        reply: async (opts) => { replies.push({ type: 'reply', opts }); return {}; },
-        editReply: async (opts) => { replies.push({ type: 'editReply', opts }); return {}; },
+        reply: async opts => {
+            replies.push({ type: 'reply', opts });
+            return {};
+        },
+        editReply: async opts => {
+            replies.push({ type: 'editReply', opts });
+            return {};
+        },
         _replies: replies
     };
     return interaction;
@@ -113,7 +119,9 @@ test('interactions router: dedup — same interaction.id processed only once', a
     const interaction2 = makeMockInteraction({ customId: 'btn_verify', type: 'button', id });
 
     // First call: dispatches (will throw karena mock incomplete, but checkAndMark runs)
-    try { await routeInteraction(interaction1); } catch (_) {}
+    try {
+        await routeInteraction(interaction1);
+    } catch (_) {}
     // Second call: should be deduped (no dispatch)
     const result = await routeInteraction(interaction2);
     assert.strictEqual(result, undefined, 'second call should be deduped');

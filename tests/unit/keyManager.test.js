@@ -111,8 +111,10 @@ test('keyManager: findAllByUser guild-scoped (v3.9.8 fix)', () => {
 
     // findAllByUser dengan guildId=A → hanya return key guild_A
     const keysInA = findAllByUser('user_scope_test', 'guild_A');
-    assert.ok(keysInA.every(k => k.guildId === 'guild_A' || !k.guildId),
-        'should only return keys from guild_A (or legacy without guildId)');
+    assert.ok(
+        keysInA.every(k => k.guildId === 'guild_A' || !k.guildId),
+        'should only return keys from guild_A (or legacy without guildId)'
+    );
 
     // findAllByUser tanpa guildId → return semua key user (backward compat)
     const allKeys = findAllByUser('user_scope_test');
@@ -132,7 +134,8 @@ test('keyManager: getActiveKeysByUserAndRole filters expired', () => {
     // Sebenarnya kita test active key saja.
     addKey({
         key: 'TEST-ACTIVE-' + Date.now(),
-        userId, roleId,
+        userId,
+        roleId,
         productName: 'Test',
         days: 30,
         guildId: 'guild_test'
@@ -140,8 +143,10 @@ test('keyManager: getActiveKeysByUserAndRole filters expired', () => {
 
     const active = getActiveKeysByUserAndRole(userId, roleId);
     assert.ok(active.length >= 1);
-    assert.ok(active.every(k => k.expireAt === null || k.expireAt > Date.now()),
-        'all returned keys should be active');
+    assert.ok(
+        active.every(k => k.expireAt === null || k.expireAt > Date.now()),
+        'all returned keys should be active'
+    );
 
     removeAllKeysByUser(userId, 'guild_test');
 });
@@ -153,7 +158,8 @@ test('keyManager: hasPermanentKey detects days=0 keys', () => {
 
     addKey({
         key: 'TEST-PERM-DET-' + Date.now(),
-        userId, roleId,
+        userId,
+        roleId,
         productName: 'Test',
         days: 0,
         guildId: 'guild_test'

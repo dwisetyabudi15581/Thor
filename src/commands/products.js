@@ -7,14 +7,7 @@
  * Behavior: kelola produk + auto-role mapping per produk.
  */
 
-const {
-    MessageFlags,
-    getConfig,
-    saveConfig,
-    Embeds,
-    logAudit,
-    safeEditReply
-} = require('./_shared');
+const { MessageFlags, getConfig, saveConfig, Embeds, logAudit, safeEditReply } = require('./_shared');
 
 module.exports = async function (interaction) {
     const embeds = new Embeds(interaction.client);
@@ -34,14 +27,16 @@ module.exports = async function (interaction) {
 
         // v3.9.8 FIX: validate `value` — dipakai di customId modal_set_key:${value}
         if (!value || !/^[a-zA-Z0-9_-]{1,50}$/.test(value)) {
-            return safeEditReply(interaction,{ content: '❌ `value` hanya boleh huruf/angka/_/-, maks 50 karakter, tanpa spasi/kolom/titik dua.' });
+            return safeEditReply(interaction, {
+                content: '❌ `value` hanya boleh huruf/angka/_/-, maks 50 karakter, tanpa spasi/kolom/titik dua.'
+            });
         }
 
         if (config.products.some(p => p.value === value)) {
-            return safeEditReply(interaction,{ content: `❌ Produk dengan value \`${value}\` sudah ada.` });
+            return safeEditReply(interaction, { content: `❌ Produk dengan value \`${value}\` sudah ada.` });
         }
         if (config.products.length >= 25) {
-            return safeEditReply(interaction,{ content: '❌ Maksimal 25 produk (batas dropdown Discord).' });
+            return safeEditReply(interaction, { content: '❌ Maksimal 25 produk (batas dropdown Discord).' });
         }
 
         // v3.9.11 Phase 2: validate category exists (kalau di-specify)
@@ -50,7 +45,9 @@ module.exports = async function (interaction) {
         const categoryExists = categories.some(c => c.id === finalCategory);
         if (!categoryExists && category) {
             // Kalau admin specify category yang gak ada, tolak.
-            return safeEditReply(interaction,{ content: `❌ Kategori \`${category}\` tidak ditemukan. Pakai /list-categories untuk lihat daftar, atau /add-category untuk bikin baru.` });
+            return safeEditReply(interaction, {
+                content: `❌ Kategori \`${category}\` tidak ditemukan. Pakai /list-categories untuk lihat daftar, atau /add-category untuk bikin baru.`
+            });
         }
 
         // v3.9.11 Phase 2: determine requiresKey
@@ -75,8 +72,16 @@ module.exports = async function (interaction) {
 
         const durationInfo = duration ? ` (durasi: ${duration})` : ' (tanpa duration)';
         const catInfo = ` | kategori: ${finalCategory} | requiresKey: ${finalRequiresKey ? 'yes' : 'no'}`;
-        await logAudit(interaction.client, { action: 'ADD_PRODUCT', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Tambah produk: **${label}** (\`${value}\`) — ${price}${durationInfo}${catInfo}`, guildId: interaction.guild.id });
-        return safeEditReply(interaction,{ content: `✅ Produk ditambahkan: **${label}** — ${price}${durationInfo}\n📦 Kategori: \`${finalCategory}\` | 🔑 Requires Key: ${finalRequiresKey ? 'Yes' : 'No'}` });
+        await logAudit(interaction.client, {
+            action: 'ADD_PRODUCT',
+            actorId: interaction.user.id,
+            actorTag: interaction.user.tag,
+            details: `Tambah produk: **${label}** (\`${value}\`) — ${price}${durationInfo}${catInfo}`,
+            guildId: interaction.guild.id
+        });
+        return safeEditReply(interaction, {
+            content: `✅ Produk ditambahkan: **${label}** — ${price}${durationInfo}\n📦 Kategori: \`${finalCategory}\` | 🔑 Requires Key: ${finalRequiresKey ? 'Yes' : 'No'}`
+        });
     }
 
     // === REMOVE PRODUCT ===
@@ -84,26 +89,34 @@ module.exports = async function (interaction) {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         const value = interaction.options.getString('value');
         const idx = config.products.findIndex(p => p.value === value);
-        if (idx === -1) return safeEditReply(interaction,{ content: `❌ Produk \`${value}\` tidak ditemukan.` });
+        if (idx === -1) return safeEditReply(interaction, { content: `❌ Produk \`${value}\` tidak ditemukan.` });
         const [removed] = config.products.splice(idx, 1);
         saveConfig(config);
-        await logAudit(interaction.client, { action: 'REMOVE_PRODUCT', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Hapus produk: **${removed.label}** (\`${removed.value}\`) — ${removed.price}`, guildId: interaction.guild.id });
-        return safeEditReply(interaction,{ content: `✅ Produk dihapus: **${removed.label}**` });
+        await logAudit(interaction.client, {
+            action: 'REMOVE_PRODUCT',
+            actorId: interaction.user.id,
+            actorTag: interaction.user.tag,
+            details: `Hapus produk: **${removed.label}** (\`${removed.value}\`) — ${removed.price}`,
+            guildId: interaction.guild.id
+        });
+        return safeEditReply(interaction, { content: `✅ Produk dihapus: **${removed.label}**` });
     }
 
     // === LIST PRODUCTS ===
     if (interaction.commandName === 'list-products') {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         if (config.products.length === 0) {
-            return safeEditReply(interaction,{ content: '📭 Belum ada produk.' });
+            return safeEditReply(interaction, { content: '📭 Belum ada produk.' });
         }
-        const list = config.products.map((p, i) => {
-            let line = `\`${i + 1}.\` **${p.label}** — ${p.price}\n   └ value: \`${p.value}\``;
-            if (p.duration) line += ` | durasi: ${p.duration}`;
-            return line;
-        }).join('\n');
+        const list = config.products
+            .map((p, i) => {
+                let line = `\`${i + 1}.\` **${p.label}** — ${p.price}\n   └ value: \`${p.value}\``;
+                if (p.duration) line += ` | durasi: ${p.duration}`;
+                return line;
+            })
+            .join('\n');
         const embed = embeds.info('📋 DAFTAR PRODUK', list);
-        return safeEditReply(interaction,{ embeds: [embed] });
+        return safeEditReply(interaction, { embeds: [embed] });
     }
 
     // === SET PRODUCT ROLE (auto-role + auto-expire) ===
@@ -118,23 +131,32 @@ module.exports = async function (interaction) {
         // = 5 hari lalu → scheduler immediate process → member dapat role lalu
         // ke-remove dalam 60 detik.
         if (days == null || days < 0 || days > 3650) {
-            return safeEditReply(interaction,{ content: '❌ `days` harus antara 0 dan 3650. (0 = permanen, >0 = durasi hari).' });
+            return safeEditReply(interaction, {
+                content: '❌ `days` harus antara 0 dan 3650. (0 = permanen, >0 = durasi hari).'
+            });
         }
 
         const product = config.products.find(p => p.value === value);
         if (!product) {
-            return safeEditReply(interaction,{ content: `❌ Produk dengan value \`${value}\` tidak ditemukan. Pakai \`/list-products\` untuk lihat daftar.` });
+            return safeEditReply(interaction, {
+                content: `❌ Produk dengan value \`${value}\` tidak ditemukan. Pakai \`/list-products\` untuk lihat daftar.`
+            });
         }
 
         product.roleId = role.id;
         product.days = days;
         saveConfig(config);
-        await logAudit(interaction.client, { action: 'EDIT_PRODUCT', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Set auto-role produk **${product.label}** → ${role.name} (${days > 0 ? days + ' hari' : 'permanen'})`, guildId: interaction.guild.id });
+        await logAudit(interaction.client, {
+            action: 'EDIT_PRODUCT',
+            actorId: interaction.user.id,
+            actorTag: interaction.user.tag,
+            details: `Set auto-role produk **${product.label}** → ${role.name} (${days > 0 ? days + ' hari' : 'permanen'})`,
+            guildId: interaction.guild.id
+        });
 
-        const expireInfo = days > 0
-            ? `akan otomatis dihapus setelah **${days} hari**`
-            : '**permanen** (tidak akan otomatis dihapus)';
-        return safeEditReply(interaction,{
+        const expireInfo =
+            days > 0 ? `akan otomatis dihapus setelah **${days} hari**` : '**permanen** (tidak akan otomatis dihapus)';
+        return safeEditReply(interaction, {
             content: `✅ Auto-role untuk produk **${product.label}** diatur!\n\n🎁 Role: ${role}\n⏰ Expire: ${expireInfo}\n\n💡 Saat admin klik "Transaksi Sukses" di tiket, role akan otomatis diberikan ke pembeli.`
         });
     }
@@ -146,17 +168,27 @@ module.exports = async function (interaction) {
 
         const product = config.products.find(p => p.value === value);
         if (!product) {
-            return safeEditReply(interaction,{ content: `❌ Produk dengan value \`${value}\` tidak ditemukan.` });
+            return safeEditReply(interaction, { content: `❌ Produk dengan value \`${value}\` tidak ditemukan.` });
         }
         if (!product.roleId) {
-            return safeEditReply(interaction,{ content: `ℹ️ Produk **${product.label}** memang belum punya auto-role.` });
+            return safeEditReply(interaction, {
+                content: `ℹ️ Produk **${product.label}** memang belum punya auto-role.`
+            });
         }
 
         delete product.roleId;
         delete product.days;
         saveConfig(config);
-        await logAudit(interaction.client, { action: 'EDIT_PRODUCT', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Hapus auto-role produk **${product.label}**`, guildId: interaction.guild.id });
-        return safeEditReply(interaction,{ content: `✅ Auto-role untuk produk **${product.label}** berhasil dihapus.` });
+        await logAudit(interaction.client, {
+            action: 'EDIT_PRODUCT',
+            actorId: interaction.user.id,
+            actorTag: interaction.user.tag,
+            details: `Hapus auto-role produk **${product.label}**`,
+            guildId: interaction.guild.id
+        });
+        return safeEditReply(interaction, {
+            content: `✅ Auto-role untuk produk **${product.label}** berhasil dihapus.`
+        });
     }
 
     // === LIST PRODUCT ROLES ===
@@ -164,14 +196,18 @@ module.exports = async function (interaction) {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         const withRoles = config.products.filter(p => p.roleId);
         if (withRoles.length === 0) {
-            return safeEditReply(interaction,{ content: '📭 Belum ada produk yang punya auto-role. Pakai `/set-product-role` untuk setup.' });
+            return safeEditReply(interaction, {
+                content: '📭 Belum ada produk yang punya auto-role. Pakai `/set-product-role` untuk setup.'
+            });
         }
-        const list = withRoles.map(p => {
-            const roleMention = `<@&${p.roleId}>`;
-            const expire = p.days > 0 ? `${p.days} hari` : 'permanen';
-            return `• **${p.label}** (\`${p.value}\`) → ${roleMention} — expire: ${expire}`;
-        }).join('\n');
+        const list = withRoles
+            .map(p => {
+                const roleMention = `<@&${p.roleId}>`;
+                const expire = p.days > 0 ? `${p.days} hari` : 'permanen';
+                return `• **${p.label}** (\`${p.value}\`) → ${roleMention} — expire: ${expire}`;
+            })
+            .join('\n');
         const embed = embeds.info('🎁 AUTO-ROLE PER PRODUK', list);
-        return safeEditReply(interaction,{ embeds: [embed] });
+        return safeEditReply(interaction, { embeds: [embed] });
     }
 };

@@ -34,20 +34,22 @@ module.exports = async function (interaction) {
         const reason = interaction.options.getString('reason');
 
         if (user.id === interaction.user.id) {
-            return safeEditReply(interaction,{ content: '❌ Tidak bisa warn diri sendiri.' });
+            return safeEditReply(interaction, { content: '❌ Tidak bisa warn diri sendiri.' });
         }
         if (user.bot) {
-            return safeEditReply(interaction,{ content: '❌ Tidak bisa warn bot.' });
+            return safeEditReply(interaction, { content: '❌ Tidak bisa warn bot.' });
         }
 
         const member = await interaction.guild.members.fetch(user.id).catch(() => null);
         if (!member) {
-            return safeEditReply(interaction,{ content: `❌ User <@${user.id}> tidak ada di server.` });
+            return safeEditReply(interaction, { content: `❌ User <@${user.id}> tidak ada di server.` });
         }
 
         // Cek hierarki: admin harus lebih tinggi dari target
         if (member.roles.highest.position >= interaction.member.roles.highest.position) {
-            return safeEditReply(interaction,{ content: '❌ Kamu tidak bisa warn member dengan role setingkat/lebih tinggi dari kamu.' });
+            return safeEditReply(interaction, {
+                content: '❌ Kamu tidak bisa warn member dengan role setingkat/lebih tinggi dari kamu.'
+            });
         }
 
         // Cek hierarki bot vs target juga. Kalau target punya role lebih tinggi dari bot,
@@ -68,7 +70,13 @@ module.exports = async function (interaction) {
             guildId: interaction.guild.id
         });
 
-        await logAudit(interaction.client, { action: 'WARN_ADD', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Warn <@${user.id}> (${user.tag}) — Reason: "${reason}" — Total: ${result.count} warn`, guildId: interaction.guild.id });
+        await logAudit(interaction.client, {
+            action: 'WARN_ADD',
+            actorId: interaction.user.id,
+            actorTag: interaction.user.tag,
+            details: `Warn <@${user.id}> (${user.tag}) — Reason: "${reason}" — Total: ${result.count} warn`,
+            guildId: interaction.guild.id
+        });
 
         // Eksekusi auto-action kalau perlu
         // P1-7 FIX: kalau actionAlreadyTaken=true, tidak re-apply timeout lagi
@@ -115,11 +123,14 @@ module.exports = async function (interaction) {
 
         // DM user
         try {
-            await user.send(`⚠️ **Kamu mendapat warning di ${interaction.guild.name}**\n\nReason: ${reason}\nTotal warnings: ${result.count}\n${result.actionToTake ? `Action: ${result.actionToTake}` : 'Belum ada auto-action (threshold: 3=mute 1h, 5=mute 1d, 7=kick)'}`);
+            await user.send(
+                `⚠️ **Kamu mendapat warning di ${interaction.guild.name}**\n\nReason: ${reason}\nTotal warnings: ${result.count}\n${result.actionToTake ? `Action: ${result.actionToTake}` : 'Belum ada auto-action (threshold: 3=mute 1h, 5=mute 1d, 7=kick)'}`
+            );
         } catch (_) {}
 
-        return safeEditReply(interaction,{
-            content: `⚠️ **<@${user.id}> telah diwarn.**\n\n` +
+        return safeEditReply(interaction, {
+            content:
+                `⚠️ **<@${user.id}> telah diwarn.**\n\n` +
                 `📝 Reason: ${reason}\n` +
                 `📊 Total warnings: **${result.count}**\n` +
                 `👤 Oleh: ${interaction.user.tag}${actionMsg}${botHierarchyWarning}`
@@ -135,19 +146,29 @@ module.exports = async function (interaction) {
         // v3.9.0: getWarns sekarang scoped per guild
         const warns = getWarns(interaction.guild.id, user.id);
         if (warns.length === 0) {
-            return safeEditReply(interaction,{ content: `✅ <@${user.id}> tidak punya warning.` });
+            return safeEditReply(interaction, { content: `✅ <@${user.id}> tidak punya warning.` });
         }
-        const lines = warns.map((w, i) => {
-            // v3.9.15: hapus dead variable `date` (sebelumnya dideklarasi tapi tidak dipakai)
-            return `\`${i + 1}.\` 🆔 \`${w.id}\`\n   📝 ${w.reason}\n   👤 Oleh: ${w.warnedByTag} | ⏰ <t:${Math.floor(w.createdAt / 1000)}:R>${w.actionTaken ? ` | ⚡ ${w.actionTaken}` : ''}`;
-        }).join('\n\n');
+        const lines = warns
+            .map((w, i) => {
+                // v3.9.15: hapus dead variable `date` (sebelumnya dideklarasi tapi tidak dipakai)
+                return `\`${i + 1}.\` 🆔 \`${w.id}\`\n   📝 ${w.reason}\n   👤 Oleh: ${w.warnedByTag} | ⏰ <t:${Math.floor(w.createdAt / 1000)}:R>${w.actionTaken ? ` | ⚡ ${w.actionTaken}` : ''}`;
+            })
+            .join('\n\n');
         const embed = new EmbedBuilder()
             .setTitle(`⚠️ WARN HISTORY — ${user.tag}`)
-            .setDescription(`Total **${warns.length}** warning.\n\n${lines}\n\n**Threshold:**\n• ${WARN_THRESHOLDS.mute1h} warn → mute 1 jam\n• ${WARN_THRESHOLDS.mute1d} warn → mute 1 hari\n• ${WARN_THRESHOLDS.kick} warn → kick`)
-            .setColor(warns.length >= WARN_THRESHOLDS.kick ? 0xED4245 : warns.length >= WARN_THRESHOLDS.mute1h ? 0xE67E22 : 0xFEE75C)
+            .setDescription(
+                `Total **${warns.length}** warning.\n\n${lines}\n\n**Threshold:**\n• ${WARN_THRESHOLDS.mute1h} warn → mute 1 jam\n• ${WARN_THRESHOLDS.mute1d} warn → mute 1 hari\n• ${WARN_THRESHOLDS.kick} warn → kick`
+            )
+            .setColor(
+                warns.length >= WARN_THRESHOLDS.kick
+                    ? 0xed4245
+                    : warns.length >= WARN_THRESHOLDS.mute1h
+                      ? 0xe67e22
+                      : 0xfee75c
+            )
             .setFooter({ text: `User ID: ${user.id}` })
             .setTimestamp();
-        return safeEditReply(interaction,{ embeds: [embed] });
+        return safeEditReply(interaction, { embeds: [embed] });
     }
 
     // ====================================================
@@ -160,10 +181,20 @@ module.exports = async function (interaction) {
         // v3.9.0: removeWarn sekarang scoped per guild
         const ok = removeWarn(interaction.guild.id, user.id, warnId);
         if (!ok) {
-            return safeEditReply(interaction,{ content: `❌ Warn ID \`${warnId}\` tidak ditemukan untuk user <@${user.id}> di guild ini.` });
+            return safeEditReply(interaction, {
+                content: `❌ Warn ID \`${warnId}\` tidak ditemukan untuk user <@${user.id}> di guild ini.`
+            });
         }
-        await logAudit(interaction.client, { action: 'WARN_REMOVE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Hapus warn \`${warnId}\` dari <@${user.id}>. Sisa: ${getWarnCount(interaction.guild.id, user.id)} warn`, guildId: interaction.guild.id });
-        return safeEditReply(interaction,{ content: `✅ Warn \`${warnId}\` dihapus dari <@${user.id}>.\n📊 Sisa warnings: **${getWarnCount(interaction.guild.id, user.id)}**` });
+        await logAudit(interaction.client, {
+            action: 'WARN_REMOVE',
+            actorId: interaction.user.id,
+            actorTag: interaction.user.tag,
+            details: `Hapus warn \`${warnId}\` dari <@${user.id}>. Sisa: ${getWarnCount(interaction.guild.id, user.id)} warn`,
+            guildId: interaction.guild.id
+        });
+        return safeEditReply(interaction, {
+            content: `✅ Warn \`${warnId}\` dihapus dari <@${user.id}>.\n📊 Sisa warnings: **${getWarnCount(interaction.guild.id, user.id)}**`
+        });
     }
 
     // ====================================================
@@ -175,9 +206,17 @@ module.exports = async function (interaction) {
         // v3.9.0: clearWarns sekarang scoped per guild
         const count = clearWarns(interaction.guild.id, user.id);
         if (count === 0) {
-            return safeEditReply(interaction,{ content: `ℹ️ <@${user.id}> memang tidak punya warning di guild ini.` });
+            return safeEditReply(interaction, { content: `ℹ️ <@${user.id}> memang tidak punya warning di guild ini.` });
         }
-        await logAudit(interaction.client, { action: 'WARN_CLEAR_ALL', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Clear ALL warns (${count}) dari <@${user.id}> di guild ini`, guildId: interaction.guild.id });
-        return safeEditReply(interaction,{ content: `✅ **${count}** warning dihapus dari <@${user.id}> di guild ini.` });
+        await logAudit(interaction.client, {
+            action: 'WARN_CLEAR_ALL',
+            actorId: interaction.user.id,
+            actorTag: interaction.user.tag,
+            details: `Clear ALL warns (${count}) dari <@${user.id}> di guild ini`,
+            guildId: interaction.guild.id
+        });
+        return safeEditReply(interaction, {
+            content: `✅ **${count}** warning dihapus dari <@${user.id}> di guild ini.`
+        });
     }
 };

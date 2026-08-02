@@ -7,14 +7,7 @@
  * untuk render button dinamis.
  */
 
-const {
-    EmbedBuilder,
-    MessageFlags,
-    getConfig,
-    saveConfig,
-    logAudit,
-    safeEditReply
-} = require('./_shared');
+const { EmbedBuilder, MessageFlags, getConfig, saveConfig, logAudit, safeEditReply } = require('./_shared');
 
 const CATEGORY_ID_REGEX = /^[a-zA-Z0-9_-]{1,30}$/;
 
@@ -81,7 +74,8 @@ module.exports = async function (interaction) {
         });
 
         return safeEditReply(interaction, {
-            content: `✅ Kategori ditambahkan!\n\n` +
+            content:
+                `✅ Kategori ditambahkan!\n\n` +
                 `🎫 ID: \`${id}\`\n` +
                 `📝 Label: **${label}**\n` +
                 `${emoji} Emoji: ${emoji}\n` +
@@ -98,20 +92,23 @@ module.exports = async function (interaction) {
         const categories = config.ticketCategories || [];
         if (categories.length === 0) {
             return safeEditReply(interaction, {
-                content: '📭 Belum ada kategori. Default 3 kategori (transaction, help, report) akan dipakai kalau config kosong.'
+                content:
+                    '📭 Belum ada kategori. Default 3 kategori (transaction, help, report) akan dipakai kalau config kosong.'
             });
         }
 
-        const lines = categories.map((c, i) => {
-            const keyFlag = c.requiresKey ? '🔑' : '📋';
-            const defaultFlag = c.isDefault ? ' *(default)*' : '';
-            return `\`${i + 1}.\` ${c.emoji} **${c.label}** (\`${c.id}\`) — ${c.style} ${keyFlag}${defaultFlag}`;
-        }).join('\n');
+        const lines = categories
+            .map((c, i) => {
+                const keyFlag = c.requiresKey ? '🔑' : '📋';
+                const defaultFlag = c.isDefault ? ' *(default)*' : '';
+                return `\`${i + 1}.\` ${c.emoji} **${c.label}** (\`${c.id}\`) — ${c.style} ${keyFlag}${defaultFlag}`;
+            })
+            .join('\n');
 
         const embed = new EmbedBuilder()
             .setTitle('🎫 DAFTAR KATEGORI TIKET')
             .setDescription(lines)
-            .setColor(0x5865F2)
+            .setColor(0x5865f2)
             .setFooter({ text: `${categories.length}/25 kategori terpakai` })
             .setTimestamp();
 
@@ -135,7 +132,8 @@ module.exports = async function (interaction) {
         // v3.9.11: jangan hapus kategori default (transaction, help, report) — terlalu risky.
         if (categories[idx].isDefault) {
             return safeEditReply(interaction, {
-                content: `❌ Kategori \`${id}\` adalah kategori default dan tidak bisa dihapus.\n` +
+                content:
+                    `❌ Kategori \`${id}\` adalah kategori default dan tidak bisa dihapus.\n` +
                     `Kalau mau disable, set \`requiresKey: false\` atau edit label via config langsung.`
             });
         }
@@ -153,7 +151,8 @@ module.exports = async function (interaction) {
         });
 
         return safeEditReply(interaction, {
-            content: `✅ Kategori **${removed.label}** (\`${removed.id}\`) berhasil dihapus.\n\n` +
+            content:
+                `✅ Kategori **${removed.label}** (\`${removed.id}\`) berhasil dihapus.\n\n` +
                 `💡 Produk yang masih pakai kategori ini akan otomatis fallback ke \`transaction\`.`
         });
     }

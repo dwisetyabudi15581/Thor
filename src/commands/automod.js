@@ -10,9 +10,7 @@
  */
 
 const { EmbedBuilder, MessageFlags, PermissionFlagsBits } = require('discord.js');
-const {
-    getConfig, saveConfig, logAudit, safeEditReply
-} = require('./_shared');
+const { getConfig, saveConfig, logAudit, safeEditReply } = require('./_shared');
 
 const automod = require('../data/automodManager');
 
@@ -34,7 +32,10 @@ module.exports = async function (interaction) {
         if (spamAction) updates.spamAction = spamAction;
         if (blockLinks !== null) updates.blockLinks = blockLinks;
         if (blockWords !== null) {
-            updates.blockWords = blockWords.split(',').map(w => w.trim().toLowerCase()).filter(Boolean);
+            updates.blockWords = blockWords
+                .split(',')
+                .map(w => w.trim().toLowerCase())
+                .filter(Boolean);
         }
         if (wordAction) updates.wordAction = wordAction;
         if (maxMentions !== null) updates.maxMentions = maxMentions;
@@ -52,13 +53,21 @@ module.exports = async function (interaction) {
 
         const embed = new EmbedBuilder()
             .setTitle('🛡️ AUTO-MOD CONFIG UPDATED')
-            .setColor(0x57F287)
+            .setColor(0x57f287)
             .addFields(
                 { name: '✅ Status', value: newConfig.enabled ? 'Enabled' : 'Disabled', inline: true },
-                { name: '⚡ Spam Threshold', value: `${newConfig.spamThreshold} msg / ${newConfig.spamWindowMs / 1000}s`, inline: true },
+                {
+                    name: '⚡ Spam Threshold',
+                    value: `${newConfig.spamThreshold} msg / ${newConfig.spamWindowMs / 1000}s`,
+                    inline: true
+                },
                 { name: '🔨 Spam Action', value: newConfig.spamAction, inline: true },
                 { name: '🔗 Block Links', value: newConfig.blockLinks ? 'Yes' : 'No', inline: true },
-                { name: '📝 Word Filter', value: newConfig.blockWords.length > 0 ? `${newConfig.blockWords.length} kata` : '_(none)_', inline: true },
+                {
+                    name: '📝 Word Filter',
+                    value: newConfig.blockWords.length > 0 ? `${newConfig.blockWords.length} kata` : '_(none)_',
+                    inline: true
+                },
                 { name: '🔨 Word Action', value: newConfig.wordAction, inline: true },
                 { name: '👥 Max Mentions', value: `${newConfig.maxMentions}`, inline: true },
                 { name: '🔨 Mention Action', value: newConfig.mentionAction, inline: true }
@@ -75,21 +84,45 @@ module.exports = async function (interaction) {
         const config = automod.getGuildConfig(interaction.guild.id);
         if (!config) {
             return safeEditReply(interaction, {
-                content: 'ℹ️ Auto-mod belum di-config. Pakai `/set-automod` untuk setup, lalu `/automod-toggle enabled:true`.'
+                content:
+                    'ℹ️ Auto-mod belum di-config. Pakai `/set-automod` untuk setup, lalu `/automod-toggle enabled:true`.'
             });
         }
 
         const embed = new EmbedBuilder()
             .setTitle('🛡️ AUTO-MOD CONFIG')
-            .setColor(config.enabled ? 0x57F287 : 0x95A5A6)
+            .setColor(config.enabled ? 0x57f287 : 0x95a5a6)
             .addFields(
                 { name: '✅ Status', value: config.enabled ? 'Enabled ✅' : 'Disabled ❌', inline: true },
-                { name: '⚡ Spam Detection', value: `${config.spamThreshold} msg dalam ${(config.spamWindowMs || 10000) / 1000}s → ${config.spamAction || 'mute_10m'}`, inline: false },
-                { name: '🔗 Link Blocking', value: config.blockLinks ? `Yes (allowed: ${config.linkAllowedChannels?.length || 0} ch, ${config.linkAllowedRoles?.length || 0} role)` : 'No', inline: false },
-                { name: '📝 Word Filter', value: (config.blockWords?.length || 0) > 0 ? config.blockWords.map(w => `\`${w}\``).join(', ') : '_(none)_', inline: false },
-                { name: '👥 Mention Limit', value: `Max ${config.maxMentions || 5} mentions → ${config.mentionAction || 'warn'}`, inline: false }
+                {
+                    name: '⚡ Spam Detection',
+                    value: `${config.spamThreshold} msg dalam ${(config.spamWindowMs || 10000) / 1000}s → ${config.spamAction || 'mute_10m'}`,
+                    inline: false
+                },
+                {
+                    name: '🔗 Link Blocking',
+                    value: config.blockLinks
+                        ? `Yes (allowed: ${config.linkAllowedChannels?.length || 0} ch, ${config.linkAllowedRoles?.length || 0} role)`
+                        : 'No',
+                    inline: false
+                },
+                {
+                    name: '📝 Word Filter',
+                    value:
+                        (config.blockWords?.length || 0) > 0
+                            ? config.blockWords.map(w => `\`${w}\``).join(', ')
+                            : '_(none)_',
+                    inline: false
+                },
+                {
+                    name: '👥 Mention Limit',
+                    value: `Max ${config.maxMentions || 5} mentions → ${config.mentionAction || 'warn'}`,
+                    inline: false
+                }
             )
-            .setFooter({ text: `Updated: ${config.updatedAt ? new Date(config.updatedAt).toLocaleString('id-ID') : 'unknown'}` });
+            .setFooter({
+                text: `Updated: ${config.updatedAt ? new Date(config.updatedAt).toLocaleString('id-ID') : 'unknown'}`
+            });
 
         return safeEditReply(interaction, { embeds: [embed] });
     }
@@ -110,7 +143,8 @@ module.exports = async function (interaction) {
         });
 
         return safeEditReply(interaction, {
-            content: `${enabled ? '✅' : '❌'} Auto-mod ${enabled ? 'diaktifkan' : 'dinonaktifkan'}.\n\n` +
+            content:
+                `${enabled ? '✅' : '❌'} Auto-mod ${enabled ? 'diaktifkan' : 'dinonaktifkan'}.\n\n` +
                 `💡 Config saat ini masih tersimpan. Kalau enable lagi nanti, tinggal pakai tanpa setup ulang.`
         });
     }
@@ -151,7 +185,8 @@ module.exports = async function (interaction) {
         });
 
         return safeEditReply(interaction, {
-            content: `✅ Whitelist ditambahkan!\n\n` +
+            content:
+                `✅ Whitelist ditambahkan!\n\n` +
                 `📢 Channels: ${newConfig.linkAllowedChannels.map(id => `<#${id}>`).join(', ') || '_(none)_'}\n` +
                 `🎭 Roles: ${newConfig.linkAllowedRoles.map(id => `<@&${id}>`).join(', ') || '_(none)_'}`
         });

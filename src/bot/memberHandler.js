@@ -57,7 +57,7 @@ async function onMemberAdd(member) {
                 .setTitle(fillTemplate(config.messages.welcomeTitle, vars))
                 .setDescription(fillTemplate(config.messages.welcomeBody, vars))
                 .setThumbnail(user.displayAvatarURL({ dynamic: true, size: 256 }))
-                .setColor(0x2ECC71)
+                .setColor(0x2ecc71)
                 .setFooter({ text: guild.name, iconURL: guild.iconURL({ dynamic: true }) || undefined })
                 .setTimestamp();
 
@@ -93,9 +93,8 @@ async function onMemberRemove(member) {
             type: AuditLogEvent.MemberKick,
             limit: 5
         });
-        const kickEntry = audits.entries.find(e =>
-            e.target?.id === user.id &&
-            (Date.now() - e.createdTimestamp) < AUDIT_WINDOW_MS
+        const kickEntry = audits.entries.find(
+            e => e.target?.id === user.id && Date.now() - e.createdTimestamp < AUDIT_WINDOW_MS
         );
         if (kickEntry) {
             action = 'dikeluarkan (kick)';
@@ -104,17 +103,18 @@ async function onMemberRemove(member) {
                 type: AuditLogEvent.MemberBanAdd,
                 limit: 5
             });
-            const banEntry = banAudits.entries.find(e =>
-                e.target?.id === user.id &&
-                (Date.now() - e.createdTimestamp) < AUDIT_WINDOW_MS
+            const banEntry = banAudits.entries.find(
+                e => e.target?.id === user.id && Date.now() - e.createdTimestamp < AUDIT_WINDOW_MS
             );
             if (banEntry) {
                 action = 'di-ban';
             }
         }
     } catch (err) {
-        console.warn(`⚠️ Tidak bisa akses audit log untuk goodbye <@${user.id}>: ${err.message?.slice(0, 80)}. ` +
-            `Pastikan bot punya permission View Audit Log.`);
+        console.warn(
+            `⚠️ Tidak bisa akses audit log untuk goodbye <@${user.id}>: ${err.message?.slice(0, 80)}. ` +
+                `Pastikan bot punya permission View Audit Log.`
+        );
     }
 
     const vars = {
@@ -129,7 +129,7 @@ async function onMemberRemove(member) {
         .setTitle(fillTemplate(config.messages.goodbyeTitle, vars))
         .setDescription(fillTemplate(config.messages.goodbyeBody, vars))
         .setThumbnail(user.displayAvatarURL({ dynamic: true, size: 256 }))
-        .setColor(0xE74C3C)
+        .setColor(0xe74c3c)
         .setFooter({ text: guild.name, iconURL: guild.iconURL({ dynamic: true }) || undefined })
         .setTimestamp();
 

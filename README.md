@@ -10,6 +10,7 @@ Bot Discord serbaguna untuk komunitas apapun — gaming, content creator, online
 ## ✨ Fitur Utama
 
 ### 🎫 Ticket Panel (Multi-Category)
+
 - Panel tiket dengan tombol dinamis per kategori (bukan hardcoded)
 - Support kategori produk: key, jasa, layanan, dll — bebas di-CRUD dari Discord
 - Multi-panel: pasang panel berbeda dengan subset kategori berbeda di channel berbeda
@@ -17,11 +18,13 @@ Bot Discord serbaguna untuk komunitas apapun — gaming, content creator, online
 - Tombol "Set Key" hanya muncul untuk produk yang `requiresKey: true`
 
 ### 💬 Auto-Responder (v3.9.13)
+
 - Set trigger keyword (`!sosmed`, `!jadwal`, dll) → bot auto-reply
 - Support plain text atau embed
 - Cooldown anti-spam per trigger
 
 ### 🛡️ Anti-Spam & Auto-Mod (v3.9.13)
+
 - Spam detection (N messages in window → action)
 - Link blocking (with channel/role whitelist)
 - Word filter (kata kasar, dll)
@@ -29,51 +32,60 @@ Bot Discord serbaguna untuk komunitas apapun — gaming, content creator, online
 - Action: delete only, warn, mute, atau kick
 
 ### 💤 AFK System (v3.9.13)
+
 - User set AFK dengan reason
 - Bot auto-reply saat ada yang mention user AFK
 - Auto-clear saat user kirim pesan lagi
 - `/afk-list` untuk admin lihat semua yang AFK
 
 ### 📊 Leveling System (v3.9.13)
+
 - XP per message (dengan cooldown anti-spam)
 - Level up announcement + auto-assign role reward
 - `/rank` untuk lihat level sendiri
 - `/leaderboard-level` top 10 member
 
 ### 🔐 Verifikasi Panel
+
 - Button customizable (label, emoji, style)
 - Auto-give role Verified, auto-remove role Unverified
 
 ### 🎭 Self-Role Panel
+
 - Member ambil/lepas role sendiri
 - Per-role button style (Primary/Secondary/Success/Danger)
 - Conditional role: butuh prerequisite role dulu (tier system)
 - Mode exclusive (1 role saja) atau multi
 
 ### 🎤 Temp Voice
+
 - Member join trigger channel → otomatis bikin voice pribadi
 - Panel kontrol: rename, kick, limit, lock, transfer, delete
 - Auto-transfer ownership saat owner leave
 - Auto-delete saat channel kosong
 
 ### 📦 Produk & Key Manager
+
 - Produk dengan kategori & `requiresKey` flag
 - Key-driven VIP role (MAX EXTEND model)
 - Auto-expire role sesuai durasi key
 - Guild-scoped (cross-guild safe)
 
 ### 🎉 Giveaway, Poll, Warn, Stats
+
 - Giveaway dengan required role, multiple winners, reroll
 - Poll dengan live bar chart, toggle vote
 - Warn system dengan auto-action (3=mute, 5=mute 1d, 7=kick)
 - Stats leaderboard (messages, purchases, totalSpent, giveawaysWon)
 
 ### 📢 Announce & Embed Builder
+
 - `/announce` quick embed
 - `/send-message` plain text
 - `/embed-builder` interactive builder dengan live preview
 
 ### 💾 Backup System
+
 - Auto-backup tiap 24 jam + saat start
 - Manual backup via `/backup-now`
 - Restore dengan safety backup otomatis
@@ -108,13 +120,14 @@ Community Bot/
 ## 🚀 Setup
 
 ### Prasyarat
+
 - Node.js v18+ (recommended v20+)
 - Discord bot token ([cara dapetin](https://discord.com/developers/applications))
 - Server Discord tempat bot mau di-deploy
 - **3 Privileged Intents** udah di-enable di Discord Developer Portal (https://discord.com/developers/applications → pilih bot → tab "Bot" → scroll ke "Privileged Gateway Intents"):
-  - ✅ Server Members Intent — buat welcome/goodbye, auto-role
-  - ✅ **Message Content Intent** — WAJIB biar auto-responder, anti-spam kata/link, dan AFK mention reply jalan. Kalau gak di-enable, fitur-fitur ini diam-diam gak berfungsi!
-  - ✅ Presence Intent — (opsional, belum dipakai)
+    - ✅ Server Members Intent — buat welcome/goodbye, auto-role
+    - ✅ **Message Content Intent** — WAJIB biar auto-responder, anti-spam kata/link, dan AFK mention reply jalan. Kalau gak di-enable, fitur-fitur ini diam-diam gak berfungsi!
+    - ✅ Presence Intent — (opsional, belum dipakai)
 
 ### Instalasi
 
@@ -160,13 +173,13 @@ Tests pakai built-in `node:test` (Node.js v18+), tidak perlu install dependency 
 
 ## 📜 Scripts
 
-| Script | Deskripsi |
-|--------|-----------|
-| `npm start` | Jalankan bot |
-| `npm run dev` | Jalankan dengan nodemon (auto-restart) |
-| `npm test` | Run semua tests |
-| `npm run lint` | ESLint check |
-| `npm run format` | Prettier format all files |
+| Script           | Deskripsi                              |
+| ---------------- | -------------------------------------- |
+| `npm start`      | Jalankan bot                           |
+| `npm run dev`    | Jalankan dengan nodemon (auto-restart) |
+| `npm test`       | Run semua tests                        |
+| `npm run lint`   | ESLint check                           |
+| `npm run format` | Prettier format all files              |
 
 ---
 
@@ -185,22 +198,26 @@ Tests pakai built-in `node:test` (Node.js v18+), tidak perlu install dependency 
 ### Untuk fitur baru (v3.9.13):
 
 **Auto-Responder:**
+
 ```
 /add-responder trigger:"!sosmed" reply:"Instagram: @server\nTikTok: @server"
 ```
 
 **Anti-Spam:**
+
 ```
 /set-automod spam_threshold:5 spam_action:mute_10m block_links:true
 /automod-toggle enabled:true
 ```
 
 **AFK:**
+
 ```
 /afk reason:"Makan dulu"
 ```
 
 **Leveling:**
+
 ```
 /setup-leveling enabled:true xp_per_message:15
 /add-level-role level:10 role:@Active
@@ -221,23 +238,28 @@ Tests pakai built-in `node:test` (Node.js v18+), tidak perlu install dependency 
 ## 🆘 Troubleshooting
 
 ### Bot tidak online
+
 - Cek `DISCORD_TOKEN` di `.env`
 - Cek bot sudah di-invite ke server dengan ID `GUILD_ID`
 
 ### Slash command tidak muncul
+
 - Pastikan `GUILD_ID` benar (bot harus member guild itu)
 - Restart bot (registrasi instan untuk guild)
 
 ### Permission error
+
 - Role bot harus **di atas** role yang dikelola
 - Bot butuh: `Manage Roles`, `Manage Channels`, `Send Messages`, `Embed Links`, `View Audit Log`, `Moderate Members`
 
 ### Auto-responder / Anti-spam / AFK reply gak berfungsi
+
 **Penyebab paling sering: "Message Content Intent" belum di-enable.**
 
 Bot butuh akses ke `message.content` buat fitur-fitur ini. Tanpa intent itu, Discord kirim content sebagai string kosong → trigger gak match → fitur gak jalan.
 
 **Cara fix:**
+
 1. Buka https://discord.com/developers/applications → pilih bot
 2. Tab "Bot" → scroll ke "Privileged Gateway Intents"
 3. Toggle ON: **MESSAGE CONTENT INTENT** (dan SERVER MEMBERS INTENT kalo belum)
@@ -246,6 +268,7 @@ Bot butuh akses ke `message.content` buat fitur-fitur ini. Tanpa intent itu, Dis
 Cek console bot — kalo ada warning `⚠️ [HINT] Pesan dari ... isinya kosong`, berarti intent emang belum on.
 
 ### Tests fail
+
 - Pastikan Node.js v18+
 - Run `npm install` dulu
 

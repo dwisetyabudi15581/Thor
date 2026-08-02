@@ -227,6 +227,18 @@ function formatTimeLeft(ms) {
 }
 
 module.exports = {
-    create, setMessageId, get, getByMessage, getByGuild, getActive, getEnding,
-    addParticipant, removeParticipant, end, reroll, remove, pickWinners, shuffle
+    create,
+    setMessageId,
+    get,
+    getByMessage,
+    getByGuild,
+    getActive,
+    getEnding,
+    addParticipant,
+    removeParticipant,
+    end,
+    reroll,
+    remove,
+    pickWinners,
+    shuffle
 };

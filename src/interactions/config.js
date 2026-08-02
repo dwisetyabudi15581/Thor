@@ -22,10 +22,14 @@ const {
 } = require('../commands/_shared');
 
 const VALID_TYPES = new Set([
-    'welcomeTitle', 'welcomeBody',
-    'goodbyeTitle', 'goodbyeBody',
-    'verifyTitle', 'verifyBody',
-    'ticketTitle', 'ticketBody',
+    'welcomeTitle',
+    'welcomeBody',
+    'goodbyeTitle',
+    'goodbyeBody',
+    'verifyTitle',
+    'verifyBody',
+    'ticketTitle',
+    'ticketBody',
     'ticketPriceHeader'
 ]);
 
@@ -90,10 +94,12 @@ module.exports = async function (interaction) {
         } catch (err) {
             console.error('config modal error:', err);
             if (!interaction.replied && !interaction.deferred) {
-                return interaction.reply({
-                    content: `❌ Gagal menyimpan perubahan: ${err.message}`,
-                    flags: MessageFlags.Ephemeral
-                }).catch(() => {});
+                return interaction
+                    .reply({
+                        content: `❌ Gagal menyimpan perubahan: ${err.message}`,
+                        flags: MessageFlags.Ephemeral
+                    })
+                    .catch(() => {});
             }
         }
     }

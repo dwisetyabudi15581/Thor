@@ -38,9 +38,17 @@ require('dotenv').config();
     const rootDir = __dirname;
     const dataDir = path.join(rootDir, 'data');
     const LEGACY_FILES = [
-        'config.json', 'keys.json', 'scheduledRoles.json', 'selfRoles.json',
-        'giveaways.json', 'warns.json', 'polls.json', 'scheduledAnnouncements.json',
-        'stats.json', 'tempVoice.json', 'tickets.json'
+        'config.json',
+        'keys.json',
+        'scheduledRoles.json',
+        'selfRoles.json',
+        'giveaways.json',
+        'warns.json',
+        'polls.json',
+        'scheduledAnnouncements.json',
+        'stats.json',
+        'tempVoice.json',
+        'tickets.json'
     ];
     if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
     let migrated = 0;
@@ -82,10 +90,10 @@ attachToClient(client);
 
 // === ERROR HANDLER GLOBAL ===
 // v3.9.8: uncaughtException → graceful shutdown (bot lanjut jalan di state rusak berisiko korup data).
-process.on('unhandledRejection', (reason) => {
+process.on('unhandledRejection', reason => {
     console.error('⚠️ Unhandled Rejection:', reason);
 });
-process.on('uncaughtException', (err) => {
+process.on('uncaughtException', err => {
     console.error('⚠️ Uncaught Exception (will shutdown after log):', err);
     gracefulShutdown('uncaughtException');
 });
@@ -97,7 +105,7 @@ const eventHandlers = [
     require('./src/bot/events/guildMemberAdd'),
     require('./src/bot/events/guildMemberRemove'),
     require('./src/bot/events/messageCreate'),
-    require('./src/bot/events/voiceStateUpdate'),
+    require('./src/bot/events/voiceStateUpdate')
 ];
 
 for (const handler of eventHandlers) {
@@ -119,12 +127,11 @@ const { shutdown: shutdownStats } = require('./src/data/statsManager');
 async function gracefulShutdown(signal) {
     console.log(`\n⚠️ Received ${signal}, flushing stats & shutting down...`);
     try {
-        await Promise.race([
-            Promise.resolve(shutdownStats()),
-            new Promise(resolve => setTimeout(resolve, 3000))
-        ]);
+        await Promise.race([Promise.resolve(shutdownStats()), new Promise(resolve => setTimeout(resolve, 3000))]);
     } catch (_) {}
-    try { client.destroy(); } catch (_) {}
+    try {
+        client.destroy();
+    } catch (_) {}
     process.exit(0);
 }
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));

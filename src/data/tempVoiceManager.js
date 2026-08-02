@@ -110,7 +110,7 @@ function getFocusedOwner(guildId) {
     const cfg = getGuildConfig(guildId);
     if (!cfg?.focusedOwnerId) return null;
     // Auto-expire setelah 5 menit kalau owner tidak ada di voice lagi
-    if (cfg.focusedAt && (Date.now() - cfg.focusedAt) > 5 * 60 * 1000) {
+    if (cfg.focusedAt && Date.now() - cfg.focusedAt > 5 * 60 * 1000) {
         return null;
     }
     return cfg.focusedOwnerId;
@@ -302,7 +302,9 @@ function reconcileGuild(client, guildId) {
                     // Skip kalau ini creator channel (trigger)
                     if (ch.id === cfg.creatorChannelId) continue;
                     result.orphansDetected++;
-                    console.warn(`⚠️ tempVoice reconcile: orphan voice channel ${ch.name} (${ch.id}) terdeteksi di category temp voice — tidak ada owner. Hapus manual atau via /tempvoice-remove.`);
+                    console.warn(
+                        `⚠️ tempVoice reconcile: orphan voice channel ${ch.name} (${ch.id}) terdeteksi di category temp voice — tidak ada owner. Hapus manual atau via /tempvoice-remove.`
+                    );
                 }
             }
         }

@@ -20,15 +20,18 @@ module.exports = async function (interaction) {
 
         const embed = new EmbedBuilder()
             .setTitle('💤 AFK Status Set')
-            .setColor(0xF1C40F)
+            .setColor(0xf1c40f)
             .setDescription(
                 `Halo ${interaction.user}, kamu sekarang **AFK**.\n\n` +
-                `📝 Reason: ${reason}\n` +
-                `🕒 Sejak: <t:${Math.floor(Date.now() / 1000)}:R>\n\n` +
-                `💡 Saat ada yang mention kamu, bot akan auto-reply dengan reason kamu.\n` +
-                `💡 AFK akan otomatis ter-clear saat kamu kirim pesan lagi.`
+                    `📝 Reason: ${reason}\n` +
+                    `🕒 Sejak: <t:${Math.floor(Date.now() / 1000)}:R>\n\n` +
+                    `💡 Saat ada yang mention kamu, bot akan auto-reply dengan reason kamu.\n` +
+                    `💡 AFK akan otomatis ter-clear saat kamu kirim pesan lagi.`
             )
-            .setFooter({ text: interaction.client.user.username, iconURL: interaction.client.user.displayAvatarURL({ dynamic: true }) })
+            .setFooter({
+                text: interaction.client.user.username,
+                iconURL: interaction.client.user.displayAvatarURL({ dynamic: true })
+            })
             .setTimestamp();
 
         return interaction.reply({ embeds: [embed] });
@@ -76,16 +79,19 @@ module.exports = async function (interaction) {
             return safeEditReply(interaction, { content: '✅ Tidak ada member yang AFK saat ini.' });
         }
 
-        const lines = afkUsers.slice(0, 25).map((u, i) => {
-            const duration = afkManager.formatDuration(u.since);
-            const reason = u.reason.length > 50 ? u.reason.slice(0, 50) + '...' : u.reason;
-            return `\`${i + 1}.\` <@${u.userId}> — ${reason} *(${duration})*`;
-        }).join('\n');
+        const lines = afkUsers
+            .slice(0, 25)
+            .map((u, i) => {
+                const duration = afkManager.formatDuration(u.since);
+                const reason = u.reason.length > 50 ? u.reason.slice(0, 50) + '...' : u.reason;
+                return `\`${i + 1}.\` <@${u.userId}> — ${reason} *(${duration})*`;
+            })
+            .join('\n');
 
         const embed = new EmbedBuilder()
             .setTitle(`💤 AFK MEMBERS (${afkUsers.length})`)
             .setDescription(lines)
-            .setColor(0xF1C40F)
+            .setColor(0xf1c40f)
             .setTimestamp();
 
         return safeEditReply(interaction, { embeds: [embed] });

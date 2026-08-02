@@ -55,7 +55,10 @@ if (match1) {
     console.log('\n7. markUsed lalu findMatch lagi (test cooldown)...');
     responderManager.markUsed(GUILD_ID, match1.id, USER_ID);
     const match5 = responderManager.findMatch(GUILD_ID, '!sosmed', USER_ID);
-    console.log('   Result after markUsed:', match5 ? 'FOUND (cooldown NOT working!)' : 'NULL (cooldown working — expected)');
+    console.log(
+        '   Result after markUsed:',
+        match5 ? 'FOUND (cooldown NOT working!)' : 'NULL (cooldown working — expected)'
+    );
 }
 
 // 8. Cleanup

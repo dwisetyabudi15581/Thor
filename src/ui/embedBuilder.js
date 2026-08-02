@@ -10,9 +10,7 @@ class Embeds {
     }
 
     _base(color, title, description) {
-        const embed = new EmbedBuilder()
-            .setColor(color)
-            .setTimestamp();
+        const embed = new EmbedBuilder().setColor(color).setTimestamp();
         if (title) embed.setTitle(title);
         if (description) embed.setDescription(description);
         if (this.client?.user) {
@@ -25,23 +23,23 @@ class Embeds {
     }
 
     success(title, description) {
-        return this._base(0x2ECC71, title, description);
+        return this._base(0x2ecc71, title, description);
     }
 
     danger(title, description) {
-        return this._base(0xE74C3C, title, description);
+        return this._base(0xe74c3c, title, description);
     }
 
     primary(title, description) {
-        return this._base(0x3498DB, title, description);
+        return this._base(0x3498db, title, description);
     }
 
     warning(title, description) {
-        return this._base(0xE67E22, title, description);
+        return this._base(0xe67e22, title, description);
     }
 
     info(title, description) {
-        return this._base(0x5865F2, title, description);
+        return this._base(0x5865f2, title, description);
     }
 }
 

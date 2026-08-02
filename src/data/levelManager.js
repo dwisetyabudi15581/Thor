@@ -74,8 +74,8 @@ function xpForLevel(level) {
  * L^2 + L - 2*totalXp/50 = 0  →  L = (-1 + sqrt(1 + 4*totalXp/50)) / 2
  */
 function levelFromXp(totalXp) {
-    if (totalXp < 100) return 0;  // quick check: < 100 XP = level 0
-    const level = Math.floor((-1 + Math.sqrt(1 + 4 * totalXp / 50)) / 2);
+    if (totalXp < 100) return 0; // quick check: < 100 XP = level 0
+    const level = Math.floor((-1 + Math.sqrt(1 + (4 * totalXp) / 50)) / 2);
     return Math.max(0, level);
 }
 
@@ -92,14 +92,16 @@ function xpToNextLevel(currentLevel) {
 function getUser(guildId, userId) {
     const all = load();
     const k = keyFor(guildId, userId);
-    return all[k] || {
-        xp: 0,         // XP di level saat ini (reset tiap level up)
-        level: 0,
-        lastMessageAt: null,
-        totalXp: 0,
-        guildId,
-        userId
-    };
+    return (
+        all[k] || {
+            xp: 0, // XP di level saat ini (reset tiap level up)
+            level: 0,
+            lastMessageAt: null,
+            totalXp: 0,
+            guildId,
+            userId
+        }
+    );
 }
 
 /**
@@ -131,7 +133,7 @@ function addXp(guildId, userId, xpGain, config) {
     const user = all[k];
 
     // Cooldown check — kalau masih dalam cooldown, skip XP gain
-    if (user.lastMessageAt && (now - user.lastMessageAt) < cooldownMs) {
+    if (user.lastMessageAt && now - user.lastMessageAt < cooldownMs) {
         return { leveledUp: false, newLevel: user.level, oldLevel: user.level, user, onCooldown: true };
     }
 

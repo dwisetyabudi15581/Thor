@@ -51,7 +51,7 @@ function createDefaultData() {
     return {
         title: null,
         description: null,
-        color: 0x5865F2, // default blurple
+        color: 0x5865f2, // default blurple
         image: null,
         thumbnail: null,
         footer: null,
@@ -108,7 +108,10 @@ function parseColor(input) {
     let hex = input.trim().replace(/^#/, '').replace(/^0x/i, '');
     if (hex.length === 3) {
         // Expand 3-digit: "f00" → "ff0000"
-        hex = hex.split('').map(c => c + c).join('');
+        hex = hex
+            .split('')
+            .map(c => c + c)
+            .join('');
     }
     if (!/^[0-9a-fA-F]{6}$/.test(hex)) return null;
     return parseInt(hex, 16);
@@ -130,13 +133,14 @@ function buildEmbed(session) {
 
     // Deteksi state kosong: tidak ada title, description, fields, image,
     // thumbnail, author, footer. Kalau kosong, pakai placeholder.
-    const hasContent = d.title
-        || d.description
-        || (d.fields && d.fields.length > 0)
-        || d.image
-        || d.thumbnail
-        || (d.footer && d.footer.text)
-        || (d.author && d.author.name);
+    const hasContent =
+        d.title ||
+        d.description ||
+        (d.fields && d.fields.length > 0) ||
+        d.image ||
+        d.thumbnail ||
+        (d.footer && d.footer.text) ||
+        (d.author && d.author.name);
 
     if (!hasContent) {
         embed.setDescription('*(Belum ada konten — pakai dropdown di bawah untuk mulai mengedit embed.)*');

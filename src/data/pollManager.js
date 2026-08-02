@@ -170,7 +170,7 @@ function vote(id, userId, optionIndex) {
     const list = load();
     const poll = list.find(p => p.id === id);
     if (!poll) return null;
-    if (poll.closed) return poll;  // kembalikan poll object utuh, bukan { closed: true }
+    if (poll.closed) return poll; // kembalikan poll object utuh, bukan { closed: true }
     // Number.isInteger check — NaN gak boleh lolos (dulu lolos soalnya (NaN<0)=false, (NaN>=length)=false).
     if (!Number.isInteger(optionIndex) || optionIndex < 0 || optionIndex >= poll.options.length) return null;
 
@@ -227,8 +227,17 @@ function getTotalVotes(poll) {
 }
 
 module.exports = {
-    create, setMessageId, get, getByMessage, getByGuild,
-    vote, close, remove, getTotalVotes,
+    create,
+    setMessageId,
+    get,
+    getByMessage,
+    getByGuild,
+    vote,
+    close,
+    remove,
+    getTotalVotes,
     // v3.9.1: poll session (in-memory, for modal customId safety)
-    createPollSession, getPollSession, deletePollSession
+    createPollSession,
+    getPollSession,
+    deletePollSession
 };

@@ -74,9 +74,11 @@ function ensureBackupsDir() {
  */
 function formatTimestamp(ts = new Date()) {
     const d = new Date(ts);
-    const pad = (n) => String(n).padStart(2, '0');
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_` +
-           `${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;
+    const pad = n => String(n).padStart(2, '0');
+    return (
+        `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}_` +
+        `${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`
+    );
 }
 
 /**
@@ -141,7 +143,8 @@ function cleanOldBackups() {
     // v3.9.8 FIX: wrap statSync di try/catch. Sebelumnya, kalau directory
     // dihapus antara readdirSync & statSync (race dengan process lain / admin
     // manual delete), statSync throw → crash createBackup.
-    const entries = fs.readdirSync(backupsDir, { withFileTypes: true })
+    const entries = fs
+        .readdirSync(backupsDir, { withFileTypes: true })
         .filter(e => e.isDirectory())
         .map(e => {
             try {
@@ -172,38 +175,38 @@ function listBackups() {
     ensureBackupsDir();
     // v3.9.8 FIX: wrap statSync di try/catch supaya kalau ada directory yang
     // dihapus race-condition, listBackups tidak crash.
-    const entries = fs.readdirSync(backupsDir, { withFileTypes: true })
-        .filter(e => e.isDirectory());
+    const entries = fs.readdirSync(backupsDir, { withFileTypes: true }).filter(e => e.isDirectory());
 
-    return entries.map(e => {
-        const dir = path.join(backupsDir, e.name);
-        let stat;
-        try {
-            stat = fs.statSync(dir);
-        } catch (_) {
-            // Directory dihapus race — skip.
-            return null;
-        }
-        let fileCount = 0;
-        let totalSize = 0;
-        try {
-            const files = fs.readdirSync(dir);
-            fileCount = files.length;
-            for (const f of files) {
-                try {
-                    totalSize += fs.statSync(path.join(dir, f)).size;
-                } catch (_) {}
+    return entries
+        .map(e => {
+            const dir = path.join(backupsDir, e.name);
+            let stat;
+            try {
+                stat = fs.statSync(dir);
+            } catch (_) {
+                // Directory dihapus race — skip.
+                return null;
             }
-        } catch (_) {}
-        return {
-            name: e.name,
-            size: totalSize,
-            fileCount,
-            mtime: stat.mtime
-        };
-    })
-    .filter(e => e !== null)
-    .sort((a, b) => b.mtime - a.mtime);
+            let fileCount = 0;
+            let totalSize = 0;
+            try {
+                const files = fs.readdirSync(dir);
+                fileCount = files.length;
+                for (const f of files) {
+                    try {
+                        totalSize += fs.statSync(path.join(dir, f)).size;
+                    } catch (_) {}
+                }
+            } catch (_) {}
+            return {
+                name: e.name,
+                size: totalSize,
+                fileCount,
+                mtime: stat.mtime
+            };
+        })
+        .filter(e => e !== null)
+        .sort((a, b) => b.mtime - a.mtime);
 }
 
 /**
@@ -265,7 +268,9 @@ function _restoreBackupImpl(name) {
     for (const file of FILES_TO_BACKUP) {
         const src = dataFilePath(file);
         if (fs.existsSync(src)) {
-            try { fs.copyFileSync(src, path.join(preRestoreDir, file)); } catch (_) {}
+            try {
+                fs.copyFileSync(src, path.join(preRestoreDir, file));
+            } catch (_) {}
         }
     }
 
@@ -319,7 +324,10 @@ function _restoreBackupImpl(name) {
 function startAutoBackup(client) {
     // Backup saat start
     const initial = createBackup();
-    if (client) console.log(`💾 Auto-backup saat start: ${initial.backupName} (${initial.filesCopied} files, ${(initial.totalSize / 1024).toFixed(1)} KB)`);
+    if (client)
+        console.log(
+            `💾 Auto-backup saat start: ${initial.backupName} (${initial.filesCopied} files, ${(initial.totalSize / 1024).toFixed(1)} KB)`
+        );
 
     // Backup tiap 24 jam
     // P3-10 FIX: .unref() supaya interval tidak block process exit.

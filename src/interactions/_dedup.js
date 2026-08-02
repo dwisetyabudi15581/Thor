@@ -48,7 +48,7 @@ function checkAndMark(interactionId) {
     if (!interactionId) return false;
     const now = Date.now();
     const prevTs = processedInteractions.get(interactionId);
-    if (prevTs && (now - prevTs) < PROCESSED_TTL_MS) {
+    if (prevTs && now - prevTs < PROCESSED_TTL_MS) {
         return true; // sudah diproses — skip
     }
     processedInteractions.set(interactionId, now);

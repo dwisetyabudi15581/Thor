@@ -41,7 +41,9 @@ module.exports = async function (interaction) {
 
         // Validate style
         if (style && !VALID_STYLES.includes(style)) {
-            return safeEditReply(interaction, { content: '❌ `style` tidak valid. Pilih: Primary, Secondary, Success, Danger.' });
+            return safeEditReply(interaction, {
+                content: '❌ `style` tidak valid. Pilih: Primary, Secondary, Success, Danger.'
+            });
         }
 
         // Build new verifyButton config
@@ -88,14 +90,18 @@ module.exports = async function (interaction) {
         const allCategories = config.ticketCategories || [];
         if (allCategories.length === 0) {
             return safeEditReply(interaction, {
-                content: '❌ Belum ada kategori. Tambah dulu pakai `/add-category`, atau pakai `/setup-ticket` untuk default.'
+                content:
+                    '❌ Belum ada kategori. Tambah dulu pakai `/add-category`, atau pakai `/setup-ticket` untuk default.'
             });
         }
 
         // Filter categories by IDs (kalau di-specify), else pakai semua
         let categoriesToShow = allCategories;
         if (categoriesFilter) {
-            const requestedIds = categoriesFilter.split(',').map(s => s.trim()).filter(Boolean);
+            const requestedIds = categoriesFilter
+                .split(',')
+                .map(s => s.trim())
+                .filter(Boolean);
             categoriesToShow = allCategories.filter(c => requestedIds.includes(c.id));
             if (categoriesToShow.length === 0) {
                 return safeEditReply(interaction, {
@@ -117,14 +123,16 @@ module.exports = async function (interaction) {
         const priceListByCategory = {};
         for (const cat of categoriesToShow) {
             const prods = productsInCategories.filter(p => (p.category || 'transaction') === cat.id);
-            priceListByCategory[cat.id] = prods.length > 0
-                ? prods.map(p => `• **${p.label}** — ${p.price}`).join('\n')
-                : `_(belum ada produk di kategori ini)_`;
+            priceListByCategory[cat.id] =
+                prods.length > 0
+                    ? prods.map(p => `• **${p.label}** — ${p.price}`).join('\n')
+                    : `_(belum ada produk di kategori ini)_`;
         }
 
-        const priceList = productsInCategories.length > 0
-            ? productsInCategories.map(p => `• **${p.label}** — ${p.price}`).join('\n')
-            : '_(belum ada produk di kategori ini)_';
+        const priceList =
+            productsInCategories.length > 0
+                ? productsInCategories.map(p => `• **${p.label}** — ${p.price}`).join('\n')
+                : '_(belum ada produk di kategori ini)_';
 
         const title = customTitle || config.messages.ticketTitle;
         const priceHeader = config.messages?.ticketPriceHeader || '💰 PRICE LIST 💰';
@@ -141,8 +149,11 @@ module.exports = async function (interaction) {
         const embed = new EmbedBuilder()
             .setTitle(title)
             .setDescription(renderedBody)
-            .setColor(0xE67E22)
-            .setFooter({ text: interaction.client.user.username, iconURL: interaction.client.user.displayAvatarURL({ dynamic: true }) })
+            .setColor(0xe67e22)
+            .setFooter({
+                text: interaction.client.user.username,
+                iconURL: interaction.client.user.displayAvatarURL({ dynamic: true })
+            })
             .setTimestamp();
 
         // Build rows from filtered categories
@@ -176,7 +187,8 @@ module.exports = async function (interaction) {
             });
         }
         return safeEditReply(interaction, {
-            content: `✅ Panel tiket dipasang! (${categoriesToShow.length} kategori ditampilkan)\n\n` +
+            content:
+                `✅ Panel tiket dipasang! (${categoriesToShow.length} kategori ditampilkan)\n\n` +
                 `Kategori: ${categoriesToShow.map(c => `\`${c.id}\``).join(', ')}`
         });
     }
@@ -205,7 +217,8 @@ module.exports = async function (interaction) {
         });
 
         return safeEditReply(interaction, {
-            content: `✅ Channel transcript diatur ke ${channel}.\n\n` +
+            content:
+                `✅ Channel transcript diatur ke ${channel}.\n\n` +
                 `💡 Setiap tiket yang di-close akan auto-save chat history ke channel ini sebagai bukti transaksi.`
         });
     }

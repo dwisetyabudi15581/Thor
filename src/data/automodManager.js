@@ -108,7 +108,7 @@ function checkSpam(guildId, userId, config) {
     let timestamps = guildMap.get(userId);
 
     // Hapus timestamp yang sudah lewat window
-    timestamps = timestamps.filter(ts => (now - ts) < window);
+    timestamps = timestamps.filter(ts => now - ts < window);
     timestamps.push(now);
     guildMap.set(userId, timestamps);
 
@@ -130,10 +130,10 @@ function resetSpamTracker(guildId, userId) {
  */
 function cleanupSpamTracker() {
     const now = Date.now();
-    const MAX_AGE_MS = 5 * 60 * 1000;  // 5 menit — cukup buat mayoritas spamWindowMs config
+    const MAX_AGE_MS = 5 * 60 * 1000; // 5 menit — cukup buat mayoritas spamWindowMs config
     for (const [guildId, guildMap] of spamTracker) {
         for (const [userId, timestamps] of guildMap) {
-            const filtered = timestamps.filter(ts => (now - ts) < MAX_AGE_MS);
+            const filtered = timestamps.filter(ts => now - ts < MAX_AGE_MS);
             if (filtered.length === 0) {
                 guildMap.delete(userId);
             } else {

@@ -44,17 +44,17 @@ const MS = {
 
 // === Scheduler / interval timing ===
 const SCHEDULER = {
-    MAIN_LOOP_INTERVAL_MS: 60 * 1000,        // 1 menit — cek expired keys/roles/giveaways/announcements
-    STATS_FLUSH_INTERVAL_MS: 30 * 1000,      // 30 detik — flush stats cache ke disk
+    MAIN_LOOP_INTERVAL_MS: 60 * 1000, // 1 menit — cek expired keys/roles/giveaways/announcements
+    STATS_FLUSH_INTERVAL_MS: 30 * 1000, // 30 detik — flush stats cache ke disk
     AUTO_BACKUP_INTERVAL_MS: 24 * 60 * 60 * 1000, // 24 jam
     MAX_BACKUPS_KEPT: 7,
-    AUDIT_LOG_WINDOW_MS: 10 * 1000,          // v3.9.8: naikkan dari 5s ke 10s — lebih toleran latency Discord
-    AUDIT_LOG_FETCH_LIMIT: 5,                // v3.9.8: turunkan dari 10 ke 5 — pakai type filter, lebih efisien
-    EMBED_SESSION_TTL_MS: 60 * 60 * 1000,    // 1 jam — TTL session embed builder
+    AUDIT_LOG_WINDOW_MS: 10 * 1000, // v3.9.8: naikkan dari 5s ke 10s — lebih toleran latency Discord
+    AUDIT_LOG_FETCH_LIMIT: 5, // v3.9.8: turunkan dari 10 ke 5 — pakai type filter, lebih efisien
+    EMBED_SESSION_TTL_MS: 60 * 60 * 1000, // 1 jam — TTL session embed builder
     EMBED_SESSION_CLEANUP_MS: 10 * 60 * 1000, // 10 menit — interval cleanup
     // v3.9.8: naikkan dari 5 menit ke 15 menit — match Discord interaction token lifetime
     PROCESSED_INTERACTIONS_TTL_MS: 15 * 60 * 1000,
-    INTERACTION_DEDUP_CLEANUP_MS: 60 * 1000  // v3.9.8: cleanup tiap 1 menit (per-entry prune, bukan bulk clear)
+    INTERACTION_DEDUP_CLEANUP_MS: 60 * 1000 // v3.9.8: cleanup tiap 1 menit (per-entry prune, bukan bulk clear)
 };
 
 // === Warn thresholds ===
@@ -65,8 +65,8 @@ const WARN_THRESHOLDS = {
 };
 
 const WARN_ACTION_DURATIONS_MS = {
-    MUTE_1H: 60 * 60 * 1000,         // 1 jam
-    MUTE_1D: 24 * 60 * 60 * 1000     // 1 hari
+    MUTE_1H: 60 * 60 * 1000, // 1 jam
+    MUTE_1D: 24 * 60 * 60 * 1000 // 1 hari
 };
 
 // === Giveaway limits ===
@@ -91,18 +91,18 @@ const BACKUP = {
 
 // === Colors (hex) ===
 const COLORS = {
-    SUCCESS: 0x57F287,
-    DANGER: 0xED4245,
-    WARNING: 0xE67E22,
-    INFO: 0x5865F2,
-    PRIMARY: 0x5865F2,
-    NEUTRAL: 0x95A5A6,
-    GOLD: 0xF1C40F,
-    PURPLE: 0x9B59B6,
-    BLUE: 0x3498DB,
-    GREEN: 0x2ECC71,
-    RED: 0xE74C3C,
-    DARK: 0x2C2F33
+    SUCCESS: 0x57f287,
+    DANGER: 0xed4245,
+    WARNING: 0xe67e22,
+    INFO: 0x5865f2,
+    PRIMARY: 0x5865f2,
+    NEUTRAL: 0x95a5a6,
+    GOLD: 0xf1c40f,
+    PURPLE: 0x9b59b6,
+    BLUE: 0x3498db,
+    GREEN: 0x2ecc71,
+    RED: 0xe74c3c,
+    DARK: 0x2c2f33
 };
 
 module.exports = {

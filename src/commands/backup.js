@@ -36,26 +36,34 @@ module.exports = async function (interaction) {
             result = createBackup();
         } catch (err) {
             console.error('Backup-now gagal:', err);
-            return safeEditReply(interaction,{ content: `❌ Gagal buat backup: ${err.message}` });
+            return safeEditReply(interaction, { content: `❌ Gagal buat backup: ${err.message}` });
         }
         if (!result.ok) {
             // Bedain total failure vs partial biar admin tau severity
             if (result.partial) {
                 return safeEditReply(interaction, {
-                    content: `⚠️ **Backup PARTIAL!** Hanya ${result.filesCopied} file berhasil disalin (sebagian gagal).\n\n` +
+                    content:
+                        `⚠️ **Backup PARTIAL!** Hanya ${result.filesCopied} file berhasil disalin (sebagian gagal).\n\n` +
                         `❌ Error:\n\`\`\`\n${result.errors.join('\n')}\n\`\`\`\n` +
                         `💡 Backup tetap dibuat dengan file yang berhasil — tapi **tidak lengkap**. Cek disk space & permission file \`data/\`.`
                 });
             }
-            return safeEditReply(interaction,{ content: `❌ Backup gagal total: ${result.errors.join('; ')}` });
+            return safeEditReply(interaction, { content: `❌ Backup gagal total: ${result.errors.join('; ')}` });
         }
         try {
-            await logAudit(interaction.client, { action: 'BACKUP_NOW', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Backup manual: \`${result.backupName}\` (${result.filesCopied} files, ${formatBackupSize(result.totalSize)})`, guildId: interaction.guild.id });
+            await logAudit(interaction.client, {
+                action: 'BACKUP_NOW',
+                actorId: interaction.user.id,
+                actorTag: interaction.user.tag,
+                details: `Backup manual: \`${result.backupName}\` (${result.filesCopied} files, ${formatBackupSize(result.totalSize)})`,
+                guildId: interaction.guild.id
+            });
         } catch (auditErr) {
             console.warn(`⚠️ Gagal log audit backup (backup tetap dibuat): ${auditErr.message}`);
         }
-        return safeEditReply(interaction,{
-            content: `💾 **Backup berhasil dibuat!**\n\n` +
+        return safeEditReply(interaction, {
+            content:
+                `💾 **Backup berhasil dibuat!**\n\n` +
                 `📁 Nama: \`${result.backupName}\`\n` +
                 `📦 File disalin: **${result.filesCopied}**\n` +
                 `📊 Ukuran total: **${formatBackupSize(result.totalSize)}**\n` +
@@ -71,21 +79,35 @@ module.exports = async function (interaction) {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         const backups = listBackups();
         if (backups.length === 0) {
-            return safeEditReply(interaction,{ content: '📭 Belum ada backup. Backup otomatis dibuat saat bot start.' });
+            return safeEditReply(interaction, {
+                content: '📭 Belum ada backup. Backup otomatis dibuat saat bot start.'
+            });
         }
-        const lines = backups.map((b, i) => {
-            const ageMs = Date.now() - b.mtime.getTime();
-            const ageMin = Math.floor(ageMs / 60000);
-            const ageStr = ageMin < 60 ? `${ageMin}m lalu` : ageMin < 1440 ? `${Math.floor(ageMin / 60)}h lalu` : `${Math.floor(ageMin / 1440)}d lalu`;
-            return `\`${i + 1}.\` 📁 \`${b.name}\`\n   📦 ${b.fileCount} file | 📊 ${formatBackupSize(b.size)} | ⏰ ${ageStr}`;
-        }).join('\n\n');
+        const lines = backups
+            .map((b, i) => {
+                const ageMs = Date.now() - b.mtime.getTime();
+                const ageMin = Math.floor(ageMs / 60000);
+                const ageStr =
+                    ageMin < 60
+                        ? `${ageMin}m lalu`
+                        : ageMin < 1440
+                          ? `${Math.floor(ageMin / 60)}h lalu`
+                          : `${Math.floor(ageMin / 1440)}d lalu`;
+                return `\`${i + 1}.\` 📁 \`${b.name}\`\n   📦 ${b.fileCount} file | 📊 ${formatBackupSize(b.size)} | ⏰ ${ageStr}`;
+            })
+            .join('\n\n');
         const embed = new EmbedBuilder()
             .setTitle('💾 DAFTAR BACKUP')
-            .setDescription(`Total **${backups.length}** backup tersimpan (maks 7, auto-clean yang lama).\n\n${lines}\n\n💡 Restore pakai: \`/restore-backup name:<nama-folder>\``)
-            .setColor(0x57F287)
-            .setFooter({ text: interaction.client.user.username, iconURL: interaction.client.user.displayAvatarURL({ dynamic: true }) })
+            .setDescription(
+                `Total **${backups.length}** backup tersimpan (maks 7, auto-clean yang lama).\n\n${lines}\n\n💡 Restore pakai: \`/restore-backup name:<nama-folder>\``
+            )
+            .setColor(0x57f287)
+            .setFooter({
+                text: interaction.client.user.username,
+                iconURL: interaction.client.user.displayAvatarURL({ dynamic: true })
+            })
             .setTimestamp();
-        return safeEditReply(interaction,{ embeds: [embed] });
+        return safeEditReply(interaction, { embeds: [embed] });
     }
 
     // ====================================================
@@ -123,7 +145,8 @@ module.exports = async function (interaction) {
         );
 
         return interaction.reply({
-            content: `⚠️ **KONFIRMASI RESTORE BACKUP**\n\n` +
+            content:
+                `⚠️ **KONFIRMASI RESTORE BACKUP**\n\n` +
                 `📁 Backup: \`${name}\`\n\n` +
                 `**Apa yang akan terjadi kalau kamu klik Confirm:**\n` +
                 `• Bot akan bikin safety backup otomatis (pre-restore) dari kondisi SEKARANG\n` +

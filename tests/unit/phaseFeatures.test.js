@@ -50,8 +50,10 @@ test('configManager: ticketCategories have valid structure', () => {
         assert.ok(cat.id, 'category should have id');
         assert.ok(cat.label, 'category should have label');
         assert.ok(cat.emoji, 'category should have emoji');
-        assert.ok(['Primary', 'Secondary', 'Success', 'Danger'].includes(cat.style),
-            `category ${cat.id} should have valid style, got: ${cat.style}`);
+        assert.ok(
+            ['Primary', 'Secondary', 'Success', 'Danger'].includes(cat.style),
+            `category ${cat.id} should have valid style, got: ${cat.style}`
+        );
         assert.ok('requiresKey' in cat, `category ${cat.id} should have requiresKey field`);
     }
 });
@@ -101,7 +103,7 @@ test('selfRoleManager: addRoleToPanel defaults style to Secondary when invalid',
     const result = addRoleToPanel(panel.id, {
         roleId: 'role_test_default',
         label: 'Default',
-        style: 'InvalidStyleName'  // should default to Secondary
+        style: 'InvalidStyleName' // should default to Secondary
     });
 
     assert.ok(result.ok);

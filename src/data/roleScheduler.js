@@ -125,9 +125,7 @@ function scheduleRoleRemoval(data) {
 
     if (newExpireAt === null) permanent = true;
 
-    const existingIndex = list.findIndex(
-        e => e.userId === data.userId && e.roleId === data.roleId
-    );
+    const existingIndex = list.findIndex(e => e.userId === data.userId && e.roleId === data.roleId);
 
     // === KASUS PERMANEN: hapus schedule lama, role jadi permanen ===
     if (permanent) {

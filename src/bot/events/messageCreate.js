@@ -29,10 +29,10 @@ function debugLogIntentMissing(message) {
     _intentWarnedGuilds.add(gid);
     console.warn(
         `⚠️ [HINT] Pesan dari ${message.author?.tag} di server "${message.guild.name}" isinya kosong.\n` +
-        `   Biasanya karena "Message Content Intent" belum di-enable di Developer Portal.\n` +
-        `   Cek: https://discord.com/developers/applications → Bot → Privileged Gateway Intents\n` +
-        `   Akibatnya: auto-responder, anti-spam kata/link, dan AFK mention reply gak bakal jalan.\n` +
-        `   (warning ini cuma muncul sekali per server, sampai bot direstart)`
+            `   Biasanya karena "Message Content Intent" belum di-enable di Developer Portal.\n` +
+            `   Cek: https://discord.com/developers/applications → Bot → Privileged Gateway Intents\n` +
+            `   Akibatnya: auto-responder, anti-spam kata/link, dan AFK mention reply gak bakal jalan.\n` +
+            `   (warning ini cuma muncul sekali per server, sampai bot direstart)`
     );
 }
 
@@ -185,7 +185,7 @@ async function hookAutoResponder(message) {
         if (responder.replyType === 'embed') {
             const embed = new EmbedBuilder()
                 .setDescription(responder.reply)
-                .setColor(0x5865F2)
+                .setColor(0x5865f2)
                 .setFooter({ text: `Auto-responder: ${responder.trigger}` });
             await message.reply({ embeds: [embed] });
         } else {
@@ -214,7 +214,7 @@ async function hookAfkSystem(message) {
     const afkReplies = [];
     if (message.mentions?.users && message.mentions.users.size > 0) {
         for (const [userId, user] of message.mentions.users) {
-            if (userId === message.author.id) continue;  // skip mention diri sendiri
+            if (userId === message.author.id) continue; // skip mention diri sendiri
             if (user.bot) continue;
 
             const afkData = afkManager.getAFK(message.guild.id, userId);
@@ -285,7 +285,7 @@ async function hookLeveling(message) {
             const levelUpEmbed = new EmbedBuilder()
                 .setTitle('🎉 LEVEL UP!')
                 .setDescription(`GG ${message.author}! Kamu naik ke **Level ${newLevel}**!`)
-                .setColor(0xF1C40F)
+                .setColor(0xf1c40f)
                 .setThumbnail(message.author.displayAvatarURL({ dynamic: true }))
                 .setTimestamp();
             await message.channel.send({ embeds: [levelUpEmbed] });
@@ -300,9 +300,13 @@ async function hookLeveling(message) {
         if (toAdd.length > 0) {
             try {
                 await message.member.roles.add(toAdd);
-                console.log(`📊 Kasih ${toAdd.length} role ke ${message.author.tag} (level ${newLevel}): ${toAdd.join(', ')}`);
+                console.log(
+                    `📊 Kasih ${toAdd.length} role ke ${message.author.tag} (level ${newLevel}): ${toAdd.join(', ')}`
+                );
                 try {
-                    await message.author.send(`🎉 Kamu dapat role baru di **${message.guild.name}** karena cap Level ${newLevel}!`);
+                    await message.author.send(
+                        `🎉 Kamu dapat role baru di **${message.guild.name}** karena cap Level ${newLevel}!`
+                    );
                 } catch (_) {}
             } catch (err) {
                 console.warn(`⚠️ Gagal kasih role level: ${err.message}`);

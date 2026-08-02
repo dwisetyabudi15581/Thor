@@ -42,15 +42,18 @@ module.exports = async function (interaction) {
             // Suruh admin cleanup dulu via /tempvoice-remove.
             if (!existingControlChannel) {
                 return safeEditReply(interaction, {
-                    content: `❌ Control channel lama (ID: \`${existingConfig.controlChannelId}\`) sudah terhapus dari server.\n\n` +
+                    content:
+                        `❌ Control channel lama (ID: \`${existingConfig.controlChannelId}\`) sudah terhapus dari server.\n\n` +
                         `Jalankan \`/tempvoice-remove\` dulu untuk cleanup config lama, lalu \`/setup-tempvoice\` lagi.`
                 });
             }
             // Hapus panel lama kalau ada
             if (existingConfig.controlMessageId) {
                 try {
-                    const oldMsg = await existingControlChannel.messages.fetch(existingConfig.controlMessageId).catch(() => null);
-                    if (oldMsg) await oldMsg.delete().catch(()=>{});
+                    const oldMsg = await existingControlChannel.messages
+                        .fetch(existingConfig.controlMessageId)
+                        .catch(() => null);
+                    if (oldMsg) await oldMsg.delete().catch(() => {});
                 } catch (_) {}
             }
             // Kirim panel baru
@@ -65,7 +68,8 @@ module.exports = async function (interaction) {
             // Kalau send gagal, balas error — jangan lanjut ke setup baru (anti orphan)
             if (!panelMsg) {
                 return safeEditReply(interaction, {
-                    content: `❌ Gagal refresh panel ke ${existingControlChannel}. Cek permission bot (**Send Messages** + **Embed Links**).\n\n` +
+                    content:
+                        `❌ Gagal refresh panel ke ${existingControlChannel}. Cek permission bot (**Send Messages** + **Embed Links**).\n\n` +
                         `Setup yang ada tidak diubah.`
                 });
             }
@@ -82,7 +86,9 @@ module.exports = async function (interaction) {
         let category, controlChannel, creatorChannel;
         try {
             // Bikin kategori "🎤 TEMP VOICE"
-            category = guild.channels.cache.find(c => c.name === '🎤 TEMP VOICE' && c.type === ChannelType.GuildCategory);
+            category = guild.channels.cache.find(
+                c => c.name === '🎤 TEMP VOICE' && c.type === ChannelType.GuildCategory
+            );
             if (!category) {
                 category = await guild.channels.create({
                     name: '🎤 TEMP VOICE',
@@ -113,13 +119,19 @@ module.exports = async function (interaction) {
             // v3.9.8: rollback — hapus channel yang sudah dibuat tapi belum ter-register
             // supaya tidak jadi orphan. Hapus yang pasti dibuat di try block ini saja.
             if (controlChannel) {
-                try { await controlChannel.delete('Rollback: setup-tempvoice gagal'); } catch (_) {}
+                try {
+                    await controlChannel.delete('Rollback: setup-tempvoice gagal');
+                } catch (_) {}
             }
             if (creatorChannel) {
-                try { await creatorChannel.delete('Rollback: setup-tempvoice gagal'); } catch (_) {}
+                try {
+                    await creatorChannel.delete('Rollback: setup-tempvoice gagal');
+                } catch (_) {}
             }
             // Category tidak dihapus karena mungkin sudah ada sebelumnya / dipakai oleh channel lain.
-            return safeEditReply(interaction,{ content: `❌ Gagal setup temp voice: ${err.message}\n\nPastikan bot punya permission **Manage Channels** dan **Manage Roles**.` });
+            return safeEditReply(interaction, {
+                content: `❌ Gagal setup temp voice: ${err.message}\n\nPastikan bot punya permission **Manage Channels** dan **Manage Roles**.`
+            });
         }
 
         // Kirim panel kontrol GLOBAL ke control channel
@@ -133,7 +145,9 @@ module.exports = async function (interaction) {
             panelMsg = await controlChannel.send({ embeds: [embed], components });
         } catch (err) {
             console.error('Gagal kirim panel global:', err.message);
-            return safeEditReply(interaction,{ content: `❌ Gagal kirim panel ke ${controlChannel}. Cek permission bot (Send Messages + Embed Links).` });
+            return safeEditReply(interaction, {
+                content: `❌ Gagal kirim panel ke ${controlChannel}. Cek permission bot (Send Messages + Embed Links).`
+            });
         }
 
         // Simpan controlMessageId
@@ -147,8 +161,9 @@ module.exports = async function (interaction) {
             guildId: guild.id
         });
 
-        return safeEditReply(interaction,{
-            content: `✅ **Temp Voice siap!**\n\n` +
+        return safeEditReply(interaction, {
+            content:
+                `✅ **Temp Voice siap!**\n\n` +
                 `📂 **Kategori:** ${category.name}\n` +
                 `🎤 **Trigger channel:** ${creatorChannel} (member join sini untuk bikin voice baru)\n` +
                 `🎛️ **Control panel:** ${panelMsg.url}\n\n` +
@@ -164,7 +179,7 @@ module.exports = async function (interaction) {
 
         const config = tempVoiceManager.getGuildConfig(interaction.guild.id);
         if (!config) {
-            return safeEditReply(interaction,{ content: 'ℹ️ Temp voice belum di-setup di guild ini.' });
+            return safeEditReply(interaction, { content: 'ℹ️ Temp voice belum di-setup di guild ini.' });
         }
 
         // Hapus control panel message global
@@ -173,7 +188,7 @@ module.exports = async function (interaction) {
                 const ctrlChannel = interaction.guild.channels.cache.get(config.controlChannelId);
                 if (ctrlChannel) {
                     const ctrlMsg = await ctrlChannel.messages.fetch(config.controlMessageId).catch(() => null);
-                    if (ctrlMsg) await ctrlMsg.delete().catch(()=>{});
+                    if (ctrlMsg) await ctrlMsg.delete().catch(() => {});
                 }
             }
         } catch (_) {}
@@ -190,12 +205,12 @@ module.exports = async function (interaction) {
             }
             for (const channelId of channelsToDelete) {
                 const ch = interaction.guild.channels.cache.get(channelId);
-                if (ch) await ch.delete('Temp voice setup dihapus').catch(()=>{});
+                if (ch) await ch.delete('Temp voice setup dihapus').catch(() => {});
             }
             // Hapus kategori (sekarang harusnya kosong)
             if (config.categoryId) {
                 const cat = interaction.guild.channels.cache.get(config.categoryId);
-                if (cat) await cat.delete('Temp voice kategori dihapus').catch(()=>{});
+                if (cat) await cat.delete('Temp voice kategori dihapus').catch(() => {});
             }
         } catch (_) {}
 
@@ -208,6 +223,9 @@ module.exports = async function (interaction) {
             guildId: interaction.guild.id
         });
 
-        return safeEditReply(interaction,{ content: '✅ Setup Temp Voice berhasil dihapus. Kategori + control panel + trigger channel + semua channel temp voice aktif juga dihapus.' });
+        return safeEditReply(interaction, {
+            content:
+                '✅ Setup Temp Voice berhasil dihapus. Kategori + control panel + trigger channel + semua channel temp voice aktif juga dihapus.'
+        });
     }
 };

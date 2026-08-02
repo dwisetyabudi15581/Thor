@@ -57,10 +57,10 @@ test('parseTime: v3.9.8 FIX — invalid date components rejected', () => {
     // Sebelum v3.9.8: "2026-13-40 99:99" di-rollover oleh Date constructor
     // jadi valid date di tahun 2027. Sekarang harus return null.
     assert.strictEqual(parseTime('2026-13-40 99:99'), null);
-    assert.strictEqual(parseTime('2026-00-15 20:00'), null);   // month 0 invalid
-    assert.strictEqual(parseTime('2026-01-32 20:00'), null);   // day 32 invalid
-    assert.strictEqual(parseTime('2026-01-15 25:00'), null);   // hour 25 invalid
-    assert.strictEqual(parseTime('2026-01-15 20:61'), null);   // minute 61 invalid
+    assert.strictEqual(parseTime('2026-00-15 20:00'), null); // month 0 invalid
+    assert.strictEqual(parseTime('2026-01-32 20:00'), null); // day 32 invalid
+    assert.strictEqual(parseTime('2026-01-15 25:00'), null); // hour 25 invalid
+    assert.strictEqual(parseTime('2026-01-15 20:61'), null); // minute 61 invalid
 });
 
 test('parseTime: past date rejected', () => {

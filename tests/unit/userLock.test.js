@@ -70,7 +70,9 @@ test('withLock: releases lock even when fn throws', async () => {
     const userId = 'user_7';
 
     await assert.rejects(
-        withLock(scope, userId, async () => { throw new Error('boom'); }),
+        withLock(scope, userId, async () => {
+            throw new Error('boom');
+        }),
         /boom/
     );
 

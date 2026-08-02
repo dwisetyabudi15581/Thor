@@ -22,15 +22,15 @@ function makeMockInteraction({ commandName, isAdmin = false, isRepliable = true 
         deferred: false,
         member: {
             permissions: {
-                has: (perm) => isAdmin  // ManageGuild = true kalau isAdmin
+                has: perm => isAdmin // ManageGuild = true kalau isAdmin
             },
             roles: { cache: { has: () => false } }
         },
-        reply: async (opts) => {
+        reply: async opts => {
             replies.push({ type: 'reply', opts });
             return {};
         },
-        editReply: async (opts) => {
+        editReply: async opts => {
             replies.push({ type: 'editReply', opts });
             return {};
         },

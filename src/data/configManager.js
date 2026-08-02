@@ -10,15 +10,19 @@ const DEFAULTS = {
     channels: {},
     messages: {
         welcomeTitle: '👋 SELAMAT DATANG!',
-        welcomeBody: 'Halo {user}!\n\nSelamat datang di **{server}** 🎉\n\n🔐 Silakan verifikasi dirimu untuk mendapatkan akses penuh ke server.\n\n📊 Kamu adalah member ke-**{count}**!',
+        welcomeBody:
+            'Halo {user}!\n\nSelamat datang di **{server}** 🎉\n\n🔐 Silakan verifikasi dirimu untuk mendapatkan akses penuh ke server.\n\n📊 Kamu adalah member ke-**{count}**!',
         goodbyeTitle: '👋 SELAMAT JALAN',
-        goodbyeBody: '**{username}** telah {action} dari server.\n\nSampai jumpa lagi! 👋\n\n📊 Sisa member: **{count}**',
+        goodbyeBody:
+            '**{username}** telah {action} dari server.\n\nSampai jumpa lagi! 👋\n\n📊 Sisa member: **{count}**',
         verifyTitle: '✅ VERIFIKASI SERVER',
-        verifyBody: 'Selamat datang di **{server}**!\n\nKlik tombol di bawah untuk diverifikasi dan mendapatkan akses penuh ke seluruh channel.',
+        verifyBody:
+            'Selamat datang di **{server}**!\n\nKlik tombol di bawah untuk diverifikasi dan mendapatkan akses penuh ke seluruh channel.',
         ticketTitle: '🎫 SISTEM TIKET & PRICE LIST',
         // v3.9.12: ticket body sekarang support template variables.
         // Variabel tersedia: {server}, {price_list}, {price_list:<category>}, {price_header}, {categories_list}
-        ticketBody: 'Butuh bantuan atau ingin membeli?\n\nKlik tombol kategori di bawah untuk memulai.\n\n**{price_header}**\n{price_list}',
+        ticketBody:
+            'Butuh bantuan atau ingin membeli?\n\nKlik tombol kategori di bawah untuk memulai.\n\n**{price_header}**\n{price_list}',
         // v3.9.11 Phase 1: ticket header configurable (sebelumnya hardcoded "PRICE LIST KEY")
         ticketPriceHeader: '💰 PRICE LIST 💰'
     },
@@ -26,24 +30,31 @@ const DEFAULTS = {
     verifyButton: {
         label: 'Verifikasi Saya',
         emoji: '✅',
-        style: 'Success'  // Primary | Secondary | Success | Danger
+        style: 'Success' // Primary | Secondary | Success | Danger
     },
     // v3.9.11 Phase 2: ticket categories (default 3 kategori built-in)
     // Generic community — bisa dipakai buat server jualan apapun, bukan cuma MLBB.
     ticketCategories: [
-        { id: 'transaction', label: 'Beli Key / Transaksi', emoji: '🔑', style: 'Primary',   requiresKey: true,  isDefault: true },
-        { id: 'help',        label: 'Bantuan Staff',        emoji: '📞', style: 'Secondary', requiresKey: false, isDefault: true },
-        { id: 'report',      label: 'Laporkan Member',      emoji: '⚠️', style: 'Danger',    requiresKey: false, isDefault: true }
+        {
+            id: 'transaction',
+            label: 'Beli Key / Transaksi',
+            emoji: '🔑',
+            style: 'Primary',
+            requiresKey: true,
+            isDefault: true
+        },
+        { id: 'help', label: 'Bantuan Staff', emoji: '📞', style: 'Secondary', requiresKey: false, isDefault: true },
+        { id: 'report', label: 'Laporkan Member', emoji: '⚠️', style: 'Danger', requiresKey: false, isDefault: true }
     ],
     // v3.9.13: Leveling system config
     leveling: {
-        enabled: false,           // default off — admin harus enable via /setup-leveling
+        enabled: false, // default off — admin harus enable via /setup-leveling
         xpPerMessage: 15,
-        cooldownMs: 60000,        // 1 menit anti-spam XP
+        cooldownMs: 60000, // 1 menit anti-spam XP
         announceLevelUp: true,
-        levelUpChannel: null      // null = channel tempat user chat
+        levelUpChannel: null // null = channel tempat user chat
     },
-    levelRoles: [],                // [{ level: 10, roleId: "123" }, ...]
+    levelRoles: [], // [{ level: 10, roleId: "123" }, ...]
     colors: {
         success: 3066993,
         danger: 15158332,
@@ -114,9 +125,10 @@ function getConfig() {
         messages: { ...DEFAULTS.messages, ...(raw.messages || {}) },
         colors: { ...DEFAULTS.colors, ...(raw.colors || {}) },
         verifyButton: { ...DEFAULTS.verifyButton, ...(raw.verifyButton || {}) },
-        ticketCategories: Array.isArray(raw.ticketCategories) && raw.ticketCategories.length > 0
-            ? raw.ticketCategories
-            : DEFAULTS.ticketCategories,
+        ticketCategories:
+            Array.isArray(raw.ticketCategories) && raw.ticketCategories.length > 0
+                ? raw.ticketCategories
+                : DEFAULTS.ticketCategories,
         leveling: { ...DEFAULTS.leveling, ...(raw.leveling || {}) },
         levelRoles: Array.isArray(raw.levelRoles) ? raw.levelRoles : DEFAULTS.levelRoles,
         products: Array.isArray(raw.products) ? raw.products : DEFAULTS.products
@@ -182,7 +194,9 @@ function setField(dotPath, value) {
         try {
             const { invalidateAdminRoleCache } = require('../infra/permissions');
             invalidateAdminRoleCache();
-        } catch (_) { /* permissions belum di-load — ignore */ }
+        } catch (_) {
+            /* permissions belum di-load — ignore */
+        }
     }
 
     return config;

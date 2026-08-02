@@ -1,4 +1,11 @@
-const { ChannelType, PermissionFlagsBits, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
+const {
+    ChannelType,
+    PermissionFlagsBits,
+    EmbedBuilder,
+    ButtonBuilder,
+    ButtonStyle,
+    ActionRowBuilder
+} = require('discord.js');
 const { getConfig } = require('./configManager');
 const { safeEditReply } = require('../infra/safeReply');
 const fs = require('fs');
@@ -122,7 +129,7 @@ async function createTicket(interaction, product) {
     // v3.9.8: lock di-scope per guild supaya user di multi-guild bot gak saling block.
     const lockKey = `${guild.id}:${user.id}`;
     if (ticketLocks.has(lockKey)) {
-        return interaction.editReply({ content: '⏳ Tiket kamu sedang dibuat, tunggu sebentar...' }).catch(()=>{});
+        return interaction.editReply({ content: '⏳ Tiket kamu sedang dibuat, tunggu sebentar...' }).catch(() => {});
     }
     ticketLocks.set(lockKey, true);
 
@@ -151,7 +158,10 @@ async function createTicket(interaction, product) {
                     // Fetch dari API untuk dapat object channel-nya.
                     try {
                         const fetched = await guild.channels.fetch(chId).catch(() => null);
-                        if (fetched) { existingTicket = fetched; break; }
+                        if (fetched) {
+                            existingTicket = fetched;
+                            break;
+                        }
                         // Channel benar-benar hilang — cleanup metadata zombie.
                         removeTicketMeta(chId);
                     } catch (_) {}
@@ -161,7 +171,9 @@ async function createTicket(interaction, product) {
         // Fallback: scan channel topic (tiket lama)
         if (!existingTicket) {
             // v3.9.8: tambah ` |` supaya ID yang prefix dari ID lain tidak false-match.
-            existingTicket = guild.channels.cache.find(c => c.topic && c.topic.startsWith(`Ticket UserID: ${user.id} |`));
+            existingTicket = guild.channels.cache.find(
+                c => c.topic && c.topic.startsWith(`Ticket UserID: ${user.id} |`)
+            );
         }
         if (existingTicket) {
             return safeEditReply(interaction, { content: `❌ Kamu sudah punya tiket aktif di ${existingTicket}!` });
@@ -169,7 +181,9 @@ async function createTicket(interaction, product) {
 
         // Admin role wajib sudah di-set
         if (!config.roles.admin) {
-            return safeEditReply(interaction, { content: '❌ Role Admin belum di-set. Pakai `/set-role admin @role` dulu.' });
+            return safeEditReply(interaction, {
+                content: '❌ Role Admin belum di-set. Pakai `/set-role admin @role` dulu.'
+            });
         }
 
         // v3.9.11 Phase 1: hapus magic string 'Bantuan/Lapor'.
@@ -177,7 +191,11 @@ async function createTicket(interaction, product) {
         // Sekarang: pakai field `category` di product (Phase 2) atau fallback `isHelp: true` flag.
         // Untuk backward compat: kalau product gak punya category, treat sebagai transaksi
         // kecuali kalau product dikirim dari tombol ticket_help/ticket_report (yang set isHelp=true).
-        const isTransaction = !(product.isHelp === true || product.category === 'help' || product.category === 'report');
+        const isTransaction = !(
+            product.isHelp === true ||
+            product.category === 'help' ||
+            product.category === 'report'
+        );
 
         // Buat kategori kalau belum ada
         let category = guild.channels.cache.find(c => c.name === '🎫 TICKETS' && c.type === ChannelType.GuildCategory);
@@ -195,9 +213,34 @@ async function createTicket(interaction, product) {
             topic: `Ticket UserID: ${user.id} | Product: ${product.label} | Price: ${product.price}`,
             permissionOverwrites: [
                 { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
-                { id: user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.AttachFiles] },
-                { id: config.roles.admin, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageMessages] },
-                { id: guild.client.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.EmbedLinks, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageChannels] }
+                {
+                    id: user.id,
+                    allow: [
+                        PermissionFlagsBits.ViewChannel,
+                        PermissionFlagsBits.SendMessages,
+                        PermissionFlagsBits.ReadMessageHistory,
+                        PermissionFlagsBits.AttachFiles
+                    ]
+                },
+                {
+                    id: config.roles.admin,
+                    allow: [
+                        PermissionFlagsBits.ViewChannel,
+                        PermissionFlagsBits.SendMessages,
+                        PermissionFlagsBits.ReadMessageHistory,
+                        PermissionFlagsBits.ManageMessages
+                    ]
+                },
+                {
+                    id: guild.client.user.id,
+                    allow: [
+                        PermissionFlagsBits.ViewChannel,
+                        PermissionFlagsBits.SendMessages,
+                        PermissionFlagsBits.EmbedLinks,
+                        PermissionFlagsBits.ReadMessageHistory,
+                        PermissionFlagsBits.ManageChannels
+                    ]
+                }
             ]
         });
 
@@ -217,24 +260,31 @@ async function createTicket(interaction, product) {
             .setTitle(isTransaction ? '🛒 TIKET TRANSAKSI' : '🎫 TIKET BANTUAN')
             .setDescription(
                 `Halo <@${user.id}>!\n\n` +
-                (isTransaction
-                    ? `Kamu memesan paket **${product.label}** dengan harga **${product.price}**.\n\n` +
-                      `Silakan lakukan pembayaran dan kirim bukti pembayaran di sini.\n` +
-                      `Admin <@&${config.roles.admin}> akan memproses pesananmu.\n\n` +
-                      `💡 Setelah pembayaran dikonfirmasi, admin klik tombol **🔑 Set Key** untuk memberikan key + role.`
-                    : `Silakan jelaskan kebutuhanmu di channel ini.\n` +
-                      `Admin <@&${config.roles.admin}> akan segera membantu.`)
+                    (isTransaction
+                        ? `Kamu memesan paket **${product.label}** dengan harga **${product.price}**.\n\n` +
+                          `Silakan lakukan pembayaran dan kirim bukti pembayaran di sini.\n` +
+                          `Admin <@&${config.roles.admin}> akan memproses pesananmu.\n\n` +
+                          `💡 Setelah pembayaran dikonfirmasi, admin klik tombol **🔑 Set Key** untuk memberikan key + role.`
+                        : `Silakan jelaskan kebutuhanmu di channel ini.\n` +
+                          `Admin <@&${config.roles.admin}> akan segera membantu.`)
             )
-            .setColor(isTransaction ? 0x3498DB : 0xE67E22)
+            .setColor(isTransaction ? 0x3498db : 0xe67e22)
             .addFields(
                 isTransaction
                     ? [
-                        { name: '📦 Produk', value: `${product.label}${product.duration ? ` (${product.duration})` : ''}`, inline: true },
-                        { name: '💰 Harga', value: product.price, inline: true }
-                    ]
+                          {
+                              name: '📦 Produk',
+                              value: `${product.label}${product.duration ? ` (${product.duration})` : ''}`,
+                              inline: true
+                          },
+                          { name: '💰 Harga', value: product.price, inline: true }
+                      ]
                     : [{ name: '📋 Jenis', value: product.label, inline: false }]
             )
-            .setFooter({ text: interaction.client.user.username, iconURL: interaction.client.user.displayAvatarURL({ dynamic: true }) })
+            .setFooter({
+                text: interaction.client.user.username,
+                iconURL: interaction.client.user.displayAvatarURL({ dynamic: true })
+            })
             .setTimestamp();
 
         // Tombol: Set Key (hanya transaksi) + Tutup Tiket
@@ -257,11 +307,15 @@ async function createTicket(interaction, product) {
         );
         const closeRow = new ActionRowBuilder().addComponents(...components);
 
-        await ticketChannel.send({ content: `<@&${config.roles.admin}> | <@${user.id}>`, embeds: [ticketEmbed], components: [closeRow] });
+        await ticketChannel.send({
+            content: `<@&${config.roles.admin}> | <@${user.id}>`,
+            embeds: [ticketEmbed],
+            components: [closeRow]
+        });
         await safeEditReply(interaction, { content: `✅ Tiket berhasil dibuat: ${ticketChannel}` });
     } catch (err) {
         console.error('Error creating ticket:', err);
-        await interaction.editReply({ content: '❌ Terjadi error saat membuat tiket. Cek izin bot!' }).catch(()=>{});
+        await interaction.editReply({ content: '❌ Terjadi error saat membuat tiket. Cek izin bot!' }).catch(() => {});
     } finally {
         // P2-2 FIX: pastikan lock dilepas walau ada error.
         // v3.9.8: gunakan lockKey scoped per guild.
@@ -287,7 +341,7 @@ async function sendInvoice(channel, userId, productName, price, closer) {
     const orderId = `INV-${Date.now().toString().slice(-6)}`;
     const invoiceEmbed = new EmbedBuilder()
         .setTitle('🧾 BUKTI TRANSAKSI / TESTIMONI')
-        .setColor(0x2ECC71)
+        .setColor(0x2ecc71)
         .addFields(
             { name: '🆔 Order ID', value: orderId, inline: false },
             { name: '👤 Pembeli', value: `<@${userId}>`, inline: false },
@@ -368,11 +422,11 @@ async function saveTranscript(ticketChannel, meta, closer, isSuccess) {
 
     // Kirim sebagai embed summary + multiple text chunks kalau perlu
     const transcriptText = lines.join('\n');
-    const CHUNK_SIZE = 1900;  // sedikit di bawah 2000 untuk safety
+    const CHUNK_SIZE = 1900; // sedikit di bawah 2000 untuk safety
 
     const embed = new EmbedBuilder()
         .setTitle(`🎫 Ticket Transcript — ${meta?.productName || 'Unknown'}`)
-        .setColor(isSuccess ? 0x57F287 : 0xED4245)
+        .setColor(isSuccess ? 0x57f287 : 0xed4245)
         .addFields(
             { name: '👤 User', value: `<@${meta?.userId || 'unknown'}>`, inline: true },
             { name: '📦 Produk', value: meta?.productName || 'unknown', inline: true },
@@ -486,7 +540,9 @@ async function closeTicket(channel, closer, isSuccess) {
             // DiscordAPIError code 10003 = Unknown Channel — sudah dihapus.
             // Anggap sukses karena tujuan close sudah tercapai.
             if (deleteErr.code === 10003) {
-                console.log(`ℹ️ Channel ${channelId} sudah tidak ada (kemungkinan dihapus admin lain atau close sebelumnya). Anggap sukses.`);
+                console.log(
+                    `ℹ️ Channel ${channelId} sudah tidak ada (kemungkinan dihapus admin lain atau close sebelumnya). Anggap sukses.`
+                );
             } else {
                 // Error lain (permission, network) — log tapi jangan crash
                 console.warn(`⚠️ Gagal hapus channel ${channelId}:`, deleteErr.message);

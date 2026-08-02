@@ -88,9 +88,9 @@ function buildGlobalControlPanel(options = {}) {
             .setTitle('TEMP VOICE')
             .setDescription(
                 'Tidak ada voice channel aktif.\n\n' +
-                `Join ke channel "🔊 Buat Voice" untuk membuat voice channel pribadi.`
+                    `Join ke channel "🔊 Buat Voice" untuk membuat voice channel pribadi.`
             )
-            .setColor(0x2C2F33)
+            .setColor(0x2c2f33)
             .setFooter({ text: `${guildName}` })
             .setTimestamp();
 
@@ -98,9 +98,7 @@ function buildGlobalControlPanel(options = {}) {
     }
 
     // v3.8.5: Sort activeOwners by createdAt desc (paling baru pertama)
-    const sorted = [...activeOwners].sort((a, b) =>
-        (b.channelInfo.createdAt || 0) - (a.channelInfo.createdAt || 0)
-    );
+    const sorted = [...activeOwners].sort((a, b) => (b.channelInfo.createdAt || 0) - (a.channelInfo.createdAt || 0));
 
     // Build description — daftar voice aktif + keterangan button
     let description = `**Voice Aktif (${sorted.length})**\n\n`;
@@ -129,32 +127,16 @@ function buildGlobalControlPanel(options = {}) {
     const embed = new EmbedBuilder()
         .setTitle('TEMP VOICE')
         .setDescription(description)
-        .setColor(0x2C2F33)
+        .setColor(0x2c2f33)
         .setFooter({ text: `${guildName}` })
         .setTimestamp();
 
     // Row 1: rename, kick, limit, lock
     const row1 = new ActionRowBuilder().addComponents(
-        new ButtonBuilder()
-            .setCustomId('tv_rename')
-            .setLabel('Rename')
-            .setEmoji('✏️')
-            .setStyle(ButtonStyle.Primary),
-        new ButtonBuilder()
-            .setCustomId('tv_kick')
-            .setLabel('Kick')
-            .setEmoji('🚫')
-            .setStyle(ButtonStyle.Danger),
-        new ButtonBuilder()
-            .setCustomId('tv_limit')
-            .setLabel('Limit')
-            .setEmoji('👥')
-            .setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder()
-            .setCustomId('tv_lock')
-            .setLabel('Lock')
-            .setEmoji('🔒')
-            .setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder().setCustomId('tv_rename').setLabel('Rename').setEmoji('✏️').setStyle(ButtonStyle.Primary),
+        new ButtonBuilder().setCustomId('tv_kick').setLabel('Kick').setEmoji('🚫').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId('tv_limit').setLabel('Limit').setEmoji('👥').setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId('tv_lock').setLabel('Lock').setEmoji('🔒').setStyle(ButtonStyle.Secondary)
     );
 
     // Row 2: transfer, delete, info room
@@ -164,16 +146,8 @@ function buildGlobalControlPanel(options = {}) {
             .setLabel('Transfer')
             .setEmoji('🔄')
             .setStyle(ButtonStyle.Primary),
-        new ButtonBuilder()
-            .setCustomId('tv_delete')
-            .setLabel('Delete')
-            .setEmoji('🗑️')
-            .setStyle(ButtonStyle.Danger),
-        new ButtonBuilder()
-            .setCustomId('tv_info')
-            .setLabel('Info Room')
-            .setEmoji('ℹ️')
-            .setStyle(ButtonStyle.Secondary)
+        new ButtonBuilder().setCustomId('tv_delete').setLabel('Delete').setEmoji('🗑️').setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId('tv_info').setLabel('Info Room').setEmoji('ℹ️').setStyle(ButtonStyle.Secondary)
     );
 
     const components = [row1, row2];
@@ -214,9 +188,7 @@ function buildInfoRoomEmbed(channelInfo, voiceChannel, guildName = 'Server') {
     const memberCount = voiceChannel?.members?.size || 0;
     const limitStr = channelInfo.limit === 0 ? 'Unlimited' : `${channelInfo.limit}`;
     const lockStr = channelInfo.locked ? 'Terkunci' : 'Terbuka';
-    const createdDate = channelInfo.createdAt
-        ? `<t:${Math.floor(channelInfo.createdAt / 1000)}:R>`
-        : '-';
+    const createdDate = channelInfo.createdAt ? `<t:${Math.floor(channelInfo.createdAt / 1000)}:R>` : '-';
 
     let memberList = '';
     if (voiceChannel?.members && voiceChannel.members.size > 0) {
@@ -233,13 +205,13 @@ function buildInfoRoomEmbed(channelInfo, voiceChannel, guildName = 'Server') {
         .setTitle(`${channelInfo.name}`)
         .setDescription(
             `👑 Owner: <@${channelInfo.ownerId}>\n` +
-            `👥 Member: ${memberCount}${channelInfo.limit > 0 ? ` / ${channelInfo.limit}` : ''}\n` +
-            `📊 Limit: ${limitStr}\n` +
-            `🔒 Status: ${lockStr}\n` +
-            `🕐 Dibuat: ${createdDate}\n\n` +
-            `**Member di voice:**\n${memberList}`
+                `👥 Member: ${memberCount}${channelInfo.limit > 0 ? ` / ${channelInfo.limit}` : ''}\n` +
+                `📊 Limit: ${limitStr}\n` +
+                `🔒 Status: ${lockStr}\n` +
+                `🕐 Dibuat: ${createdDate}\n\n` +
+                `**Member di voice:**\n${memberList}`
         )
-        .setColor(channelInfo.locked ? 0xE67E22 : 0x57F287)
+        .setColor(channelInfo.locked ? 0xe67e22 : 0x57f287)
         .setFooter({ text: `${guildName}` })
         .setTimestamp();
 

@@ -62,7 +62,7 @@ function create(data) {
         data: {
             title: data.title,
             description: data.description,
-            color: data.color || 0x5865F2,
+            color: data.color || 0x5865f2,
             image: data.image || null,
             thumbnail: data.thumbnail || null,
             mention: data.mention || null,
@@ -206,11 +206,13 @@ function parseTime(input) {
         // v3.9.8 FIX: Date constructor auto-rolls invalid components (mis. month 13
         // → January next year, day 40 → 9th of next month). Sebelumnya, "2026-13-40 99:99"
         // silently menjadi valid date di tahun 2027. Sekarang: verify components match.
-        if (dt.getFullYear() !== yearNum ||
+        if (
+            dt.getFullYear() !== yearNum ||
             dt.getMonth() !== monthNum - 1 ||
             dt.getDate() !== dayNum ||
             dt.getHours() !== hourNum ||
-            dt.getMinutes() !== minNum) {
+            dt.getMinutes() !== minNum
+        ) {
             return null;
         }
 
@@ -235,6 +237,12 @@ function formatTimeLeft(ms) {
 }
 
 module.exports = {
-    create, get, getByGuild, getPending, markSent, remove,
-    computeNextRecurring, parseTime
+    create,
+    get,
+    getByGuild,
+    getPending,
+    markSent,
+    remove,
+    computeNextRecurring,
+    parseTime
 };

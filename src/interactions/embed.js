@@ -17,14 +17,8 @@
  * Jadi domain handler fokus ke logic-nya saja.
  */
 
-const {
-    ActionRowBuilder,
-    MessageFlags,
-    ModalBuilder, TextInputBuilder, TextInputStyle
-} = require('discord.js');
-const {
-    safeEditReply, logAudit, parseColor
-} = require('../commands/_shared');
+const { ActionRowBuilder, MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
+const { safeEditReply, logAudit, parseColor } = require('../commands/_shared');
 // `getSession` (singular) tidak di-export dari _shared, import langsung.
 const { getSession, deleteSession, buildEmbed: buildSessionEmbed } = require('../ui/embedBuilderSessions');
 
@@ -43,7 +37,10 @@ module.exports = async function (interaction) {
         const sessionId = interaction.customId.split(':')[1];
         const session = getSession(sessionId);
         if (!session) {
-            return interaction.reply({ content: '❌ Session builder sudah tidak ada (mungkin bot restart).', flags: MessageFlags.Ephemeral });
+            return interaction.reply({
+                content: '❌ Session builder sudah tidak ada (mungkin bot restart).',
+                flags: MessageFlags.Ephemeral
+            });
         }
         const embed = buildSessionEmbed(session);
         // v3.9.6: tampilkan plain text message di preview ephemeral supaya
@@ -62,19 +59,23 @@ module.exports = async function (interaction) {
             return interaction.reply({ content: '❌ Session builder sudah tidak ada.', flags: MessageFlags.Ephemeral });
         }
         if (session.ownerId !== interaction.user.id) {
-            return interaction.reply({ content: '❌ Hanya pembuat yang bisa kirim draft ini.', flags: MessageFlags.Ephemeral });
+            return interaction.reply({
+                content: '❌ Hanya pembuat yang bisa kirim draft ini.',
+                flags: MessageFlags.Ephemeral
+            });
         }
         if (!session.data.title && !session.data.description) {
-            return interaction.reply({ content: '❌ Embed minimal harus punya **Title** atau **Description** sebelum dikirim.', flags: MessageFlags.Ephemeral });
+            return interaction.reply({
+                content: '❌ Embed minimal harus punya **Title** atau **Description** sebelum dikirim.',
+                flags: MessageFlags.Ephemeral
+            });
         }
         // v3.9.6: kirim bisa dengan atau tanpa plain text message.
         // Message sudah diset via opsi "Message (plain text)" di dropdown.
         // Tampilkan di modal supaya admin bisa lihat & edit cepat sebelum kirim.
         const currentMessage = session.data.content || '';
         // Buka modal untuk input channel target + optional override message
-        const modal = new ModalBuilder()
-            .setCustomId(`emb_modal_send:${sessionId}`)
-            .setTitle('Kirim Embed ke Channel');
+        const modal = new ModalBuilder().setCustomId(`emb_modal_send:${sessionId}`).setTitle('Kirim Embed ke Channel');
         modal.addComponents(
             new ActionRowBuilder().addComponents(
                 new TextInputBuilder()
@@ -92,7 +93,9 @@ module.exports = async function (interaction) {
                     .setStyle(TextInputStyle.Paragraph)
                     .setRequired(false)
                     .setMaxLength(2000)
-                    .setPlaceholder('Kosongkan = embed saja. Isi = teks + embed.\nSupport @everyone, @here, <@&role>, <@user>')
+                    .setPlaceholder(
+                        'Kosongkan = embed saja. Isi = teks + embed.\nSupport @everyone, @here, <@&role>, <@user>'
+                    )
                     .setValue(currentMessage)
             )
         );
@@ -106,7 +109,10 @@ module.exports = async function (interaction) {
             return interaction.reply({ content: '❌ Session builder sudah tidak ada.', flags: MessageFlags.Ephemeral });
         }
         if (session.ownerId !== interaction.user.id) {
-            return interaction.reply({ content: '❌ Hanya pembuat yang bisa cancel draft ini.', flags: MessageFlags.Ephemeral });
+            return interaction.reply({
+                content: '❌ Hanya pembuat yang bisa cancel draft ini.',
+                flags: MessageFlags.Ephemeral
+            });
         }
         // Hapus draft message
         try {
@@ -135,10 +141,16 @@ async function handleEmbedBuilderEdit(interaction) {
     const sessionId = interaction.customId.split(':')[1];
     const session = getSession(sessionId);
     if (!session) {
-        return interaction.reply({ content: '❌ Session builder sudah tidak ada (mungkin bot restart).', flags: MessageFlags.Ephemeral });
+        return interaction.reply({
+            content: '❌ Session builder sudah tidak ada (mungkin bot restart).',
+            flags: MessageFlags.Ephemeral
+        });
     }
     if (session.ownerId !== interaction.user.id) {
-        return interaction.reply({ content: '❌ Hanya pembuat yang bisa edit draft ini.', flags: MessageFlags.Ephemeral });
+        return interaction.reply({
+            content: '❌ Hanya pembuat yang bisa edit draft ini.',
+            flags: MessageFlags.Ephemeral
+        });
     }
 
     const action = interaction.values[0];
@@ -146,96 +158,93 @@ async function handleEmbedBuilderEdit(interaction) {
 
     // === TITLE ===
     if (action === 'title') {
-        const modal = new ModalBuilder()
-            .setCustomId(`emb_modal_title:${sessionId}`)
-            .setTitle('Edit Title');
-        modal.addComponents(new ActionRowBuilder().addComponents(
-            new TextInputBuilder()
-                .setCustomId('value')
-                .setLabel('Title (kosongkan untuk hapus)')
-                .setStyle(TextInputStyle.Short)
-                .setRequired(false)
-                .setMaxLength(256)
-                .setValue(d.title || '')
-        ));
+        const modal = new ModalBuilder().setCustomId(`emb_modal_title:${sessionId}`).setTitle('Edit Title');
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(
+                new TextInputBuilder()
+                    .setCustomId('value')
+                    .setLabel('Title (kosongkan untuk hapus)')
+                    .setStyle(TextInputStyle.Short)
+                    .setRequired(false)
+                    .setMaxLength(256)
+                    .setValue(d.title || '')
+            )
+        );
         return interaction.showModal(modal);
     }
 
     // === DESCRIPTION ===
     if (action === 'description') {
-        const modal = new ModalBuilder()
-            .setCustomId(`emb_modal_desc:${sessionId}`)
-            .setTitle('Edit Description');
-        modal.addComponents(new ActionRowBuilder().addComponents(
-            new TextInputBuilder()
-                .setCustomId('value')
-                .setLabel('Description (kosongkan untuk hapus)')
-                .setStyle(TextInputStyle.Paragraph)
-                .setRequired(false)
-                .setMaxLength(4000)
-                .setValue(d.description || '')
-        ));
+        const modal = new ModalBuilder().setCustomId(`emb_modal_desc:${sessionId}`).setTitle('Edit Description');
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(
+                new TextInputBuilder()
+                    .setCustomId('value')
+                    .setLabel('Description (kosongkan untuk hapus)')
+                    .setStyle(TextInputStyle.Paragraph)
+                    .setRequired(false)
+                    .setMaxLength(4000)
+                    .setValue(d.description || '')
+            )
+        );
         return interaction.showModal(modal);
     }
 
     // === COLOR ===
     if (action === 'color') {
-        const modal = new ModalBuilder()
-            .setCustomId(`emb_modal_color:${sessionId}`)
-            .setTitle('Set Color');
-        const currentHex = d.color !== null && d.color !== undefined
-            ? '#' + d.color.toString(16).padStart(6, '0').toUpperCase()
-            : '';
-        modal.addComponents(new ActionRowBuilder().addComponents(
-            new TextInputBuilder()
-                .setCustomId('value')
-                .setLabel('Color hex (mis. #FF0000 atau FF0000)')
-                .setStyle(TextInputStyle.Short)
-                .setRequired(false)
-                .setMaxLength(7)
-                .setPlaceholder('#FF0000')
-                .setValue(currentHex)
-        ));
+        const modal = new ModalBuilder().setCustomId(`emb_modal_color:${sessionId}`).setTitle('Set Color');
+        const currentHex =
+            d.color !== null && d.color !== undefined ? '#' + d.color.toString(16).padStart(6, '0').toUpperCase() : '';
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(
+                new TextInputBuilder()
+                    .setCustomId('value')
+                    .setLabel('Color hex (mis. #FF0000 atau FF0000)')
+                    .setStyle(TextInputStyle.Short)
+                    .setRequired(false)
+                    .setMaxLength(7)
+                    .setPlaceholder('#FF0000')
+                    .setValue(currentHex)
+            )
+        );
         return interaction.showModal(modal);
     }
 
     // === IMAGE ===
     if (action === 'image') {
-        const modal = new ModalBuilder()
-            .setCustomId(`emb_modal_image:${sessionId}`)
-            .setTitle('Set Image');
-        modal.addComponents(new ActionRowBuilder().addComponents(
-            new TextInputBuilder()
-                .setCustomId('value')
-                .setLabel('Image URL (kosongkan untuk hapus)')
-                .setStyle(TextInputStyle.Short)
-                .setRequired(false)
-                .setValue(d.image?.url || '')
-        ));
+        const modal = new ModalBuilder().setCustomId(`emb_modal_image:${sessionId}`).setTitle('Set Image');
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(
+                new TextInputBuilder()
+                    .setCustomId('value')
+                    .setLabel('Image URL (kosongkan untuk hapus)')
+                    .setStyle(TextInputStyle.Short)
+                    .setRequired(false)
+                    .setValue(d.image?.url || '')
+            )
+        );
         return interaction.showModal(modal);
     }
 
     // === THUMBNAIL ===
     if (action === 'thumbnail') {
-        const modal = new ModalBuilder()
-            .setCustomId(`emb_modal_thumbnail:${sessionId}`)
-            .setTitle('Set Thumbnail');
-        modal.addComponents(new ActionRowBuilder().addComponents(
-            new TextInputBuilder()
-                .setCustomId('value')
-                .setLabel('Thumbnail URL (kosongkan untuk hapus)')
-                .setStyle(TextInputStyle.Short)
-                .setRequired(false)
-                .setValue(d.thumbnail?.url || '')
-        ));
+        const modal = new ModalBuilder().setCustomId(`emb_modal_thumbnail:${sessionId}`).setTitle('Set Thumbnail');
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(
+                new TextInputBuilder()
+                    .setCustomId('value')
+                    .setLabel('Thumbnail URL (kosongkan untuk hapus)')
+                    .setStyle(TextInputStyle.Short)
+                    .setRequired(false)
+                    .setValue(d.thumbnail?.url || '')
+            )
+        );
         return interaction.showModal(modal);
     }
 
     // === FOOTER ===
     if (action === 'footer') {
-        const modal = new ModalBuilder()
-            .setCustomId(`emb_modal_footer:${sessionId}`)
-            .setTitle('Set Footer');
+        const modal = new ModalBuilder().setCustomId(`emb_modal_footer:${sessionId}`).setTitle('Set Footer');
         modal.addComponents(
             new ActionRowBuilder().addComponents(
                 new TextInputBuilder()
@@ -260,9 +269,7 @@ async function handleEmbedBuilderEdit(interaction) {
 
     // === AUTHOR ===
     if (action === 'author') {
-        const modal = new ModalBuilder()
-            .setCustomId(`emb_modal_author:${sessionId}`)
-            .setTitle('Set Author');
+        const modal = new ModalBuilder().setCustomId(`emb_modal_author:${sessionId}`).setTitle('Set Author');
         modal.addComponents(
             new ActionRowBuilder().addComponents(
                 new TextInputBuilder()
@@ -294,23 +301,28 @@ async function handleEmbedBuilderEdit(interaction) {
         const modal = new ModalBuilder()
             .setCustomId(`emb_modal_message:${sessionId}`)
             .setTitle('Set Message (Plain Text)');
-        modal.addComponents(new ActionRowBuilder().addComponents(
-            new TextInputBuilder()
-                .setCustomId('value')
-                .setLabel('Pesan di luar embed (kosongkan untuk hapus)')
-                .setStyle(TextInputStyle.Paragraph)
-                .setRequired(false)
-                .setMaxLength(2000)
-                .setPlaceholder('Teks pengantar di luar embed.\nSupport @everyone, @here, mention')
-                .setValue(d.content || '')
-        ));
+        modal.addComponents(
+            new ActionRowBuilder().addComponents(
+                new TextInputBuilder()
+                    .setCustomId('value')
+                    .setLabel('Pesan di luar embed (kosongkan untuk hapus)')
+                    .setStyle(TextInputStyle.Paragraph)
+                    .setRequired(false)
+                    .setMaxLength(2000)
+                    .setPlaceholder('Teks pengantar di luar embed.\nSupport @everyone, @here, mention')
+                    .setValue(d.content || '')
+            )
+        );
         return interaction.showModal(modal);
     }
 
     // === ADD FIELD (normal / inline) ===
     if (action === 'add_field' || action === 'add_field_inline') {
         if (d.fields.length >= 25) {
-            return interaction.reply({ content: '❌ Maksimal 25 field (batas Discord). Hapus field lama dulu.', flags: MessageFlags.Ephemeral });
+            return interaction.reply({
+                content: '❌ Maksimal 25 field (batas Discord). Hapus field lama dulu.',
+                flags: MessageFlags.Ephemeral
+            });
         }
         const inline = action === 'add_field_inline';
         const modal = new ModalBuilder()
@@ -362,7 +374,10 @@ async function handleEmbedBuilderEdit(interaction) {
     if (action === 'toggle_timestamp') {
         d.timestamp = !d.timestamp;
         await refreshEmbedDraft(interaction, session);
-        return interaction.reply({ content: `✅ Timestamp ${d.timestamp ? 'DINYALAKAN' : 'DIMATIKAN'}.`, flags: MessageFlags.Ephemeral });
+        return interaction.reply({
+            content: `✅ Timestamp ${d.timestamp ? 'DINYALAKAN' : 'DIMATIKAN'}.`,
+            flags: MessageFlags.Ephemeral
+        });
     }
 }
 
@@ -379,7 +394,10 @@ async function handleEmbedBuilderModal(interaction) {
         return interaction.reply({ content: '❌ Session builder sudah tidak ada.', flags: MessageFlags.Ephemeral });
     }
     if (session.ownerId !== interaction.user.id) {
-        return interaction.reply({ content: '❌ Hanya pembuat yang bisa edit draft ini.', flags: MessageFlags.Ephemeral });
+        return interaction.reply({
+            content: '❌ Hanya pembuat yang bisa edit draft ini.',
+            flags: MessageFlags.Ephemeral
+        });
     }
 
     // v3.9.7: log deferReply failure supaya tidak gaib. Kalau deferReply gagal
@@ -395,14 +413,14 @@ async function handleEmbedBuilderModal(interaction) {
     // Setiap ActionRowModalData punya .components (bukan .fields!) — array TextInputModalData.
     // Tiap TextInputModalData punya .value (string).
     // Pakai ?. di seluruh chain supaya gak throw kalau index gak ada.
-    const getFieldValue = (idx) => interaction.components[idx]?.components?.[0]?.value?.trim() || '';
+    const getFieldValue = idx => interaction.components[idx]?.components?.[0]?.value?.trim() || '';
 
     // === TITLE ===
     if (modalType === 'emb_modal_title') {
         // v3.9.2: validate Discord embed title limit (256 char)
         const val = getFieldValue(0);
         if (val && val.length > 256) {
-            return safeEditReply(interaction,{ content: `❌ Title terlalu panjang (${val.length} char, maks 256).` });
+            return safeEditReply(interaction, { content: `❌ Title terlalu panjang (${val.length} char, maks 256).` });
         }
         d.title = val || null;
     }
@@ -412,7 +430,9 @@ async function handleEmbedBuilderModal(interaction) {
         // v3.9.2: validate Discord embed description limit (4096 char)
         const val = getFieldValue(0);
         if (val && val.length > 4096) {
-            return safeEditReply(interaction,{ content: `❌ Description terlalu panjang (${val.length} char, maks 4096).` });
+            return safeEditReply(interaction, {
+                content: `❌ Description terlalu panjang (${val.length} char, maks 4096).`
+            });
         }
         d.description = val || null;
     }
@@ -421,11 +441,13 @@ async function handleEmbedBuilderModal(interaction) {
     else if (modalType === 'emb_modal_color') {
         const val = getFieldValue(0);
         if (!val) {
-            d.color = 0x5865F2; // reset ke default
+            d.color = 0x5865f2; // reset ke default
         } else {
             const parsed = parseColor(val);
             if (parsed === null) {
-                return safeEditReply(interaction,{ content: `❌ Color tidak valid: \`${val}\`. Pakai format hex 6 digit, mis. \`#FF0000\`.` });
+                return safeEditReply(interaction, {
+                    content: `❌ Color tidak valid: \`${val}\`. Pakai format hex 6 digit, mis. \`#FF0000\`.`
+                });
             }
             d.color = parsed;
         }
@@ -435,7 +457,7 @@ async function handleEmbedBuilderModal(interaction) {
     else if (modalType === 'emb_modal_image') {
         const val = getFieldValue(0);
         if (val && !/^https?:\/\//i.test(val)) {
-            return safeEditReply(interaction,{ content: '❌ Image URL harus mulai dengan `http://` atau `https://`' });
+            return safeEditReply(interaction, { content: '❌ Image URL harus mulai dengan `http://` atau `https://`' });
         }
         d.image = val ? { url: val } : null;
     }
@@ -444,7 +466,9 @@ async function handleEmbedBuilderModal(interaction) {
     else if (modalType === 'emb_modal_thumbnail') {
         const val = getFieldValue(0);
         if (val && !/^https?:\/\//i.test(val)) {
-            return safeEditReply(interaction,{ content: '❌ Thumbnail URL harus mulai dengan `http://` atau `https://`' });
+            return safeEditReply(interaction, {
+                content: '❌ Thumbnail URL harus mulai dengan `http://` atau `https://`'
+            });
         }
         d.thumbnail = val ? { url: val } : null;
     }
@@ -483,7 +507,9 @@ async function handleEmbedBuilderModal(interaction) {
         // v3.9.6: validate Discord message content limit (2000 char).
         // Modal setMaxLength sudah batasi, tapi defense-in-depth tetap cek.
         if (val && val.length > 2000) {
-            return safeEditReply(interaction, { content: `❌ Message terlalu panjang (${val.length} char, maks 2000).` });
+            return safeEditReply(interaction, {
+                content: `❌ Message terlalu panjang (${val.length} char, maks 2000).`
+            });
         }
         d.content = val || null;
     }
@@ -494,19 +520,23 @@ async function handleEmbedBuilderModal(interaction) {
         const name = getFieldValue(0);
         const value = getFieldValue(1);
         if (!name || !value) {
-            return safeEditReply(interaction,{ content: '❌ Field name dan value wajib diisi.' });
+            return safeEditReply(interaction, { content: '❌ Field name dan value wajib diisi.' });
         }
         if (d.fields.length >= 25) {
-            return safeEditReply(interaction,{ content: '❌ Maksimal 25 field (batas Discord).' });
+            return safeEditReply(interaction, { content: '❌ Maksimal 25 field (batas Discord).' });
         }
         // v3.9.2: defense-in-depth — walau modal setMaxLength sudah membatasi,
         // validasi lagi di sini supaya embed tidak throw di buildEmbed().
         // Field name maks 256 char, value maks 1024 char (Discord API limit).
         if (name.length > 256) {
-            return safeEditReply(interaction,{ content: `❌ Field name terlalu panjang (${name.length} char, maks 256).` });
+            return safeEditReply(interaction, {
+                content: `❌ Field name terlalu panjang (${name.length} char, maks 256).`
+            });
         }
         if (value.length > 1024) {
-            return safeEditReply(interaction,{ content: `❌ Field value terlalu panjang (${value.length} char, maks 1024).` });
+            return safeEditReply(interaction, {
+                content: `❌ Field value terlalu panjang (${value.length} char, maks 1024).`
+            });
         }
         d.fields.push({ name, value, inline });
     }
@@ -516,7 +546,7 @@ async function handleEmbedBuilderModal(interaction) {
         const channelInput = getFieldValue(0);
         // v3.9.6: ambil message dari modal (bisa di-edit admin sebelum kirim).
         // Kalau kosong, fallback ke session.data.content (yang sudah diset via opsi "Message").
-        let messageInput = getFieldValue(1);
+        const messageInput = getFieldValue(1);
         const messageText = messageInput || session.data.content || '';
 
         let targetChannel = null;
@@ -526,11 +556,13 @@ async function handleEmbedBuilderModal(interaction) {
         // (channel baru setelah bot start, atau guild besar dengan cache parsial).
         const mentionMatch = channelInput.match(/^<#(\d+)>$/);
         if (mentionMatch) {
-            targetChannel = interaction.guild.channels.cache.get(mentionMatch[1])
-                || await interaction.guild.channels.fetch(mentionMatch[1]).catch(() => null);
+            targetChannel =
+                interaction.guild.channels.cache.get(mentionMatch[1]) ||
+                (await interaction.guild.channels.fetch(mentionMatch[1]).catch(() => null));
         } else if (/^\d+$/.test(channelInput)) {
-            targetChannel = interaction.guild.channels.cache.get(channelInput)
-                || await interaction.guild.channels.fetch(channelInput).catch(() => null);
+            targetChannel =
+                interaction.guild.channels.cache.get(channelInput) ||
+                (await interaction.guild.channels.fetch(channelInput).catch(() => null));
         } else {
             const name = channelInput.replace(/^#/, '');
             // Buat name lookup, cache lookup udah cukup (fetch gak bisa by name).
@@ -538,7 +570,9 @@ async function handleEmbedBuilderModal(interaction) {
         }
 
         if (!targetChannel) {
-            return safeEditReply(interaction, { content: `❌ Channel tidak ditemukan: \`${channelInput}\`. Pakai #mention atau channel ID.` });
+            return safeEditReply(interaction, {
+                content: `❌ Channel tidak ditemukan: \`${channelInput}\`. Pakai #mention atau channel ID.`
+            });
         }
 
         // v3.9.6: validate message length (Discord limit 2000 char)
@@ -567,15 +601,16 @@ async function handleEmbedBuilderModal(interaction) {
             for (const m of foundMentions) {
                 const lower = m.toLowerCase();
                 if (lower === '@everyone' || lower === '@here') continue;
-                if (/^<@&\d{17,20}>$/.test(m)) continue;       // role mention
-                if (/^<@!?\d{17,20}>$/.test(m)) continue;       // user mention
+                if (/^<@&\d{17,20}>$/.test(m)) continue; // role mention
+                if (/^<@!?\d{17,20}>$/.test(m)) continue; // user mention
                 // Kalau sampai sini, berarti `@\w+` match tapi bukan format valid
                 // (mis. "@halo", "@admin", "@semua") → reject
                 invalidMentions.push(m);
             }
             if (invalidMentions.length > 0) {
                 return safeEditReply(interaction, {
-                    content: `❌ Mention tidak valid di message: \`${invalidMentions.join('`, `')}\`\n\n` +
+                    content:
+                        `❌ Mention tidak valid di message: \`${invalidMentions.join('`, `')}\`\n\n` +
                         'Format mention yang didukung:\n' +
                         '• `@everyone` atau `@here`\n' +
                         '• `<@&ROLE_ID>` (mention role — ketik `@rolename` di Discord lalu copy)\n' +
@@ -631,7 +666,7 @@ async function handleEmbedBuilderModal(interaction) {
 
     // Refresh draft dengan embed terbaru
     await refreshEmbedDraft(interaction, session);
-    return safeEditReply(interaction,{ content: '✅ Embed diupdate.' });
+    return safeEditReply(interaction, { content: '✅ Embed diupdate.' });
 }
 
 // ====================================================

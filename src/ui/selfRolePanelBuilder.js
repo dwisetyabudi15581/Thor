@@ -32,15 +32,18 @@ function buildPanelEmbed(panel, client) {
         ? '🔒 **Mode eksklusif** — hanya boleh 1 role pada satu waktu.'
         : '✅ **Mode multi** — boleh ambil lebih dari 1 role.';
 
-    const rolesText = panel.roles.length === 0
-        ? '_Belum ada role. Admin bisa tambah via `/selfrole-add`._'
-        : panel.roles.map(r => {
-            const emojiStr = r.emoji ? `${r.emoji} ` : '';
-            const descStr = r.description ? ` — ${r.description}` : '';
-            // v3.9.11 Phase 3: tampilkan badge kalau role butuh prerequisite
-            const reqStr = r.requiresRoleId ? ` _(butuh <@&${r.requiresRoleId}>)_` : '';
-            return `• ${emojiStr}**${r.label}** <@&${r.roleId}>${descStr}${reqStr}`;
-        }).join('\n');
+    const rolesText =
+        panel.roles.length === 0
+            ? '_Belum ada role. Admin bisa tambah via `/selfrole-add`._'
+            : panel.roles
+                  .map(r => {
+                      const emojiStr = r.emoji ? `${r.emoji} ` : '';
+                      const descStr = r.description ? ` — ${r.description}` : '';
+                      // v3.9.11 Phase 3: tampilkan badge kalau role butuh prerequisite
+                      const reqStr = r.requiresRoleId ? ` _(butuh <@&${r.requiresRoleId}>)_` : '';
+                      return `• ${emojiStr}**${r.label}** <@&${r.roleId}>${descStr}${reqStr}`;
+                  })
+                  .join('\n');
 
     // Discord embed description limit 4096 char. Kalau panel punya 25 role dengan
     // label/description panjang, total description bisa exceed limit → Discord reject.
@@ -50,7 +53,10 @@ function buildPanelEmbed(panel, client) {
     let fullDesc;
     if (header.length + rolesText.length > MAX_DESC) {
         const remaining = MAX_DESC - header.length - 30;
-        fullDesc = header + rolesText.slice(0, Math.max(0, remaining)) + `\n... +${panel.roles.length} lainnya (lihat via /selfrole-list)`;
+        fullDesc =
+            header +
+            rolesText.slice(0, Math.max(0, remaining)) +
+            `\n... +${panel.roles.length} lainnya (lihat via /selfrole-list)`;
     } else {
         fullDesc = header + rolesText;
     }
@@ -58,7 +64,7 @@ function buildPanelEmbed(panel, client) {
     const embed = new EmbedBuilder()
         .setTitle(panel.title)
         .setDescription(fullDesc)
-        .setColor(0x9B59B6)
+        .setColor(0x9b59b6)
         .setFooter({
             text: `${client?.user?.username || 'Bot'} • Panel ID: ${panel.id} • ${panel.exclusive ? 'Eksklusif' : 'Multi'}`,
             iconURL: client?.user?.displayAvatarURL?.({ dynamic: true })
@@ -87,12 +93,14 @@ function buildPanelComponents(panel) {
             .setPlaceholder('Pilih role...')
             .setMinValues(0)
             .setMaxValues(panel.exclusive ? 1 : Math.min(panel.roles.length, 25))
-            .addOptions(panel.roles.map(r => ({
-                label: r.label,
-                value: r.roleId,
-                ...(r.emoji ? { emoji: r.emoji } : {}),
-                ...(r.description ? { description: r.description } : {})
-            })));
+            .addOptions(
+                panel.roles.map(r => ({
+                    label: r.label,
+                    value: r.roleId,
+                    ...(r.emoji ? { emoji: r.emoji } : {}),
+                    ...(r.description ? { description: r.description } : {})
+                }))
+            );
         return [new ActionRowBuilder().addComponents(select)];
     }
 
@@ -110,7 +118,11 @@ function buildPanelComponents(panel) {
                 .setLabel(r.label)
                 .setStyle(btnStyle);
             if (r.emoji) {
-                try { btn.setEmoji(r.emoji); } catch (_) { /* emoji invalid, skip */ }
+                try {
+                    btn.setEmoji(r.emoji);
+                } catch (_) {
+                    /* emoji invalid, skip */
+                }
             }
             row.addComponents(btn);
         }
@@ -120,4 +132,3 @@ function buildPanelComponents(panel) {
 }
 
 module.exports = { buildPanelEmbed, buildPanelComponents, STYLE_MAP };
-

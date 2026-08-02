@@ -40,11 +40,13 @@ module.exports = async function (interaction) {
         const mention = interaction.options.getString('mention');
 
         // Parse color
-        let color = 0x5865F2; // default blurple
+        let color = 0x5865f2; // default blurple
         if (colorStr) {
             const parsed = parseColor(colorStr);
             if (parsed === null) {
-                return safeEditReply(interaction,{ content: `❌ Color tidak valid: \`${colorStr}\`. Pakai format hex 6 digit, mis. \`#FF0000\` atau \`FF0000\`.` });
+                return safeEditReply(interaction, {
+                    content: `❌ Color tidak valid: \`${colorStr}\`. Pakai format hex 6 digit, mis. \`#FF0000\` atau \`FF0000\`.`
+                });
             }
             color = parsed;
         }
@@ -53,18 +55,24 @@ module.exports = async function (interaction) {
         // Discord API akan throw RangeError kalau title > 256 atau description > 4096,
         // yang sebelumnya ditangkap outer try-catch sebagai "Terjadi error" generik.
         if (title.length > EMBED_LIMITS.TITLE) {
-            return safeEditReply(interaction,{ content: `❌ Title terlalu panjang (${title.length} char, maks ${EMBED_LIMITS.TITLE}).` });
+            return safeEditReply(interaction, {
+                content: `❌ Title terlalu panjang (${title.length} char, maks ${EMBED_LIMITS.TITLE}).`
+            });
         }
         if (description.length > EMBED_LIMITS.DESCRIPTION) {
-            return safeEditReply(interaction,{ content: `❌ Description terlalu panjang (${description.length} char, maks ${EMBED_LIMITS.DESCRIPTION}).` });
+            return safeEditReply(interaction, {
+                content: `❌ Description terlalu panjang (${description.length} char, maks ${EMBED_LIMITS.DESCRIPTION}).`
+            });
         }
 
         // Validate URLs
         if (image && !/^https?:\/\//i.test(image)) {
-            return safeEditReply(interaction,{ content: '❌ Image URL harus mulai dengan `http://` atau `https://`' });
+            return safeEditReply(interaction, { content: '❌ Image URL harus mulai dengan `http://` atau `https://`' });
         }
         if (thumbnail && !/^https?:\/\//i.test(thumbnail)) {
-            return safeEditReply(interaction,{ content: '❌ Thumbnail URL harus mulai dengan `http://` atau `https://`' });
+            return safeEditReply(interaction, {
+                content: '❌ Thumbnail URL harus mulai dengan `http://` atau `https://`'
+            });
         }
 
         // Build embed
@@ -83,7 +91,7 @@ module.exports = async function (interaction) {
         // Resolve target channel
         const targetChannel = interaction.guild.channels.cache.get(channel.id);
         if (!targetChannel) {
-            return safeEditReply(interaction,{ content: '❌ Channel tidak ditemukan.' });
+            return safeEditReply(interaction, { content: '❌ Channel tidak ditemukan.' });
         }
 
         // Build content (mention)
@@ -111,8 +119,9 @@ module.exports = async function (interaction) {
                 // User mention: <@123456789012345678> or <@!123456789012345678>
                 content = mention;
             } else {
-                return safeEditReply(interaction,{
-                    content: `❌ Format mention tidak valid: \`${mention}\`\n\n` +
+                return safeEditReply(interaction, {
+                    content:
+                        `❌ Format mention tidak valid: \`${mention}\`\n\n` +
                         `Format yang didukung:\n` +
                         `• \`@everyone\` atau \`everyone\`\n` +
                         `• \`@here\` atau \`here\`\n` +
@@ -129,16 +138,22 @@ module.exports = async function (interaction) {
             // (audit channel hilang / DB write error), admin tidak diberi tahu
             // "Gagal kirim ke channel" padahal announce sudah terkirim.
             try {
-                await logAudit(interaction.client, { action: 'ANNOUNCE_SEND', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Kirim announce ke ${targetChannel}: **${title}**${mention ? ` | mention: ${mention}` : ''}`, guildId: interaction.guild.id });
+                await logAudit(interaction.client, {
+                    action: 'ANNOUNCE_SEND',
+                    actorId: interaction.user.id,
+                    actorTag: interaction.user.tag,
+                    details: `Kirim announce ke ${targetChannel}: **${title}**${mention ? ` | mention: ${mention}` : ''}`,
+                    guildId: interaction.guild.id
+                });
             } catch (auditErr) {
                 console.warn(`⚠️ Gagal log audit announce (announce tetap terkirim): ${auditErr.message}`);
             }
-            return safeEditReply(interaction,{
+            return safeEditReply(interaction, {
                 content: `✅ Announce terkirim ke ${targetChannel}!\n\n📋 **Preview:**`,
                 embeds: [embed]
             });
         } catch (err) {
-            return safeEditReply(interaction,{ content: `❌ Gagal kirim ke ${targetChannel}: ${err.message}` });
+            return safeEditReply(interaction, { content: `❌ Gagal kirim ke ${targetChannel}: ${err.message}` });
         }
     }
 
@@ -160,20 +175,25 @@ module.exports = async function (interaction) {
         // Parse time
         const sendAt = parseAnnTime(at);
         if (!sendAt) {
-            return safeEditReply(interaction,{
-                content: '❌ Format waktu tidak valid.\n\nFormat yang didukung:\n• Relative: `30m`, `2h`, `1d`\n• Absolute: `2026-01-15 20:00` (WITA, format YYYY-MM-DD HH:MM)'
+            return safeEditReply(interaction, {
+                content:
+                    '❌ Format waktu tidak valid.\n\nFormat yang didukung:\n• Relative: `30m`, `2h`, `1d`\n• Absolute: `2026-01-15 20:00` (WITA, format YYYY-MM-DD HH:MM)'
             });
         }
         if (sendAt <= Date.now()) {
-            return safeEditReply(interaction,{ content: '❌ Waktu yang dimasukkan sudah lewat. Pakai waktu di masa depan.' });
+            return safeEditReply(interaction, {
+                content: '❌ Waktu yang dimasukkan sudah lewat. Pakai waktu di masa depan.'
+            });
         }
 
         // Parse color
-        let colorNum = 0x5865F2;
+        let colorNum = 0x5865f2;
         if (color) {
             const parsed = parseColor(color);
             if (parsed === null) {
-                return safeEditReply(interaction,{ content: `❌ Color tidak valid: \`${color}\`. Pakai format hex 6 digit, mis. \`#FF0000\` atau \`FF0000\`.` });
+                return safeEditReply(interaction, {
+                    content: `❌ Color tidak valid: \`${color}\`. Pakai format hex 6 digit, mis. \`#FF0000\` atau \`FF0000\`.`
+                });
             }
             colorNum = parsed;
         }
@@ -183,18 +203,24 @@ module.exports = async function (interaction) {
         // kelebihan, EmbedBuilder akan throw saat processScheduledAnnouncement
         // jalan → announce gagal terkirim dan entry stuck di scheduledAnns.json.
         if (title.length > EMBED_LIMITS.TITLE) {
-            return safeEditReply(interaction,{ content: `❌ Title terlalu panjang (${title.length} char, maks ${EMBED_LIMITS.TITLE}).` });
+            return safeEditReply(interaction, {
+                content: `❌ Title terlalu panjang (${title.length} char, maks ${EMBED_LIMITS.TITLE}).`
+            });
         }
         if (description.length > EMBED_LIMITS.DESCRIPTION) {
-            return safeEditReply(interaction,{ content: `❌ Description terlalu panjang (${description.length} char, maks ${EMBED_LIMITS.DESCRIPTION}).` });
+            return safeEditReply(interaction, {
+                content: `❌ Description terlalu panjang (${description.length} char, maks ${EMBED_LIMITS.DESCRIPTION}).`
+            });
         }
 
         // Validate URLs
         if (image && !/^https?:\/\//.test(image)) {
-            return safeEditReply(interaction,{ content: '❌ Image URL harus mulai dengan `http://` atau `https://`' });
+            return safeEditReply(interaction, { content: '❌ Image URL harus mulai dengan `http://` atau `https://`' });
         }
         if (thumbnail && !/^https?:\/\//.test(thumbnail)) {
-            return safeEditReply(interaction,{ content: '❌ Thumbnail URL harus mulai dengan `http://` atau `https://`' });
+            return safeEditReply(interaction, {
+                content: '❌ Thumbnail URL harus mulai dengan `http://` atau `https://`'
+            });
         }
 
         // v3.9.1 FIX: validasi mention (sama seperti /announce) supaya admin
@@ -202,12 +228,14 @@ module.exports = async function (interaction) {
         if (mention) {
             const m = mention.trim().toLowerCase();
             const isValidMention =
-                m === 'everyone' || m === '@everyone' ||
-                m === 'here' || m === '@here' ||
+                m === 'everyone' ||
+                m === '@everyone' ||
+                m === 'here' ||
+                m === '@here' ||
                 /^<@&\d{17,20}>$/.test(mention) ||
                 /^<@!?\d{17,20}>$/.test(mention);
             if (!isValidMention) {
-                return safeEditReply(interaction,{
+                return safeEditReply(interaction, {
                     content: `❌ Format mention tidak valid: \`${mention}\`\n\nFormat yang didukung: \`@everyone\`, \`@here\`, \`<@&ROLE_ID>\`, \`<@USER_ID>\`.`
                 });
             }
@@ -228,10 +256,17 @@ module.exports = async function (interaction) {
             recurring
         });
 
-        await logAudit(interaction.client, { action: 'ANNOUNCE_SCHEDULE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Schedule announce ke ${channel} pada <t:${Math.floor(sendAt / 1000)}:F>${recurring ? ` (recurring: ${recurring})` : ''} — Title: "${title}"`, guildId: interaction.guild.id });
+        await logAudit(interaction.client, {
+            action: 'ANNOUNCE_SCHEDULE',
+            actorId: interaction.user.id,
+            actorTag: interaction.user.tag,
+            details: `Schedule announce ke ${channel} pada <t:${Math.floor(sendAt / 1000)}:F>${recurring ? ` (recurring: ${recurring})` : ''} — Title: "${title}"`,
+            guildId: interaction.guild.id
+        });
 
-        return safeEditReply(interaction,{
-            content: `✅ **Announce dijadwalkan!**\n\n` +
+        return safeEditReply(interaction, {
+            content:
+                `✅ **Announce dijadwalkan!**\n\n` +
                 `📍 Channel: ${channel}\n` +
                 `⏰ Kirim pada: <t:${Math.floor(sendAt / 1000)}:F> (<t:${Math.floor(sendAt / 1000)}:R>)\n` +
                 (recurring ? `🔄 Recurring: **${recurring}**\n` : '') +
@@ -249,19 +284,26 @@ module.exports = async function (interaction) {
         const entries = getScheduledAnnsByGuild(interaction.guild.id);
         const pending = entries.filter(e => !e.sent);
         if (pending.length === 0) {
-            return safeEditReply(interaction,{ content: '📭 Tidak ada announce terjadwal yang pending. Pakai `/announce-schedule` untuk bikin.' });
+            return safeEditReply(interaction, {
+                content: '📭 Tidak ada announce terjadwal yang pending. Pakai `/announce-schedule` untuk bikin.'
+            });
         }
-        const lines = pending.map(e => {
-            const timeLeft = e.sendAt - Date.now();
-            return `• 📝 **${e.data.title}**\n  🆔 \`${e.id}\`\n  📍 <#${e.channelId}> | ⏰ <t:${Math.floor(e.sendAt / 1000)}:F> (<t:${Math.floor(e.sendAt / 1000)}:R>)\n  ${e.recurring ? `🔄 Recurring: ${e.recurring}\n  ` : ''}👤 Oleh: ${e.data.authorTag}`;
-        }).join('\n\n');
+        const lines = pending
+            .map(e => {
+                const timeLeft = e.sendAt - Date.now();
+                return `• 📝 **${e.data.title}**\n  🆔 \`${e.id}\`\n  📍 <#${e.channelId}> | ⏰ <t:${Math.floor(e.sendAt / 1000)}:F> (<t:${Math.floor(e.sendAt / 1000)}:R>)\n  ${e.recurring ? `🔄 Recurring: ${e.recurring}\n  ` : ''}👤 Oleh: ${e.data.authorTag}`;
+            })
+            .join('\n\n');
         const embed = new EmbedBuilder()
             .setTitle('⏰ ANNOUNCE TERJADWAL')
             .setDescription(`Total **${pending.length}** announce pending.\n\n${lines}`)
-            .setColor(0x5865F2)
-            .setFooter({ text: interaction.client.user.username, iconURL: interaction.client.user.displayAvatarURL({ dynamic: true }) })
+            .setColor(0x5865f2)
+            .setFooter({
+                text: interaction.client.user.username,
+                iconURL: interaction.client.user.displayAvatarURL({ dynamic: true })
+            })
             .setTimestamp();
-        return safeEditReply(interaction,{ embeds: [embed] });
+        return safeEditReply(interaction, { embeds: [embed] });
     }
 
     // ====================================================
@@ -271,11 +313,19 @@ module.exports = async function (interaction) {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         const id = interaction.options.getString('id');
         const entry = getScheduledAnn(id);
-        if (!entry) return safeEditReply(interaction,{ content: `❌ Announce ID \`${id}\` tidak ditemukan.` });
-        if (entry.sent) return safeEditReply(interaction,{ content: `❌ Announce sudah terkirim, tidak bisa dibatalkan.` });
-        if (entry.guildId !== interaction.guild.id) return safeEditReply(interaction,{ content: '❌ Announce ini bukan dari guild ini.' });
+        if (!entry) return safeEditReply(interaction, { content: `❌ Announce ID \`${id}\` tidak ditemukan.` });
+        if (entry.sent)
+            return safeEditReply(interaction, { content: `❌ Announce sudah terkirim, tidak bisa dibatalkan.` });
+        if (entry.guildId !== interaction.guild.id)
+            return safeEditReply(interaction, { content: '❌ Announce ini bukan dari guild ini.' });
         removeScheduledAnn(id);
-        await logAudit(interaction.client, { action: 'ANNOUNCE_CANCEL', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Cancel scheduled announce \`${id}\` (Title: "${entry.data.title}")`, guildId: interaction.guild.id });
-        return safeEditReply(interaction,{ content: `✅ Announce \`${id}\` (${entry.data.title}) dibatalkan.` });
+        await logAudit(interaction.client, {
+            action: 'ANNOUNCE_CANCEL',
+            actorId: interaction.user.id,
+            actorTag: interaction.user.tag,
+            details: `Cancel scheduled announce \`${id}\` (Title: "${entry.data.title}")`,
+            guildId: interaction.guild.id
+        });
+        return safeEditReply(interaction, { content: `✅ Announce \`${id}\` (${entry.data.title}) dibatalkan.` });
     }
 };

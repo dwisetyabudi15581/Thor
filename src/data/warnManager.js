@@ -36,9 +36,9 @@ const { safeWriteJSON } = require('../infra/safeWrite');
 const filePath = path.join(__dirname, '..', '..', 'data', 'warns.json');
 
 const DEFAULT_THRESHOLDS = {
-    mute1h: 3,    // 3 warnings → mute 1 jam
-    mute1d: 5,    // 5 warnings → mute 1 hari
-    kick: 7       // 7 warnings → kick
+    mute1h: 3, // 3 warnings → mute 1 jam
+    mute1d: 5, // 5 warnings → mute 1 hari
+    kick: 7 // 7 warnings → kick
 };
 
 /**
@@ -147,9 +147,7 @@ function addWarn(guildId, userId, data) {
     // P1-7 FIX: cek apakah action yang sama sudah pernah diambil sebelumnya.
     let actionAlreadyTaken = false;
     if (actionToTake && actionToTake !== 'kick') {
-        const previouslyTookSameAction = all[k].some(w =>
-            w.id !== entry.id && w.actionTaken === actionToTake
-        );
+        const previouslyTookSameAction = all[k].some(w => w.id !== entry.id && w.actionTaken === actionToTake);
         if (previouslyTookSameAction) {
             actionAlreadyTaken = true;
             actionToTake = null;
@@ -209,6 +207,11 @@ function markActionTaken(guildId, userId, warnId, action) {
 }
 
 module.exports = {
-    addWarn, getWarns, getWarnCount, removeWarn, clearWarns, markActionTaken,
+    addWarn,
+    getWarns,
+    getWarnCount,
+    removeWarn,
+    clearWarns,
+    markActionTaken,
     DEFAULT_THRESHOLDS
 };

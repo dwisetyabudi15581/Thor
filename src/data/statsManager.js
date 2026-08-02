@@ -42,9 +42,9 @@ const filePath = path.join(__dirname, '..', '..', 'data', 'stats.json');
 const FLUSH_INTERVAL_MS = 30 * 1000; // 30 detik
 
 // === In-memory cache ===
-let cache = null;       // null = belum di-load
-let dirty = false;      // apakah cache ada perubahan yang belum di-flush?
-let flushTimer = null;  // timer periodic flush
+let cache = null; // null = belum di-load
+let dirty = false; // apakah cache ada perubahan yang belum di-flush?
+let flushTimer = null; // timer periodic flush
 let defaultGuildId = null; // v3.9.4: untuk migrasi legacy entries
 
 function defaultUserStats() {
@@ -327,10 +327,10 @@ function getServerStats(guildId) {
     for (const [k, s] of Object.entries(all)) {
         if (!k.startsWith(prefix)) continue;
         totalUsers++;
-        totalMessages += (s.messages || 0);
-        totalPurchases += (s.vipPurchases || 0);
-        totalRevenue += (s.totalSpent || 0);
-        totalGiveawaysWon += (s.giveawaysWon || 0);
+        totalMessages += s.messages || 0;
+        totalPurchases += s.vipPurchases || 0;
+        totalRevenue += s.totalSpent || 0;
+        totalGiveawaysWon += s.giveawaysWon || 0;
     }
     return {
         totalUsers,
@@ -355,8 +355,13 @@ function parsePrice(priceStr) {
     if (!priceStr) return 0;
     let s = String(priceStr).toLowerCase().replace(/rp\.?/g, '').replace(/\s/g, '');
     let multiplier = 1;
-    if (s.endsWith('k')) { multiplier = 1000; s = s.slice(0, -1); }
-    else if (s.endsWith('m')) { multiplier = 1000000; s = s.slice(0, -1); }
+    if (s.endsWith('k')) {
+        multiplier = 1000;
+        s = s.slice(0, -1);
+    } else if (s.endsWith('m')) {
+        multiplier = 1000000;
+        s = s.slice(0, -1);
+    }
 
     const hasDot = s.includes('.');
     const hasComma = s.includes(',');
@@ -422,7 +427,16 @@ function parsePrice(priceStr) {
 
 module.exports = {
     init,
-    getStats, incrementMessages, recordPurchase, recordGiveawayWin, recordJoin,
-    getTopUsers, getServerStats, parsePrice,
-    startAutoFlush, shutdown, flush, reload
+    getStats,
+    incrementMessages,
+    recordPurchase,
+    recordGiveawayWin,
+    recordJoin,
+    getTopUsers,
+    getServerStats,
+    parsePrice,
+    startAutoFlush,
+    shutdown,
+    flush,
+    reload
 };

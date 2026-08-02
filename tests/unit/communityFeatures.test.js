@@ -40,12 +40,14 @@ test('responderManager: duplicate trigger rejected', () => {
     addResponder('test_guild_dup', {
         trigger: '!dup-test',
         reply: 'First',
-        createdBy: 'u', createdByTag: 'U'
+        createdBy: 'u',
+        createdByTag: 'U'
     });
     const result = addResponder('test_guild_dup', {
         trigger: '!dup-test',
         reply: 'Second',
-        createdBy: 'u', createdByTag: 'U'
+        createdBy: 'u',
+        createdByTag: 'U'
     });
     assert.ok(!result.ok);
     assert.match(result.error, /sudah ada/);
@@ -57,7 +59,8 @@ test('responderManager: findMatch returns correct responder', () => {
     addResponder('test_guild_match', {
         trigger: '!sosmed-test',
         reply: 'IG: @test',
-        createdBy: 'u', createdByTag: 'U'
+        createdBy: 'u',
+        createdByTag: 'U'
     });
 
     const match = findMatch('test_guild_match', '!sosmed-test halo');
@@ -76,7 +79,8 @@ test('responderManager: case-insensitive trigger match', () => {
     addResponder('test_guild_case', {
         trigger: '!SOSMED',
         reply: 'Test',
-        createdBy: 'u', createdByTag: 'U'
+        createdBy: 'u',
+        createdByTag: 'U'
     });
 
     const match = findMatch('test_guild_case', '!sosmed halo');
@@ -90,7 +94,8 @@ test('responderManager: v3.9.14 per-user cooldown (different users not blocked)'
     addResponder('test_guild_usercd', {
         trigger: '!cdtest',
         reply: 'Test reply',
-        createdBy: 'u', createdByTag: 'U',
+        createdBy: 'u',
+        createdByTag: 'U',
         cooldownMs: 5000
     });
 
@@ -155,10 +160,10 @@ test('automodManager: checkSpam detects spam pattern', () => {
 
     // 3 pesan dalam window → spam (threshold 3, jadi pesan ke-4 yang trigger)
     // Actually checkSpam returns true kalau length > threshold
-    assert.ok(!checkSpam('test_guild_spam', 'test_user_spam', config));  // 1 msg
-    assert.ok(!checkSpam('test_guild_spam', 'test_user_spam', config));  // 2 msg
-    assert.ok(!checkSpam('test_guild_spam', 'test_user_spam', config));  // 3 msg (== threshold, not >)
-    assert.ok(checkSpam('test_guild_spam', 'test_user_spam', config));   // 4 msg (> threshold)
+    assert.ok(!checkSpam('test_guild_spam', 'test_user_spam', config)); // 1 msg
+    assert.ok(!checkSpam('test_guild_spam', 'test_user_spam', config)); // 2 msg
+    assert.ok(!checkSpam('test_guild_spam', 'test_user_spam', config)); // 3 msg (== threshold, not >)
+    assert.ok(checkSpam('test_guild_spam', 'test_user_spam', config)); // 4 msg (> threshold)
 
     resetSpamTracker('test_guild_spam', 'test_user_spam');
 });
@@ -186,7 +191,7 @@ test('afkManager: AFK scoped per guild', () => {
     const { setAFK, isAFK, clearAFK } = require('../../src/data/afkManager');
     setAFK('guild_A', 'user_x', 'AFK di A');
     assert.ok(isAFK('guild_A', 'user_x'));
-    assert.ok(!isAFK('guild_B', 'user_x'));  // not AFK in guild B
+    assert.ok(!isAFK('guild_B', 'user_x')); // not AFK in guild B
     clearAFK('guild_A', 'user_x');
 });
 
@@ -213,16 +218,16 @@ test('levelManager: xpForLevel formula', () => {
 test('levelManager: levelFromXp correct calculation', () => {
     const { levelFromXp, xpForLevel } = require('../../src/data/levelManager');
     assert.strictEqual(levelFromXp(0), 0);
-    assert.strictEqual(levelFromXp(99), 0);      // kurang dari 100 = level 0
-    assert.strictEqual(levelFromXp(100), 1);     // exactly 100 = level 1
-    assert.strictEqual(levelFromXp(299), 1);     // kurang dari 300 = level 1
-    assert.strictEqual(levelFromXp(300), 2);     // exactly 300 = level 2
-    assert.strictEqual(levelFromXp(1500), 5);    // exactly 1500 = level 5
+    assert.strictEqual(levelFromXp(99), 0); // kurang dari 100 = level 0
+    assert.strictEqual(levelFromXp(100), 1); // exactly 100 = level 1
+    assert.strictEqual(levelFromXp(299), 1); // kurang dari 300 = level 1
+    assert.strictEqual(levelFromXp(300), 2); // exactly 300 = level 2
+    assert.strictEqual(levelFromXp(1500), 5); // exactly 1500 = level 5
 });
 
 test('levelManager: addXp increases level', () => {
     const { addXp, getUser } = require('../../src/data/levelManager');
-    const config = { cooldownMs: 0 };  // no cooldown for test
+    const config = { cooldownMs: 0 }; // no cooldown for test
     const gid = 'test_guild_lvl_' + Date.now();
     const uid = 'test_user_lvl_' + Date.now();
 
@@ -238,7 +243,7 @@ test('levelManager: addXp increases level', () => {
 
 test('levelManager: addXp respects cooldown', () => {
     const { addXp } = require('../../src/data/levelManager');
-    const config = { cooldownMs: 60000 };  // 1 minute cooldown
+    const config = { cooldownMs: 60000 }; // 1 minute cooldown
     const gid = 'test_guild_cd_' + Date.now();
     const uid = 'test_user_cd_' + Date.now();
 
@@ -277,10 +282,10 @@ test('levelManager: getRoleForLevel returns array of roles for stacking (v3.9.14
             { level: 50, roleId: 'role_50' }
         ]
     };
-    assert.deepStrictEqual(getRoleForLevel(5, config), []);                       // below any threshold
-    assert.deepStrictEqual(getRoleForLevel(10, config), ['role_10']);             // cap level 10
-    assert.deepStrictEqual(getRoleForLevel(30, config), ['role_10']);             // still only role_10 (level 50 not yet capped)
-    assert.deepStrictEqual(getRoleForLevel(50, config), ['role_10', 'role_50']);  // STACKING: dapat keduanya
+    assert.deepStrictEqual(getRoleForLevel(5, config), []); // below any threshold
+    assert.deepStrictEqual(getRoleForLevel(10, config), ['role_10']); // cap level 10
+    assert.deepStrictEqual(getRoleForLevel(30, config), ['role_10']); // still only role_10 (level 50 not yet capped)
+    assert.deepStrictEqual(getRoleForLevel(50, config), ['role_10', 'role_50']); // STACKING: dapat keduanya
     assert.deepStrictEqual(getRoleForLevel(100, config), ['role_10', 'role_50']); // tetap keduanya
 });
 
@@ -290,7 +295,7 @@ test('configManager: leveling config defaults applied', () => {
     const { getConfig } = require('../../src/data/configManager');
     const config = getConfig();
     assert.ok(config.leveling);
-    assert.strictEqual(config.leveling.enabled, false);  // default off
+    assert.strictEqual(config.leveling.enabled, false); // default off
     assert.ok('xpPerMessage' in config.leveling);
     assert.ok('cooldownMs' in config.leveling);
     assert.ok(Array.isArray(config.levelRoles));

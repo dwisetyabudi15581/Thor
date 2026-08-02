@@ -23,17 +23,18 @@
  */
 
 const {
-    ButtonBuilder, ButtonStyle, ActionRowBuilder,
-    MessageFlags, StringSelectMenuBuilder,
-    ModalBuilder, TextInputBuilder, TextInputStyle
+    ButtonBuilder,
+    ButtonStyle,
+    ActionRowBuilder,
+    MessageFlags,
+    StringSelectMenuBuilder,
+    ModalBuilder,
+    TextInputBuilder,
+    TextInputStyle
 } = require('discord.js');
-const {
-    getConfig, safeEditReply, logAudit, checkIsAdmin
-} = require('../commands/_shared');
+const { getConfig, safeEditReply, logAudit, checkIsAdmin } = require('../commands/_shared');
 const { createTicket, closeTicket, sendInvoice, getTicketMeta } = require('../data/ticketManager');
-const {
-    addKey, getActiveKeysByUserAndRole, formatRemaining
-} = require('../data/keyManager');
+const { addKey, getActiveKeysByUserAndRole, formatRemaining } = require('../data/keyManager');
 const { scheduleRoleRemoval } = require('../data/roleScheduler');
 
 module.exports = async function (interaction) {
@@ -52,7 +53,10 @@ module.exports = async function (interaction) {
         const catConfig = categories.find(c => c.id === categoryId);
 
         if (!catConfig) {
-            return interaction.reply({ content: `❌ Kategori \`${categoryId}\` tidak ditemukan di config.`, flags: MessageFlags.Ephemeral });
+            return interaction.reply({
+                content: `❌ Kategori \`${categoryId}\` tidak ditemukan di config.`,
+                flags: MessageFlags.Ephemeral
+            });
         }
 
         // Cek verified role (sama seperti tombol lain)
@@ -76,7 +80,8 @@ module.exports = async function (interaction) {
 
         if (productsInCat.length === 0) {
             return interaction.reply({
-                content: `❌ Belum ada produk di kategori **${catConfig.label}**.\n\n` +
+                content:
+                    `❌ Belum ada produk di kategori **${catConfig.label}**.\n\n` +
                     `💡 Admin: pakai \`/add-product category:${categoryId}\` untuk tambah produk ke kategori ini.`,
                 flags: MessageFlags.Ephemeral
             });
@@ -87,12 +92,14 @@ module.exports = async function (interaction) {
             new StringSelectMenuBuilder()
                 .setCustomId('select_product')
                 .setPlaceholder(`Pilih produk — ${catConfig.label}...`)
-                .addOptions(productsInCat.map(p => ({
-                    label: p.label,
-                    description: p.price,
-                    value: p.value,
-                    emoji: catConfig.emoji || '🎫'
-                })))
+                .addOptions(
+                    productsInCat.map(p => ({
+                        label: p.label,
+                        description: p.price,
+                        value: p.value,
+                        emoji: catConfig.emoji || '🎫'
+                    }))
+                )
         );
         return interaction.reply({
             content: `Silakan pilih produk di kategori **${catConfig.label}** ${catConfig.emoji || ''}:`,
@@ -115,21 +122,29 @@ module.exports = async function (interaction) {
             new StringSelectMenuBuilder()
                 .setCustomId('select_product')
                 .setPlaceholder('Pilih durasi key yang ingin dibeli...')
-                .addOptions(config.products.map(p => ({
-                    label: p.label,
-                    description: p.price,
-                    value: p.value,
-                    emoji: '🔑'
-                })))
+                .addOptions(
+                    config.products.map(p => ({
+                        label: p.label,
+                        description: p.price,
+                        value: p.value,
+                        emoji: '🔑'
+                    }))
+                )
         );
-        return interaction.reply({ content: 'Silakan pilih paket key di bawah ini:', components: [selectMenu], flags: MessageFlags.Ephemeral });
+        return interaction.reply({
+            content: 'Silakan pilih paket key di bawah ini:',
+            components: [selectMenu],
+            flags: MessageFlags.Ephemeral
+        });
     }
 
     // ====================================================
     // === TIKET: PILIH PRODUK / HELP / REPORT → BUAT TIKET ===
     // ====================================================
-    if ((interaction.isStringSelectMenu() && interaction.customId === 'select_product') ||
-        (interaction.isButton() && (interaction.customId === 'ticket_help' || interaction.customId === 'ticket_report'))) {
+    if (
+        (interaction.isStringSelectMenu() && interaction.customId === 'select_product') ||
+        (interaction.isButton() && (interaction.customId === 'ticket_help' || interaction.customId === 'ticket_report'))
+    ) {
         if (!config.roles.verified || !interaction.member.roles.cache.has(config.roles.verified)) {
             return interaction.reply({ content: '❌ Verifikasi dulu!', flags: MessageFlags.Ephemeral });
         }
@@ -139,7 +154,7 @@ module.exports = async function (interaction) {
         if (interaction.customId === 'select_product') {
             const selectedValue = interaction.values[0];
             product = config.products.find(p => p.value === selectedValue);
-            if (!product) return safeEditReply(interaction,{ content: '❌ Produk tidak ditemukan.' });
+            if (!product) return safeEditReply(interaction, { content: '❌ Produk tidak ditemukan.' });
         } else if (interaction.customId === 'ticket_help') {
             // v3.9.11 Phase 1: pakai isHelp flag, bukan magic string label.
             product = { label: 'Bantuan Staff', duration: '-', price: '-', isHelp: true, category: 'help' };
@@ -159,7 +174,10 @@ module.exports = async function (interaction) {
     if (interaction.isButton() && interaction.customId === 'ticket_close') {
         const isAdmin = checkIsAdmin(interaction.member);
         if (!isAdmin) {
-            return interaction.reply({ content: '❌ Hanya Admin/Staff yang dapat menutup tiket ini!', flags: MessageFlags.Ephemeral });
+            return interaction.reply({
+                content: '❌ Hanya Admin/Staff yang dapat menutup tiket ini!',
+                flags: MessageFlags.Ephemeral
+            });
         }
 
         // v3.9.4 FIX: pakai getTicketMeta (sumber utama tickets.json) bukan parse topic langsung.
@@ -168,22 +186,41 @@ module.exports = async function (interaction) {
         const productName = meta?.productName || 'Unknown';
         const productCategory = meta?.category || null;
         // v3.9.11 Phase 1: hapus magic string 'Bantuan/Lapor'. Pakai category field.
-        const isTransaction = productCategory !== 'help' && productCategory !== 'report'
-            && productName !== 'Bantuan Staff' && productName !== 'Laporkan Member' && productName !== 'Bantuan/Lapor';
+        const isTransaction =
+            productCategory !== 'help' &&
+            productCategory !== 'report' &&
+            productName !== 'Bantuan Staff' &&
+            productName !== 'Laporkan Member' &&
+            productName !== 'Bantuan/Lapor';
 
         // Untuk tiket transaksi: tombol "Tidak Jadi Beli" (close tanpa role) + "Batal Tutup"
         // Untuk tiket help/report: tombol "Selesai" (close sukses) + "Tutup Tanpa Selesai" + "Batal Tutup"
         const confirmRow = new ActionRowBuilder();
         if (isTransaction) {
             confirmRow.addComponents(
-                new ButtonBuilder().setCustomId('ticket_close_cancel_trans').setLabel('❌ Tidak Jadi Beli').setStyle(ButtonStyle.Danger),
-                new ButtonBuilder().setCustomId('ticket_close_abort').setLabel('⏏️ Batal Tutup').setStyle(ButtonStyle.Secondary)
+                new ButtonBuilder()
+                    .setCustomId('ticket_close_cancel_trans')
+                    .setLabel('❌ Tidak Jadi Beli')
+                    .setStyle(ButtonStyle.Danger),
+                new ButtonBuilder()
+                    .setCustomId('ticket_close_abort')
+                    .setLabel('⏏️ Batal Tutup')
+                    .setStyle(ButtonStyle.Secondary)
             );
         } else {
             confirmRow.addComponents(
-                new ButtonBuilder().setCustomId('ticket_close_success').setLabel('✅ Selesai').setStyle(ButtonStyle.Success),
-                new ButtonBuilder().setCustomId('ticket_close_abort').setLabel('❌ Tutup Tanpa Selesai').setStyle(ButtonStyle.Danger),
-                new ButtonBuilder().setCustomId('ticket_close_abort2').setLabel('⏏️ Batal Tutup').setStyle(ButtonStyle.Secondary)
+                new ButtonBuilder()
+                    .setCustomId('ticket_close_success')
+                    .setLabel('✅ Selesai')
+                    .setStyle(ButtonStyle.Success),
+                new ButtonBuilder()
+                    .setCustomId('ticket_close_abort')
+                    .setLabel('❌ Tutup Tanpa Selesai')
+                    .setStyle(ButtonStyle.Danger),
+                new ButtonBuilder()
+                    .setCustomId('ticket_close_abort2')
+                    .setLabel('⏏️ Batal Tutup')
+                    .setStyle(ButtonStyle.Secondary)
             );
         }
         const msg = isTransaction
@@ -192,18 +229,25 @@ module.exports = async function (interaction) {
         return interaction.reply({ content: msg, components: [confirmRow], flags: MessageFlags.Ephemeral });
     }
 
-    if (interaction.isButton() && (interaction.customId === 'ticket_close_abort' || interaction.customId === 'ticket_close_abort2')) {
+    if (
+        interaction.isButton() &&
+        (interaction.customId === 'ticket_close_abort' || interaction.customId === 'ticket_close_abort2')
+    ) {
         // Wrap interaction.update dalam try/catch. Kalau ephemeral sudah di-dismiss (10008)
         // atau token expired (10062), fallback ke reply ephemeral.
         try {
             return await interaction.update({ content: '❌ Penutupan tiket dibatalkan.', embeds: [], components: [] });
         } catch (err) {
             if (err.code === 10008 || err.code === 10062) {
-                return interaction.reply({ content: '❌ Penutupan tiket dibatalkan.', flags: MessageFlags.Ephemeral }).catch(() => {});
+                return interaction
+                    .reply({ content: '❌ Penutupan tiket dibatalkan.', flags: MessageFlags.Ephemeral })
+                    .catch(() => {});
             }
             console.warn('ticket_close_abort update error:', err.message);
             if (!interaction.replied) {
-                return interaction.reply({ content: '❌ Penutupan tiket dibatalkan.', flags: MessageFlags.Ephemeral }).catch(() => {});
+                return interaction
+                    .reply({ content: '❌ Penutupan tiket dibatalkan.', flags: MessageFlags.Ephemeral })
+                    .catch(() => {});
             }
         }
     }
@@ -242,7 +286,10 @@ module.exports = async function (interaction) {
     if (interaction.isButton() && interaction.customId === 'ticket_set_key') {
         const isAdmin = checkIsAdmin(interaction.member);
         if (!isAdmin) {
-            return interaction.reply({ content: '❌ Hanya Admin/Staff yang bisa set key!', flags: MessageFlags.Ephemeral });
+            return interaction.reply({
+                content: '❌ Hanya Admin/Staff yang bisa set key!',
+                flags: MessageFlags.Ephemeral
+            });
         }
 
         // v3.9.4 FIX: pakai getTicketMeta (sumber utama tickets.json) bukan parse topic langsung.
@@ -250,17 +297,32 @@ module.exports = async function (interaction) {
         const productName = meta?.productName || null;
         const productCategory = meta?.category || null;
         // v3.9.11 Phase 1: hapus magic string 'Bantuan/Lapor'. Pakai category field.
-        if (!productName || productCategory === 'help' || productCategory === 'report'
-            || productName === 'Bantuan Staff' || productName === 'Laporkan Member' || productName === 'Bantuan/Lapor') {
-            return interaction.reply({ content: '❌ Tombol Set Key hanya untuk tiket transaksi.', flags: MessageFlags.Ephemeral });
+        if (
+            !productName ||
+            productCategory === 'help' ||
+            productCategory === 'report' ||
+            productName === 'Bantuan Staff' ||
+            productName === 'Laporkan Member' ||
+            productName === 'Bantuan/Lapor'
+        ) {
+            return interaction.reply({
+                content: '❌ Tombol Set Key hanya untuk tiket transaksi.',
+                flags: MessageFlags.Ephemeral
+            });
         }
 
         const product = config.products.find(p => p.label === productName);
         if (!product) {
-            return interaction.reply({ content: `❌ Produk "${productName}" tidak ditemukan di config. Cek /list-products.`, flags: MessageFlags.Ephemeral });
+            return interaction.reply({
+                content: `❌ Produk "${productName}" tidak ditemukan di config. Cek /list-products.`,
+                flags: MessageFlags.Ephemeral
+            });
         }
         if (!product.roleId) {
-            return interaction.reply({ content: `❌ Produk **${product.label}** belum punya auto-role. Pakai \`/set-product-role\` dulu.`, flags: MessageFlags.Ephemeral });
+            return interaction.reply({
+                content: `❌ Produk **${product.label}** belum punya auto-role. Pakai \`/set-product-role\` dulu.`,
+                flags: MessageFlags.Ephemeral
+            });
         }
 
         // Buka modal input key
@@ -297,7 +359,9 @@ module.exports = async function (interaction) {
         // Sebelumnya: kalau channel sudah dihapus saat admin submit modal,
         // `interaction.channel.topic` throw TypeError → error generik.
         if (!interaction.channel) {
-            return safeEditReply(interaction,{ content: '❌ Channel tiket sudah tidak ada (mungkin sudah ditutup admin lain).' }).catch(()=>{});
+            return safeEditReply(interaction, {
+                content: '❌ Channel tiket sudah tidak ada (mungkin sudah ditutup admin lain).'
+            }).catch(() => {});
         }
 
         // v3.9.1: baca metadata tiket dari tickets.json (sumber kebenaran).
@@ -309,25 +373,29 @@ module.exports = async function (interaction) {
         const price = meta?.price || 'Unknown';
 
         if (!userId) {
-            return safeEditReply(interaction,{ content: '❌ Gagal ambil metadata tiket (channel ini mungkin bukan tiket valid).' });
+            return safeEditReply(interaction, {
+                content: '❌ Gagal ambil metadata tiket (channel ini mungkin bukan tiket valid).'
+            });
         }
 
         const product = config.products.find(p => p.value === productValue);
         if (!product) {
-            return safeEditReply(interaction,{ content: `❌ Produk value \`${productValue}\` tidak ditemukan.` });
+            return safeEditReply(interaction, { content: `❌ Produk value \`${productValue}\` tidak ditemukan.` });
         }
         if (!product.roleId) {
-            return safeEditReply(interaction,{ content: `❌ Produk **${product.label}** belum punya auto-role.` });
+            return safeEditReply(interaction, { content: `❌ Produk **${product.label}** belum punya auto-role.` });
         }
 
         const guild = interaction.guild;
         const member = await guild.members.fetch(userId).catch(() => null);
         if (!member) {
-            return safeEditReply(interaction,{ content: `❌ Member <@${userId}> sudah tidak ada di server.` });
+            return safeEditReply(interaction, { content: `❌ Member <@${userId}> sudah tidak ada di server.` });
         }
         const role = guild.roles.cache.get(product.roleId);
         if (!role) {
-            return safeEditReply(interaction,{ content: `❌ Role ID \`${product.roleId}\` tidak ditemukan di guild.` });
+            return safeEditReply(interaction, {
+                content: `❌ Role ID \`${product.roleId}\` tidak ditemukan di guild.`
+            });
         }
 
         // === 1. Simpan key baru (independent expireAt) ===
@@ -338,7 +406,7 @@ module.exports = async function (interaction) {
             roleId: role.id,
             productName: product.label,
             days: product.days || 0,
-            guildId: interaction.guild.id  // v3.9.3: simpan guildId supaya cross-guild wipe akurat
+            guildId: interaction.guild.id // v3.9.3: simpan guildId supaya cross-guild wipe akurat
         });
 
         // === 2. Berikan role ke member ===
@@ -348,7 +416,9 @@ module.exports = async function (interaction) {
             }
         } catch (err) {
             console.error('Gagal add role saat set key:', err.message);
-            return safeEditReply(interaction,{ content: `❌ Gagal memberikan role ${role}. Pastikan role bot ada di ATAS role tersebut.\n\nKey tetap disimpan di keys.json.` });
+            return safeEditReply(interaction, {
+                content: `❌ Gagal memberikan role ${role}. Pastikan role bot ada di ATAS role tersebut.\n\nKey tetap disimpan di keys.json.`
+            });
         }
 
         // === 3. Schedule role removal (MAX EXTEND) ===
@@ -365,7 +435,9 @@ module.exports = async function (interaction) {
                 productName: product.label
             });
         } catch (schedErr) {
-            console.error(`⚠️ Gagal scheduleRoleRemoval saat set-key (key + role tetap tersimpan): ${schedErr.message}`);
+            console.error(
+                `⚠️ Gagal scheduleRoleRemoval saat set-key (key + role tetap tersimpan): ${schedErr.message}`
+            );
             scheduleResult = { extended: false, permanent: false, error: schedErr.message };
         }
 
@@ -382,13 +454,16 @@ module.exports = async function (interaction) {
 
             // Cek semua key aktif untuk info tambahan
             const activeKeys = getActiveKeysByUserAndRole(member.id, role.id);
-            const keyList = activeKeys.map((k, i) => {
-                const rem = formatRemaining(k);
-                return `\`${i + 1}.\` \`${k.key}\` — ${k.productName} — ${rem}`;
-            }).join('\n');
+            const keyList = activeKeys
+                .map((k, i) => {
+                    const rem = formatRemaining(k);
+                    return `\`${i + 1}.\` \`${k.key}\` — ${k.productName} — ${rem}`;
+                })
+                .join('\n');
 
             await member.send({
-                content: `🎁 **Transaksi Sukses!**\n\n` +
+                content:
+                    `🎁 **Transaksi Sukses!**\n\n` +
                     `Terima kasih sudah membeli **${product.label}** di **${guild.name}**.\n\n` +
                     `🔑 **Key kamu:**\n\`\`\`\n${keyValue}\n\`\`\`\n` +
                     `🎭 Role: ${role}\n⏰ ${expireInfo}\n\n` +
@@ -441,10 +516,12 @@ module.exports = async function (interaction) {
         } catch (_) {}
 
         // === 6. Hapus channel tiket ===
-        await interaction.channel.delete().catch(()=>{});
+        await interaction.channel.delete().catch(() => {});
 
         // === 7. Log sukses (feedback ephemeral sudah dikirim di atas) ===
-        console.log(`✅ Set Key sukses: ${member.user.tag} | produk=${product.label} | role=${role.name} | extend=${scheduleResult.extended} | permanen=${scheduleResult.permanent} | dm=${dmSent}`);
+        console.log(
+            `✅ Set Key sukses: ${member.user.tag} | produk=${product.label} | role=${role.name} | extend=${scheduleResult.extended} | permanen=${scheduleResult.permanent} | dm=${dmSent}`
+        );
         return;
     }
 };

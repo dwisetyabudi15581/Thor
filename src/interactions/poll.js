@@ -15,10 +15,7 @@
  * Jadi domain handler fokus ke logic-nya saja.
  */
 
-const {
-    EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder,
-    MessageFlags
-} = require('discord.js');
+const { EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder, MessageFlags } = require('discord.js');
 const { logAudit, withUserLock } = require('../commands/_shared');
 // votePoll / getPollByMessage / removePoll / getPollSession / deletePollSession
 // tidak di-export _shared, import langsung dari pollManager.
@@ -85,7 +82,10 @@ async function handlePollButton(interaction) {
             });
         }
         if (!result) {
-            return interaction.reply({ content: '❌ Gagal vote. Option mungkin tidak valid.', flags: MessageFlags.Ephemeral });
+            return interaction.reply({
+                content: '❌ Gagal vote. Option mungkin tidak valid.',
+                flags: MessageFlags.Ephemeral
+            });
         }
         if (result.closed) {
             return interaction.reply({ content: '❌ Poll sudah ditutup.', flags: MessageFlags.Ephemeral });
@@ -94,15 +94,13 @@ async function handlePollButton(interaction) {
         const opt = result.options[optionIndex];
         const voted = opt.votes.includes(interaction.user.id);
         return interaction.reply({
-            content: voted
-                ? `✅ Vote tercatat untuk **${opt.label}**!`
-                : `🚪 Vote dibatalkan untuk **${opt.label}**.`,
+            content: voted ? `✅ Vote tercatat untuk **${opt.label}**!` : `🚪 Vote dibatalkan untuk **${opt.label}**.`,
             flags: MessageFlags.Ephemeral
         });
     } catch (err) {
         console.error('Poll button error:', err);
         if (interaction.isRepliable() && !interaction.replied) {
-            await interaction.reply({ content: '❌ Terjadi error.', flags: MessageFlags.Ephemeral }).catch(()=>{});
+            await interaction.reply({ content: '❌ Terjadi error.', flags: MessageFlags.Ephemeral }).catch(() => {});
         }
     }
 }
@@ -115,22 +113,24 @@ async function updatePollVoteMessage(interaction, poll) {
         if (!msg) return;
 
         const total = getPollTotalVotes(poll);
-        const lines = poll.options.map((opt, i) => {
-            const pct = total > 0 ? Math.round((opt.votes.length / total) * 100) : 0;
-            const bar = '█'.repeat(Math.floor(pct / 10)).padEnd(10, '░');
-            return `${opt.emoji} **${opt.label}** — ${opt.votes.length} votes (${pct}%)\n\`${bar}\``;
-        }).join('\n\n');
+        const lines = poll.options
+            .map((opt, i) => {
+                const pct = total > 0 ? Math.round((opt.votes.length / total) * 100) : 0;
+                const bar = '█'.repeat(Math.floor(pct / 10)).padEnd(10, '░');
+                return `${opt.emoji} **${opt.label}** — ${opt.votes.length} votes (${pct}%)\n\`${bar}\``;
+            })
+            .join('\n\n');
 
         const embed = new EmbedBuilder()
             .setTitle(`📊 ${poll.question}`)
             .setDescription(
                 `${lines}\n\n` +
-                `🗳️ Total votes: **${total}**\n` +
-                `🔄 Mode: ${poll.multiple ? 'Multi-vote (boleh pilih banyak)' : 'Single-vote (pilih satu)'}\n` +
-                `⏰ Dibuat: <t:${Math.floor(poll.createdAt / 1000)}:R>\n\n` +
-                `👇 Klik tombol di bawah untuk vote (toggle)`
+                    `🗳️ Total votes: **${total}**\n` +
+                    `🔄 Mode: ${poll.multiple ? 'Multi-vote (boleh pilih banyak)' : 'Single-vote (pilih satu)'}\n` +
+                    `⏰ Dibuat: <t:${Math.floor(poll.createdAt / 1000)}:R>\n\n` +
+                    `👇 Klik tombol di bawah untuk vote (toggle)`
             )
-            .setColor(0x5865F2)
+            .setColor(0x5865f2)
             .setFooter({ text: `Poll by ${poll.creatorTag} | ID: ${poll.id}` })
             .setTimestamp();
         await msg.edit({ embeds: [embed] });
@@ -173,7 +173,10 @@ async function handlePollModalCreate(interaction) {
             return interaction.reply({ content: '❌ Options tidak boleh kosong.', flags: MessageFlags.Ephemeral });
         }
 
-        const optionLines = optionsRaw.split('\n').map(s => s.trim()).filter(s => s.length > 0);
+        const optionLines = optionsRaw
+            .split('\n')
+            .map(s => s.trim())
+            .filter(s => s.length > 0);
         if (optionLines.length < 2) {
             return interaction.reply({ content: '❌ Minimal 2 options (1 per baris).', flags: MessageFlags.Ephemeral });
         }
@@ -209,22 +212,24 @@ async function handlePollModalCreate(interaction) {
 
         // Build embed + buttons
         const total = 0;
-        const lines = poll.options.map((opt, i) => {
-            const pct = 0;
-            const bar = '░'.repeat(10);
-            return `${opt.emoji} **${opt.label}** — 0 votes (0%)\n\`${bar}\``;
-        }).join('\n\n');
+        const lines = poll.options
+            .map((opt, i) => {
+                const pct = 0;
+                const bar = '░'.repeat(10);
+                return `${opt.emoji} **${opt.label}** — 0 votes (0%)\n\`${bar}\``;
+            })
+            .join('\n\n');
 
         const embed = new EmbedBuilder()
             .setTitle(`📊 ${question}`)
             .setDescription(
                 `${lines}\n\n` +
-                `🗳️ Total votes: **0**\n` +
-                `🔄 Mode: ${multiple ? 'Multi-vote (boleh pilih banyak)' : 'Single-vote (pilih satu)'}\n` +
-                `⏰ Dibuat: <t:${Math.floor(poll.createdAt / 1000)}:R>\n\n` +
-                `👇 Klik tombol di bawah untuk vote (toggle)`
+                    `🗳️ Total votes: **0**\n` +
+                    `🔄 Mode: ${multiple ? 'Multi-vote (boleh pilih banyak)' : 'Single-vote (pilih satu)'}\n` +
+                    `⏰ Dibuat: <t:${Math.floor(poll.createdAt / 1000)}:R>\n\n` +
+                    `👇 Klik tombol di bawah untuk vote (toggle)`
             )
-            .setColor(0x5865F2)
+            .setColor(0x5865f2)
             .setFooter({ text: `Poll by ${interaction.user.tag} | ID: ${poll.id}` })
             .setTimestamp();
 
@@ -245,25 +250,43 @@ async function handlePollModalCreate(interaction) {
             rows.push(row);
         }
 
-        const msg = await channel.send({ embeds: [embed], components: rows, content: `📊 **POLL BARU** oleh ${interaction.user}` }).catch(err => null);
+        const msg = await channel
+            .send({ embeds: [embed], components: rows, content: `📊 **POLL BARU** oleh ${interaction.user}` })
+            .catch(err => null);
         if (!msg) {
             // P0-5 FIX: rollback poll entry yang sudah tersimpan kalau gagal kirim message.
-            try { removePoll(poll.id); } catch (_) {}
+            try {
+                removePoll(poll.id);
+            } catch (_) {}
             deletePollSession(sessionId);
-            return interaction.reply({ content: `❌ Gagal kirim poll ke ${channel}. Cek permission bot. Entry di-rollback.`, flags: MessageFlags.Ephemeral });
+            return interaction.reply({
+                content: `❌ Gagal kirim poll ke ${channel}. Cek permission bot. Entry di-rollback.`,
+                flags: MessageFlags.Ephemeral
+            });
         }
         setPollMessageId(poll.id, msg.id);
         // v3.9.1: session sudah dipakai, hapus dari memory.
         deletePollSession(sessionId);
         // P1-10 FIX: tambah audit log untuk POLL_CREATE (sebelumnya missing).
         try {
-            await logAudit(interaction.client, { action: 'POLL_CREATE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Buat poll **${question}** (${poll.options.length} options, ${multiple ? 'multi' : 'single'}-vote) di ${channel}`, guildId: interaction.guild.id });
+            await logAudit(interaction.client, {
+                action: 'POLL_CREATE',
+                actorId: interaction.user.id,
+                actorTag: interaction.user.tag,
+                details: `Buat poll **${question}** (${poll.options.length} options, ${multiple ? 'multi' : 'single'}-vote) di ${channel}`,
+                guildId: interaction.guild.id
+            });
         } catch (_) {}
-        return interaction.reply({ content: `✅ Poll dibuat di ${channel}!\n🆔 \`${poll.id}\`\n💡 Tutup pakai \`/poll close id:${poll.id}\``, flags: MessageFlags.Ephemeral });
+        return interaction.reply({
+            content: `✅ Poll dibuat di ${channel}!\n🆔 \`${poll.id}\`\n💡 Tutup pakai \`/poll close id:${poll.id}\``,
+            flags: MessageFlags.Ephemeral
+        });
     } catch (err) {
         console.error('Poll modal create error:', err);
         if (interaction.isRepliable() && !interaction.replied) {
-            await interaction.reply({ content: '❌ Terjadi error: ' + err.message, flags: MessageFlags.Ephemeral }).catch(()=>{});
+            await interaction
+                .reply({ content: '❌ Terjadi error: ' + err.message, flags: MessageFlags.Ephemeral })
+                .catch(() => {});
         }
     }
 }

@@ -7,9 +7,7 @@
  */
 
 const { EmbedBuilder, MessageFlags } = require('./_shared');
-const {
-    getConfig, saveConfig, logAudit, safeEditReply
-} = require('./_shared');
+const { getConfig, saveConfig, logAudit, safeEditReply } = require('./_shared');
 
 const responderManager = require('../data/responderManager');
 
@@ -34,7 +32,7 @@ module.exports = async function (interaction) {
             trigger,
             reply,
             replyType,
-            cooldownMs: cooldown !== null ? cooldown * 1000 : 3000,  // 0 = matiin, null = default 3s
+            cooldownMs: cooldown !== null ? cooldown * 1000 : 3000, // 0 = matiin, null = default 3s
             createdBy: interaction.user.id,
             createdByTag: interaction.user.tag
         });
@@ -52,11 +50,12 @@ module.exports = async function (interaction) {
         });
 
         return safeEditReply(interaction, {
-            content: `✅ Responder ditambahkan!\n\n` +
+            content:
+                `✅ Responder ditambahkan!\n\n` +
                 `🔤 Trigger: \`${result.responder.trigger}\`\n` +
                 `💬 Reply: ${reply.slice(0, 200)}${reply.length > 200 ? '...' : ''}\n` +
                 `📝 Type: ${replyType}\n` +
-                `⏱️ Cooldown: ${(result.responder.cooldownMs / 1000)}s\n\n` +
+                `⏱️ Cooldown: ${result.responder.cooldownMs / 1000}s\n\n` +
                 `💡 Member kirim pesan yang diawali \`${result.responder.trigger}\` → bot auto-reply.`
         });
     }
@@ -72,15 +71,17 @@ module.exports = async function (interaction) {
             });
         }
 
-        const lines = responders.map((r, i) => {
-            const replyPreview = r.reply.length > 60 ? r.reply.slice(0, 60) + '...' : r.reply;
-            return `\`${i + 1}.\` \`${r.trigger}\` → ${replyPreview} *(used ${r.useCount}x)*`;
-        }).join('\n');
+        const lines = responders
+            .map((r, i) => {
+                const replyPreview = r.reply.length > 60 ? r.reply.slice(0, 60) + '...' : r.reply;
+                return `\`${i + 1}.\` \`${r.trigger}\` → ${replyPreview} *(used ${r.useCount}x)*`;
+            })
+            .join('\n');
 
         const embed = new EmbedBuilder()
             .setTitle('💬 DAFTAR AUTO-RESPONDER')
             .setDescription(lines)
-            .setColor(0x5865F2)
+            .setColor(0x5865f2)
             .setFooter({ text: `${responders.length}/50 responder terpakai` })
             .setTimestamp();
 

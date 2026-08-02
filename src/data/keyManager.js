@@ -81,7 +81,7 @@ function addKey(data) {
         productName: data.productName || 'Unknown',
         days,
         expireAt,
-        guildId: data.guildId || null,  // v3.9.3: simpan guildId supaya cross-guild wipe bisa akurat
+        guildId: data.guildId || null, // v3.9.3: simpan guildId supaya cross-guild wipe bisa akurat
         createdAt: now
     };
     list.push(entry);
@@ -114,11 +114,7 @@ function findAllByUser(userId, guildId) {
  */
 function getActiveKeysByUserAndRole(userId, roleId, now = Date.now()) {
     const list = loadKeys();
-    return list.filter(k =>
-        k.userId === userId &&
-        k.roleId === roleId &&
-        (k.expireAt === null || k.expireAt > now)
-    );
+    return list.filter(k => k.userId === userId && k.roleId === roleId && (k.expireAt === null || k.expireAt > now));
 }
 
 /**
@@ -126,11 +122,7 @@ function getActiveKeysByUserAndRole(userId, roleId, now = Date.now()) {
  */
 function hasPermanentKey(userId, roleId) {
     const list = loadKeys();
-    return list.some(k =>
-        k.userId === userId &&
-        k.roleId === roleId &&
-        k.expireAt === null
-    );
+    return list.some(k => k.userId === userId && k.roleId === roleId && k.expireAt === null);
 }
 
 /**
@@ -181,7 +173,9 @@ function getAllKeys() {
  */
 function getStats(now = Date.now()) {
     const list = loadKeys();
-    let active = 0, expired = 0, permanent = 0;
+    let active = 0,
+        expired = 0,
+        permanent = 0;
     for (const k of list) {
         if (k.expireAt === null || k.days === 0) {
             permanent++;
@@ -206,7 +200,9 @@ function getStats(now = Date.now()) {
 function getStatsByGuild(guildId, now = Date.now()) {
     if (!guildId) return getStats(now);
     const list = loadKeys().filter(k => !k.guildId || k.guildId === guildId);
-    let active = 0, expired = 0, permanent = 0;
+    let active = 0,
+        expired = 0,
+        permanent = 0;
     for (const k of list) {
         if (k.expireAt === null || k.days === 0) {
             permanent++;
@@ -256,7 +252,9 @@ function removeAllKeysByUser(userId, guildId) {
         // Hapus key milik user ini di guild ini.
         // Key tanpa guildId (schema lama, pre-v3.9.3) juga dihapus karena
         // diasumsikan milik guild pertama yang memanggil (backward compat).
-        filtered = list.filter(k => !(k.userId === userId && (k.guildId === guildId || k.guildId === undefined || k.guildId === null)));
+        filtered = list.filter(
+            k => !(k.userId === userId && (k.guildId === guildId || k.guildId === undefined || k.guildId === null))
+        );
     } else {
         // Behavior lama: hapus semua key user (backward compat untuk single-guild).
         filtered = list.filter(k => k.userId !== userId);
@@ -306,10 +304,12 @@ function formatRemaining(key, now = Date.now()) {
  */
 function formatKeysForUser(keys, now = Date.now()) {
     if (keys.length === 0) return '(tidak ada key)';
-    return keys.map((k, i) => {
-        const remaining = formatRemaining(k, now);
-        return `\`${i + 1}.\` \`${k.key}\` — ${k.productName} — ${remaining}`;
-    }).join('\n');
+    return keys
+        .map((k, i) => {
+            const remaining = formatRemaining(k, now);
+            return `\`${i + 1}.\` \`${k.key}\` — ${k.productName} — ${remaining}`;
+        })
+        .join('\n');
 }
 
 module.exports = {

@@ -7,9 +7,7 @@
  */
 
 const { EmbedBuilder, MessageFlags } = require('./_shared');
-const {
-    getConfig, saveConfig, logAudit, safeEditReply
-} = require('./_shared');
+const { getConfig, saveConfig, logAudit, safeEditReply } = require('./_shared');
 
 const levelManager = require('../data/levelManager');
 
@@ -44,14 +42,16 @@ module.exports = async function (interaction) {
 
         const embed = new EmbedBuilder()
             .setTitle('📊 LEVELING SYSTEM')
-            .setColor(updates.enabled ? 0x57F287 : 0x95A5A6)
+            .setColor(updates.enabled ? 0x57f287 : 0x95a5a6)
             .addFields(
                 { name: '✅ Status', value: updates.enabled ? 'Enabled ✅' : 'Disabled ❌', inline: true },
                 { name: '⚡ XP per Message', value: `${updates.xpPerMessage}`, inline: true },
                 { name: '⏱️ Cooldown', value: `${updates.cooldownMs / 1000}s`, inline: true },
                 { name: '📢 Announce Level Up', value: updates.announceLevelUp ? 'Yes' : 'No', inline: true }
             )
-            .setFooter({ text: 'Member dapat XP tiap pesan (subject to cooldown). Pakai /add-level-role untuk setup role reward.' });
+            .setFooter({
+                text: 'Member dapat XP tiap pesan (subject to cooldown). Pakai /add-level-role untuk setup role reward.'
+            });
 
         return safeEditReply(interaction, { embeds: [embed] });
     }
@@ -85,7 +85,8 @@ module.exports = async function (interaction) {
         });
 
         return safeEditReply(interaction, {
-            content: `✅ Level role ditambahkan!\n\n📊 Level **${level}** → ${role} (${role.name})\n\n` +
+            content:
+                `✅ Level role ditambahkan!\n\n📊 Level **${level}** → ${role} (${role.name})\n\n` +
                 `💡 User yang cap level ${level}+ akan otomatis dapat role ini.`
         });
     }
@@ -105,7 +106,7 @@ module.exports = async function (interaction) {
         const embed = new EmbedBuilder()
             .setTitle('📊 LEVEL ROLES')
             .setDescription(lines)
-            .setColor(0x5865F2)
+            .setColor(0x5865f2)
             .setFooter({ text: `${roles.length} role reward terdaftar` });
 
         return safeEditReply(interaction, { embeds: [embed] });
@@ -160,7 +161,7 @@ module.exports = async function (interaction) {
 
         const embed = new EmbedBuilder()
             .setTitle(`📊 Rank — ${targetUser.tag}`)
-            .setColor(0xF1C40F)
+            .setColor(0xf1c40f)
             .setThumbnail(targetUser.displayAvatarURL({ dynamic: true }))
             .addFields(
                 { name: 'Level', value: `**${userData.level}**`, inline: true },
@@ -168,7 +169,9 @@ module.exports = async function (interaction) {
                 { name: 'XP Progress', value: `${xpInLevel}/${xpNeeded} (${progress}%)`, inline: false },
                 { name: 'Progress Bar', value: `\`${bar}\``, inline: false }
             )
-            .setFooter({ text: `Leveling ${config.leveling?.enabled ? 'enabled' : 'disabled'} | XP/msg: ${config.leveling?.xpPerMessage || 15}` });
+            .setFooter({
+                text: `Leveling ${config.leveling?.enabled ? 'enabled' : 'disabled'} | XP/msg: ${config.leveling?.xpPerMessage || 15}`
+            });
 
         return safeEditReply(interaction, { embeds: [embed] });
     }
@@ -184,16 +187,21 @@ module.exports = async function (interaction) {
             });
         }
 
-        const lines = top.map((u, i) => {
-            const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `\`${i + 1}.\``;
-            return `${medal} <@${u.userId}> — Level **${u.level}** (${u.totalXp} XP)`;
-        }).join('\n');
+        const lines = top
+            .map((u, i) => {
+                const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `\`${i + 1}.\``;
+                return `${medal} <@${u.userId}> — Level **${u.level}** (${u.totalXp} XP)`;
+            })
+            .join('\n');
 
         const embed = new EmbedBuilder()
             .setTitle('🏆 LEADERBOARD — TOP 10 (Level)')
             .setDescription(lines)
-            .setColor(0xF1C40F)
-            .setFooter({ text: interaction.client.user.username, iconURL: interaction.client.user.displayAvatarURL({ dynamic: true }) })
+            .setColor(0xf1c40f)
+            .setFooter({
+                text: interaction.client.user.username,
+                iconURL: interaction.client.user.displayAvatarURL({ dynamic: true })
+            })
             .setTimestamp();
 
         return safeEditReply(interaction, { embeds: [embed] });

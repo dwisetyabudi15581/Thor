@@ -62,11 +62,12 @@ test('fillTemplate: mixed variables in ticketBody', () => {
         priceList: '• Item 1 — Rp 10.000',
         categoriesList: '🔑 Key • 📞 Help'
     });
-    assert.strictEqual(result,
+    assert.strictEqual(
+        result,
         'Selamat datang di Test Server!\n\n' +
-        '**💰 HARGA 💰**\n' +
-        '• Item 1 — Rp 10.000\n\n' +
-        'Kategori: 🔑 Key • 📞 Help'
+            '**💰 HARGA 💰**\n' +
+            '• Item 1 — Rp 10.000\n\n' +
+            'Kategori: 🔑 Key • 📞 Help'
     );
 });
 
@@ -88,7 +89,7 @@ test('fillTemplate: missing variables leave placeholder unchanged (defensive)', 
     assert.ok(typeof result === 'string');
     // {user} replaced with '' (always replaced). Others stay as-is kalau vars not provided.
     assert.ok(!result.includes('{user}'));
-    assert.ok(result.includes('{price_list}'));  // tetap ada karena vars.priceList undefined
+    assert.ok(result.includes('{price_list}')); // tetap ada karena vars.priceList undefined
 });
 
 test('configManager: default ticketBody uses template variables', () => {
@@ -108,7 +109,10 @@ test('commands/config.js: edit-message command registered', () => {
     const commands = getCommands();
     const editMsg = commands.find(c => c.name === 'edit-message');
     assert.ok(editMsg, 'edit-message command should be registered');
-    assert.strictEqual(editMsg.description, 'Edit teks pesan embed via modal (multi-line, lebih flexible dari /set-message)');
+    assert.strictEqual(
+        editMsg.description,
+        'Edit teks pesan embed via modal (multi-line, lebih flexible dari /set-message)'
+    );
     assert.ok(editMsg.options.find(o => o.name === 'tipe' && o.required));
 });
 
@@ -129,7 +133,10 @@ test('help.js: help embed mentions new commands', async () => {
                 displayAvatarURL: () => 'http://example.com/avatar.png'
             }
         },
-        reply: async (opts) => { replies.push(opts); return {}; }
+        reply: async opts => {
+            replies.push(opts);
+            return {};
+        }
     };
 
     const helpHandler = require('../../src/commands/help');

@@ -28,7 +28,10 @@ module.exports = async function (interaction) {
     // ====================================================
     // === GIVEAWAY: JOIN / LEAVE BUTTONS ===
     // ====================================================
-    if (interaction.isButton() && (interaction.customId.startsWith('gw_join:') || interaction.customId.startsWith('gw_leave:'))) {
+    if (
+        interaction.isButton() &&
+        (interaction.customId.startsWith('gw_join:') || interaction.customId.startsWith('gw_leave:'))
+    ) {
         return handleGiveawayButton(interaction);
     }
 };
@@ -41,13 +44,19 @@ async function handleGiveawayButton(interaction) {
         const [action, gwId] = interaction.customId.split(':');
         const gw = getGiveaway(gwId);
         if (!gw) {
-            return interaction.reply({ content: '❌ Giveaway tidak ditemukan (mungkin sudah dihapus).', flags: MessageFlags.Ephemeral });
+            return interaction.reply({
+                content: '❌ Giveaway tidak ditemukan (mungkin sudah dihapus).',
+                flags: MessageFlags.Ephemeral
+            });
         }
         if (gw.ended) {
             return interaction.reply({ content: '❌ Giveaway sudah berakhir.', flags: MessageFlags.Ephemeral });
         }
         if (gw.guildId !== interaction.guild.id) {
-            return interaction.reply({ content: '❌ Giveaway ini bukan dari guild ini.', flags: MessageFlags.Ephemeral });
+            return interaction.reply({
+                content: '❌ Giveaway ini bukan dari guild ini.',
+                flags: MessageFlags.Ephemeral
+            });
         }
 
         // Cek required role
@@ -55,7 +64,10 @@ async function handleGiveawayButton(interaction) {
             const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
             if (!member || !member.roles.cache.has(gw.requiredRoleId)) {
                 const role = interaction.guild.roles.cache.get(gw.requiredRoleId);
-                return interaction.reply({ content: `❌ Kamu harus punya role ${role || '`' + gw.requiredRoleId + '`'} untuk ikut giveaway ini.`, flags: MessageFlags.Ephemeral });
+                return interaction.reply({
+                    content: `❌ Kamu harus punya role ${role || '`' + gw.requiredRoleId + '`'} untuk ikut giveaway ini.`,
+                    flags: MessageFlags.Ephemeral
+                });
             }
         }
 
@@ -102,24 +114,42 @@ async function handleGiveawayButton(interaction) {
 
         switch (lockResult.type) {
             case 'notfound':
-                return interaction.reply({ content: '❌ Giveaway tidak ditemukan (mungkin sudah dihapus).', flags: MessageFlags.Ephemeral });
+                return interaction.reply({
+                    content: '❌ Giveaway tidak ditemukan (mungkin sudah dihapus).',
+                    flags: MessageFlags.Ephemeral
+                });
             case 'ended':
                 return interaction.reply({ content: '❌ Giveaway sudah berakhir.', flags: MessageFlags.Ephemeral });
             case 'already_joined':
-                return interaction.reply({ content: 'ℹ️ Kamu sudah join giveaway ini.', flags: MessageFlags.Ephemeral });
+                return interaction.reply({
+                    content: 'ℹ️ Kamu sudah join giveaway ini.',
+                    flags: MessageFlags.Ephemeral
+                });
             case 'not_joined':
-                return interaction.reply({ content: 'ℹ️ Kamu belum join giveaway ini.', flags: MessageFlags.Ephemeral });
+                return interaction.reply({
+                    content: 'ℹ️ Kamu belum join giveaway ini.',
+                    flags: MessageFlags.Ephemeral
+                });
             case 'joined':
-                return interaction.reply({ content: `✅ Kamu join giveaway **${gw.prize}**! 🎉\n👥 Total peserta: ${lockResult.total}`, flags: MessageFlags.Ephemeral });
+                return interaction.reply({
+                    content: `✅ Kamu join giveaway **${gw.prize}**! 🎉\n👥 Total peserta: ${lockResult.total}`,
+                    flags: MessageFlags.Ephemeral
+                });
             case 'left':
-                return interaction.reply({ content: `🚪 Kamu keluar dari giveaway **${gw.prize}**.`, flags: MessageFlags.Ephemeral });
+                return interaction.reply({
+                    content: `🚪 Kamu keluar dari giveaway **${gw.prize}**.`,
+                    flags: MessageFlags.Ephemeral
+                });
             default:
-                return interaction.reply({ content: '❌ Tidak ada aksi yang dilakukan.', flags: MessageFlags.Ephemeral });
+                return interaction.reply({
+                    content: '❌ Tidak ada aksi yang dilakukan.',
+                    flags: MessageFlags.Ephemeral
+                });
         }
     } catch (err) {
         console.error('Giveaway button error:', err);
         if (interaction.isRepliable() && !interaction.replied) {
-            await interaction.reply({ content: '❌ Terjadi error.', flags: MessageFlags.Ephemeral }).catch(()=>{});
+            await interaction.reply({ content: '❌ Terjadi error.', flags: MessageFlags.Ephemeral }).catch(() => {});
         }
     }
 }
@@ -136,13 +166,13 @@ async function updateGiveawayMessage(interaction, gw) {
             .setTitle('🎉 GIVEAWAY!')
             .setDescription(
                 `🎁 **Prize:** ${gw.prize}\n\n` +
-                `👥 **Pemenang:** ${gw.winnersCount}\n` +
-                `⏰ **Berakhir:** <t:${Math.floor(gw.endsAt / 1000)}:R> (<t:${Math.floor(gw.endsAt / 1000)}:F>)\n` +
-                `🎟️ **Peserta:** ${gw.participantIds.length}\n` +
-                (gw.requiredRoleId ? `🔐 **Syarat:** <@&${gw.requiredRoleId}>\n` : '') +
-                `\n👇 Klik tombol **🎉 Join** di bawah untuk ikut!`
+                    `👥 **Pemenang:** ${gw.winnersCount}\n` +
+                    `⏰ **Berakhir:** <t:${Math.floor(gw.endsAt / 1000)}:R> (<t:${Math.floor(gw.endsAt / 1000)}:F>)\n` +
+                    `🎟️ **Peserta:** ${gw.participantIds.length}\n` +
+                    (gw.requiredRoleId ? `🔐 **Syarat:** <@&${gw.requiredRoleId}>\n` : '') +
+                    `\n👇 Klik tombol **🎉 Join** di bawah untuk ikut!`
             )
-            .setColor(timeLeft < 60000 ? 0xE67E22 : 0xF1C40F)
+            .setColor(timeLeft < 60000 ? 0xe67e22 : 0xf1c40f)
             .setFooter({ text: `Host: ${gw.hostTag} | ID: ${gw.id}` })
             .setTimestamp();
         await msg.edit({ embeds: [embed] });

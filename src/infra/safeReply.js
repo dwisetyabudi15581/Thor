@@ -84,9 +84,8 @@ async function safeEditReply(interaction, options) {
 
         // Original reply hilang. Coba followUp (bikin pesan baru).
         // Preserve ephemeral flag kalau original deferReply ephemeral.
-        const wasEphemeral = interaction.ephemeral === true ||
-            options?.flags === MessageFlags.Ephemeral ||
-            options?.flags === 64;
+        const wasEphemeral =
+            interaction.ephemeral === true || options?.flags === MessageFlags.Ephemeral || options?.flags === 64;
 
         try {
             return await interaction.followUp({

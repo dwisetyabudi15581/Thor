@@ -39,10 +39,9 @@ async function onVoiceStateUpdate(oldState, newState) {
 
         // CASE 2: Member join/leave channel temp voice → refresh panel global
         if (oldChannelId !== newChannelId) {
-            const involvedTempVoice = (
+            const involvedTempVoice =
                 (oldChannelId && tempVoiceManager.getChannel(guildId, oldChannelId)) ||
-                (newChannelId && tempVoiceManager.getChannel(guildId, newChannelId))
-            );
+                (newChannelId && tempVoiceManager.getChannel(guildId, newChannelId));
             if (involvedTempVoice) {
                 await refreshGlobalControlPanel(newState.client, guildId);
             }
@@ -55,7 +54,14 @@ async function onVoiceStateUpdate(oldState, newState) {
                 const oldChannel = newState.guild.channels.cache.get(oldChannelId);
 
                 if (channelInfo.ownerId === userId && oldChannel && oldChannel.members.size > 0) {
-                    await handleAutoTransferOwnership(newState.client, guildId, oldChannelId, channelInfo, oldChannel, userId);
+                    await handleAutoTransferOwnership(
+                        newState.client,
+                        guildId,
+                        oldChannelId,
+                        channelInfo,
+                        oldChannel,
+                        userId
+                    );
                 }
 
                 if (oldChannel && oldChannel.members.size === 0) {
@@ -73,7 +79,9 @@ async function onVoiceStateUpdate(oldState, newState) {
                             // Discord error lain (50013 Missing Permissions, 50001 Missing Access, dst).
                             // Channel masih ada di Discord tapi bot gak bisa hapus. JANGAN unregister —
                             // nanti bisa di-retry. Log warning biar admin tau ada channel stuck.
-                            console.warn(`⚠️ Gagal hapus temp voice ${oldChannelId} (Discord code ${err.code}). Channel masih ada, bot gak punya permission. Entry tetap dipertahankan buat retry.`);
+                            console.warn(
+                                `⚠️ Gagal hapus temp voice ${oldChannelId} (Discord code ${err.code}). Channel masih ada, bot gak punya permission. Entry tetap dipertahankan buat retry.`
+                            );
                         } else {
                             console.error(`❌ Non-Discord error saat hapus temp voice ${oldChannelId}:`, err);
                             // Untuk non-Discord error, uninstall juga biar gak stuck loop
@@ -134,12 +142,14 @@ async function handleAutoTransferOwnership(client, guildId, channelId, channelIn
         try {
             await newOwner.send(
                 `🎁 **Kamu sekarang owner voice channel: ${voiceChannel.name}**\n\n` +
-                `Ownership otomatis dipindahkan ke kamu karena owner sebelumnya (<@${oldOwnerId}>) keluar dari voice.\n\n` +
-                `🎛️ Kamu bisa kontrol channel ini lewat panel global temp voice di server.`
+                    `Ownership otomatis dipindahkan ke kamu karena owner sebelumnya (<@${oldOwnerId}>) keluar dari voice.\n\n` +
+                    `🎛️ Kamu bisa kontrol channel ini lewat panel global temp voice di server.`
             );
         } catch (_) {}
 
-        console.log(`🔄 Auto-transfer ownership channel ${channelId}: ${oldOwnerId} → ${newOwner.id} (${newOwner.user.tag})`);
+        console.log(
+            `🔄 Auto-transfer ownership channel ${channelId}: ${oldOwnerId} → ${newOwner.id} (${newOwner.user.tag})`
+        );
     } catch (err) {
         console.error('Error auto-transfer ownership:', err.message);
     }
@@ -181,22 +191,30 @@ async function handleCreateTempVoice(newState) {
             bitrate: 64000,
             permissionOverwrites: [
                 { id: guild.roles.everyone.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect] },
-                { id: member.id, allow: [
-                    PermissionFlagsBits.ViewChannel,
-                    PermissionFlagsBits.Connect,
-                    PermissionFlagsBits.ManageChannels,
-                    PermissionFlagsBits.MoveMembers,
-                    PermissionFlagsBits.MuteMembers,
-                    PermissionFlagsBits.DeafenMembers
-                ]}
+                {
+                    id: member.id,
+                    allow: [
+                        PermissionFlagsBits.ViewChannel,
+                        PermissionFlagsBits.Connect,
+                        PermissionFlagsBits.ManageChannels,
+                        PermissionFlagsBits.MoveMembers,
+                        PermissionFlagsBits.MuteMembers,
+                        PermissionFlagsBits.DeafenMembers
+                    ]
+                }
             ]
         });
 
         try {
             tempVoiceManager.registerChannel(guild.id, newChannel.id, member.id, member.user.tag, newChannel.name);
         } catch (regErr) {
-            console.error(`❌ Gagal register temp voice ${newChannel.id}, hapus channel untuk cegah orphan:`, regErr.message);
-            try { await newChannel.delete('Register failed — cleanup orphan'); } catch (_) {}
+            console.error(
+                `❌ Gagal register temp voice ${newChannel.id}, hapus channel untuk cegah orphan:`,
+                regErr.message
+            );
+            try {
+                await newChannel.delete('Register failed — cleanup orphan');
+            } catch (_) {}
             return;
         }
 
@@ -204,8 +222,12 @@ async function handleCreateTempVoice(newState) {
             await member.voice.setChannel(newChannel.id);
         } catch (err) {
             console.warn(`⚠️ Gagal pindahkan member ke channel baru: ${err.message}. Cleanup orphan channel.`);
-            try { await newChannel.delete('SetChannel failed — cleanup orphan'); } catch (_) {}
-            try { tempVoiceManager.unregisterChannel(guild.id, newChannel.id); } catch (_) {}
+            try {
+                await newChannel.delete('SetChannel failed — cleanup orphan');
+            } catch (_) {}
+            try {
+                tempVoiceManager.unregisterChannel(guild.id, newChannel.id);
+            } catch (_) {}
             return;
         }
 
@@ -232,7 +254,9 @@ async function refreshGlobalControlPanel(client, guildId) {
 
         const panelMsg = await controlChannel.messages.fetch(config.controlMessageId).catch(() => null);
         if (!panelMsg) {
-            console.warn(`⚠️ Panel global temp voice untuk guild ${guildId} tidak ditemukan. Jalankan /setup-tempvoice lagi.`);
+            console.warn(
+                `⚠️ Panel global temp voice untuk guild ${guildId} tidak ditemukan. Jalankan /setup-tempvoice lagi.`
+            );
             return;
         }
 

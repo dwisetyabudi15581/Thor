@@ -82,7 +82,9 @@ function safeWriteText(filePath, content) {
         fs.renameSync(tmpPath, filePath);
     } catch (err) {
         // v3.9.8: kalau rename gagal, cleanup .tmp supaya tidak numpuk.
-        try { fs.unlinkSync(tmpPath); } catch (_) {}
+        try {
+            fs.unlinkSync(tmpPath);
+        } catch (_) {}
         throw err;
     }
 }
@@ -127,7 +129,9 @@ function safeWriteJSONWithBackup(filePath, data, opts = {}) {
         fs.renameSync(tmpPath, filePath);
     } catch (err) {
         // v3.9.8: cleanup .tmp kalau rename gagal.
-        try { fs.unlinkSync(tmpPath); } catch (_) {}
+        try {
+            fs.unlinkSync(tmpPath);
+        } catch (_) {}
         throw err;
     }
 }
@@ -135,5 +139,5 @@ function safeWriteJSONWithBackup(filePath, data, opts = {}) {
 module.exports = {
     safeWriteJSON,
     safeWriteText,
-    safeWriteJSONWithBackup,
+    safeWriteJSONWithBackup
 };

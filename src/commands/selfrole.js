@@ -59,20 +59,35 @@ module.exports = async function (interaction) {
             panelMsg = await interaction.channel.send({ embeds: [embed], components });
         } catch (err) {
             console.error('Gagal kirim self-role panel:', err.message);
-            try { deleteSelfRolePanel(panel.id); } catch (_) {}
-            return safeEditReply(interaction,{ content: `❌ Gagal kirim panel ke ${interaction.channel}. Cek permission bot. Entry di-rollback.` });
+            try {
+                deleteSelfRolePanel(panel.id);
+            } catch (_) {}
+            return safeEditReply(interaction, {
+                content: `❌ Gagal kirim panel ke ${interaction.channel}. Cek permission bot. Entry di-rollback.`
+            });
         }
         if (!panelMsg) {
-            try { deleteSelfRolePanel(panel.id); } catch (_) {}
-            return safeEditReply(interaction,{ content: `❌ Gagal kirim panel (channel tidak ada). Entry di-rollback.` });
+            try {
+                deleteSelfRolePanel(panel.id);
+            } catch (_) {}
+            return safeEditReply(interaction, {
+                content: `❌ Gagal kirim panel (channel tidak ada). Entry di-rollback.`
+            });
         }
 
         // Update messageId
         setMessageId(panel.id, panelMsg.id);
-        await logAudit(interaction.client, { action: 'SETUP_SELFROLE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Buat panel self-role **${title}** (\`${panel.id}\`) di ${interaction.channel} — tipe: ${panel.type}, exclusive: ${panel.exclusive}`, guildId: interaction.guild.id });
+        await logAudit(interaction.client, {
+            action: 'SETUP_SELFROLE',
+            actorId: interaction.user.id,
+            actorTag: interaction.user.tag,
+            details: `Buat panel self-role **${title}** (\`${panel.id}\`) di ${interaction.channel} — tipe: ${panel.type}, exclusive: ${panel.exclusive}`,
+            guildId: interaction.guild.id
+        });
 
-        return safeEditReply(interaction,{
-            content: `✅ **Panel self-role dibuat!**\n\n` +
+        return safeEditReply(interaction, {
+            content:
+                `✅ **Panel self-role dibuat!**\n\n` +
                 `🆔 Panel ID: \`${panel.id}\`\n` +
                 `📍 Channel: ${interaction.channel}\n` +
                 `🎨 Tipe: **${panel.type}**\n` +
@@ -98,10 +113,12 @@ module.exports = async function (interaction) {
 
         const panel = getPanel(panelId);
         if (!panel) {
-            return safeEditReply(interaction,{ content: `❌ Panel ID \`${panelId}\` tidak ditemukan. Pakai \`/selfrole-list\` untuk lihat daftar.` });
+            return safeEditReply(interaction, {
+                content: `❌ Panel ID \`${panelId}\` tidak ditemukan. Pakai \`/selfrole-list\` untuk lihat daftar.`
+            });
         }
         if (panel.guildId !== interaction.guild.id) {
-            return safeEditReply(interaction,{ content: `❌ Panel ini bukan dari guild ini.` });
+            return safeEditReply(interaction, { content: `❌ Panel ini bukan dari guild ini.` });
         }
 
         const result = addRoleToPanel(panelId, {
@@ -114,7 +131,7 @@ module.exports = async function (interaction) {
             requiresRoleId: requiresRole?.id || null
         });
         if (!result.ok) {
-            return safeEditReply(interaction,{ content: `❌ ${result.error}` });
+            return safeEditReply(interaction, { content: `❌ ${result.error}` });
         }
 
         // Update panel message
@@ -133,8 +150,14 @@ module.exports = async function (interaction) {
             console.warn('Gagal update panel message:', err.message);
         }
 
-        await logAudit(interaction.client, { action: 'SELFROLE_ADD', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Tambah role ${role.name} ke panel \`${panelId}\` (label: ${label})`, guildId: interaction.guild.id });
-        return safeEditReply(interaction,{
+        await logAudit(interaction.client, {
+            action: 'SELFROLE_ADD',
+            actorId: interaction.user.id,
+            actorTag: interaction.user.tag,
+            details: `Tambah role ${role.name} ke panel \`${panelId}\` (label: ${label})`,
+            guildId: interaction.guild.id
+        });
+        return safeEditReply(interaction, {
             content: `✅ Role ${role} ditambahkan ke panel \`${panelId}\`.\nLabel: **${label}**${emoji ? ` | Emoji: ${emoji}` : ''}${description ? ` | Desc: ${description}` : ''}`
         });
     }
@@ -150,7 +173,7 @@ module.exports = async function (interaction) {
 
         const result = removeRoleFromPanel(panelId, role.id);
         if (!result.ok) {
-            return safeEditReply(interaction,{ content: `❌ ${result.error}` });
+            return safeEditReply(interaction, { content: `❌ ${result.error}` });
         }
 
         // Update panel message
@@ -169,8 +192,14 @@ module.exports = async function (interaction) {
             console.warn('Gagal update panel message:', err.message);
         }
 
-        await logAudit(interaction.client, { action: 'SELFROLE_REMOVE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Hapus role ${role.name} dari panel \`${panelId}\``, guildId: interaction.guild.id });
-        return safeEditReply(interaction,{
+        await logAudit(interaction.client, {
+            action: 'SELFROLE_REMOVE',
+            actorId: interaction.user.id,
+            actorTag: interaction.user.tag,
+            details: `Hapus role ${role.name} dari panel \`${panelId}\``,
+            guildId: interaction.guild.id
+        });
+        return safeEditReply(interaction, {
             content: `✅ Role ${role} dihapus dari panel \`${panelId}\`.`
         });
     }
@@ -183,25 +212,33 @@ module.exports = async function (interaction) {
 
         const panels = getPanelsByGuild(interaction.guild.id);
         if (panels.length === 0) {
-            return safeEditReply(interaction,{ content: '📭 Belum ada panel self-role di guild ini. Pakai `/setup-selfrole` untuk membuat.' });
+            return safeEditReply(interaction, {
+                content: '📭 Belum ada panel self-role di guild ini. Pakai `/setup-selfrole` untuk membuat.'
+            });
         }
 
-        const lines = panels.map(p => {
-            const typeStr = p.type === 'select' ? '📋 Select' : '🔘 Button';
-            const modeStr = p.exclusive ? '🔒 Eksklusif' : '✅ Multi';
-            const rolesStr = p.roles.length === 0
-                ? '_kosong_'
-                : p.roles.map(r => `${r.emoji ? r.emoji + ' ' : ''}<@&${r.roleId}>`).join(', ');
-            return `• **${p.title}**\n  🆔 \`${p.id}\` | ${typeStr} | ${modeStr} | ${p.roles.length} role\n  📍 <#${p.channelId}> | [pesan](https://discord.com/channels/${p.guildId}/${p.channelId}/${p.messageId})\n  Role: ${rolesStr}`;
-        }).join('\n\n');
+        const lines = panels
+            .map(p => {
+                const typeStr = p.type === 'select' ? '📋 Select' : '🔘 Button';
+                const modeStr = p.exclusive ? '🔒 Eksklusif' : '✅ Multi';
+                const rolesStr =
+                    p.roles.length === 0
+                        ? '_kosong_'
+                        : p.roles.map(r => `${r.emoji ? r.emoji + ' ' : ''}<@&${r.roleId}>`).join(', ');
+                return `• **${p.title}**\n  🆔 \`${p.id}\` | ${typeStr} | ${modeStr} | ${p.roles.length} role\n  📍 <#${p.channelId}> | [pesan](https://discord.com/channels/${p.guildId}/${p.channelId}/${p.messageId})\n  Role: ${rolesStr}`;
+            })
+            .join('\n\n');
 
         const embed = new EmbedBuilder()
             .setTitle('🎭 DAFTAR PANEL SELF-ROLE')
             .setDescription(lines)
-            .setColor(0x9B59B6)
-            .setFooter({ text: interaction.client.user.username, iconURL: interaction.client.user.displayAvatarURL({ dynamic: true }) })
+            .setColor(0x9b59b6)
+            .setFooter({
+                text: interaction.client.user.username,
+                iconURL: interaction.client.user.displayAvatarURL({ dynamic: true })
+            })
             .setTimestamp();
-        return safeEditReply(interaction,{ embeds: [embed] });
+        return safeEditReply(interaction, { embeds: [embed] });
     }
 
     // ====================================================
@@ -213,7 +250,7 @@ module.exports = async function (interaction) {
         const panelId = interaction.options.getString('panel_id');
         const panel = getPanel(panelId);
         if (!panel) {
-            return safeEditReply(interaction,{ content: `❌ Panel ID \`${panelId}\` tidak ditemukan.` });
+            return safeEditReply(interaction, { content: `❌ Panel ID \`${panelId}\` tidak ditemukan.` });
         }
 
         // Hapus panel message
@@ -228,7 +265,13 @@ module.exports = async function (interaction) {
         }
 
         deletePanel(panelId);
-        await logAudit(interaction.client, { action: 'SELFROLE_DELETE', actorId: interaction.user.id, actorTag: interaction.user.tag, details: `Hapus panel self-role **${panel.title}** (\`${panelId}\`)`, guildId: interaction.guild.id });
-        return safeEditReply(interaction,{ content: `✅ Panel \`${panelId}\` (${panel.title}) berhasil dihapus.` });
+        await logAudit(interaction.client, {
+            action: 'SELFROLE_DELETE',
+            actorId: interaction.user.id,
+            actorTag: interaction.user.tag,
+            details: `Hapus panel self-role **${panel.title}** (\`${panelId}\`)`,
+            guildId: interaction.guild.id
+        });
+        return safeEditReply(interaction, { content: `✅ Panel \`${panelId}\` (${panel.title}) berhasil dihapus.` });
     }
 };

@@ -14,7 +14,11 @@
 
 const { Events } = require('discord.js');
 const { getCommands } = require('../../commands/registry');
-const { processExpiredRole, processGiveawayEnd, processScheduledAnnouncement } = require('../../services/schedulerTasks');
+const {
+    processExpiredRole,
+    processGiveawayEnd,
+    processScheduledAnnouncement
+} = require('../../services/schedulerTasks');
 const { getExpired, getAllActive } = require('../../data/roleScheduler');
 const { removeExpiredKeys } = require('../../data/keyManager');
 const { startAutoBackup } = require('../../data/backupManager');
@@ -49,7 +53,9 @@ async function onReady(client) {
         } else {
             const guild = client.guilds.cache.get(GUILD_ID);
             if (!guild) {
-                console.warn(`⚠️ Guild dengan ID ${GUILD_ID} tidak ditemukan. Pastikan bot sudah di-invite ke server itu.`);
+                console.warn(
+                    `⚠️ Guild dengan ID ${GUILD_ID} tidak ditemukan. Pastikan bot sudah di-invite ke server itu.`
+                );
                 console.warn('   Sementara fallback ke global commands (perlu ~1 jam untuk muncul).');
                 await client.application.commands.set(getCommands());
             } else {
@@ -92,7 +98,9 @@ async function onReady(client) {
             for (const [gid] of client.guilds.cache) {
                 const r = tempVoiceManager.reconcileGuild(client, gid);
                 if (r.zombiesRemoved > 0 || r.orphansDetected > 0) {
-                    console.log(`🧹 Temp voice reconcile ${gid}: ${r.zombiesRemoved} zombie dihapus, ${r.orphansDetected} orphan terdeteksi.`);
+                    console.log(
+                        `🧹 Temp voice reconcile ${gid}: ${r.zombiesRemoved} zombie dihapus, ${r.orphansDetected} orphan terdeteksi.`
+                    );
                 }
             }
         } catch (err) {
@@ -102,7 +110,9 @@ async function onReady(client) {
         // === 7. Init statsManager dengan default guild untuk migrasi legacy ===
         const defaultStatsGuildId = GUILD_ID || (client.guilds.cache.size > 0 ? client.guilds.cache.first().id : null);
         if (defaultStatsGuildId) {
-            try { initStats(defaultStatsGuildId); } catch (err) {
+            try {
+                initStats(defaultStatsGuildId);
+            } catch (err) {
                 console.warn('⚠️ Gagal init statsManager:', err.message);
             }
         }
@@ -129,20 +139,29 @@ async function onReady(client) {
 
                 const expiredNow = getExpired();
                 for (const entry of expiredNow) {
-                    try { await processExpiredRole(client, entry); }
-                    catch (err) { console.error(`Scheduler: processExpiredRole ${entry.id} error:`, err.message); }
+                    try {
+                        await processExpiredRole(client, entry);
+                    } catch (err) {
+                        console.error(`Scheduler: processExpiredRole ${entry.id} error:`, err.message);
+                    }
                 }
 
                 const endingGws = getEndingGiveaways();
                 for (const gw of endingGws) {
-                    try { await processGiveawayEnd(client, gw); }
-                    catch (err) { console.error(`Scheduler: processGiveawayEnd ${gw.id} error:`, err.message); }
+                    try {
+                        await processGiveawayEnd(client, gw);
+                    } catch (err) {
+                        console.error(`Scheduler: processGiveawayEnd ${gw.id} error:`, err.message);
+                    }
                 }
 
                 const pendingAnns = getPendingAnns();
                 for (const ann of pendingAnns) {
-                    try { await processScheduledAnnouncement(client, ann); }
-                    catch (err) { console.error(`Scheduler: processScheduledAnnouncement ${ann.id} error:`, err.message); }
+                    try {
+                        await processScheduledAnnouncement(client, ann);
+                    } catch (err) {
+                        console.error(`Scheduler: processScheduledAnnouncement ${ann.id} error:`, err.message);
+                    }
                 }
             } catch (err) {
                 console.error('Scheduler tick error:', err);

@@ -43,28 +43,28 @@ const { isAdmin: checkIsAdmin } = require('../infra/permissions');
 
 // === Domain handlers ===
 // Tiap file export satu async function (interaction) → void.
-const helpHandler        = require('./help');
-const configHandler      = require('./config');
-const productsHandler    = require('./products');
-const keysHandler        = require('./keys');
-const selfroleHandler    = require('./selfrole');
-const announceHandler    = require('./announce');
-const embedHandler       = require('./embed');
-const backupHandler      = require('./backup');
-const giveawayHandler    = require('./giveaway');
-const warnHandler        = require('./warn');
-const statsHandler       = require('./stats');
-const pollHandler        = require('./poll');
-const tempvoiceHandler   = require('./tempvoice');
+const helpHandler = require('./help');
+const configHandler = require('./config');
+const productsHandler = require('./products');
+const keysHandler = require('./keys');
+const selfroleHandler = require('./selfrole');
+const announceHandler = require('./announce');
+const embedHandler = require('./embed');
+const backupHandler = require('./backup');
+const giveawayHandler = require('./giveaway');
+const warnHandler = require('./warn');
+const statsHandler = require('./stats');
+const pollHandler = require('./poll');
+const tempvoiceHandler = require('./tempvoice');
 const sendMessageHandler = require('./send-message');
 // v3.9.11 Phase 2 & 3: new domains
-const categoriesHandler  = require('./categories');
-const panelsHandler      = require('./panels');
+const categoriesHandler = require('./categories');
+const panelsHandler = require('./panels');
 // v3.9.13: new community features
-const responderHandler   = require('./responder');
-const automodHandler     = require('./automod');
-const afkHandler         = require('./afk');
-const levelingHandler    = require('./leveling');
+const responderHandler = require('./responder');
+const automodHandler = require('./automod');
+const afkHandler = require('./afk');
+const levelingHandler = require('./leveling');
 
 const DOMAIN_HANDLERS = {
     help: helpHandler,
@@ -94,7 +94,7 @@ const DOMAIN_HANDLERS = {
 // Mapping commandName → domain key (di DOMAIN_HANDLERS).
 const COMMAND_TO_DOMAIN = {
     // help
-    'help': 'help',
+    help: 'help',
 
     // config
     'setup-verify': 'config',
@@ -132,7 +132,7 @@ const COMMAND_TO_DOMAIN = {
     'selfrole-delete': 'selfrole',
 
     // announce
-    'announce': 'announce',
+    announce: 'announce',
     'announce-schedule': 'announce',
     'announce-list': 'announce',
     'announce-cancel': 'announce',
@@ -148,21 +148,21 @@ const COMMAND_TO_DOMAIN = {
     'restore-backup': 'backup',
 
     // giveaway
-    'giveaway': 'giveaway',
+    giveaway: 'giveaway',
 
     // warn
-    'warn': 'warn',
+    warn: 'warn',
     'warn-list': 'warn',
     'warn-remove': 'warn',
     'warn-clear': 'warn',
 
     // stats
-    'stats': 'stats',
-    'leaderboard': 'stats',
+    stats: 'stats',
+    leaderboard: 'stats',
     'my-stats': 'stats',
 
     // poll
-    'poll': 'poll',
+    poll: 'poll',
 
     // tempvoice
     'setup-tempvoice': 'tempvoice',
@@ -193,7 +193,7 @@ const COMMAND_TO_DOMAIN = {
     'add-link-whitelist': 'automod',
 
     // v3.9.13: AFK System
-    'afk': 'afk',
+    afk: 'afk',
     'afk-clear': 'afk',
     'afk-list': 'afk',
 
@@ -202,7 +202,7 @@ const COMMAND_TO_DOMAIN = {
     'add-level-role': 'leveling',
     'list-level-roles': 'leveling',
     'remove-level-role': 'leveling',
-    'rank': 'leveling',
+    rank: 'leveling',
     'leaderboard-level': 'leveling'
 };
 
@@ -219,7 +219,8 @@ async function routeCommand(interaction) {
     // === PERMISSION CHECK ===
     if (!checkIsAdmin(interaction.member) && !PUBLIC_COMMANDS.includes(interaction.commandName)) {
         return interaction.reply({
-            content: '🚫 **Akses Ditolak.**\n\nSlash command hanya bisa dipakai oleh **Admin/Staff**.\n\nKalau kamu merasa ini salah, hubungi server admin.',
+            content:
+                '🚫 **Akses Ditolak.**\n\nSlash command hanya bisa dipakai oleh **Admin/Staff**.\n\nKalau kamu merasa ini salah, hubungi server admin.',
             flags: MessageFlags.Ephemeral
         });
     }

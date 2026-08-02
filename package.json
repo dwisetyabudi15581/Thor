@@ -9,8 +9,8 @@
     "test": "node --test \"tests/**/*.test.js\"",
     "test:unit": "node --test \"tests/unit/**/*.test.js\"",
     "test:integration": "node --test \"tests/integration/**/*.test.js\"",
-    "lint": "eslint index.js src/ handlers/ --ext .js",
-    "lint:fix": "eslint index.js src/ handlers/ --ext .js --fix",
+    "lint": "eslint index.js src/",
+    "lint:fix": "eslint index.js src/ --fix",
     "format": "prettier --write \"**/*.{js,json,md,yml}\" --ignore-path .gitignore",
     "format:check": "prettier --check \"**/*.{js,json,md,yml}\" --ignore-path .gitignore"
   },

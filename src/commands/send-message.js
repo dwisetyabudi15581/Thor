@@ -12,13 +12,7 @@
  * - Discord limit 2000 char untuk message content.
  */
 
-const {
-    MessageFlags,
-    ChannelType,
-    logAudit,
-    safeEditReply,
-    DISCORD_LIMITS
-} = require('./_shared');
+const { MessageFlags, ChannelType, logAudit, safeEditReply, DISCORD_LIMITS } = require('./_shared');
 
 module.exports = async function (interaction) {
     if (interaction.commandName !== 'send-message') return;
@@ -34,7 +28,8 @@ module.exports = async function (interaction) {
     // Reject voice, category, forum, announcement thread, dll.
     if (!channel || channel.type !== ChannelType.GuildText) {
         return safeEditReply(interaction, {
-            content: '❌ Channel harus berupa **text channel**.\n\n' +
+            content:
+                '❌ Channel harus berupa **text channel**.\n\n' +
                 'Tip: pilih channel text biasa dari dropdown — bukan voice, category, atau forum.'
         });
     }
@@ -48,7 +43,8 @@ module.exports = async function (interaction) {
     // Cek permission bot untuk send message di channel tujuan
     if (!targetChannel.permissionsFor(interaction.guild.members.me)?.has('SendMessages')) {
         return safeEditReply(interaction, {
-            content: `❌ Bot tidak punya permission **Send Messages** di ${targetChannel}.\n\n` +
+            content:
+                `❌ Bot tidak punya permission **Send Messages** di ${targetChannel}.\n\n` +
                 'Berikan permission ke bot atau pilih channel lain.'
         });
     }
@@ -59,7 +55,8 @@ module.exports = async function (interaction) {
     // === Validasi panjang pesan (Discord limit 2000 char) ===
     if (message.length > DISCORD_LIMITS.MESSAGE_CONTENT) {
         return safeEditReply(interaction, {
-            content: `❌ Pesan terlalu panjang (${message.length} char, maks ${DISCORD_LIMITS.MESSAGE_CONTENT} char).\n\n` +
+            content:
+                `❌ Pesan terlalu panjang (${message.length} char, maks ${DISCORD_LIMITS.MESSAGE_CONTENT} char).\n\n` +
                 'Tip: pecah jadi 2 pesan, atau pakai `/announce` yang support description 4096 char.'
         });
     }
@@ -88,7 +85,8 @@ module.exports = async function (interaction) {
             mentionContent = mention;
         } else {
             return safeEditReply(interaction, {
-                content: `❌ Format mention tidak valid: \`${mention}\`\n\n` +
+                content:
+                    `❌ Format mention tidak valid: \`${mention}\`\n\n` +
                     'Format yang didukung:\n' +
                     '• `@everyone` atau `everyone`\n' +
                     '• `@here` atau `here`\n' +
@@ -101,9 +99,7 @@ module.exports = async function (interaction) {
 
     // === Gabungkan mention + pesan ===
     // Mention diletakkan di depan, dipisahkan newline dari body pesan.
-    const finalContent = mentionContent
-        ? `${mentionContent}\n${message}`.trim()
-        : message;
+    const finalContent = mentionContent ? `${mentionContent}\n${message}`.trim() : message;
 
     // Safety net: kalau setelah digabung ternyata > 2000 char (jarang, tapi mention + body bisa overflow)
     if (finalContent.length > DISCORD_LIMITS.MESSAGE_CONTENT) {
@@ -124,9 +120,10 @@ module.exports = async function (interaction) {
         });
 
         // Preview di ephemeral reply (potong kalau > 1500 char biar tidak overflow)
-        const preview = finalContent.length > 1500
-            ? finalContent.slice(0, 1500) + '\n...*(pesan dipotong untuk preview)*'
-            : finalContent;
+        const preview =
+            finalContent.length > 1500
+                ? finalContent.slice(0, 1500) + '\n...*(pesan dipotong untuk preview)*'
+                : finalContent;
 
         return safeEditReply(interaction, {
             content: `✅ Pesan terkirim ke ${targetChannel}!\n\n📋 **Preview:**\n\`\`\`\n${preview}\n\`\`\``

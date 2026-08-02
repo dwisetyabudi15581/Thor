@@ -47,7 +47,10 @@ module.exports = async function (interaction) {
         const parts = interaction.customId.split(':');
         const ownerId = parts[1];
         if (interaction.user.id !== ownerId) {
-            return interaction.reply({ content: '❌ Hanya admin yang memulai konfirmasi ini yang bisa membatalkan.', flags: MessageFlags.Ephemeral });
+            return interaction.reply({
+                content: '❌ Hanya admin yang memulai konfirmasi ini yang bisa membatalkan.',
+                flags: MessageFlags.Ephemeral
+            });
         }
         return interaction.update({
             content: '✅ Restore backup dibatalkan. Tidak ada perubahan yang dilakukan.',
@@ -92,7 +95,8 @@ async function handleResetConfigConfirm(interaction) {
         });
 
         return interaction.update({
-            content: '⚠️ **SEMUA konfigurasi berhasil direset.**\n\n' +
+            content:
+                '⚠️ **SEMUA konfigurasi berhasil direset.**\n\n' +
                 'Sekarang config.json kosong. Silakan set ulang:\n' +
                 '• `/set-role verified @role`\n' +
                 '• `/set-role unverified @role`\n' +
@@ -110,16 +114,19 @@ async function handleResetConfigConfirm(interaction) {
         // supaya admin tetap dapat konfirmasi bahwa reset sudah sukses (atau gagal).
         const isUnknownMessage = err.code === 10008 || err.code === 10062;
         if (isUnknownMessage && !interaction.replied) {
-            await interaction.reply({
-                content: '✅ Reset config berhasil (pesan konfirmasi sebelumnya sudah tidak bisa di-edit karena di-dismiss).',
-                flags: MessageFlags.Ephemeral
-            }).catch(()=>{});
+            await interaction
+                .reply({
+                    content:
+                        '✅ Reset config berhasil (pesan konfirmasi sebelumnya sudah tidak bisa di-edit karena di-dismiss).',
+                    flags: MessageFlags.Ephemeral
+                })
+                .catch(() => {});
             return;
         }
         if (interaction.deferred && !interaction.replied) {
-            await safeEditReply(interaction,{ content: `❌ Gagal reset: ${err.message}` }).catch(()=>{});
+            await safeEditReply(interaction, { content: `❌ Gagal reset: ${err.message}` }).catch(() => {});
         } else if (!interaction.replied) {
-            await interaction.update({ content: `❌ Gagal reset: ${err.message}`, components: [] }).catch(()=>{});
+            await interaction.update({ content: `❌ Gagal reset: ${err.message}`, components: [] }).catch(() => {});
         }
     }
 }
@@ -168,7 +175,8 @@ async function handleRestoreBackupConfirm(interaction) {
         });
 
         return interaction.update({
-            content: `♻️ **Restore berhasil!**\n\n` +
+            content:
+                `♻️ **Restore berhasil!**\n\n` +
                 `📁 Dari: \`${name}\`\n` +
                 `📦 File dipulihkan: **${result.filesRestored}**\n` +
                 `💾 Backup sebelum restore: \`${result.preRestoreName}\` (safety net)\n\n` +
@@ -182,16 +190,19 @@ async function handleRestoreBackupConfirm(interaction) {
         // fallback ke reply() supaya admin tetap dapat konfirmasi.
         const isUnknownMessage = err.code === 10008 || err.code === 10062;
         if (isUnknownMessage && !interaction.replied) {
-            await interaction.reply({
-                content: '✅ Restore backup berhasil (pesan konfirmasi sebelumnya sudah tidak bisa di-edit karena di-dismiss). **RESTART bot sekarang** supaya data baru ke-load penuh.',
-                flags: MessageFlags.Ephemeral
-            }).catch(()=>{});
+            await interaction
+                .reply({
+                    content:
+                        '✅ Restore backup berhasil (pesan konfirmasi sebelumnya sudah tidak bisa di-edit karena di-dismiss). **RESTART bot sekarang** supaya data baru ke-load penuh.',
+                    flags: MessageFlags.Ephemeral
+                })
+                .catch(() => {});
             return;
         }
         if (interaction.deferred && !interaction.replied) {
-            await safeEditReply(interaction,{ content: `❌ Gagal restore: ${err.message}` }).catch(()=>{});
+            await safeEditReply(interaction, { content: `❌ Gagal restore: ${err.message}` }).catch(() => {});
         } else if (!interaction.replied) {
-            await interaction.update({ content: `❌ Gagal restore: ${err.message}`, components: [] }).catch(()=>{});
+            await interaction.update({ content: `❌ Gagal restore: ${err.message}`, components: [] }).catch(() => {});
         }
     }
 }

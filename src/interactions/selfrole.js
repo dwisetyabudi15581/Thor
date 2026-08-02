@@ -59,7 +59,8 @@ async function handleSelfRoleButton(interaction) {
             const reqRole = interaction.guild.roles.cache.get(roleConfig.requiresRoleId);
             const reqName = reqRole ? reqRole.name : `<@&${roleConfig.requiresRoleId}>`;
             return interaction.reply({
-                content: `❌ Kamu butuh role **${reqName}** untuk bisa mengambil role ini.\n\n` +
+                content:
+                    `❌ Kamu butuh role **${reqName}** untuk bisa mengambil role ini.\n\n` +
                     `💡 Ambil role ${reqName} dulu lewat panel self-role yang sesuai.`,
                 flags: MessageFlags.Ephemeral
             });
@@ -131,16 +132,13 @@ async function handleSelfRoleSelect(interaction) {
     //   - Kalau user pilih 0 role (clear selection):
     //     * Remove semua role panel yang dimiliki.
     if (panel.exclusive) {
-        const targetRoleId = selectedIds.size > 0
-            ? interaction.values[0]  // role pertama yang dipilih
-            : null;
+        const targetRoleId =
+            selectedIds.size > 0
+                ? interaction.values[0] // role pertama yang dipilih
+                : null;
 
-        const toRemoveExclusive = panelRoleIds.filter(rid =>
-            rid !== targetRoleId && member.roles.cache.has(rid)
-        );
-        const toAddExclusive = targetRoleId && !member.roles.cache.has(targetRoleId)
-            ? [targetRoleId]
-            : [];
+        const toRemoveExclusive = panelRoleIds.filter(rid => rid !== targetRoleId && member.roles.cache.has(rid));
+        const toAddExclusive = targetRoleId && !member.roles.cache.has(targetRoleId) ? [targetRoleId] : [];
 
         try {
             if (toRemoveExclusive.length > 0) await member.roles.remove(toRemoveExclusive);
