@@ -19,10 +19,39 @@ const automodManager = require('../../data/automodManager');
 const afkManager = require('../../data/afkManager');
 const levelManager = require('../../data/levelManager');
 
+// v3.9.15 DEBUG helper: log warning sekali per guild kalau MessageContent intent missing.
+// Anti-spam console: hanya log pertama kali per guild dalam session.
+const _intentWarnedGuilds = new Set();
+function debugLogIntentMissing(message) {
+    const gid = message.guild.id;
+    if (_intentWarnedGuilds.has(gid)) return;
+    _intentWarnedGuilds.add(gid);
+    console.warn(
+        `⚠️ [DEBUG] message.content kosong untuk pesan dari ${message.author?.tag} di guild ${message.guild.name}.\n` +
+        `   Penyebab paling umum: "Message Content Intent" belum di-enable di Discord Developer Portal.\n` +
+        `   → https://discord.com/developers/applications → Bot → Privileged Gateway Intents → Message Content Intent = ON\n` +
+        `   Akibat: auto-responder, anti-spam word/link filter, dan AFK mention reply TIDAK berfungsi.\n` +
+        `   (warning ini muncul sekali per guild, lalu di-skip sampai restart)`
+    );
+}
+
 async function onMessageCreate(message) {
     try {
         if (message.author?.bot) return;
         if (!message.guild) return;
+
+        // v3.9.15 DEBUG: deteksi kalau MessageContent intent belum di-enable.
+        // Tanpa intent ini, message.content selalu empty string untuk pesan user lain
+        // → auto-responder, anti-spam word filter, dll tidak berfungsi.
+        // Log warning sekali per guild (anti spam console).
+        if (!message.content && message.author.id !== message.client.user.id) {
+            // Pesan tanpa content dari user lain = intent missing.
+            // Tapi hati-hati: pesan dengan hanya attachment/embed juga bisa content kosong.
+            // Cek flag: kalau message punya sticker/attachment/components, skip warning.
+            if (!message.attachments?.size && !message.stickers?.size && !message.components?.length) {
+                debugLogIntentMissing(message);
+            }
+        }
 
         // === Track message untuk stats (existing) ===
         try {

@@ -24,7 +24,10 @@ Panduan lengkap untuk admin server Discord yang menjalankan bot ini. Cocok untuk
 ### Prasyarat
 - Node.js 16.11+ (rekomendasi 18+)
 - Bot sudah di-invite ke server dengan permission: Manage Roles, Manage Channels, Send Messages, Embed Links, View Audit Log, Moderate Members, Move Members
-- Server Members Intent sudah di-enable di Discord Developer Portal
+- **3 Privileged Intents** sudah di-enable di Discord Developer Portal (https://discord.com/developers/applications → pilih bot → tab "Bot" → scroll ke "Privileged Gateway Intents"):
+  - ✅ **Server Members Intent** — untuk welcome/goodbye, auto-role, member sync
+  - ✅ **Message Content Intent** — WAJIB untuk auto-responder, anti-spam word/link filter, AFK mention reply. Tanpa ini, `message.content` selalu kosong → fitur-fitur tersebut tidak berfungsi!
+  - ✅ **Presence Intent** — (opsional, belum dipakai di v3.9.15)
 - **Role bot di ATAS** semua role yang akan dikelola (Verified, Unverified, VIP, dll)
 
 ### Install
@@ -414,6 +417,33 @@ Akan tampil semua backup termasuk safety backup `pre-restore_*` (kalau pernah re
 - Cek `config.channels.welcome` / `config.channels.goodbye` sudah di-set via `/config-show`
 - Cek bot punya `Send Messages` + `Embed Links` di channel itu
 - Cek channel masih ada (belum dihapus)
+
+### Auto-responder tidak reply / Anti-spam word filter tidak jalan / AFK mention reply tidak terkirim
+**Root cause paling umum: `Message Content Intent` belum di-enable.**
+
+Bot butuh akses ke `message.content` untuk fitur-fitur ini. Tanpa intent tersebut, Discord mengirim `message.content` sebagai **empty string** untuk pesan user → `findMatch()` return null → auto-responder tidak pernah trigger.
+
+**Cara fix:**
+1. Buka https://discord.com/developers/applications
+2. Pilih bot Anda
+3. Tab "Bot"
+4. Scroll ke bagian "Privileged Gateway Intents"
+5. Toggle **ON** ketiga ini (kalau belum):
+   - ✅ PRESENCE INTENT
+   - ✅ SERVER MEMBERS INTENT
+   - ✅ **MESSAGE CONTENT INTENT** ← yang paling penting untuk fitur ini
+6. Klik "Save Changes"
+7. **Restart bot** (`npm start`)
+
+Cek juga: `/list-responder` untuk pastikan responder sudah terdaftar. Trigger match bersifat case-insensitive dan harus di awal pesan (`!sosmed` match `!sosmed halo`, tapi tidak match `halo !sosmed`).
+
+### Cooldown auto-responder terlalu lama
+Default cooldown 3 detik per-user. Untukubah:
+```
+/add-responder trigger:"!sosmed" reply:"..." cooldown:0    # 0 = disable cooldown
+/add-responder trigger:"!sosmed" reply:"..." cooldown:10   # 10 detik
+```
+Cooldown bersifat **per-user** (sejak v3.9.14) — user A trigger tidak mempengaruhi user B.
 
 ### Audit log tidak terkirim
 - Cek `config.channels['audit-log']` sudah di-set via `/set-channel audit-log #channel`
