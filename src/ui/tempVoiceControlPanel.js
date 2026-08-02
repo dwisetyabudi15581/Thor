@@ -109,7 +109,7 @@ function buildGlobalControlPanel(options = {}) {
         const o = sorted[i];
         const mc = o.voiceChannel?.members?.size || 0;
         const lockIcon = o.channelInfo.locked ? ' 🔒' : '';
-        // v3.9.15 FIX: null check channelInfo.name (kalau data corrupt / migrated dari format lama)
+        // Null check channelInfo.name (kalau data corrupt / migrated dari format lama)
         const displayName = o.channelInfo.name || `Channel ${o.channelId || 'unknown'}`;
         description += `• ${displayName} — <@${o.channelInfo.ownerId}> (${mc}${lockIcon})\n`;
     }
@@ -182,7 +182,7 @@ function buildGlobalControlPanel(options = {}) {
     // supaya user bisa pilih channel mana yang ingin dilihat infonya
     if (sorted.length > 1) {
         const switchOptions = sorted.map(o => ({
-            // v3.9.15 FIX: null check channelInfo.name (sama seperti line 113)
+            // Null check channelInfo.name (sama kayak di description)
             label: `${o.channelInfo.name || `Channel ${o.channelId}`}`.slice(0, 100),
             value: o.channelId,
             description: `Owner: ${o.channelInfo.ownerTag} (${o.voiceChannel?.members?.size || 0} member)`.slice(0, 100)

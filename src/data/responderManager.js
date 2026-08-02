@@ -14,9 +14,9 @@
  *       "createdAt": 1735689600000,
  *       "useCount": 0,
  *       "lastUsedAt": null,
- *       "cooldownMs": 3000,             // anti-spam: same trigger gak reply 2x dalam 3s PER USER
- *       "lastFiredAt": null,            // legacy: timestamp global terakhir (tidak dipakai lagi, kept for backward compat)
- *       "userCooldowns": {}             // v3.9.14: { [userId]: timestamp } per-user cooldown
+ *       "cooldownMs": 3000,             // jeda antar trigger yang sama per user (3 detik default)
+ *       "lastFiredAt": null,            // legacy: timestamp global terakhir dipakai (udah gak dipake, tapi tetap disimpen untuk jaga-jaga)
+ *       "userCooldowns": {}             // daftar timestamp per-user: { "userId": timestamp }
  *     }
  *   ]
  * }
@@ -82,8 +82,8 @@ function addResponder(guildId, data) {
         useCount: 0,
         lastUsedAt: null,
         cooldownMs: data.cooldownMs || 3000,
-        lastFiredAt: null,            // legacy, kept for backward compat
-        userCooldowns: {}             // v3.9.14: per-user cooldown map
+        lastFiredAt: null,            // legacy — gak dipake lagi, disimpen untuk backward compat
+        userCooldowns: {}             // map cooldown per-user
     };
     all[guildId].push(entry);
     save(all);
@@ -104,17 +104,15 @@ function removeResponder(guildId, trigger) {
 }
 
 /**
- * Cari responder yang match dengan message.
- * Trigger dianggap match kalau message (lowercased) dimulai dengan trigger.
+ * Cari responder yang match sama pesan.
+ * Match kalau pesan dimulai dengan trigger (case-insensitive).
  *
- * v3.9.14: cooldown sekarang PER-USER (bukan global per-trigger).
- * Sebelumnya: user A trigger responder → user B trigger dalam cooldown → B tidak dapat reply.
- * Sekarang: setiap user punya cooldown terpisah.
+ * Cooldown per-user: user A yang baru trigger gak bakal ngelarang user B dapet reply.
  *
  * @param {string} guildId
  * @param {string} messageContent
- * @param {string} [userId]  v3.9.14: userId untuk per-user cooldown check
- * @returns {Object|null} responder entry atau null kalau gak match / cooldown aktif
+ * @param {string} [userId]  kirim userId biar cooldown per-user (recommended)
+ * @returns {Object|null} responder entry, atau null kalau gak match / lagi cooldown
  */
 function findMatch(guildId, messageContent, userId) {
     const responders = getGuildResponders(guildId);
@@ -125,17 +123,17 @@ function findMatch(guildId, messageContent, userId) {
 
     for (const r of responders) {
         const trig = r.trigger.toLowerCase();
-        // Match kalau message == trigger ATAU message diikuti spasi (mis. "!sosmed" match "!sosmed halo")
+        // Match kalau pesan == trigger, ATAU pesan diikuti spasi/newline (mis. "!sosmed" match "!sosmed halo")
         if (lower === trig || lower.startsWith(trig + ' ') || lower.startsWith(trig + '\n')) {
-            // v3.9.14: per-user cooldown check
+            // Cek cooldown per-user. cooldownMs = 0 artinya cooldown dimatikan.
             const cooldownMs = r.cooldownMs || 3000;
-            if (userId && r.userCooldowns && r.userCooldowns[userId]) {
+            if (cooldownMs > 0 && userId && r.userCooldowns && r.userCooldowns[userId]) {
                 const lastFired = r.userCooldowns[userId];
                 if ((now - lastFired) < cooldownMs) {
-                    return null;  // cooldown aktif untuk user ini, skip
+                    return null;  // user ini masih cooldown, skip
                 }
-            } else if (!userId && r.lastFiredAt) {
-                // Fallback: kalau caller tidak pass userId, pakai legacy global cooldown
+            } else if (cooldownMs > 0 && !userId && r.lastFiredAt) {
+                // Fallback: kalau caller gak kirim userId, pakai cooldown global lama
                 if ((now - r.lastFiredAt) < cooldownMs) {
                     return null;
                 }
@@ -147,8 +145,8 @@ function findMatch(guildId, messageContent, userId) {
 }
 
 /**
- * Tandai responder sudah dipakai (update useCount + lastFiredAt).
- * v3.9.14: tambah parameter userId untuk track per-user cooldown.
+ * Tandai responder sudah dipakai (update useCount + catat timestamp cooldown).
+ * Kirim userId biar cooldown-nya per-user.
  */
 function markUsed(guildId, responderId, userId) {
     const all = load();
@@ -157,12 +155,12 @@ function markUsed(guildId, responderId, userId) {
     if (!r) return;
     r.useCount = (r.useCount || 0) + 1;
     r.lastUsedAt = Date.now();
-    r.lastFiredAt = Date.now();  // legacy, kept for backward compat
-    // v3.9.14: track per-user cooldown
+    r.lastFiredAt = Date.now();  // legacy — tetap diisi untuk jaga-jaga
+    // Catat cooldown per-user
     if (userId) {
         if (!r.userCooldowns || typeof r.userCooldowns !== 'object') r.userCooldowns = {};
         r.userCooldowns[userId] = Date.now();
-        // Cleanup: keep only recent entries (last 100 users) supaya file gak bengkak
+        // Cleanup: simpan maksimal 100 user terakhir biar file gak bengkak
         const entries = Object.entries(r.userCooldowns);
         if (entries.length > 100) {
             entries.sort((a, b) => b[1] - a[1]);

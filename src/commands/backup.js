@@ -39,7 +39,7 @@ module.exports = async function (interaction) {
             return safeEditReply(interaction,{ content: `❌ Gagal buat backup: ${err.message}` });
         }
         if (!result.ok) {
-            // v3.9.15: differentiate total vs partial failure supaya admin tahu severity
+            // Bedain total failure vs partial biar admin tau severity
             if (result.partial) {
                 return safeEditReply(interaction, {
                     content: `⚠️ **Backup PARTIAL!** Hanya ${result.filesCopied} file berhasil disalin (sebagian gagal).\n\n` +

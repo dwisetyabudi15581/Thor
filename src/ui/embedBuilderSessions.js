@@ -155,9 +155,9 @@ function buildEmbed(session) {
             if (d.author.iconURL) a.iconURL = d.author.iconURL;
             embed.setAuthor(a);
         }
-        // v3.9.15 FIX: defensive validation — Discord limit: max 25 fields, name max 256, value max 1024.
-        // Sebelumnya, kalau session somehow akumulasi >25 fields, addFields akan throw
-        // RangeError → render draft gagal → user lihat broken panel.
+        // Defensive validation — Discord limit: max 25 fields, name max 256, value max 1024.
+        // Kalau session somehow akumulasi >25 fields, addFields bakal throw RangeError
+        // → render draft gagal → user lihat broken panel.
         if (d.fields && d.fields.length > 0) {
             const safeFields = d.fields.slice(0, 25).map(f => ({
                 name: String(f.name || '\u200B').slice(0, 256),

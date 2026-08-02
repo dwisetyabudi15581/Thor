@@ -186,6 +186,10 @@ async function handlePollModalCreate(interaction) {
             emoji: `${i + 1}️⃣`
         }));
 
+        // Defense-in-depth: command router sudah gate guild-only, tapi cek lagi biar aman
+        if (!interaction.guild) {
+            return interaction.reply({ content: '❌ Poll cuma bisa dibuat di server.', flags: MessageFlags.Ephemeral });
+        }
         const channel = interaction.guild.channels.cache.get(channelId);
         if (!channel) {
             deletePollSession(sessionId);

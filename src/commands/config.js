@@ -76,9 +76,8 @@ module.exports = async function (interaction) {
         // Discord ButtonBuilder.setEmoji otomatis handle keduanya.
         const row = new ActionRowBuilder().addComponents(verifyBtn);
 
-        // v3.9.15 FIX: wrap channel.send dalam try/catch. Sebelumnya, kalau gagal
-        // (bot kekurangan Send Messages / Embed Links), error propagate ke top-level
-        // handler → admin lihat "Terjadi error" generik, tidak tahu akar masalahnya.
+        // Kirim panel ke channel. Kalau gagal (biasanya permission), balas error jelas
+        // biar admin tau apa yang harus diperbaiki.
         try {
             await interaction.channel.send({ embeds: [embed], components: [row] });
         } catch (sendErr) {
@@ -190,7 +189,7 @@ module.exports = async function (interaction) {
             rows.push(fallbackRow);
         }
 
-        // v3.9.15 FIX: wrap channel.send dalam try/catch (sama seperti setup-verify)
+        // Kirim panel ke channel. Wrap try/catch biar error message jelas ke admin.
         try {
             await interaction.channel.send({ embeds: [embed], components: rows });
         } catch (sendErr) {

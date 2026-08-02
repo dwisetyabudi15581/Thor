@@ -35,11 +35,11 @@ module.exports = async function (interaction) {
         // Cek apakah sudah ada setup sebelumnya
         const existingConfig = tempVoiceManager.getGuildConfig(guild.id);
 
-        // Kalau sudah ada setup, langsung re-kirim panel ke control channel yang ada
+        // Kalau sudah ada setup, re-kirim panel ke control channel yang ada.
         if (existingConfig?.controlChannelId && existingConfig?.creatorChannelId) {
             const existingControlChannel = guild.channels.cache.get(existingConfig.controlChannelId);
-            // v3.9.15 FIX: kalau control channel lama sudah terhapus, JANGAN fall-through
-            // ke setup baru (akan bikin orphan category + channels). Beri pesan jelas.
+            // Kalau control channel lama udah dihapus, jangan lanjut ke setup baru (bikin orphan).
+            // Suruh admin cleanup dulu via /tempvoice-remove.
             if (!existingControlChannel) {
                 return safeEditReply(interaction, {
                     content: `❌ Control channel lama (ID: \`${existingConfig.controlChannelId}\`) sudah terhapus dari server.\n\n` +
@@ -62,7 +62,7 @@ module.exports = async function (interaction) {
                 console.warn('Gagal refresh panel temp voice:', err?.message || err);
                 return null;
             });
-            // v3.9.15 FIX: kalau send gagal, return error — JANGAN fall-through ke setup baru
+            // Kalau send gagal, balas error — jangan lanjut ke setup baru (anti orphan)
             if (!panelMsg) {
                 return safeEditReply(interaction, {
                     content: `❌ Gagal refresh panel ke ${existingControlChannel}. Cek permission bot (**Send Messages** + **Embed Links**).\n\n` +

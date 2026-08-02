@@ -56,10 +56,8 @@ module.exports = async function (interaction) {
             return safeEditReply(interaction,{ content: `❌ Role ID \`${product.roleId}\` tidak ditemukan di guild.` });
         }
 
-        // 1. Simpan key
-        // v3.9.15 FIX: wrap addKey dalam try/catch. Sebelumnya, kalau addKey throw
-        // (disk error / EACCES / file corrupt), error propagate ke top-level handler →
-        // admin lihat "Terjadi error" generik, tidak tahu penyebabnya.
+        // 1. Simpan key ke database. Wrap try/catch biar error jelas ke admin
+        // (kalau gagal, role belum dikasih, schedule belum dibuat — state masih bersih).
         let keyEntry;
         try {
             keyEntry = addKey({
@@ -69,7 +67,7 @@ module.exports = async function (interaction) {
                 roleId: role.id,
                 productName: product.label,
                 days: product.days || 0,
-                guildId: interaction.guild.id  // v3.9.3: simpan guildId supaya cross-guild wipe akurat
+                guildId: interaction.guild.id
             });
         } catch (keyErr) {
             console.error('addKey gagal:', keyErr);
@@ -78,7 +76,7 @@ module.exports = async function (interaction) {
             });
         }
 
-        // 2. Beri role
+        // 2. Kasih role ke member
         try {
             if (!member.roles.cache.has(role.id)) {
                 await member.roles.add(role);
@@ -92,10 +90,8 @@ module.exports = async function (interaction) {
             });
         }
 
-        // 3. Schedule (MAX EXTEND)
-        // v3.9.15 FIX: wrap scheduleRoleRemoval dalam try/catch. Sebelumnya, kalau throw,
-        // error propagate ke top-level handler padahal key + role sudah terpasang.
-        // Member dapat role VIP permanent (tidak auto-expire) tapi admin tidak sadar.
+        // 3. Schedule auto-expire (MAX EXTEND). Wrap try/catch — kalau gagal, role + key
+        // udah tersimpan. Tampilin warning ke admin biar dia tau role gak auto-expire.
         let schedResult;
         let scheduleWarning = '';
         try {

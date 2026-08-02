@@ -141,8 +141,7 @@ module.exports = async function (interaction) {
 
     // === RANK (lihat level sendiri / user lain) ===
     if (interaction.commandName === 'rank') {
-        // v3.9.14: deferReply dulu supaya gak timeout kalau disk I/O lambat
-        // (levelManager.getUser baca levels.json sync dari disk)
+        // deferReply dulu biar gak timeout kalo disk I/O lambat
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const targetUser = interaction.options.getUser('user') || interaction.user;

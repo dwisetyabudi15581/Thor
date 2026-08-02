@@ -176,10 +176,8 @@ async function processGiveawayEnd(client, gw, options = {}) {
     try {
         const { EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
         const guild = await client.guilds.fetch(gw.guildId).catch(() => null);
-        // v3.9.15 FIX: kalau guild tidak ditemukan (bot di-kick / guild di-delete),
-        // mark giveaway sebagai ended (tanpa winner) supaya tidak di-pick ulang tiap tick.
-        // Sebelumnya: return tanpa endGiveaway → gw.ended tetap false → getEnding()
-        // return giveaway ini lagi di tick berikutnya → infinite retry loop 60s.
+        // Kalau guild gak ketemu (bot di-kick / guild di-delete), mark giveaway sebagai ended
+        // biar gak di-pick ulang tiap tick. Sebelumnya ini bikin infinite retry loop 60-an.
         if (!guild) {
             console.warn(`⚠️ Giveaway ${gw.id}: guild ${gw.guildId} tidak ditemukan, mark ended (bot di-kick / guild di-delete?).`);
             endGiveaway(gw.id, []);
@@ -187,7 +185,7 @@ async function processGiveawayEnd(client, gw, options = {}) {
         }
 
         const channel = guild.channels.cache.get(gw.channelId);
-        // v3.9.15 FIX: sama — kalau channel sudah di-delete, mark ended supaya tidak infinite retry.
+        // Sama — kalau channel udah di-delete, mark ended biar gak infinite retry.
         if (!channel) {
             console.warn(`⚠️ Giveaway ${gw.id}: channel ${gw.channelId} tidak ditemukan di guild ${gw.guildId}, mark ended.`);
             endGiveaway(gw.id, []);

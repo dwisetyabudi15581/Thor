@@ -42,14 +42,14 @@ function buildPanelEmbed(panel, client) {
             return `• ${emojiStr}**${r.label}** <@&${r.roleId}>${descStr}${reqStr}`;
         }).join('\n');
 
-    // v3.9.15 FIX: Discord embed description limit 4096 char. Kalau panel punya 25 role
-    // dengan label/description panjang, total description bisa exceed limit → Discord reject.
+    // Discord embed description limit 4096 char. Kalau panel punya 25 role dengan
+    // label/description panjang, total description bisa exceed limit → Discord reject.
     // Truncate supaya tetap dalam batas, dengan indikator "+N lainnya".
-    const MAX_DESC = 4000; // 96 char margin untuk footer-style indicator
+    const MAX_DESC = 4000; // 96 char margin
     const header = `${panel.description}\n\n${modeText}\n\n**Role tersedia:**\n`;
     let fullDesc;
     if (header.length + rolesText.length > MAX_DESC) {
-        const remaining = MAX_DESC - header.length - 30; // margin untuk "... +N lainnya"
+        const remaining = MAX_DESC - header.length - 30;
         fullDesc = header + rolesText.slice(0, Math.max(0, remaining)) + `\n... +${panel.roles.length} lainnya (lihat via /selfrole-list)`;
     } else {
         fullDesc = header + rolesText;

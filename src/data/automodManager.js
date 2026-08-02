@@ -50,9 +50,8 @@ function getGuildConfig(guildId) {
     const all = load();
     const cfg = all[guildId];
     if (!cfg) return null;
-    // v3.9.14 backward compat: normalisasi legacy value 'delete' → 'delete_only'
-    // (sebelumnya wordAction/mentionAction pakai 'delete', spamAction pakai 'delete_only').
-    // Sekarang semua pakai 'delete_only' supaya konsisten.
+    // Backward compat: config lama mungkin punya value 'delete' (bukan 'delete_only').
+    // Sekarang semua pakai 'delete_only' biar konsisten.
     if (cfg.wordAction === 'delete') cfg.wordAction = 'delete_only';
     if (cfg.mentionAction === 'delete') cfg.mentionAction = 'delete_only';
     return cfg;

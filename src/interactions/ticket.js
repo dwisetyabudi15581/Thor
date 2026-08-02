@@ -193,8 +193,8 @@ module.exports = async function (interaction) {
     }
 
     if (interaction.isButton() && (interaction.customId === 'ticket_close_abort' || interaction.customId === 'ticket_close_abort2')) {
-        // v3.9.15 FIX: wrap interaction.update dalam try/catch. Kalau ephemeral sudah di-dismiss
-        // (10008) atau token expired (10062), fallback ke reply ephemeral.
+        // Wrap interaction.update dalam try/catch. Kalau ephemeral sudah di-dismiss (10008)
+        // atau token expired (10062), fallback ke reply ephemeral.
         try {
             return await interaction.update({ content: '❌ Penutupan tiket dibatalkan.', embeds: [], components: [] });
         } catch (err) {
@@ -209,9 +209,9 @@ module.exports = async function (interaction) {
     }
 
     if (interaction.isButton() && interaction.customId === 'ticket_close_success') {
-        // Hanya untuk tiket help/report (selesai)
-        // v3.9.15 FIX: wrap deferUpdate dalam try/catch. closeTicket punya internal try/catch
-        // jadi channel tetap ke-delete meski deferUpdate gagal.
+        // Untuk tiket help/report (selesai).
+        // Wrap deferUpdate — closeTicket punya internal try/catch jadi channel tetap ke-delete
+        // meski deferUpdate gagal.
         try {
             await interaction.deferUpdate();
         } catch (err) {
@@ -224,8 +224,7 @@ module.exports = async function (interaction) {
     }
 
     if (interaction.isButton() && interaction.customId === 'ticket_close_cancel_trans') {
-        // Tutup tiket transaksi tanpa memberi key (batal beli)
-        // v3.9.15 FIX: wrap deferUpdate dalam try/catch (sama seperti ticket_close_success)
+        // Tutup tiket transaksi tanpa kasih key (batal beli).
         try {
             await interaction.deferUpdate();
         } catch (err) {
@@ -353,9 +352,8 @@ module.exports = async function (interaction) {
         }
 
         // === 3. Schedule role removal (MAX EXTEND) ===
-        // v3.9.15 FIX: wrap dalam try/catch. Sebelumnya, kalau scheduleRoleRemoval throw
-        // (disk error / EACCES), error propagate ke outer catch. Padahal key + role sudah
-        // tersimpan. Admin klik "Set Key" lagi → addKey jalan 2x (duplicate key).
+        // Wrap try/catch. Kalau gagal, key + role udah tersimpan. Admin klik "Set Key"
+        // lagi bisa bikin duplicate key — ini yg mau dicegah.
         let scheduleResult;
         try {
             scheduleResult = scheduleRoleRemoval({

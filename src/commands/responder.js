@@ -23,11 +23,18 @@ module.exports = async function (interaction) {
         const replyType = interaction.options.getString('reply_type') || 'text';
         const cooldown = interaction.options.getInteger('cooldown');
 
+        // Validasi cooldown gak boleh negatif. 0 = matiin cooldown.
+        if (cooldown !== null && cooldown < 0) {
+            return safeEditReply(interaction, {
+                content: '❌ `cooldown` gak boleh negatif. Pakai 0 buat matiin cooldown, atau minimal 1 detik.'
+            });
+        }
+
         const result = responderManager.addResponder(interaction.guild.id, {
             trigger,
             reply,
             replyType,
-            cooldownMs: cooldown ? cooldown * 1000 : 3000,
+            cooldownMs: cooldown !== null ? cooldown * 1000 : 3000,  // 0 = matiin, null = default 3s
             createdBy: interaction.user.id,
             createdByTag: interaction.user.tag
         });

@@ -23,12 +23,12 @@ Panduan lengkap untuk admin server Discord yang menjalankan bot ini. Cocok untuk
 
 ### Prasyarat
 - Node.js 16.11+ (rekomendasi 18+)
-- Bot sudah di-invite ke server dengan permission: Manage Roles, Manage Channels, Send Messages, Embed Links, View Audit Log, Moderate Members, Move Members
-- **3 Privileged Intents** sudah di-enable di Discord Developer Portal (https://discord.com/developers/applications → pilih bot → tab "Bot" → scroll ke "Privileged Gateway Intents"):
-  - ✅ **Server Members Intent** — untuk welcome/goodbye, auto-role, member sync
-  - ✅ **Message Content Intent** — WAJIB untuk auto-responder, anti-spam word/link filter, AFK mention reply. Tanpa ini, `message.content` selalu kosong → fitur-fitur tersebut tidak berfungsi!
-  - ✅ **Presence Intent** — (opsional, belum dipakai di v3.9.15)
-- **Role bot di ATAS** semua role yang akan dikelola (Verified, Unverified, VIP, dll)
+- Bot udah di-invite ke server dengan permission: Manage Roles, Manage Channels, Send Messages, Embed Links, View Audit Log, Moderate Members, Move Members
+- **3 Privileged Intents** udah di-enable di Discord Developer Portal (https://discord.com/developers/applications → pilih bot → tab "Bot" → scroll ke "Privileged Gateway Intents"):
+  - ✅ **Server Members Intent** — buat welcome/goodbye, auto-role, member sync
+  - ✅ **Message Content Intent** — WAJIB buat auto-responder, anti-spam kata/link, AFK mention reply. Tanpa ini, `message.content` selalu kosong → fitur-fitur tersebut gak jalan!
+  - ✅ **Presence Intent** — (opsional, belum dipakai)
+- **Role bot di ATAS** semua role yang bakal dikelola (Verified, Unverified, VIP, dll)
 
 ### Install
 ```bash
@@ -418,32 +418,32 @@ Akan tampil semua backup termasuk safety backup `pre-restore_*` (kalau pernah re
 - Cek bot punya `Send Messages` + `Embed Links` di channel itu
 - Cek channel masih ada (belum dihapus)
 
-### Auto-responder tidak reply / Anti-spam word filter tidak jalan / AFK mention reply tidak terkirim
-**Root cause paling umum: `Message Content Intent` belum di-enable.**
+### Auto-responder gak reply / Anti-spam kata gak jalan / AFK mention reply gak terkirim
+**Penyebab paling sering: `Message Content Intent` belum di-enable.**
 
-Bot butuh akses ke `message.content` untuk fitur-fitur ini. Tanpa intent tersebut, Discord mengirim `message.content` sebagai **empty string** untuk pesan user → `findMatch()` return null → auto-responder tidak pernah trigger.
+Bot butuh akses ke `message.content` buat fitur-fitur ini. Tanpa intent itu, Discord kirim `message.content` sebagai **string kosong** buat pesan user → `findMatch()` return null → auto-responder gak pernah trigger.
 
 **Cara fix:**
 1. Buka https://discord.com/developers/applications
 2. Pilih bot Anda
 3. Tab "Bot"
 4. Scroll ke bagian "Privileged Gateway Intents"
-5. Toggle **ON** ketiga ini (kalau belum):
+5. Toggle **ON** ketiga ini (kalo belum):
    - ✅ PRESENCE INTENT
    - ✅ SERVER MEMBERS INTENT
-   - ✅ **MESSAGE CONTENT INTENT** ← yang paling penting untuk fitur ini
+   - ✅ **MESSAGE CONTENT INTENT** ← yang paling penting buat fitur ini
 6. Klik "Save Changes"
 7. **Restart bot** (`npm start`)
 
-Cek juga: `/list-responder` untuk pastikan responder sudah terdaftar. Trigger match bersifat case-insensitive dan harus di awal pesan (`!sosmed` match `!sosmed halo`, tapi tidak match `halo !sosmed`).
+Cek juga: `/list-responder` buat pastiin responder udah terdaftar. Trigger match-nya case-insensitive dan harus di awal pesan (`!sosmed` match `!sosmed halo`, tapi gak match `halo !sosmed`).
 
-### Cooldown auto-responder terlalu lama
-Default cooldown 3 detik per-user. Untukubah:
+### Cooldown auto-responder kebanyakan lama
+Default cooldown 3 detik per-user. Buat ubah:
 ```
-/add-responder trigger:"!sosmed" reply:"..." cooldown:0    # 0 = disable cooldown
+/add-responder trigger:"!sosmed" reply:"..." cooldown:0    # 0 = matiin cooldown
 /add-responder trigger:"!sosmed" reply:"..." cooldown:10   # 10 detik
 ```
-Cooldown bersifat **per-user** (sejak v3.9.14) — user A trigger tidak mempengaruhi user B.
+Cooldown-nya **per-user** — user A trigger gak ngarang ke user B.
 
 ### Audit log tidak terkirim
 - Cek `config.channels['audit-log']` sudah di-set via `/set-channel audit-log #channel`

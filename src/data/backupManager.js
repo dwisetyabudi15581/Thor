@@ -106,13 +106,12 @@ function createBackup() {
         }
     }
 
-    // v3.9.15 FIX: tingkatkan accuracy status backup.
+    // Tentukan status backup berdasarkan jumlah file yang berhasil vs error.
     // File yang TIDAK ada (existsSync=false) BUKAN error — feature belum dipakai.
     // Yang dihitung error: file ada tapi gagal di-copy (permission, disk full, dst).
-    // Logic:
-    //   - errors.length === 0 → sukses (semua file yang exist berhasil di-copy) → ok=true
-    //   - errors.length > 0 && filesCopied > 0 → partial failure → ok=false, partial=true
-    //   - errors.length > 0 && filesCopied === 0 → total failure → ok=false
+    //   - errors.length === 0 → sukses (semua file yang exist berhasil di-copy)
+    //   - errors.length > 0 && filesCopied > 0 → partial failure
+    //   - errors.length > 0 && filesCopied === 0 → total failure
     if (result.errors.length > 0) {
         if (result.filesCopied === 0) {
             result.ok = false;

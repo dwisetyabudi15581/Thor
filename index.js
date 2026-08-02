@@ -65,13 +65,12 @@ const client = new Client({
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.GuildMembers,
         GatewayIntentBits.GuildVoiceStates,
-        // v3.9.15 CRITICAL FIX: MessageContent intent WAJIB untuk fitur yang baca
-        // message.content (auto-responder, anti-spam word/link filter, dll).
-        // Tanpa intent ini, message.content selalu empty string untuk pesan user lain
-        // → findMatch() return null → auto-responder tidak pernah trigger.
-        // NOTE: ini adalah PRIVILEGED intent — harus di-enable juga di Discord Developer Portal:
+        // WAJIB: Message Content Intent. Tanpa ini, message.content selalu kosong buat
+        // pesan user lain, jadi auto-responder, anti-spam kata/link, dan AFK mention
+        // reply gak bakal jalan.
+        // ⚠️ Intent ini juga harus di-enable di Discord Developer Portal:
         //   https://discord.com/developers/applications → Bot → Privileged Gateway Intents
-        //   → toggle "Message Content Intent" ON.
+        //   → toggle "Message Content Intent" jadi ON.
         GatewayIntentBits.MessageContent
     ],
     partials: [Partials.Channel, Partials.Message, Partials.GuildMember, Partials.User]

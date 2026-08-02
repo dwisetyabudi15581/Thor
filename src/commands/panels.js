@@ -167,7 +167,7 @@ module.exports = async function (interaction) {
         }
         if (btnCount > 0) rows.push(currentRow);
 
-        // v3.9.15 FIX: wrap channel.send dalam try/catch (sama seperti setup-verify/setup-ticket)
+        // Kirim panel ke channel. Wrap try/catch biar error jelas.
         try {
             await interaction.channel.send({ embeds: [embed], components: rows });
         } catch (sendErr) {

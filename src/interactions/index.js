@@ -47,8 +47,8 @@ const PREFIX_TO_DOMAIN = [
     { prefix: 'select_product', domain: 'ticket' },
     { prefix: 'modal_set_key:', domain: 'ticket' },
     { prefix: 'modal_edit_message:', domain: 'config' },
-    // v3.9.15: ticket_cat: di-explicit-kan sebelum ticket_ supaya routing jelas
-    // dan tidak bergantung pada fallback ticket_ (fragile untuk refactor masa depan).
+    // ticket_cat: di-explicit di sini (sebelum ticket_) biar routing jelas,
+    // gak andalkan fallback ticket_ yang fragile kalau nanti ada refactor.
     { prefix: 'ticket_cat:', domain: 'ticket' },
     { prefix: 'ticket_', domain: 'ticket' },
     { prefix: 'sr_btn:', domain: 'selfrole' },

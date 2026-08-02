@@ -32,10 +32,9 @@ const VALID_TYPES = new Set([
 module.exports = async function (interaction) {
     // === MODAL: edit_message:<tipe> ===
     if (interaction.isModalSubmit() && interaction.customId.startsWith('modal_edit_message:')) {
-        // v3.9.15 FIX: bungkus seluruh body dalam try/catch.
-        // Sebelumnya, kalau setField() atau logAudit() throw (disk error / EACCES),
-        // error propagate ke top-level handler → admin lihat "Terjadi error" generik
-        // padahal config mungkin sudah tersimpan (setField OK) tapi logAudit gagal.
+        // Bungkus seluruh body dalam try/catch.
+        // Kalau setField atau logAudit throw (disk error / permission),
+        // balas error jelas ke admin — jangan biarin error propagate ke top-level handler.
         try {
             const tipe = interaction.customId.split(':')[1];
 
@@ -69,8 +68,8 @@ module.exports = async function (interaction) {
             const oldValue = getConfig().messages?.[tipe];
             setField(`messages.${tipe}`, newText);
 
-            // logAudit async — kalau gagal, config sudah tersimpan. Tetap reply sukses,
-            // tapi log warning supaya admin bisa lihat di console.
+            // logAudit async — kalau gagal, config udah tersimpan. Tetap balas sukses,
+            // tapi log warning biar kelihatan di console.
             try {
                 await logAudit(interaction.client, {
                     action: 'SET_MESSAGE',

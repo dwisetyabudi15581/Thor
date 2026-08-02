@@ -636,7 +636,7 @@ function getCommands() {
                     { name: 'Plain text', value: 'text' },
                     { name: 'Embed', value: 'embed' }
                 ]},
-                { type: 4, name: 'cooldown', description: 'Cooldown dalam detik (anti-spam, default: 3)', required: false }
+                { type: 4, name: 'cooldown', description: 'Cooldown dalam detik (anti-spam, default: 3, 0 = matiin)', required: false, min_value: 0 }
             ]
         },
         {

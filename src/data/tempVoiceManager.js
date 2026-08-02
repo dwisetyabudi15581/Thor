@@ -267,10 +267,10 @@ function reconcileGuild(client, guildId) {
     const guild = client.guilds?.cache?.get(guildId);
     if (!guild) return result;
 
-    // 1. Cleanup zombie entries (channel tidak ada di Discord)
-    // v3.9.15 FIX: batch delete supaya hanya 1 load + 1 save per reconcile.
-    // Sebelumnya, unregisterChannel dipanggil per zombie → N load+save cycles.
-    // Untuk bot yang offline lama + banyak channel terhapus, ini lambat & boros I/O.
+    // 1. Cleanup zombie entries (channel udah gak ada di Discord).
+    // Batch delete biar cuma 1 load + 1 save per reconcile. Dulu unregisterChannel
+    // dipanggil per zombie → N load+save cycles. Buat bot yang offline lama + banyak
+    // channel terhapus, ini lambat & boros I/O.
     const zombieIds = [];
     for (const channelId of Object.keys(cfg.channels)) {
         const channel = guild.channels.cache.get(channelId);

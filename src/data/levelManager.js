@@ -175,14 +175,13 @@ function getLevelRoles(config) {
 }
 
 /**
- * Cek role apa yang harus di-assign saat user cap level tertentu.
- * v3.9.14 FIX: sekarang return array of roleIds (semua role dengan level ≤ user level),
- * supaya role stacking works (mis. user level 50 dapat @Active level 10 DAN @Veteran level 50).
- * Backward compatible: kalau caller expect string, ambil elemen pertama.
+ * Cek role mana yang harus dikasih ke user yang cap level tertentu.
+ * Return array of roleIds (semua role yang level-nya ≤ user level).
+ * Support stacking — user level 50 dapet role level 10, 20, 50 sekaligus.
  *
  * @param {number} level
  * @param {Object} config
- * @returns {string[]} array of roleIds (kosong kalau tidak ada yang match)
+ * @returns {string[]} array of roleIds (kosong kalau gak ada yang match)
  */
 function getRoleForLevel(level, config) {
     const roles = getLevelRoles(config);

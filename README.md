@@ -109,12 +109,12 @@ Community Bot/
 
 ### Prasyarat
 - Node.js v18+ (recommended v20+)
-- Discord bot token ([cara dapatkan](https://discord.com/developers/applications))
-- Server Discord tempat bot akan di-deploy
-- **3 Privileged Intents** sudah di-enable di Discord Developer Portal (https://discord.com/developers/applications → pilih bot → tab "Bot" → scroll ke "Privileged Gateway Intents"):
-  - ✅ Server Members Intent — untuk welcome/goodbye, auto-role
-  - ✅ **Message Content Intent** — WAJIB untuk auto-responder, anti-spam word/link filter, AFK mention reply. Tanpa ini, fitur-fitur tersebut tidak berfungsi!
-  - ✅ Presence Intent — (opsional)
+- Discord bot token ([cara dapetin](https://discord.com/developers/applications))
+- Server Discord tempat bot mau di-deploy
+- **3 Privileged Intents** udah di-enable di Discord Developer Portal (https://discord.com/developers/applications → pilih bot → tab "Bot" → scroll ke "Privileged Gateway Intents"):
+  - ✅ Server Members Intent — buat welcome/goodbye, auto-role
+  - ✅ **Message Content Intent** — WAJIB biar auto-responder, anti-spam kata/link, dan AFK mention reply jalan. Kalau gak di-enable, fitur-fitur ini diam-diam gak berfungsi!
+  - ✅ Presence Intent — (opsional, belum dipakai)
 
 ### Instalasi
 
@@ -232,18 +232,18 @@ Tests pakai built-in `node:test` (Node.js v18+), tidak perlu install dependency 
 - Role bot harus **di atas** role yang dikelola
 - Bot butuh: `Manage Roles`, `Manage Channels`, `Send Messages`, `Embed Links`, `View Audit Log`, `Moderate Members`
 
-### Auto-responder / Anti-spam / AFK reply tidak berfungsi
-**Penyebab paling umum: "Message Content Intent" belum di-enable.**
+### Auto-responder / Anti-spam / AFK reply gak berfungsi
+**Penyebab paling sering: "Message Content Intent" belum di-enable.**
 
-Bot butuh akses ke `message.content` untuk fitur-fitur ini. Tanpa intent tersebut, Discord mengirim content sebagai empty string → trigger tidak match → fitur tidak jalan.
+Bot butuh akses ke `message.content` buat fitur-fitur ini. Tanpa intent itu, Discord kirim content sebagai string kosong → trigger gak match → fitur gak jalan.
 
 **Cara fix:**
 1. Buka https://discord.com/developers/applications → pilih bot
 2. Tab "Bot" → scroll ke "Privileged Gateway Intents"
-3. Toggle ON: **MESSAGE CONTENT INTENT** (dan SERVER MEMBERS INTENT kalau belum)
+3. Toggle ON: **MESSAGE CONTENT INTENT** (dan SERVER MEMBERS INTENT kalo belum)
 4. Save Changes → Restart bot
 
-Cek console bot — kalau ada warning `⚠️ [DEBUG] message.content kosong`, berarti intent memang belum on.
+Cek console bot — kalo ada warning `⚠️ [HINT] Pesan dari ... isinya kosong`, berarti intent emang belum on.
 
 ### Tests fail
 - Pastikan Node.js v18+

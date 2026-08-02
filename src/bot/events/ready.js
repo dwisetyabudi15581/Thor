@@ -111,9 +111,8 @@ async function onReady(client) {
         // Guard overlap: skip tick kalau sebelumnya belum selesai (anti double-DM).
         // Setiap item di-wrap try/catch sendiri (1 throw gak abort sisa loop).
         let schedulerRunning = false;
-        // v3.9.15 FIX: simpan reference + .unref() supaya interval tidak block graceful shutdown.
-        // Sebelumnya, kalau gracefulShutdown gagal reach process.exit (Promise.race hang /
-        // client.destroy throw), interval keep Node.js event loop alive → zombie process.
+        // Simpen reference + .unref() biar interval gak nge-block graceful shutdown.
+        // Kalau gak, process bisa jadi zombie kalo gracefulShutdown gagal reach process.exit.
         const schedulerInterval = setInterval(async () => {
             if (schedulerRunning) {
                 console.log('⏭️ Scheduler tick di-skip (iterasi sebelumnya masih jalan).');
