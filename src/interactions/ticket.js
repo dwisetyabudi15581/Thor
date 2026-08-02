@@ -70,7 +70,7 @@ module.exports = async function (interaction) {
 
         // Kategori transaksi → filter produk berdasarkan category
         const productsInCat = (config.products || []).filter(p => {
-            const pCat = p.category || 'mlbb_key';
+            const pCat = p.category || 'transaction';
             return pCat === categoryId;
         });
 

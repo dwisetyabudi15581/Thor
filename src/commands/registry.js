@@ -184,7 +184,7 @@ function getCommands() {
                 { type: 3, name: 'price', description: 'Harga (mis. Rp. 50.000)', required: true },
                 { type: 3, name: 'duration', description: 'Opsional. Keterangan durasi (mis. 7 Hari). Kosong = pakai label.', required: false },
                 // v3.9.11 Phase 2: category & requires_key
-                { type: 3, name: 'category', description: 'Kategori produk (default: mlbb_key). Lihat /list-categories untuk daftar.', required: false },
+                { type: 3, name: 'category', description: 'Kategori produk (default: transaction). Lihat /list-categories untuk daftar.', required: false },
                 { type: 5, name: 'requires_key', description: 'Apakah produk ini butuh Set Key? (default: true untuk kategori key)', required: false }
             ]
         },
@@ -659,7 +659,7 @@ function getCommands() {
             description: 'Konfigurasi auto-mod (spam, link, word filter, mention limit)',
             defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
             options: [
-                { type: 4, name: 'spam_threshold', description: 'Jumlah pesan dalam window = spam (default: 5)', required: false },
+                { type: 4, name: 'spam_threshold', description: 'Jumlah pesan dalam window = spam (default: 5)', required: false, min_value: 1 },
                 { type: 3, name: 'spam_action', description: 'Action untuk spammer', required: false, choices: [
                     { name: 'Delete only', value: 'delete_only' },
                     { name: 'Warn', value: 'warn' },
@@ -674,7 +674,7 @@ function getCommands() {
                     { name: 'Warn', value: 'warn' },
                     { name: 'Mute 10 menit', value: 'mute_10m' }
                 ]},
-                { type: 4, name: 'max_mentions', description: 'Max mention per message (default: 5)', required: false },
+                { type: 4, name: 'max_mentions', description: 'Max mention per message (default: 5)', required: false, min_value: 0 },
                 { type: 3, name: 'mention_action', description: 'Action untuk mass-mention', required: false, choices: [
                     { name: 'Delete only', value: 'delete_only' },
                     { name: 'Warn', value: 'warn' },

@@ -31,7 +31,7 @@ test('configManager: ticketCategories defaults applied', () => {
     assert.ok(Array.isArray(config.ticketCategories));
     assert.ok(config.ticketCategories.length >= 3, 'should have at least 3 default categories');
     const ids = config.ticketCategories.map(c => c.id);
-    assert.ok(ids.includes('mlbb_key'));
+    assert.ok(ids.includes('transaction'));
     assert.ok(ids.includes('help'));
     assert.ok(ids.includes('report'));
 });
@@ -149,12 +149,12 @@ test('ticketManager: setTicketMeta accepts category & requiresKey (Phase 2)', ()
         productName: 'VIP 30 Hari',
         price: 'Rp 50.000',
         guildId: 'test_guild',
-        category: 'mlbb_key',
+        category: 'transaction',
         requiresKey: true
     });
 
     const meta = getTicketMeta(testChannelId);
-    assert.strictEqual(meta.category, 'mlbb_key');
+    assert.strictEqual(meta.category, 'transaction');
     assert.strictEqual(meta.requiresKey, true);
 
     removeTicketMeta(testChannelId);

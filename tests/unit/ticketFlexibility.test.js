@@ -38,9 +38,9 @@ test('fillTemplate: v3.9.12 {categories_list} variable', () => {
 });
 
 test('fillTemplate: v3.9.12 {price_list:<category>} filtered by category', () => {
-    const result = fillTemplate('Key saja:\n{price_list:mlbb_key}\n\nJasa:\n{price_list:jasa}', {
+    const result = fillTemplate('Key saja:\n{price_list:transaction}\n\nJasa:\n{price_list:jasa}', {
         priceListByCategory: {
-            mlbb_key: '• VIP 30 Hari',
+            transaction: '• VIP 30 Hari',
             jasa: '• Joki Mythic'
         }
     });
@@ -49,7 +49,7 @@ test('fillTemplate: v3.9.12 {price_list:<category>} filtered by category', () =>
 
 test('fillTemplate: {price_list:<unknown_category>} shows placeholder', () => {
     const result = fillTemplate('{price_list:unknown}', {
-        priceListByCategory: { mlbb_key: '• VIP' }
+        priceListByCategory: { transaction: '• VIP' }
     });
     assert.match(result, /belum ada produk di kategori.*unknown/);
 });

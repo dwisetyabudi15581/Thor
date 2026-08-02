@@ -28,11 +28,12 @@ const DEFAULTS = {
         emoji: '✅',
         style: 'Success'  // Primary | Secondary | Success | Danger
     },
-    // v3.9.11 Phase 2: ticket categories (default 5 kategori built-in)
+    // v3.9.11 Phase 2: ticket categories (default 3 kategori built-in)
+    // Generic community — bisa dipakai buat server jualan apapun, bukan cuma MLBB.
     ticketCategories: [
-        { id: 'mlbb_key', label: 'Beli Key',     emoji: '🔑', style: 'Primary',   requiresKey: true,  isDefault: true },
-        { id: 'help',     label: 'Bantuan Staff', emoji: '📞', style: 'Secondary', requiresKey: false, isDefault: true },
-        { id: 'report',   label: 'Laporkan Member', emoji: '⚠️', style: 'Danger', requiresKey: false, isDefault: true }
+        { id: 'transaction', label: 'Beli Key / Transaksi', emoji: '🔑', style: 'Primary',   requiresKey: true,  isDefault: true },
+        { id: 'help',        label: 'Bantuan Staff',        emoji: '📞', style: 'Secondary', requiresKey: false, isDefault: true },
+        { id: 'report',      label: 'Laporkan Member',      emoji: '⚠️', style: 'Danger',    requiresKey: false, isDefault: true }
     ],
     // v3.9.13: Leveling system config
     leveling: {
@@ -121,6 +122,20 @@ function getConfig() {
         products: Array.isArray(raw.products) ? raw.products : DEFAULTS.products
     };
 
+    // Backward compat: rename kategori 'mlbb_key' (lama) → 'transaction' (baru).
+    // Berlaku untuk ticketCategories dan product.category.
+    // Old config yang masih pakai 'mlbb_key' tetap jalan, tapi next save bakal terganti.
+    if (Array.isArray(config.ticketCategories)) {
+        config.ticketCategories = config.ticketCategories.map(cat =>
+            cat.id === 'mlbb_key' ? { ...cat, id: 'transaction' } : cat
+        );
+    }
+    if (Array.isArray(config.products)) {
+        config.products = config.products.map(p =>
+            p && p.category === 'mlbb_key' ? { ...p, category: 'transaction' } : p
+        );
+    }
+
     return config;
 }
 
@@ -185,7 +200,7 @@ function setField(dotPath, value) {
  *
  * v3.9.12: Variabel tambahan untuk ticket body (dipakai di /setup-ticket):
  *   - {price_list}        → daftar semua produk (auto-generated dari config.products)
- *   - {price_list:<cat>}  → daftar produk filter by category (mis. {price_list:mlbb_key})
+ *   - {price_list:<cat>}  → daftar produk filter by category (mis. {price_list:transaction})
  *   - {categories_list}   → daftar semua kategori tiket (auto-generated dari config.ticketCategories)
  *   - {price_header}      → isi dari config.messages.ticketPriceHeader
  */

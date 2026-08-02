@@ -98,7 +98,7 @@ module.exports = async function (interaction) {
         const categories = config.ticketCategories || [];
         if (categories.length === 0) {
             return safeEditReply(interaction, {
-                content: '📭 Belum ada kategori. Default 3 kategori (mlbb_key, help, report) akan dipakai kalau config kosong.'
+                content: '📭 Belum ada kategori. Default 3 kategori (transaction, help, report) akan dipakai kalau config kosong.'
             });
         }
 
@@ -132,7 +132,7 @@ module.exports = async function (interaction) {
             });
         }
 
-        // v3.9.11: jangan hapus kategori default (mlbb_key, help, report) — terlalu risky.
+        // v3.9.11: jangan hapus kategori default (transaction, help, report) — terlalu risky.
         if (categories[idx].isDefault) {
             return safeEditReply(interaction, {
                 content: `❌ Kategori \`${id}\` adalah kategori default dan tidak bisa dihapus.\n` +
@@ -154,7 +154,7 @@ module.exports = async function (interaction) {
 
         return safeEditReply(interaction, {
             content: `✅ Kategori **${removed.label}** (\`${removed.id}\`) berhasil dihapus.\n\n` +
-                `💡 Produk yang masih pakai kategori ini akan otomatis fallback ke \`mlbb_key\`.`
+                `💡 Produk yang masih pakai kategori ini akan otomatis fallback ke \`transaction\`.`
         });
     }
 };

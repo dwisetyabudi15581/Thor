@@ -96,7 +96,7 @@ module.exports = async function (interaction) {
         // Dilakukan di configManager getConfig(), tapi kita pastikan di sini juga.
         let productsWithCategory = (config.products || []).map(p => ({
             ...p,
-            category: p.category || 'mlbb_key',
+            category: p.category || 'transaction',
             requiresKey: p.requiresKey !== undefined ? p.requiresKey : true
         }));
 
@@ -122,7 +122,7 @@ module.exports = async function (interaction) {
         // Build price list per category
         const priceListByCategory = {};
         for (const cat of categories) {
-            const prods = productsWithCategory.filter(p => (p.category || 'mlbb_key') === cat.id);
+            const prods = productsWithCategory.filter(p => (p.category || 'transaction') === cat.id);
             priceListByCategory[cat.id] = prods.length > 0
                 ? prods.map(p => `• **${p.label}** — ${p.price}`).join('\n')
                 : `_(belum ada produk)_`;

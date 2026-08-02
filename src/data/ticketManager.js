@@ -1,5 +1,6 @@
 const { ChannelType, PermissionFlagsBits, EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
 const { getConfig } = require('./configManager');
+const { safeEditReply } = require('../infra/safeReply');
 const fs = require('fs');
 const path = require('path');
 const { safeWriteJSON } = require('../infra/safeWrite');
@@ -163,12 +164,12 @@ async function createTicket(interaction, product) {
             existingTicket = guild.channels.cache.find(c => c.topic && c.topic.startsWith(`Ticket UserID: ${user.id} |`));
         }
         if (existingTicket) {
-            return interaction.editReply({ content: `❌ Kamu sudah punya tiket aktif di ${existingTicket}!` });
+            return safeEditReply(interaction, { content: `❌ Kamu sudah punya tiket aktif di ${existingTicket}!` });
         }
 
         // Admin role wajib sudah di-set
         if (!config.roles.admin) {
-            return interaction.editReply({ content: '❌ Role Admin belum di-set. Pakai `/set-role admin @role` dulu.' });
+            return safeEditReply(interaction, { content: '❌ Role Admin belum di-set. Pakai `/set-role admin @role` dulu.' });
         }
 
         // v3.9.11 Phase 1: hapus magic string 'Bantuan/Lapor'.
@@ -208,7 +209,7 @@ async function createTicket(interaction, product) {
             price: product.price,
             guildId: guild.id,
             createdAt: Date.now(),
-            category: product.category || (isTransaction ? 'mlbb_key' : 'help'),
+            category: product.category || (isTransaction ? 'transaction' : 'help'),
             requiresKey: product.requiresKey !== undefined ? product.requiresKey : isTransaction
         });
 
@@ -228,7 +229,7 @@ async function createTicket(interaction, product) {
             .addFields(
                 isTransaction
                     ? [
-                        { name: '📦 Produk', value: `Key MLBB${product.duration ? ` (${product.duration})` : ''}`, inline: true },
+                        { name: '📦 Produk', value: `${product.label}${product.duration ? ` (${product.duration})` : ''}`, inline: true },
                         { name: '💰 Harga', value: product.price, inline: true }
                     ]
                     : [{ name: '📋 Jenis', value: product.label, inline: false }]
@@ -257,7 +258,7 @@ async function createTicket(interaction, product) {
         const closeRow = new ActionRowBuilder().addComponents(...components);
 
         await ticketChannel.send({ content: `<@&${config.roles.admin}> | <@${user.id}>`, embeds: [ticketEmbed], components: [closeRow] });
-        await interaction.editReply({ content: `✅ Tiket berhasil dibuat: ${ticketChannel}` });
+        await safeEditReply(interaction, { content: `✅ Tiket berhasil dibuat: ${ticketChannel}` });
     } catch (err) {
         console.error('Error creating ticket:', err);
         await interaction.editReply({ content: '❌ Terjadi error saat membuat tiket. Cek izin bot!' }).catch(()=>{});

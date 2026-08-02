@@ -1,5 +1,5 @@
 /**
- * Thor — MLBB Community Bot
+ * Thor — Community Bot
  * Entry point (v3.9.9 refactor: slim, event-driven via src/bot/events/).
  *
  * Flow:

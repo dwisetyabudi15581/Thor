@@ -7,7 +7,7 @@
  * Auto-clear AFK saat user kirim pesan lagi.
  */
 
-const { EmbedBuilder, MessageFlags } = require('./_shared');
+const { EmbedBuilder, MessageFlags, safeEditReply } = require('./_shared');
 
 const afkManager = require('../data/afkManager');
 
@@ -73,7 +73,7 @@ module.exports = async function (interaction) {
             .sort((a, b) => b.since - a.since);
 
         if (afkUsers.length === 0) {
-            return interaction.editReply({ content: '✅ Tidak ada member yang AFK saat ini.' });
+            return safeEditReply(interaction, { content: '✅ Tidak ada member yang AFK saat ini.' });
         }
 
         const lines = afkUsers.slice(0, 25).map((u, i) => {
@@ -88,6 +88,6 @@ module.exports = async function (interaction) {
             .setColor(0xF1C40F)
             .setTimestamp();
 
-        return interaction.editReply({ embeds: [embed] });
+        return safeEditReply(interaction, { embeds: [embed] });
     }
 };

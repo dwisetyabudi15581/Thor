@@ -216,7 +216,7 @@ async function handleTempVoiceRename(interaction) {
                     .setLabel('Nama baru channel')
                     .setStyle(TextInputStyle.Short)
                     .setRequired(true)
-                    .setPlaceholder('mis. 🎮 Squad Mobile Legends')
+                    .setPlaceholder('mis. 🎮 Squad Santai')
                     .setMinLength(1)
                     .setMaxLength(95)
             )

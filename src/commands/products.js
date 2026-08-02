@@ -45,7 +45,7 @@ module.exports = async function (interaction) {
         }
 
         // v3.9.11 Phase 2: validate category exists (kalau di-specify)
-        const finalCategory = category || 'mlbb_key';
+        const finalCategory = category || 'transaction';
         const categories = config.ticketCategories || [];
         const categoryExists = categories.some(c => c.id === finalCategory);
         if (!categoryExists && category) {

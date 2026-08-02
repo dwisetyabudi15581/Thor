@@ -107,7 +107,7 @@ module.exports = async function (interaction) {
         // Build price list (filtered by category kalau di-specify)
         const categoryIds = new Set(categoriesToShow.map(c => c.id));
         const productsInCategories = (config.products || []).filter(p => {
-            const pCat = p.category || 'mlbb_key';
+            const pCat = p.category || 'transaction';
             return categoryIds.has(pCat);
         });
 
@@ -116,7 +116,7 @@ module.exports = async function (interaction) {
 
         const priceListByCategory = {};
         for (const cat of categoriesToShow) {
-            const prods = productsInCategories.filter(p => (p.category || 'mlbb_key') === cat.id);
+            const prods = productsInCategories.filter(p => (p.category || 'transaction') === cat.id);
             priceListByCategory[cat.id] = prods.length > 0
                 ? prods.map(p => `• **${p.label}** — ${p.price}`).join('\n')
                 : `_(belum ada produk di kategori ini)_`;

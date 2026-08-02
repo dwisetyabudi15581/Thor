@@ -11,7 +11,7 @@ Bot Discord serbaguna untuk komunitas apapun — gaming, content creator, online
 
 ### 🎫 Ticket Panel (Multi-Category)
 - Panel tiket dengan tombol dinamis per kategori (bukan hardcoded)
-- Support kategori produk: key, jasa, topup, dll — bebas di-CRUD dari Discord
+- Support kategori produk: key, jasa, layanan, dll — bebas di-CRUD dari Discord
 - Multi-panel: pasang panel berbeda dengan subset kategori berbeda di channel berbeda
 - Auto-transcript: simpan chat history tiket sebelum close
 - Tombol "Set Key" hanya muncul untuk produk yang `requiresKey: true`

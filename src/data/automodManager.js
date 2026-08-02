@@ -126,10 +126,11 @@ function resetSpamTracker(guildId, userId) {
 
 /**
  * Periodic cleanup — hapus entry lama dari spam tracker supaya memory gak bocor.
+ * Pakai 5 menit supaya aman buat server yang set spamWindowMs > 60s.
  */
 function cleanupSpamTracker() {
     const now = Date.now();
-    const MAX_AGE_MS = 60 * 1000;  // 1 menit
+    const MAX_AGE_MS = 5 * 60 * 1000;  // 5 menit — cukup buat mayoritas spamWindowMs config
     for (const [guildId, guildMap] of spamTracker) {
         for (const [userId, timestamps] of guildMap) {
             const filtered = timestamps.filter(ts => (now - ts) < MAX_AGE_MS);

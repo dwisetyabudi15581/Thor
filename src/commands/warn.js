@@ -50,19 +50,14 @@ module.exports = async function (interaction) {
             return safeEditReply(interaction,{ content: '❌ Kamu tidak bisa warn member dengan role setingkat/lebih tinggi dari kamu.' });
         }
 
-        // v3.9.8 FIX: cek hierarki bot vs target juga. Sebelumnya cuma cek admin
-        // vs target. Kalau target punya role lebih tinggi dari bot, auto-action
-        // (timeout/kick) bakal throw "Missing Permissions" → auto-action gagal silent,
-        // admin tidak diberi tahu kalau bot kekurangan permission.
+        // Cek hierarki bot vs target juga. Kalau target punya role lebih tinggi dari bot,
+        // auto-action (timeout/kick) bakal throw "Missing Permissions".
+        // Tapi record warn tetap dibuat — berguna buat catatan, meski auto-action gak jalan.
+        // Jadi: jangan return, kasih flag warning aja, lanjut ke addWarn.
         const botMember = interaction.guild.members.me;
+        let botHierarchyWarning = '';
         if (botMember && member.roles.highest.position >= botMember.roles.highest.position) {
-            // Tidak block warn (record tetap dibuat), tapi kasih warning dulu
-            // supaya admin sadar auto-action bakal gagal.
-            return safeEditReply(interaction,{
-                content: `❌ Role bot (\`${botMember.roles.highest.name || 'top role'}\`) lebih rendah dari role tertinggi target (\`${member.roles.highest.name || 'top role'}\`).\n` +
-                    `Bot tidak akan bisa eksekusi auto-action (timeout/kick) kalau mencapai threshold.\n` +
-                    `Pindahkan role bot ke atas role target di Server Settings → Roles, lalu coba lagi.`
-            });
+            botHierarchyWarning = `\n\n⚠️ **Heads up:** Role bot (\`${botMember.roles.highest.name || 'top role'}\`) lebih rendah dari role tertinggi target (\`${member.roles.highest.name || 'top role'}\`). Bot gak bakal bisa eksekusi auto-action (timeout/kick) kalau mencapai threshold. Pindahin role bot ke atas role target di Server Settings → Roles biar auto-action jalan.`;
         }
 
         // v3.9.0: addWarn sekarang scoped per guild (guildId, userId, data)
@@ -127,7 +122,7 @@ module.exports = async function (interaction) {
             content: `⚠️ **<@${user.id}> telah diwarn.**\n\n` +
                 `📝 Reason: ${reason}\n` +
                 `📊 Total warnings: **${result.count}**\n` +
-                `👤 Oleh: ${interaction.user.tag}${actionMsg}`
+                `👤 Oleh: ${interaction.user.tag}${actionMsg}${botHierarchyWarning}`
         });
     }
 

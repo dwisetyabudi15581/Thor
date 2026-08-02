@@ -1,4 +1,4 @@
-# 📖 ADMIN GUIDE — MLBB Community Bot v3.9.7
+# 📖 ADMIN GUIDE — Community Bot v3.9.7
 
 Panduan lengkap untuk admin server Discord yang menjalankan bot ini. Cocok untuk admin baru yang baru pertama kali setup, maupun admin yang sudah ada untuk referensi harian.
 

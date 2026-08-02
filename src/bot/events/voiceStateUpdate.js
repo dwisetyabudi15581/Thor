@@ -66,15 +66,19 @@ async function onVoiceStateUpdate(oldState, newState) {
                     } catch (err) {
                         // Bedain Discord error (numeric code) vs non-Discord error.
                         // err.code undefined = non-Discord error (TypeError, RangeError, dll)
-                        // — jangan disamarkan dengan Discord permission issue.
                         if (err.code === 10003) {
-                            // Unknown Channel — udah ke-delete sebelumnya, OK
+                            // Unknown Channel — udah ke-delete sebelumnya, aman buat unregister
+                            tempVoiceManager.unregisterChannel(guildId, oldChannelId);
                         } else if (typeof err.code === 'number') {
-                            console.warn(`⚠️ Gagal hapus temp voice ${oldChannelId} (Discord code ${err.code}):`, err.message);
+                            // Discord error lain (50013 Missing Permissions, 50001 Missing Access, dst).
+                            // Channel masih ada di Discord tapi bot gak bisa hapus. JANGAN unregister —
+                            // nanti bisa di-retry. Log warning biar admin tau ada channel stuck.
+                            console.warn(`⚠️ Gagal hapus temp voice ${oldChannelId} (Discord code ${err.code}). Channel masih ada, bot gak punya permission. Entry tetap dipertahankan buat retry.`);
                         } else {
                             console.error(`❌ Non-Discord error saat hapus temp voice ${oldChannelId}:`, err);
+                            // Untuk non-Discord error, uninstall juga biar gak stuck loop
+                            tempVoiceManager.unregisterChannel(guildId, oldChannelId);
                         }
-                        tempVoiceManager.unregisterChannel(guildId, oldChannelId);
                     }
                 }
                 await refreshGlobalControlPanel(newState.client, guildId);

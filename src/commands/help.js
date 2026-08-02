@@ -94,11 +94,11 @@ module.exports = async function (interaction) {
             { name: '📝 Variabel Pesan (template)', value: [
                 '**Welcome/Goodbye:** `{user}` `{username}` `{server}` `{count}` `{action}`',
                 '**Ticket Body:**',
-                '• `{server}` `{price_header}` `{price_list}` `{price_list:mlbb_key}` `{categories_list}`'
+                '• `{server}` `{price_header}` `{price_list}` `{price_list:transaction}` `{categories_list}`'
             ].join('\n'), inline: false },
 
             { name: '📦 Manajemen Produk', value: [
-                '• `/add-product label:"VIP 30 Hari" value:vip30 price:"Rp 50.000" category:mlbb_key requires_key:true`',
+                '• `/add-product label:"VIP 30 Hari" value:vip30 price:"Rp 50.000" category:transaction requires_key:true`',
                 '• `/remove-product value:vip30`',
                 '• `/list-products`'
             ].join('\n'), inline: false },
