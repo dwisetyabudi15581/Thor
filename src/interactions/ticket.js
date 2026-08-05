@@ -181,22 +181,37 @@ module.exports = async function (interaction) {
         }
 
         // v3.9.4 FIX: pakai getTicketMeta (sumber utama tickets.json) bukan parse topic langsung.
-        // Sebelumnya, kalau admin edit channel topic / topic ke-truncate, productName salah.
         const meta = getTicketMeta(interaction.channel.id, interaction.channel?.topic || '');
         const productName = meta?.productName || 'Unknown';
         const productCategory = meta?.category || null;
-        // v3.9.11 Phase 1: hapus magic string 'Bantuan/Lapor'. Pakai category field.
         const isTransaction =
             productCategory !== 'help' &&
             productCategory !== 'report' &&
             productName !== 'Bantuan Staff' &&
             productName !== 'Laporkan Member' &&
             productName !== 'Bantuan/Lapor';
+        // v3.9.16: requiresKey — kalau false, transaksi non-key butuh tombol "Pesanan Sukses"
+        // supaya admin bisa catat sukses + kirim invoice/testimoni.
+        const requiresKey = meta?.requiresKey !== undefined ? meta.requiresKey : isTransaction;
 
-        // Untuk tiket transaksi: tombol "Tidak Jadi Beli" (close tanpa role) + "Batal Tutup"
-        // Untuk tiket help/report: tombol "Selesai" (close sukses) + "Tutup Tanpa Selesai" + "Batal Tutup"
+        // 3 skenario tombol konfirmasi close:
+        // - Transaksi pakai key (requiresKey=true):
+        //     • ❌ Tidak Jadi Beli (close tanpa invoice)
+        //     • ⏏️ Batal Tutup
+        //   (sukses ditandai via Set Key, jadi gak perlu tombol sukses di sini)
+        //
+        // - Transaksi non-key (requiresKey=false, isTransaction=true):
+        //     • ✅ Pesanan Sukses (close + kirim invoice/testimoni)
+        //     • ❌ Tidak Jadi Beli (close tanpa invoice)
+        //     • ⏏️ Batal Tutup
+        //
+        // - Help / Report (isTransaction=false):
+        //     • ✅ Selesai (close sukses)
+        //     • 🚪 Tutup Tanpa Selesai (close batal)
+        //     • ⏏️ Batal Tutup
         const confirmRow = new ActionRowBuilder();
-        if (isTransaction) {
+        if (isTransaction && requiresKey) {
+            // Transaksi pakai key — sukses via Set Key, di sini cuma batal/abort
             confirmRow.addComponents(
                 new ButtonBuilder()
                     .setCustomId('ticket_close_cancel_trans')
@@ -207,7 +222,24 @@ module.exports = async function (interaction) {
                     .setLabel('⏏️ Batal Tutup')
                     .setStyle(ButtonStyle.Secondary)
             );
+        } else if (isTransaction && !requiresKey) {
+            // Transaksi non-key — butuh tombol sukses buat kirim invoice
+            confirmRow.addComponents(
+                new ButtonBuilder()
+                    .setCustomId('ticket_close_success')
+                    .setLabel('✅ Pesanan Sukses')
+                    .setStyle(ButtonStyle.Success),
+                new ButtonBuilder()
+                    .setCustomId('ticket_close_cancel_trans')
+                    .setLabel('❌ Tidak Jadi Beli')
+                    .setStyle(ButtonStyle.Danger),
+                new ButtonBuilder()
+                    .setCustomId('ticket_close_abort')
+                    .setLabel('⏏️ Batal Tutup')
+                    .setStyle(ButtonStyle.Secondary)
+            );
         } else {
+            // Help / Report
             confirmRow.addComponents(
                 new ButtonBuilder()
                     .setCustomId('ticket_close_success')
@@ -224,7 +256,9 @@ module.exports = async function (interaction) {
             );
         }
         const msg = isTransaction
-            ? '⚠️ Tutup tiket tanpa memberi key? Klik **❌ Tidak Jadi Beli**.'
+            ? (requiresKey
+                ? '⚠️ Tutup tiket tanpa memberi key? Klik **❌ Tidak Jadi Beli**.'
+                : '⚠️ Tutup tiket transaksi ini?\n• **✅ Pesanan Sukses** — transaksi berhasil, kirim invoice/testimoni\n• **❌ Tidak Jadi Beli** — batal, tanpa invoice')
             : '⚠️ Selesaikan tiket ini?';
         return interaction.reply({ content: msg, components: [confirmRow], flags: MessageFlags.Ephemeral });
     }
@@ -253,9 +287,8 @@ module.exports = async function (interaction) {
     }
 
     if (interaction.isButton() && interaction.customId === 'ticket_close_success') {
-        // Untuk tiket help/report (selesai).
-        // Wrap deferUpdate — closeTicket punya internal try/catch jadi channel tetap ke-delete
-        // meski deferUpdate gagal.
+        // Untuk tiket help/report (selesai) ATAU transaksi non-key (pesanan sukses).
+        // isSuccess=true → closeTicket akan kirim invoice ke channel invoice (kalau di-set).
         try {
             await interaction.deferUpdate();
         } catch (err) {
