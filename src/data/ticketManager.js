@@ -564,9 +564,21 @@ async function closeTicket(channel, closer, isSuccess) {
             }
         }
 
-        // Kirim invoice kalau sukses & bukan tiket help/report
-        // FIX v3.7.1: invoice failure tidak boleh block close — log warning saja.
-        if (isSuccess && userId) {
+        // Kirim invoice HANYA untuk transaksi sukses (bukan help/report).
+        // v3.9.16: fix bug — sebelumnya help/report yang diklik "Selesai" juga kekirim invoice
+        // padahal bukan transaksi jualan. Sekarang cek category dulu.
+        //   - category 'help' / 'report'           → skip invoice (bukan jualan)
+        //   - productName 'Bantuan Staff' dll      → skip invoice (legacy backward compat)
+        //   - lainnya + isSuccess=true + userId    → kirim invoice
+        const ticketCategory = meta?.category || null;
+        const isHelpOrReport =
+            ticketCategory === 'help' ||
+            ticketCategory === 'report' ||
+            productName === 'Bantuan Staff' ||
+            productName === 'Laporkan Member' ||
+            productName === 'Bantuan/Lapor';
+
+        if (isSuccess && userId && !isHelpOrReport) {
             try {
                 await sendInvoice(channel, userId, productName, price, closer);
             } catch (invoiceErr) {
