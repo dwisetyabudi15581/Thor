@@ -108,11 +108,20 @@ module.exports = async function (interaction) {
             },
 
             {
-                name: '📢 Atur Channel',
+                name: '📢 Atur Channel & Kategori Tiket',
                 value: [
                     '• `/set-channel welcome #channel` — set channel (welcome/goodbye/invoice/audit-log/transcript)',
                     '• `/set-transcript-channel #channel` — auto-save transcript tiket sebelum close',
-                    '• `/remove-channel welcome` — hapus channel dari config'
+                    '• `/remove-channel welcome` — hapus channel dari config',
+                    '',
+                    '**🎫 Auto-Split Tiket:** Bot otomatis pisah channel tiket jadi 2 kategori:',
+                    '• **`🎫 TRANSAKSI`** — tiket yang pakai key (ada tombol Set Key)',
+                    '• **`🎫 BANTUAN`** — tiket help/report (tanpa tombol Set Key)',
+                    'Kategori dibuat otomatis. Mau custom nama? Edit `data/config.json`:',
+                    '```',
+                    '"ticketCategoryKey": "🎫 JUALAN",',
+                    '"ticketCategoryNoKey": "🎫 SUPPORT"',
+                    '```'
                 ].join('\n'),
                 inline: false
             },

@@ -197,10 +197,39 @@ async function createTicket(interaction, product) {
             product.category === 'report'
         );
 
-        // Buat kategori kalau belum ada
-        let category = guild.channels.cache.find(c => c.name === '🎫 TICKETS' && c.type === ChannelType.GuildCategory);
+        // Tentukan requiresKey flag (default true buat transaksi, false buat help/report).
+        const requiresKey = product.requiresKey !== undefined ? product.requiresKey : isTransaction;
+
+        // v3.9.16: Pisahkan kategori tiket berdasarkan pakai key atau tidak.
+        // - requiresKey=true  → "🎫 TRANSAKSI" (tiket jualan, ada tombol Set Key)
+        // - requiresKey=false → "🎫 BANTUAN"   (tiket help/report, tanpa tombol Set Key)
+        // Admin bisa custom nama kategori via config.ticketCategoriesKey / ticketCategoriesNoKey
+        // (kalau gak di-set, pakai default hardcoded di sini).
+        const keyCategoryName = config.ticketCategoryKey || '🎫 TRANSAKSI';
+        const noKeyCategoryName = config.ticketCategoryNoKey || '🎫 BANTUAN';
+        const targetCategoryName = requiresKey ? keyCategoryName : noKeyCategoryName;
+
+        // Cari kategori target. Kalau gak ada, buat baru.
+        let category = guild.channels.cache.find(
+            c => c.name === targetCategoryName && c.type === ChannelType.GuildCategory
+        );
         if (!category) {
-            category = await guild.channels.create({ name: '🎫 TICKETS', type: ChannelType.GuildCategory });
+            try {
+                category = await guild.channels.create({
+                    name: targetCategoryName,
+                    type: ChannelType.GuildCategory
+                });
+                console.log(`📁 Kategori tiket baru dibuat: ${targetCategoryName}`);
+            } catch (catErr) {
+                console.error(`Gagal buat kategori ${targetCategoryName}:`, catErr.message);
+                // Fallback: pakai kategori "🎫 TICKETS" lama kalau ada (backward compat)
+                category = guild.channels.cache.find(
+                    c => c.name === '🎫 TICKETS' && c.type === ChannelType.GuildCategory
+                );
+                if (!category) {
+                    throw new Error(`Gagal buat kategori tiket "${targetCategoryName}". Cek permission Manage Channels.`);
+                }
+            }
         }
 
         const channelName = `ticket-${user.id}`.toLowerCase().slice(0, 50);
@@ -253,7 +282,7 @@ async function createTicket(interaction, product) {
             guildId: guild.id,
             createdAt: Date.now(),
             category: product.category || (isTransaction ? 'transaction' : 'help'),
-            requiresKey: product.requiresKey !== undefined ? product.requiresKey : isTransaction
+            requiresKey
         });
 
         const ticketEmbed = new EmbedBuilder()
