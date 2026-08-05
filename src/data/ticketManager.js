@@ -285,19 +285,27 @@ async function createTicket(interaction, product) {
             requiresKey
         });
 
+        // v3.9.16: Pesan embed & tombol disesuaikan berdasarkan requiresKey.
+        // - requiresKey=true  → "TIKET TRANSAKSI" + tombol Set Key (produk jualan pakai key)
+        // - requiresKey=false → "TIKET BANTUAN"   → tanpa tombol Set Key (produk non-key / help / report)
         const ticketEmbed = new EmbedBuilder()
-            .setTitle(isTransaction ? '🛒 TIKET TRANSAKSI' : '🎫 TIKET BANTUAN')
+            .setTitle(requiresKey ? '🛒 TIKET TRANSAKSI' : '🎫 TIKET BANTUAN')
             .setDescription(
                 `Halo <@${user.id}>!\n\n` +
-                    (isTransaction
+                    (requiresKey
                         ? `Kamu memesan paket **${product.label}** dengan harga **${product.price}**.\n\n` +
                           `Silakan lakukan pembayaran dan kirim bukti pembayaran di sini.\n` +
                           `Admin <@&${config.roles.admin}> akan memproses pesananmu.\n\n` +
                           `💡 Setelah pembayaran dikonfirmasi, admin klik tombol **🔑 Set Key** untuk memberikan key + role.`
-                        : `Silakan jelaskan kebutuhanmu di channel ini.\n` +
-                          `Admin <@&${config.roles.admin}> akan segera membantu.`)
+                        : isTransaction
+                          ? `Kamu memesan paket **${product.label}** dengan harga **${product.price}**.\n\n` +
+                            `Silakan lakukan pembayaran dan kirim bukti pembayaran di sini.\n` +
+                            `Admin <@&${config.roles.admin}> akan memproses pesananmu.\n\n` +
+                            `💡 Setelah pembayaran dikonfirmasi, admin klik tombol **✅ Selesai** untuk menutup tiket.`
+                          : `Silakan jelaskan kebutuhanmu di channel ini.\n` +
+                            `Admin <@&${config.roles.admin}> akan segera membantu.`)
             )
-            .setColor(isTransaction ? 0x3498db : 0xe67e22)
+            .setColor(requiresKey ? 0x3498db : 0xe67e22)
             .addFields(
                 isTransaction
                     ? [
@@ -316,9 +324,9 @@ async function createTicket(interaction, product) {
             })
             .setTimestamp();
 
-        // Tombol: Set Key (hanya transaksi) + Tutup Tiket
+        // Tombol: Set Key (HANYA kalau requiresKey=true) + Tutup Tiket
         const components = [];
-        if (isTransaction) {
+        if (requiresKey) {
             components.push(
                 new ButtonBuilder()
                     .setCustomId('ticket_set_key')

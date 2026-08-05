@@ -310,6 +310,15 @@ module.exports = async function (interaction) {
                 flags: MessageFlags.Ephemeral
             });
         }
+        // v3.9.16: reject kalau produk non-key (requiresKey=false).
+        // Tombol Set Key seharusnya tidak muncul untuk produk non-key, tapi ini defense-in-depth
+        // kalau admin somehow klik via customId lama / message lama yang belum di-update.
+        if (meta?.requiresKey === false) {
+            return interaction.reply({
+                content: '❌ Produk ini tidak memerlukan key (requiresKey=false). Tombol Set Key tidak tersedia untuk produk non-key.',
+                flags: MessageFlags.Ephemeral
+            });
+        }
 
         const product = config.products.find(p => p.label === productName);
         if (!product) {
