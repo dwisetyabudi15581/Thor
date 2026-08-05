@@ -187,10 +187,7 @@ async function createTicket(interaction, product) {
         }
 
         // v3.9.11 Phase 1: hapus magic string 'Bantuan/Lapor'.
-        // Sebelumnya: `product.label !== 'Bantuan/Lapor'` — fragile kalau admin rename produk.
-        // Sekarang: pakai field `category` di product (Phase 2) atau fallback `isHelp: true` flag.
-        // Untuk backward compat: kalau product gak punya category, treat sebagai transaksi
-        // kecuali kalau product dikirim dari tombol ticket_help/ticket_report (yang set isHelp=true).
+        // Pakai field `category` di product (Phase 2) atau fallback `isHelp: true` flag.
         const isTransaction = !(
             product.isHelp === true ||
             product.category === 'help' ||
@@ -200,14 +197,22 @@ async function createTicket(interaction, product) {
         // Tentukan requiresKey flag (default true buat transaksi, false buat help/report).
         const requiresKey = product.requiresKey !== undefined ? product.requiresKey : isTransaction;
 
-        // v3.9.16: Pisahkan kategori tiket berdasarkan pakai key atau tidak.
-        // - requiresKey=true  → "🎫 TRANSAKSI" (tiket jualan, ada tombol Set Key)
-        // - requiresKey=false → "🎫 BANTUAN"   (tiket help/report, tanpa tombol Set Key)
-        // Admin bisa custom nama kategori via config.ticketCategoriesKey / ticketCategoriesNoKey
-        // (kalau gak di-set, pakai default hardcoded di sini).
-        const keyCategoryName = config.ticketCategoryKey || '🎫 TRANSAKSI';
-        const noKeyCategoryName = config.ticketCategoryNoKey || '🎫 BANTUAN';
-        const targetCategoryName = requiresKey ? keyCategoryName : noKeyCategoryName;
+        // v3.9.16: Kategori channel dipisah berdasarkan TIPE TIKET (transaksi vs bantuan),
+        // BUKAN berdasarkan pakai key atau tidak. Jadi:
+        // - isTransaction=true  → "🎫 TRANSAKSI" (baik pakai key atau tidak — sama-sama transaksi)
+        // - isTransaction=false → "🎫 BANTUAN"   (help/report)
+        //
+        // Tombol Set Key di-cek terpisah berdasarkan requiresKey:
+        // - requiresKey=true  → tombol Set Key muncul
+        // - requiresKey=false → tombol Set Key tidak muncul (cuma Tutup Tiket)
+        //
+        // Contoh kasus:
+        //   - Produk "VIP 30 Hari" (requiresKey=true) → 🎫 TRANSAKSI + tombol Set Key
+        //   - Produk "Jasa Joki" (requiresKey=false)  → 🎫 TRANSAKSI + tanpa Set Key (cuma Tutup)
+        //   - Help / Report                          → 🎫 BANTUAN + tanpa Set Key
+        const transactionCategoryName = config.ticketCategoryKey || '🎫 TRANSAKSI';
+        const helpCategoryName = config.ticketCategoryNoKey || '🎫 BANTUAN';
+        const targetCategoryName = isTransaction ? transactionCategoryName : helpCategoryName;
 
         // Cari kategori target. Kalau gak ada, buat baru.
         let category = guild.channels.cache.find(
@@ -285,27 +290,27 @@ async function createTicket(interaction, product) {
             requiresKey
         });
 
-        // v3.9.16: Pesan embed & tombol disesuaikan berdasarkan requiresKey.
-        // - requiresKey=true  → "TIKET TRANSAKSI" + tombol Set Key (produk jualan pakai key)
-        // - requiresKey=false → "TIKET BANTUAN"   → tanpa tombol Set Key (produk non-key / help / report)
+        // v3.9.16: Pesan embed pakai isTransaction (transaksi vs bantuan).
+        // Tombol Set Key pakai requiresKey (pakai key atau tidak).
+        // Jadi 3 skenario:
+        //   1. Transaksi + requiresKey=true  → "TIKET TRANSAKSI" + tombol Set Key + Tutup
+        //   2. Transaksi + requiresKey=false → "TIKET TRANSAKSI" + tombol Tutup saja (jasa, dll)
+        //   3. Help / Report                 → "TIKET BANTUAN" + tombol Tutup saja
         const ticketEmbed = new EmbedBuilder()
-            .setTitle(requiresKey ? '🛒 TIKET TRANSAKSI' : '🎫 TIKET BANTUAN')
+            .setTitle(isTransaction ? '🛒 TIKET TRANSAKSI' : '🎫 TIKET BANTUAN')
             .setDescription(
                 `Halo <@${user.id}>!\n\n` +
-                    (requiresKey
+                    (isTransaction
                         ? `Kamu memesan paket **${product.label}** dengan harga **${product.price}**.\n\n` +
                           `Silakan lakukan pembayaran dan kirim bukti pembayaran di sini.\n` +
                           `Admin <@&${config.roles.admin}> akan memproses pesananmu.\n\n` +
-                          `💡 Setelah pembayaran dikonfirmasi, admin klik tombol **🔑 Set Key** untuk memberikan key + role.`
-                        : isTransaction
-                          ? `Kamu memesan paket **${product.label}** dengan harga **${product.price}**.\n\n` +
-                            `Silakan lakukan pembayaran dan kirim bukti pembayaran di sini.\n` +
-                            `Admin <@&${config.roles.admin}> akan memproses pesananmu.\n\n` +
-                            `💡 Setelah pembayaran dikonfirmasi, admin klik tombol **✅ Selesai** untuk menutup tiket.`
-                          : `Silakan jelaskan kebutuhanmu di channel ini.\n` +
-                            `Admin <@&${config.roles.admin}> akan segera membantu.`)
+                          (requiresKey
+                              ? `💡 Setelah pembayaran dikonfirmasi, admin klik tombol **🔑 Set Key** untuk memberikan key + role.`
+                              : `💡 Setelah pembayaran dikonfirmasi, admin klik tombol **🔒 Tutup Tiket** untuk menyelesaikan transaksi.`)
+                        : `Silakan jelaskan kebutuhanmu di channel ini.\n` +
+                          `Admin <@&${config.roles.admin}> akan segera membantu.`)
             )
-            .setColor(requiresKey ? 0x3498db : 0xe67e22)
+            .setColor(isTransaction ? 0x3498db : 0xe67e22)
             .addFields(
                 isTransaction
                     ? [
