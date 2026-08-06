@@ -41,6 +41,80 @@ module.exports = async function (interaction) {
     const config = getConfig();
 
     // ====================================================
+    // === v3.9.14: TIKET KATEGORI SELECT MENU (DROPDOWN PANEL) ===
+    // === customId: ticket_cat_select (exact match)         ===
+    // ====================================================
+    // Saat panel pakai use_dropdown=true, kategori dirender sebagai select menu.
+    // User pilih kategori di dropdown → handler ini jalan.
+    // Behavior sama seperti button ticket_cat:<id>:
+    //   - help/report → langsung create ticket
+    //   - lainnya → tampilkan dropdown produk
+    if (interaction.isStringSelectMenu() && interaction.customId === 'ticket_cat_select') {
+        const categoryId = interaction.values && interaction.values[0];
+        if (!categoryId) {
+            return interaction.reply({
+                content: '❌ Tidak ada kategori yang dipilih.',
+                flags: MessageFlags.Ephemeral
+            });
+        }
+        const categories = config.ticketCategories || [];
+        const catConfig = categories.find(c => c.id === categoryId);
+
+        if (!catConfig) {
+            return interaction.reply({
+                content: `❌ Kategori \`${categoryId}\` tidak ditemukan di config.`,
+                flags: MessageFlags.Ephemeral
+            });
+        }
+
+        if (config.roles.verified && !interaction.member.roles.cache.has(config.roles.verified)) {
+            return interaction.reply({ content: '❌ Verifikasi dulu!', flags: MessageFlags.Ephemeral });
+        }
+
+        // help/report → langsung buat tiket
+        if (catConfig.requiresKey === false && (categoryId === 'help' || categoryId === 'report')) {
+            const label = categoryId === 'help' ? 'Bantuan Staff' : 'Laporkan Member';
+            const product = { label, duration: '-', price: '-', isHelp: true, category: categoryId };
+            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+            return createTicket(interaction, product);
+        }
+
+        // Transaksi → tampilkan dropdown produk
+        const productsInCat = (config.products || []).filter(p => {
+            const pCat = p.category || 'transaction';
+            return pCat === categoryId;
+        });
+
+        if (productsInCat.length === 0) {
+            return interaction.reply({
+                content:
+                    `❌ Belum ada produk di kategori **${catConfig.label}**.\n\n` +
+                    `💡 Admin: pakai \`/add-product category:${categoryId}\` untuk tambah produk ke kategori ini.`,
+                flags: MessageFlags.Ephemeral
+            });
+        }
+
+        const selectMenu = new ActionRowBuilder().addComponents(
+            new StringSelectMenuBuilder()
+                .setCustomId('select_product')
+                .setPlaceholder(`Pilih produk — ${catConfig.label}...`)
+                .addOptions(
+                    productsInCat.map(p => ({
+                        label: p.label,
+                        description: p.price,
+                        value: p.value,
+                        emoji: catConfig.emoji || '🎫'
+                    }))
+                )
+        );
+        return interaction.reply({
+            content: `Silakan pilih produk di kategori **${catConfig.label}** ${catConfig.emoji || ''}:`,
+            components: [selectMenu],
+            flags: MessageFlags.Ephemeral
+        });
+    }
+
+    // ====================================================
     // === v3.9.11 Phase 2: TIKET KATEGORI BUTTON → DROPDOWN PRODUK FILTERED ===
     // === customId: ticket_cat:<categoryId>                ===
     // ====================================================

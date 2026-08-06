@@ -13,7 +13,7 @@ module.exports = async function (interaction) {
         .setTitle('🤖 COMMUNITY BOT — HELP')
         .setDescription(
             `Halo ${interaction.user}! Anda terverifikasi sebagai **Admin/Staff**.\n` +
-                `Berikut daftar lengkap command yang tersedia (v3.9.13).`
+                `Berikut daftar lengkap command yang tersedia (v3.9.14).`
         )
         .setColor(0x5865f2)
         .addFields(
@@ -30,12 +30,20 @@ module.exports = async function (interaction) {
             },
 
             {
-                name: '🏗️ Panel Setup (Verifikasi & Tiket)',
+                name: '🏗️ Panel Setup (Verifikasi & Tiket) — v3.9.14: Multi-Panel Penuh!',
                 value: [
                     '• `/setup-verify` — pasang panel verifikasi (button customizable)',
-                    '• `/setup-ticket` — pasang panel tiket (auto-render tombol per kategori)',
-                    '• `/setup-ticket-panel title:... categories:cat1,cat2` — panel tiket dengan subset kategori (multi-panel)',
-                    '• `/set-verify-button label:"Saya Bukan Bot" emoji:🤖 style:Secondary` — kustomisasi tombol verifikasi'
+                    '• `/setup-ticket` — pasang panel tiket (legacy, auto-render tombol per kategori)',
+                    '• `/setup-ticket-panel` — pasang panel **multi-panel penuh** dengan opsi:',
+                    '   `title:` `body:` `color:#ff5733` `image:` `thumbnail:` `footer:`',
+                    '   `categories:cat1,cat2` `channel:#other` `use_dropdown:true`',
+                    '• `/list-panels` — lihat semua panel persistent + ID-nya',
+                    '• `/update-panel id:tp_xxx field:body` — edit field via modal (auto re-render)',
+                    '• `/refresh-panel id:tp_xxx` — re-render panel dengan kategori/produk terbaru',
+                    '• `/delete-panel id:tp_xxx` — hapus panel (auto delete message + metadata)',
+                    '• `/set-verify-button label:"Saya Bukan Bot" emoji:🤖 style:Secondary`',
+                    '',
+                    '💡 **Multi-panel = beberapa panel di channel berbeda, masing-masing punya custom title/body/color/image/layout sendiri.** Bot restart? Panel tetap ada karena di-save ke panels.json.'
                 ].join('\n'),
                 inline: false
             },
@@ -278,7 +286,7 @@ module.exports = async function (interaction) {
             }
         )
         .setFooter({
-            text: `${interaction.client.user.username} v3.9.13 — All-in-One Community Bot`,
+            text: `${interaction.client.user.username} v3.9.14 — All-in-One Community Bot`,
             iconURL: interaction.client.user.displayAvatarURL({ dynamic: true })
         })
         .setTimestamp();

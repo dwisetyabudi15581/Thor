@@ -35,6 +35,9 @@ const pollDomain = require('./poll');
 const tempvoiceDomain = require('./tempvoice');
 const backupDomain = require('./backup');
 const configDomain = require('./config');
+// v3.9.14: panel modal handler (modal_panel_edit:<panelId>:<field>)
+// Di-impor dari commands/panels-mgmt.js supaya logic-nya reuse dengan slash command.
+const { handlePanelModal: panelModalHandler } = require('../commands/panels-mgmt');
 
 // Mapping customId prefix → domain.
 // Diurutkan dari paling spesifik ke paling umum (startsWith cocok dengan prefix
@@ -45,8 +48,12 @@ const configDomain = require('./config');
 const PREFIX_TO_DOMAIN = [
     { prefix: 'btn_verify', domain: 'verify', exact: true },
     { prefix: 'select_product', domain: 'ticket' },
+    // v3.9.14: dropdown select menu dari panel (customId: ticket_cat_select)
+    { prefix: 'ticket_cat_select', domain: 'ticket', exact: true },
     { prefix: 'modal_set_key:', domain: 'ticket' },
     { prefix: 'modal_edit_message:', domain: 'config' },
+    // v3.9.14: panel edit modal (modal_panel_edit:<panelId>:<field>)
+    { prefix: 'modal_panel_edit:', domain: 'panel-modal' },
     // ticket_cat: di-explicit di sini (sebelum ticket_) biar routing jelas,
     // gak andalkan fallback ticket_ yang fragile kalau nanti ada refactor.
     { prefix: 'ticket_cat:', domain: 'ticket' },
@@ -77,20 +84,40 @@ const DOMAIN_HANDLERS = {
     poll: pollDomain,
     tempvoice: tempvoiceDomain,
     backup: backupDomain,
-    config: configDomain
+    config: configDomain,
+    // v3.9.14: panel modal handler (bukan domain biasa — function langsung)
+    'panel-modal': { handler: panelModalHandler }
 };
 
 /**
  * Pilih domain handler berdasarkan customId.
  * Mengembalikan function atau `null` kalau tidak ada match.
+ *
+ * v3.9.14: domain bisa berupa:
+ *   - async function(interaction) → langsung dipanggil
+ *   - { handler: async function(interaction) } → wrapper (untuk modal yang
+ *     di-impor dari commands/* bukan interactions/*). Fungsi `pickDomain`
+ *     mengembalikan function-nya, bukan wrapper object.
  */
 function pickDomain(customId) {
     if (!customId) return null;
     for (const entry of PREFIX_TO_DOMAIN) {
+        let matched = false;
         if (entry.exact) {
-            if (customId === entry.prefix) return DOMAIN_HANDLERS[entry.domain];
-        } else {
-            if (customId.startsWith(entry.prefix)) return DOMAIN_HANDLERS[entry.domain];
+            if (customId === entry.prefix) matched = true;
+        } else if (customId.startsWith(entry.prefix)) {
+            matched = true;
+        }
+        if (matched) {
+            const domainEntry = DOMAIN_HANDLERS[entry.domain];
+            if (!domainEntry) return null;
+            // Kalau wrapper { handler }, return function-nya langsung.
+            if (domainEntry.handler && typeof domainEntry.handler === 'function') {
+                return domainEntry.handler;
+            }
+            // Kalau function biasa, return as-is.
+            if (typeof domainEntry === 'function') return domainEntry;
+            return null;
         }
     }
     return null;

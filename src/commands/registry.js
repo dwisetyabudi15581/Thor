@@ -201,18 +201,101 @@ function getCommands() {
             options: [{ type: 3, name: 'id', description: 'ID kategori yang akan dihapus', required: true }]
         },
 
-        // v3.9.11 Phase 3: multi-panel ticket
+        // v3.9.11 Phase 3: multi-panel ticket (v3.9.14: full customization)
         {
             name: 'setup-ticket-panel',
-            description: 'Pasang panel tiket dengan subset kategori (multi-panel support)',
+            description: 'Pasang panel tiket dengan kustomisasi penuh (multi-panel support)',
             defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
             options: [
-                { type: 3, name: 'title', description: 'Judul embed panel (override config default)', required: false },
+                { type: 3, name: 'title', description: 'Judul embed (override global). Kosongkan = pakai config default', required: false },
                 {
                     type: 3,
                     name: 'categories',
                     description: 'Koma-separated category IDs yang mau ditampilkan (kosongkan = semua)',
                     required: false
+                },
+                {
+                    type: 3,
+                    name: 'body',
+                    description: 'Body embed custom (override global). Dukung template {server} {price_list} {price_list:cat} {price_header} {categories_list}',
+                    required: false
+                },
+                {
+                    type: 3,
+                    name: 'color',
+                    description: 'Warna hex (mis. #ff5733 atau #fff). Kosongkan = default orange',
+                    required: false
+                },
+                {
+                    type: 3,
+                    name: 'image',
+                    description: 'URL gambar besar (https://...). Kosongkan = no image',
+                    required: false
+                },
+                {
+                    type: 3,
+                    name: 'thumbnail',
+                    description: 'URL thumbnail kecil (https://...). Kosongkan = no thumbnail',
+                    required: false
+                },
+                {
+                    type: 3,
+                    name: 'footer',
+                    description: 'Teks footer. Kosongkan = pakai nama bot',
+                    required: false
+                },
+                {
+                    type: 7,
+                    name: 'channel',
+                    description: 'Channel target (default: channel saat ini). Harus text channel',
+                    required: false
+                },
+                {
+                    type: 5,
+                    name: 'use_dropdown',
+                    description: 'TRUE = pakai dropdown select menu (default: FALSE = buttons)',
+                    required: false
+                }
+            ]
+        },
+
+        // v3.9.14: panel management commands
+        {
+            name: 'list-panels',
+            description: 'Lihat semua panel tiket persistent di server ini',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild
+        },
+        {
+            name: 'delete-panel',
+            description: 'Hapus panel tiket by ID (auto delete message + metadata)',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
+            options: [{ type: 3, name: 'id', description: 'Panel ID (lihat /list-panels)', required: true }]
+        },
+        {
+            name: 'refresh-panel',
+            description: 'Re-render panel dengan kategori/produk terbaru (tanpa setup ulang)',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
+            options: [{ type: 3, name: 'id', description: 'Panel ID (lihat /list-panels)', required: true }]
+        },
+        {
+            name: 'update-panel',
+            description: 'Edit field panel (title/body/color/image/thumbnail/footer) via modal',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
+            options: [
+                { type: 3, name: 'id', description: 'Panel ID (lihat /list-panels)', required: true },
+                {
+                    type: 3,
+                    name: 'field',
+                    description: 'Field yang mau diedit',
+                    required: true,
+                    choices: [
+                        { name: 'Title (judul)', value: 'title' },
+                        { name: 'Body (isi, dukung template)', value: 'body' },
+                        { name: 'Color (warna hex)', value: 'color' },
+                        { name: 'Image (URL gambar besar)', value: 'image' },
+                        { name: 'Thumbnail (URL gambar kecil)', value: 'thumbnail' },
+                        { name: 'Footer (teks footer)', value: 'footer' }
+                    ]
                 }
             ]
         },

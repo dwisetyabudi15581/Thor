@@ -60,6 +60,8 @@ const sendMessageHandler = require('./send-message');
 // v3.9.11 Phase 2 & 3: new domains
 const categoriesHandler = require('./categories');
 const panelsHandler = require('./panels');
+// v3.9.14: panel management (list/delete/update/refresh) — handler terpisah
+const panelsMgmtHandler = require('./panels-mgmt');
 // v3.9.13: new community features
 const responderHandler = require('./responder');
 const automodHandler = require('./automod');
@@ -88,7 +90,9 @@ const DOMAIN_HANDLERS = {
     responder: responderHandler,
     automod: automodHandler,
     afk: afkHandler,
-    leveling: levelingHandler
+    leveling: levelingHandler,
+    // v3.9.14
+    'panels-mgmt': panelsMgmtHandler
 };
 
 // Mapping commandName → domain key (di DOMAIN_HANDLERS).
@@ -180,6 +184,12 @@ const COMMAND_TO_DOMAIN = {
     'set-verify-button': 'panels',
     'setup-ticket-panel': 'panels',
     'set-transcript-channel': 'panels',
+
+    // v3.9.14: panel management (list/delete/update/refresh)
+    'list-panels': 'panels-mgmt',
+    'delete-panel': 'panels-mgmt',
+    'refresh-panel': 'panels-mgmt',
+    'update-panel': 'panels-mgmt',
 
     // v3.9.13: Auto-Responder
     'add-responder': 'responder',
