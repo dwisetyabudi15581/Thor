@@ -217,7 +217,7 @@ function getCommands() {
                 {
                     type: 3,
                     name: 'body',
-                    description: 'Body embed custom (override global). Dukung template {server} {price_list} {price_list:cat} {price_header} {categories_list}',
+                    description: 'Body embed custom (override global). Dukung template {server} {price_list} {categories_list} dll',
                     required: false
                 },
                 {
