@@ -30,20 +30,15 @@ module.exports = async function (interaction) {
             },
 
             {
-                name: '🏗️ Panel Setup (Verifikasi & Tiket) — v3.9.14: Multi-Panel Penuh!',
+                name: '🏗️ Panel Tiket (Multi-Panel)',
                 value: [
-                    '• `/setup-verify` — pasang panel verifikasi (button customizable)',
-                    '• `/setup-ticket` — pasang panel tiket (legacy, auto-render tombol per kategori)',
-                    '• `/setup-ticket-panel` — pasang panel **multi-panel penuh** dengan opsi:',
-                    '   `title:` `body:` `color:#ff5733` `image:` `thumbnail:` `footer:`',
-                    '   `categories:cat1,cat2` `channel:#other` `use_dropdown:true`',
-                    '• `/list-panels` — lihat semua panel persistent + ID-nya',
-                    '• `/update-panel id:tp_xxx field:body` — edit field via modal (auto re-render)',
-                    '• `/refresh-panel id:tp_xxx` — re-render panel dengan kategori/produk terbaru',
-                    '• `/delete-panel id:tp_xxx` — hapus panel (auto delete message + metadata)',
-                    '• `/set-verify-button label:"Saya Bukan Bot" emoji:🤖 style:Secondary`',
-                    '',
-                    '💡 **Multi-panel = beberapa panel di channel berbeda, masing-masing punya custom title/body/color/image/layout sendiri.** Bot restart? Panel tetap ada karena di-save ke panels.json.'
+                    '• `/setup-verify` — pasang panel verifikasi',
+                    '• `/setup-ticket` — pasang panel tiket (legacy)',
+                    '• `/setup-ticket-panel` — panel multi-panel penuh:',
+                    '   opsi: `title` `body` `color:#ff5733` `image` `thumbnail` `footer` `categories` `channel` `use_dropdown`',
+                    '• `/list-panels` `/update-panel` `/refresh-panel` `/delete-panel`',
+                    '• `/set-verify-button` — kustomisasi tombol verifikasi',
+                    '💡 Multi-panel = tiap panel custom sendiri. Disimpan ke panels.json.'
                 ].join('\n'),
                 inline: false
             },
@@ -59,49 +54,38 @@ module.exports = async function (interaction) {
             },
 
             {
-                name: '💬 Auto-Responder (v3.9.13 BARU)',
+                name: '💬 Auto-Responder',
                 value: [
-                    '• `/add-responder trigger:"!sosmed" reply:"IG: @server\nTikTok: @server"`',
-                    '• `/list-responder` — lihat semua responder',
-                    '• `/remove-responder trigger:"!sosmed"` — hapus responder',
-                    '💡 Member kirim pesan diawali trigger → bot auto-reply. Cocok untuk FAQ.'
+                    '• `/add-responder` `/list-responder` `/remove-responder`',
+                    '💡 Member kirim trigger → bot auto-reply. Cocok untuk FAQ.'
                 ].join('\n'),
                 inline: false
             },
 
             {
-                name: '🛡️ Anti-Spam & Auto-Mod (v3.9.13 BARU)',
+                name: '🛡️ Anti-Spam & Auto-Mod',
                 value: [
-                    '• `/set-automod spam_threshold:5 spam_action:mute_10m block_links:true block_words:"kata1,kata2"`',
-                    '• `/automod-show` — lihat config saat ini',
-                    '• `/automod-toggle enabled:true` — enable/disable',
-                    '• `/add-link-whitelist channel:#spam-role` — whitelist channel/role untuk link',
+                    '• `/set-automod` `/automod-show` `/automod-toggle` `/add-link-whitelist`',
                     '💡 Auto-detect: spam, link, kata kasar, mass-mention → auto-action'
                 ].join('\n'),
                 inline: false
             },
 
             {
-                name: '💤 AFK System (v3.9.13 BARU)',
+                name: '💤 AFK System',
                 value: [
-                    '• `/afk reason:"Makan dulu, 30 menit"` — set AFK',
-                    '• `/afk-clear` — clear AFK status',
-                    '• `/afk-list` — lihat semua member AFK (admin)',
-                    '💡 Bot auto-reply saat ada yang mention user AFK. Auto-clear saat user chat lagi.'
+                    '• `/afk` `/afk-clear` `/afk-list`',
+                    '💡 Bot auto-reply saat user AFK di-mention.'
                 ].join('\n'),
                 inline: false
             },
 
             {
-                name: '📊 Leveling System (v3.9.13 BARU)',
+                name: '📊 Leveling System',
                 value: [
-                    '• `/setup-leveling enabled:true xp_per_message:15 cooldown:60`',
-                    '• `/add-level-role level:10 role:@Active` — role reward untuk level tertentu',
-                    '• `/list-level-roles` — lihat semua level role',
-                    '• `/remove-level-role level:10` — hapus level role',
-                    '• `/rank` — lihat level & XP kamu (public)',
-                    '• `/leaderboard-level` — top 10 member (public)',
-                    '💡 XP per message (cooldown anti-spam). Level up → announce + auto-assign role.'
+                    '• `/setup-leveling` `/add-level-role` `/list-level-roles` `/remove-level-role`',
+                    '• `/rank` `/leaderboard-level` (public)',
+                    '💡 XP per message, level up → auto-assign role.'
                 ].join('\n'),
                 inline: false
             },
@@ -116,64 +100,38 @@ module.exports = async function (interaction) {
             },
 
             {
-                name: '📢 Atur Channel & Kategori Tiket',
+                name: '📢 Atur Channel & Auto-Split Tiket',
                 value: [
-                    '• `/set-channel welcome #channel` — set channel (welcome/goodbye/invoice/audit-log/transcript)',
-                    '• `/set-transcript-channel #channel` — auto-save transcript tiket sebelum close',
+                    '• `/set-channel welcome #ch` — set (welcome/goodbye/invoice/audit-log/transcript)',
+                    '• `/set-transcript-channel #ch` — auto-save transcript tiket sebelum close',
                     '• `/remove-channel welcome` — hapus channel dari config',
                     '',
-                    '**🎫 Auto-Split Tiket:** Bot otomatis pisah channel tiket jadi 2 kategori:',
-                    '• **`🎫 TRANSAKSI`** — tiket yang pakai key (ada tombol Set Key)',
-                    '• **`🎫 BANTUAN`** — tiket help/report (tanpa tombol Set Key)',
-                    'Kategori dibuat otomatis. Mau custom nama? Edit `data/config.json`:',
-                    '```',
-                    '"ticketCategoryKey": "🎫 JUALAN",',
-                    '"ticketCategoryNoKey": "🎫 SUPPORT"',
-                    '```'
+                    '**🎫 Auto-Split:** Bot pisah tiket jadi 2 kategori otomatis:',
+                    '• **`🎫 TRANSAKSI`** — tiket pakai key (ada tombol Set Key)',
+                    '• **`🎫 BANTUAN`** — tiket help/report',
+                    'Custom nama? Edit `data/config.json`: `ticketCategoryKey`, `ticketCategoryNoKey`'
                 ].join('\n'),
                 inline: false
             },
 
             {
-                name: '✏️ Atur Pesan Embed (3 cara!)',
+                name: '✏️ Atur Pesan Embed',
                 value: [
-                    '**Cara 1 — `/set-message`** (cepat, 1-line):',
-                    '• `/set-message ticketBody teks...`',
-                    '**Cara 2 — `/edit-message`** (modal multi-line, lebih flexible):',
-                    '• `/edit-message tipe:"Ticket Body"` → buka modal editor',
-                    '**Cara 3 — `/reset-message`** (kembalikan ke default):',
-                    '• `/reset-message ticketBody` — reset 1 pesan',
-                    '• `/reset-message ALL` — reset semua pesan'
+                    '• `/set-message ticketBody teks...` (cepat, 1-line)',
+                    '• `/edit-message tipe:"Ticket Body"` → buka modal editor multi-line',
+                    '• `/reset-message ticketBody` / `/reset-message ALL`',
+                    '',
+                    '**Template vars:** `{server}` `{price_header}` `{price_list}` `{price_list:cat}` `{categories_list}`'
                 ].join('\n'),
                 inline: false
             },
 
             {
-                name: '📝 Variabel Pesan (template)',
+                name: '📦 Produk & Auto-Role',
                 value: [
-                    '**Welcome/Goodbye:** `{user}` `{username}` `{server}` `{count}` `{action}`',
-                    '**Ticket Body:**',
-                    '• `{server}` `{price_header}` `{price_list}` `{price_list:transaction}` `{categories_list}`'
-                ].join('\n'),
-                inline: false
-            },
-
-            {
-                name: '📦 Manajemen Produk',
-                value: [
-                    '• `/add-product label:"VIP 30 Hari" value:vip30 price:"Rp 50.000" category:transaction requires_key:true`',
-                    '• `/remove-product value:vip30`',
-                    '• `/list-products`'
-                ].join('\n'),
-                inline: false
-            },
-
-            {
-                name: '🎁 Auto-Role Produk (VIP role + auto-expire)',
-                value: [
-                    '• `/set-product-role value:vip30 role:@VIP days:30`',
-                    '• `/remove-product-role value:vip30`',
-                    '• `/list-product-roles`'
+                    '• `/add-product` `/remove-product` `/list-products`',
+                    '• `/set-product-role` `/remove-product-role` `/list-product-roles`',
+                    '💡 VIP role + auto-expire (days)'
                 ].join('\n'),
                 inline: false
             },
@@ -192,9 +150,8 @@ module.exports = async function (interaction) {
                 name: '🎭 Self-Role Panel',
                 value: [
                     '• `/setup-selfrole title:... type:button exclusive:false`',
-                    '• `/selfrole-add panel_id:sr_xxx role:@Gamer label:Gamer style:Primary`',
-                    '• `/selfrole-add panel_id:sr_xxx role:@Booster label:Booster requires_role:@Verified` — **conditional**',
-                    '• `/selfrole-remove` / `/selfrole-list` / `/selfrole-delete`'
+                    '• `/selfrole-add` `/selfrole-remove` `/selfrole-list` `/selfrole-delete`',
+                    '💡 `requires_role:@Verified` — conditional role'
                 ].join('\n'),
                 inline: false
             },
@@ -203,85 +160,48 @@ module.exports = async function (interaction) {
                 name: '🎤 Temp Voice',
                 value: [
                     '• `/setup-tempvoice` / `/tempvoice-remove`',
-                    '💡 Member join "🔊 Buat Voice" → otomatis bikin voice pribadi'
+                    '💡 Member join trigger channel → otomatis bikin voice pribadi'
                 ].join('\n'),
                 inline: false
             },
 
             {
-                name: '📢 Announce & Embed Builder',
+                name: '📢 Announce, Embed & Backup',
                 value: [
                     '• `/announce channel:#ch title:... description:...`',
-                    '• `/send-message channel:#ch message:...`',
-                    '• `/embed-builder` / `/embed-list` / `/embed-cancel`'
+                    '• `/send-message` `/embed-builder` `/embed-list` `/embed-cancel`',
+                    '• `/backup-now` `/backup-list` `/restore-backup` (auto 24h, max 7)'
                 ].join('\n'),
                 inline: false
             },
 
             {
-                name: '💾 Backup System',
-                value: [
-                    '• `/backup-now` / `/backup-list` / `/restore-backup`',
-                    '💡 Auto-backup tiap 24 jam. Maks 7 backup.'
-                ].join('\n'),
-                inline: false
-            },
-
-            {
-                name: '🎉 Giveaway System',
+                name: '🎉 Giveaway & Poll',
                 value: [
                     '• `/giveaway create channel:#ch prize:... winners:1 duration:60`',
-                    '• `/giveaway list` / `/giveaway end` / `/giveaway reroll`'
+                    '• `/giveaway list` `/giveaway end` `/giveaway reroll`',
+                    '• `/poll create` `/poll list` `/poll close`'
                 ].join('\n'),
                 inline: false
             },
 
             {
-                name: '⏰ Scheduled Announcements',
+                name: '⏰ Scheduled Announce & Warn',
                 value: [
                     '• `/announce-schedule channel:#ch at:30m recurring?:daily`',
-                    '• `/announce-list` / `/announce-cancel`'
+                    '• `/announce-list` `/announce-cancel`',
+                    '• `/warn` `/warn-list` `/warn-remove` `/warn-clear` (3=mute1h, 5=mute1d, 7=kick)'
                 ].join('\n'),
                 inline: false
             },
 
             {
-                name: '⚠️ Warn System',
+                name: '📊 Stats & Lainnya',
                 value: [
-                    '• `/warn user:@user reason:...` / `/warn-list` / `/warn-remove` / `/warn-clear`',
-                    '💡 Threshold: 3=mute 1h, 5=mute 1d, 7=kick'
+                    '• `/stats` `/leaderboard metric:messages|vipPurchases|totalSpent` `/my-stats`',
+                    '• `/set-channel audit-log #ch` — catat admin action',
+                    '• `/reset-config` — ⚠️ HAPUS SEMUA setting (konfirmasi 2-step)'
                 ].join('\n'),
-                inline: false
-            },
-
-            {
-                name: '📊 Stats & Leaderboard',
-                value: [
-                    '• `/stats` — statistik server (admin)',
-                    '• `/leaderboard metric:messages|vipPurchases|totalSpent|giveawaysWon` (public)',
-                    '• `/my-stats` (public)'
-                ].join('\n'),
-                inline: false
-            },
-
-            {
-                name: '📊 Poll System',
-                value: ['• `/poll create` / `/poll list` / `/poll close`'].join('\n'),
-                inline: false
-            },
-
-            {
-                name: '🔧 Audit Log & Transcript',
-                value: [
-                    '• `/set-channel audit-log #channel` — catat semua admin action',
-                    '• `/set-transcript-channel #channel` — auto-save chat tiket sebelum close'
-                ].join('\n'),
-                inline: false
-            },
-
-            {
-                name: '🧨 Reset Total',
-                value: ['• `/reset-config` — ⚠️ **hapus SEMUA setting** (konfirmasi 2-step)'].join('\n'),
                 inline: false
             }
         )
