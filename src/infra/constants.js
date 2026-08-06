@@ -105,6 +105,18 @@ const COLORS = {
     DARK: 0x2c2f33
 };
 
+// v3.9.17: ButtonStyle string → ButtonStyle enum mapping (shared).
+// Dipakai panels.js, config.js (2x), selfRolePanelBuilder.js, selfRoleManager.js.
+// Import dari discord.js supaya gak duplikat.
+const { ButtonStyle } = require('discord.js');
+const BUTTON_STYLE_MAP = {
+    Primary: ButtonStyle.Primary,
+    Secondary: ButtonStyle.Secondary,
+    Success: ButtonStyle.Success,
+    Danger: ButtonStyle.Danger
+};
+const VALID_BUTTON_STYLES = ['Primary', 'Secondary', 'Success', 'Danger'];
+
 module.exports = {
     EMBED_LIMITS,
     DISCORD_LIMITS,
@@ -115,5 +127,7 @@ module.exports = {
     GIVEAWAY,
     POLL,
     BACKUP,
-    COLORS
+    COLORS,
+    BUTTON_STYLE_MAP,
+    VALID_BUTTON_STYLES
 };

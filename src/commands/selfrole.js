@@ -171,6 +171,16 @@ module.exports = async function (interaction) {
         const panelId = interaction.options.getString('panel_id');
         const role = interaction.options.getRole('role');
 
+        // v3.9.17 FIX: cross-guild check. Sebelumnya, admin Guild A yang tahu
+        // panel ID dari Guild B bisa hapus role dari panel Guild B.
+        const panelCheck = getPanel(panelId);
+        if (!panelCheck) {
+            return safeEditReply(interaction, { content: `❌ Panel ID \`${panelId}\` tidak ditemukan.` });
+        }
+        if (panelCheck.guildId !== interaction.guild.id) {
+            return safeEditReply(interaction, { content: '❌ Panel ini bukan milik server ini.' });
+        }
+
         const result = removeRoleFromPanel(panelId, role.id);
         if (!result.ok) {
             return safeEditReply(interaction, { content: `❌ ${result.error}` });
@@ -251,6 +261,10 @@ module.exports = async function (interaction) {
         const panel = getPanel(panelId);
         if (!panel) {
             return safeEditReply(interaction, { content: `❌ Panel ID \`${panelId}\` tidak ditemukan.` });
+        }
+        // v3.9.17 FIX: cross-guild check (sama seperti /selfrole-remove).
+        if (panel.guildId !== interaction.guild.id) {
+            return safeEditReply(interaction, { content: '❌ Panel ini bukan milik server ini.' });
         }
 
         // Hapus panel message

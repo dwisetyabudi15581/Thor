@@ -97,8 +97,22 @@ function markSent(id) {
     entry.sentAt = Date.now();
 
     // Kalau recurring, bikin entry baru untuk next cycle
+    // v3.9.17 FIX: catch-up loop. Sebelumnya, kalau bot offline lama (mis. 30 hari
+    // untuk daily recurring), nextSendAt masih di masa lalu → scheduler tick
+    // berikutnya (60s) fires lagi → bikin entry baru lagi → spam 1 announce per
+    // menit sampai catch up ke now.
+    // Sekarang: while-loop nextSendAt sampai > now, supaya entry baru selalu
+    // di masa depan. Tapi batasi maks 365 iterasi (defense-in-depth kalau ada
+    // bug di computeNextRecurring yang return timestamp tetap).
     if (entry.recurring) {
-        const nextSendAt = computeNextRecurring(entry.sendAt, entry.recurring);
+        let nextSendAt = computeNextRecurring(entry.sendAt, entry.recurring);
+        const now = Date.now();
+        let iter = 0;
+        const MAX_ITER = 366; // 1 tahun cycle maximum
+        while (nextSendAt && nextSendAt <= now && iter < MAX_ITER) {
+            nextSendAt = computeNextRecurring(nextSendAt, entry.recurring);
+            iter++;
+        }
         if (nextSendAt) {
             const newEntry = {
                 ...entry,

@@ -25,6 +25,13 @@ module.exports = async function (interaction) {
             flags: MessageFlags.Ephemeral
         });
     }
+    // v3.9.17 FIX: guard member.roles akses (partial member / user leave saat klik).
+    if (!interaction.member?.roles?.cache) {
+        return interaction.reply({
+            content: '❌ Data member tidak lengkap. Coba lagi sebentar.',
+            flags: MessageFlags.Ephemeral
+        });
+    }
     if (interaction.member.roles.cache.has(config.roles.verified)) {
         return interaction.reply({ content: '✅ Kamu sudah terverifikasi!', flags: MessageFlags.Ephemeral });
     }
@@ -37,15 +44,31 @@ module.exports = async function (interaction) {
             flags: MessageFlags.Ephemeral
         });
     }
+    // v3.9.17 FIX: track apakah unverified role berhasil dihapus. Sebelumnya,
+    // pesan selalu bilang "role Unverified telah dihapus" padahal bisa gagal.
+    let unverifiedRemoved = false;
+    let unverifiedNote = '';
     if (config.roles.unverified) {
         try {
             await interaction.member.roles.remove(config.roles.unverified);
+            unverifiedRemoved = true;
         } catch (err) {
             console.error('Gagal hapus role unverified:', err.message);
+            unverifiedNote =
+                '\n⚠️ Bot tidak bisa menghapus role Unverified. Pastikan role bot ada di ATAS role Unverified. Hubungi admin untuk hapus manual.';
         }
+    } else {
+        // unverified role belum di-set di config — bukan error, tapi pesan jangan bilang "dihapus".
+        unverifiedNote = '\nℹ️ Role Unverified belum di-set di config — hanya role Verified yang diberikan.';
     }
     return interaction.reply({
-        content: '✅ Verifikasi berhasil! Role Verified telah diberikan, role Unverified telah dihapus.',
+        content:
+            '✅ Verifikasi berhasil! Role Verified telah diberikan.' +
+            (config.roles.unverified
+                ? unverifiedRemoved
+                    ? ' Role Unverified telah dihapus.'
+                    : unverifiedNote
+                : unverifiedNote),
         flags: MessageFlags.Ephemeral
     });
 };

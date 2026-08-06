@@ -119,7 +119,13 @@ function getConfig() {
     // === MERGE dengan DEFAULTS (deep untuk messages) ===
     // v3.9.11: tambah merge untuk verifyButton & ticketCategories
     // v3.9.13: tambah merge untuk leveling & levelRoles
+    // v3.9.17 FIX: preserve field custom (ticketCategoryKey, ticketCategoryNoKey,
+    //   dan field non-standar lainnya). Sebelumnya, hanya keys di DEFAULTS yang
+    //   di-merge — field yang admin tambahkan manual di config.json DROPPED.
+    //   Sekarang: spread `...raw` di akhir supaya field custom preserve, TAPI
+    //   keys yang sudah di-merge explicit akan override ( karena spread di awal ).
     const config = {
+        ...raw, // preserve unknown fields (v3.9.17)
         roles: { ...DEFAULTS.roles, ...(raw.roles || {}) },
         channels: { ...DEFAULTS.channels, ...(raw.channels || {}) },
         messages: { ...DEFAULTS.messages, ...(raw.messages || {}) },

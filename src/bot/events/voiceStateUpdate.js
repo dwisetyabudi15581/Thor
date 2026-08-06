@@ -157,10 +157,25 @@ async function handleAutoTransferOwnership(client, guildId, channelId, channelIn
 
 /**
  * Handle member join trigger channel → bikin voice baru.
+ *
+ * v3.9.17 FIX: tambah per-user lock. Sebelumnya, network jitter/Gateway retry
+ * bisa fire 2 voiceStateUpdate event untuk user yang sama dalam <100ms. Kedua
+ * event lolos `findChannelByOwner` (return null karena channel belum terdaftar)
+ * → kedua-nya `guild.channels.create` → 2 channel terbuat, 1 jadi orphan.
+ * Sekarang: lock per-(guildId,userId) di awal, release di finally.
  */
+const tempVoiceCreateLocks = new Map();
+
 async function handleCreateTempVoice(newState) {
     const guild = newState.guild;
     const member = newState.member;
+    const lockKey = `${guild.id}:${member.id}`;
+
+    // v3.9.17: cek lock dulu — kalau sedang diproses, skip.
+    if (tempVoiceCreateLocks.has(lockKey)) {
+        return;
+    }
+    tempVoiceCreateLocks.set(lockKey, true);
 
     try {
         const config = tempVoiceManager.getGuildConfig(guild.id);
@@ -235,6 +250,9 @@ async function handleCreateTempVoice(newState) {
         console.log(`🎤 Temp voice dibuat: ${newChannel.name} (${newChannel.id}) oleh ${member.user.tag}`);
     } catch (err) {
         console.error('Error create temp voice:', err);
+    } finally {
+        // v3.9.17: pastikan lock dilepas walau ada error.
+        tempVoiceCreateLocks.delete(lockKey);
     }
 }
 

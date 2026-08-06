@@ -42,6 +42,15 @@ module.exports = async function (interaction) {
                 flags: MessageFlags.Ephemeral
             });
         }
+        // v3.9.17 FIX: owner check. Sebelumnya, member biasa yang klik tombol
+        // Preview (di channel public tempat admin buka builder) bisa lihat
+        // draft content yang sedang admin susun, termasuk plain text message.
+        if (session.ownerId !== interaction.user.id) {
+            return interaction.reply({
+                content: '❌ Hanya pembuat yang bisa preview draft ini.',
+                flags: MessageFlags.Ephemeral
+            });
+        }
         const embed = buildSessionEmbed(session);
         // v3.9.6: tampilkan plain text message di preview ephemeral supaya
         // admin bisa lihat bagaimana message + embed akan terlihat saat dikirim.

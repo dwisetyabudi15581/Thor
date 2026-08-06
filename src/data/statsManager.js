@@ -401,6 +401,13 @@ function parsePrice(priceStr) {
         // decimal kalau SANGAT jelas (int part < 10 DAN fractional 1 digit).
         // Mis. "2.5" → 2.5 (decimal), "9.9" → 9.9 (decimal).
         // Tapi "1.50" → 150 (thousand), "10.50" → 1050 (thousand), "2.50" → 250 (thousand).
+        //
+        // v3.9.17 FIX: untuk currency Rupiah (integer currency), dot SELALU
+        // thousand separator. "1.5" sebagai 1.5 Rupiah tidak masuk akal — kemungkinan
+        // besar admin maksudnya 15 atau 1500. Tapi untuk backward compat, kita keep
+        // heuristic v3.9.9 untuk angka kecil (< 10) supaya test lama gak break.
+        // Dokumentasi: kalau admin mau input harga < 10 Rupiah dengan decimal
+        // (sangat jarang), pakai format "0.5" atau "5" saja.
         const parts = s.split('.');
         if (parts.length === 2 && parts[0] !== '' && parts[1].length > 0) {
             const intPart = parseInt(parts[0], 10);

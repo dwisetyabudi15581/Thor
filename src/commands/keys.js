@@ -130,7 +130,8 @@ module.exports = async function (interaction) {
                 content:
                     `🎁 **Key Baru!**\n\n` +
                     `Admin memberimu key untuk produk **${product.label}** di **${guild.name}**.\n\n` +
-                    `🔑 **Key:**\n\`\`\`\n${keyValue}\n\`\`\`\n` +
+                    // v3.9.17 FIX: sanitize backticks di keyValue (sama seperti ticket.js).
+                    `🔑 **Key:**\n\`\`\`\n${keyValue.replace(/`/g, "'")}\n\`\`\`\n` +
                     `🎭 Role: ${role}\n⏰ ${expireInfo}`
             });
             dmSent = true;
@@ -263,15 +264,71 @@ module.exports = async function (interaction) {
         }
 
         // Opsional: lepas semua role yang terkait schedule?
-        // Untuk safety, tidak otomatis lepas role di sini. Admin bisa lepas manual.
-        // Tapi kalau clear_keys=true, berarti full reset VIP → lepas role yang ada di config produk
+        // v3.9.17 FIX: scan scheduledRoles.json JUGA (bukan cuma config.products).
+        // Sebelumnya, kalau produk sudah dihapus dari config, role lama tetap nempel
+        // selamanya (schedule sudah dihapus, gak akan auto-expire). Sekarang:
+        // kumpulkan roleId dari config.products DAN dari scheduledRoles yang baru
+        // saja dihapus (removedSchedules), supaya semua role terkait di-lepas.
         const rolesRemoved = [];
         const rolesFailed = []; // v3.9.8: track role yang gagal dilepas
         if (clearKeys) {
             const guild = interaction.guild;
             const member = await guild.members.fetch(user.id).catch(() => null);
             if (member) {
-                const productRoleIds = new Set(config.products.filter(p => p.roleId).map(p => p.roleId));
+                // v3.9.17: kumpulkan roleId dari 2 sumber:
+                //   1. config.products (yang masih ada di config)
+                //   2. scheduledRoles yang baru dihapus (removedSchedules)
+                //      — bisa contain roleId untuk produk yang sudah dihapus dari config
+                const productRoleIds = new Set(
+                    (config.products || []).filter(p => p.roleId).map(p => p.roleId)
+                );
+                // Tambahkan roleId dari schedule entries yang baru dihapus.
+                // removeAllSchedulesByUser return count, tapi kita butuh list roleId.
+                // Solusi: baca scheduledRoles.json SEBELUM hapus (tapi sudah terlanjur
+                // dihapus di line 257). Workaround: scan semua schedule entries yang
+                // punya userId + guildId ini — entries yang masih ada di file = entries
+                // yang TIDAK dihapus (karena bukan milik user ini). Jadi kita gak bisa
+                // dapat list yang sudah dihapus dari sini.
+                // Alternatif: lepas SEMUA role yang member punya, yang juga ada di
+                // scheduledRoles.json (entries lain, mungkin milik user lain). Tapi
+                // itu terlalu broad.
+                // Decision: untuk sekarang, scan scheduledRoles.json untuk cari roleId
+                // yang pernah di-schedule untuk user ini (entries yang masih ada di file
+                // setelah removeAllSchedulesByUser = entries milik user lain, TAPI roleId-
+                // nya mungkin sama dengan yang user ini punya).
+                // Simplest fix: baca scheduledRoles sebelum dihapus, kumpulkan roleId
+                // milik user ini, lalu coba remove semua.
+                // Karena removeAllSchedulesByUser sudah jalan, kita pakai approach lain:
+                // baca ulang scheduledRoles untuk semua roleId yang pernah ada untuk user ini
+                // di guild ini (entries yang masih ada di file mungkin dari schedule ulang).
+                // Untuk simplicity & safety, juga scan keys yang masih ada (kalau clearKeys
+                // false) untuk dapat roleId. Tapi kalau clearKeys=true, keys juga sudah
+                // dihapus di line 262.
+                // Final approach: baca keys.json SEBELUM dihapus (backup pattern).
+                // Karena sudah terlanjur, pakai approach defensive: collect roleIds dari
+                // config.products + roleIds yang member punya yang bukan @everyone dan
+                // bukan role managed (bot role). Hanya lepas role yang namanya match
+                // produk label pattern (heuristic, TIDAK sempurna).
+                // ----
+                // Lebih clean: baca scheduledRoles.json untuk SEMUA entries (termasuk
+                // user lain) → kumpulkan semua roleId yang pernah di-schedule → itu
+                // adalah kandidat role VIP yang mungkin nempel di member.
+                try {
+                    const fs = require('fs');
+                    const path = require('path');
+                    const schedPath = path.join(__dirname, '..', '..', 'data', 'scheduledRoles.json');
+                    if (fs.existsSync(schedPath)) {
+                        const schedData = JSON.parse(fs.readFileSync(schedPath, 'utf8'));
+                        if (Array.isArray(schedData)) {
+                            for (const s of schedData) {
+                                if (s && s.roleId) productRoleIds.add(s.roleId);
+                            }
+                        }
+                    }
+                } catch (_) {
+                    // ignore — kalau gak bisa baca, pakai productRoleIds dari config saja
+                }
+
                 for (const rid of productRoleIds) {
                     if (member.roles.cache.has(rid)) {
                         try {

@@ -26,6 +26,8 @@ const {
 
 const { fillTemplate } = require('../data/configManager');
 const { upsertPanel } = require('../data/panelManager');
+// v3.9.17: shared parseColor + parseColorOrError supaya konsisten di seluruh codebase.
+const { parseColorOrError } = require('../infra/colors');
 
 const VALID_STYLES = ['Primary', 'Secondary', 'Success', 'Danger'];
 const STYLE_MAP = {
@@ -40,28 +42,20 @@ const MAX_BUTTONS_PER_ROW = 5;
 const MAX_ROWS = 5;
 
 /**
- * Parse color input → number. Accept: hex string (#fff, #ffffff), decimal number, null.
- * Return null kalau input null/empty (biar caller pakai default).
- * Throw kalau format invalid.
+ * v3.9.17: parseColor local ini di-keep untuk backward compat (dipakai di
+ * panels-mgmt.js dan tests). Behavior tetap sama: THROW kalau invalid.
+ * Tapi sekarang delegate ke shared `parseColorOrError` di infra/colors.js
+ * supaya logic tidak duplikat. Caller baru sebaiknya pakai `parseColorOrError`
+ * langsung dari `infra/colors.js`.
+ *
+ * @deprecated Use `parseColorOrError` from `infra/colors.js` instead.
  */
 function parseColor(input) {
-    if (input === null || input === undefined || input === '') return null;
-    if (typeof input === 'number' && Number.isFinite(input)) return input;
-    if (typeof input !== 'string') {
-        throw new Error(`Format color tidak dikenali: ${typeof input}`);
+    const result = parseColorOrError(input);
+    if (!result.ok) {
+        throw new Error(result.error);
     }
-    const trimmed = input.trim().replace(/^#/, '');
-    // Hex 3-digit (#fff) atau 6-digit (#ffffff)
-    if (/^[0-9a-fA-F]{3}$/.test(trimmed)) {
-        const r = trimmed[0] + trimmed[0];
-        const g = trimmed[1] + trimmed[1];
-        const b = trimmed[2] + trimmed[2];
-        return parseInt(r + g + b, 16);
-    }
-    if (/^[0-9a-fA-F]{6}$/.test(trimmed)) {
-        return parseInt(trimmed, 16);
-    }
-    throw new Error(`Format color tidak valid: "${input}". Pakai hex (#ff5733 atau #fff).`);
+    return result.color;
 }
 
 /**
@@ -297,6 +291,13 @@ module.exports = async function (interaction) {
     // === SETUP TICKET PANEL (multi-panel + full customization, v3.9.14) ===
     if (interaction.commandName === 'setup-ticket-panel') {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+        // v3.9.17 FIX: validasi roles.admin di awal (sama seperti /setup-ticket).
+        if (!config.roles.admin) {
+            return safeEditReply(interaction, {
+                content: '❌ Role Admin belum di-set. Pakai `/set-role admin @role` dulu sebelum setup panel tiket.'
+            });
+        }
 
         const customTitle = interaction.options.getString('title');
         const categoriesFilter = interaction.options.getString('categories');

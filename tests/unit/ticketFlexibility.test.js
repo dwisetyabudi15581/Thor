@@ -525,7 +525,7 @@ test('registry: update-panel has field choices', () => {
 });
 
 // === Help.js updated test ===
-test('help.js: help embed mentions new v3.9.14 commands', async () => {
+test('help.js: help embed mentions new v3.9.14+ commands', async () => {
     const replies = [];
     const mockInteraction = {
         user: { toString: () => '<@test>' },
@@ -554,7 +554,7 @@ test('help.js: help embed mentions new v3.9.14 commands', async () => {
     assert.match(allText, /update-panel/);
     assert.match(allText, /refresh-panel/);
     assert.match(allText, /use_dropdown/);
-    assert.match(allText, /v3\.9\.14/);
+    assert.match(allText, /v3\.9\.17/);
 });
 
 // === Router test ===

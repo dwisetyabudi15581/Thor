@@ -56,24 +56,10 @@ module.exports = async function (interaction) {
     if (interaction.commandName === 'afk-list') {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-        // afkManager doesn't have listGuildAFK, so iterate manually
-        const fs = require('fs');
-        const path = require('path');
-        const afkPath = path.join(__dirname, '..', '..', 'data', 'afk.json');
-        let allAfk = {};
-        try {
-            allAfk = JSON.parse(fs.readFileSync(afkPath, 'utf8'));
-        } catch (_) {}
-
-        const guildPrefix = `${interaction.guild.id}:`;
-        const afkUsers = Object.entries(allAfk)
-            .filter(([k]) => k.startsWith(guildPrefix))
-            .map(([k, data]) => ({
-                userId: data.userId,
-                reason: data.reason,
-                since: data.since
-            }))
-            .sort((a, b) => b.since - a.since);
+        // v3.9.17 FIX: pakai afkManager.listGuildAFK (encapsulation).
+        // Sebelumnya, command baca afk.json langsung via fs.readFileSync —
+        // bypass manager, rentan break kalau schema afk.json berubah.
+        const afkUsers = afkManager.listGuildAFK(interaction.guild.id);
 
         if (afkUsers.length === 0) {
             return safeEditReply(interaction, { content: '✅ Tidak ada member yang AFK saat ini.' });

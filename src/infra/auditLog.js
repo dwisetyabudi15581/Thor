@@ -68,7 +68,31 @@ const ACTION_LABELS = {
     POLL_CLOSE: '🔒 Tutup Poll',
     // v3.9.4: tambah label yang sebelumnya fallback ke raw action string.
     SETUP_TEMPVOICE: '🎤 Setup Temp Voice',
-    TEMPVOICE_REMOVE: '🗑️ Hapus Setup Temp Voice'
+    TEMPVOICE_REMOVE: '🗑️ Hapus Setup Temp Voice',
+    // v3.9.17 FIX: tambah 15 label yang sebelumnya fallback ke raw action string.
+    // Leveling
+    SETUP_LEVELING: '📊 Setup Leveling',
+    ADD_LEVEL_ROLE: '➕ Tambah Level Role',
+    REMOVE_LEVEL_ROLE: '❌ Hapus Level Role',
+    // Auto-Responder
+    ADD_RESPONDER: '➕ Tambah Auto-Responder',
+    REMOVE_RESPONDER: '❌ Hapus Auto-Responder',
+    // Auto-Mod
+    SET_AUTOMOD: '🛡️ Set Auto-Mod Config',
+    TOGGLE_AUTOMOD: '🔄 Toggle Auto-Mod',
+    AUTOMOD_WHITELIST: '✅ Whitelist Channel/Role untuk Link',
+    // Categories
+    ADD_CATEGORY: '🎫 Tambah Kategori Tiket',
+    REMOVE_CATEGORY: '🗑️ Hapus Kategori Tiket',
+    // Send Message
+    SEND_MESSAGE: '📤 Kirim Pesan (Custom)',
+    // Panels (verify + ticket panel)
+    SET_VERIFY_BUTTON: '✏️ Set Verify Button',
+    SETUP_TICKET_PANEL: '🎫 Setup Panel Tiket (Multi-Panel)',
+    // Panel management (v3.9.14+)
+    DELETE_PANEL: '🗑️ Hapus Panel Tiket',
+    REFRESH_PANEL: '🔄 Refresh Panel Tiket',
+    UPDATE_PANEL: '✏️ Update Field Panel'
 };
 
 const RETRY_DELAY_MS = 500;

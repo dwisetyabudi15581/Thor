@@ -140,20 +140,40 @@ module.exports = async function (interaction) {
 
         const [removed] = categories.splice(idx, 1);
         config.ticketCategories = categories;
+
+        // v3.9.17 FIX: implement fallback actual. Sebelumnya, pesan bilang
+        // "produk akan fallback ke transaction" tapi tidak ada code yang update
+        // product.category → produk jadi orphan (tidak muncul di panel manapun).
+        // Sekarang: iterate products, set category='transaction' untuk produk
+        // yang category-nya === id kategori yang dihapus.
+        const removedId = removed.id;
+        let migratedCount = 0;
+        if (Array.isArray(config.products)) {
+            config.products = config.products.map(p => {
+                if (p && p.category === removedId) {
+                    migratedCount++;
+                    return { ...p, category: 'transaction' };
+                }
+                return p;
+            });
+        }
+
         saveConfig(config);
 
         await logAudit(interaction.client, {
             action: 'REMOVE_CATEGORY',
             actorId: interaction.user.id,
             actorTag: interaction.user.tag,
-            details: `Hapus kategori tiket: **${removed.label}** (\`${removed.id}\`)`,
+            details: `Hapus kategori tiket: **${removed.label}** (\`${removed.id}\`) — ${migratedCount} produk di-migrate ke \`transaction\``,
             guildId: interaction.guild.id
         });
 
         return safeEditReply(interaction, {
             content:
                 `✅ Kategori **${removed.label}** (\`${removed.id}\`) berhasil dihapus.\n\n` +
-                `💡 Produk yang masih pakai kategori ini akan otomatis fallback ke \`transaction\`.`
+                (migratedCount > 0
+                    ? `📦 ${migratedCount} produk yang pakai kategori ini sudah otomatis dipindah ke kategori \`transaction\`.`
+                    : `ℹ️ Tidak ada produk yang pakai kategori ini.`)
         });
     }
 };

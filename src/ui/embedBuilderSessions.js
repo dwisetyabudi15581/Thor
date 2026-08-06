@@ -99,22 +99,15 @@ function deleteSession(id) {
 }
 
 /**
- * Parse hex color string ke number.
- * Accept: "#FF0000", "FF0000", "0xFF0000", "#f00" (3-digit expanded)
- * Returns: number atau null kalau invalid.
+ * v3.9.17: parseColor di-deprecate. Sekarang delegate ke shared helper di
+ * infra/colors.js supaya logic tidak duplikat. Function ini di-keep untuk
+ * backward compat (di-export via _shared.js dan dipakai di beberapa file).
+ *
+ * @deprecated Use `parseColor` from `infra/colors.js` instead.
  */
+const { parseColor: _sharedParseColor } = require('../infra/colors');
 function parseColor(input) {
-    if (!input) return null;
-    let hex = input.trim().replace(/^#/, '').replace(/^0x/i, '');
-    if (hex.length === 3) {
-        // Expand 3-digit: "f00" → "ff0000"
-        hex = hex
-            .split('')
-            .map(c => c + c)
-            .join('');
-    }
-    if (!/^[0-9a-fA-F]{6}$/.test(hex)) return null;
-    return parseInt(hex, 16);
+    return _sharedParseColor(input);
 }
 
 /**

@@ -95,6 +95,15 @@ module.exports = async function (interaction) {
     if (interaction.commandName === 'setup-ticket') {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
+        // v3.9.17 FIX: validasi roles.admin di awal. Sebelumnya, panel kepasang
+        // tanpa cek — saat user klik tombol kategori, createTicket return error
+        // "Role Admin belum di-set" → admin gak sadar sampai user report.
+        if (!config.roles.admin) {
+            return safeEditReply(interaction, {
+                content: '❌ Role Admin belum di-set. Pakai `/set-role admin @role` dulu sebelum setup panel tiket.'
+            });
+        }
+
         // v3.9.11 Phase 2: auto-migrate produk lama (tambah category & requiresKey default).
         // Dilakukan di configManager getConfig(), tapi kita pastikan di sini juga.
         const productsWithCategory = (config.products || []).map(p => ({

@@ -85,10 +85,26 @@ function formatDuration(since, now = Date.now()) {
     return `${seconds} detik lalu`;
 }
 
+/**
+ * List semua user AFK di guild tertentu, sorted by since (paling baru duluan).
+ * v3.9.17: tambah supaya /afk-list tidak perlu baca afk.json langsung.
+ *
+ * @param {string} guildId
+ * @returns {Array<{userId, reason, since, guildId}>}
+ */
+function listGuildAFK(guildId) {
+    const all = load();
+    const prefix = `${guildId}:`;
+    return Object.values(all)
+        .filter(data => data && data.guildId === guildId)
+        .sort((a, b) => b.since - a.since);
+}
+
 module.exports = {
     setAFK,
     clearAFK,
     getAFK,
     isAFK,
-    formatDuration
+    formatDuration,
+    listGuildAFK
 };

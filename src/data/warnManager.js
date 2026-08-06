@@ -65,8 +65,12 @@ function load() {
 
     // v3.9.0: detect old format (key is plain userId, no `:`) and migrate.
     // Old keys look like "1234567890" (just digits). New keys have `:`.
+    // v3.9.17 FIX: entry tanpa guildId jangan di-drop. Sebelumnya, entry orphan
+    // di-skip + dihapus dari file saat save. Sekarang: assign ke default guild
+    // supaya data tidak hilang (admin bisa investigasi manual).
     let needsMigration = false;
     const migrated = {};
+    const DEFAULT_GUILD_ID = 'legacy'; // placeholder guild untuk entry orphan
     for (const [k, warns] of Object.entries(raw)) {
         if (k.includes(':')) {
             // New format — keep as-is.
@@ -77,9 +81,9 @@ function load() {
             if (!Array.isArray(warns)) continue;
             for (const w of warns) {
                 if (!w.guildId) {
-                    // No guildId stored (very old entry). Skip — can't migrate safely.
-                    console.warn(`⚠️ Warn entry ${w.id} untuk user ${k} tidak punya guildId, skip migration.`);
-                    continue;
+                    // v3.9.17: assign ke default guild 'legacy' supaya entry tidak hilang.
+                    console.warn(`⚠️ Warn entry ${w.id} untuk user ${k} tidak punya guildId, assign ke guild 'legacy'.`);
+                    w.guildId = DEFAULT_GUILD_ID;
                 }
                 const newKey = keyFor(w.guildId, k);
                 if (!migrated[newKey]) migrated[newKey] = [];

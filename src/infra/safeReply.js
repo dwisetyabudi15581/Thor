@@ -40,12 +40,9 @@ const { MessageFlags } = require('discord.js');
 const IGNORABLE_REPLY_CODES = new Set([10008, 10062, 40060]);
 
 /**
- * Discord.js error codes (string, bukan angka) yang juga "safe to ignore"
- * dalam konteks editReply:
- * - 'InteractionNotReplied': deferReply gagal (mis. token expired saat modal
- *   terbuka >15 menit), jadi editReply tidak bisa jalan. Fallback ke reply().
+ * v3.9.17: dead code removed. IGNORABLE_REPLY_STRING_CODES tidak pernah dipakai —
+ * cek 'InteractionNotReplied' di safeEditReply pakai direct string comparison.
  */
-const IGNORABLE_REPLY_STRING_CODES = new Set(['InteractionNotReplied']);
 
 /**
  * Edit interaction reply dengan fallback ke followUp kalau original hilang.

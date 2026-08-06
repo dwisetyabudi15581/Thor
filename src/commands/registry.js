@@ -1065,7 +1065,10 @@ function getCommands() {
             name: 'afk',
             description: 'Set status AFK (bot auto-reply saat di-mention)',
             options: [
-                { type: 3, name: 'reason', description: 'Alasan AFK (mis. "Makan dulu, 30 menit")', required: false }
+                // v3.9.17: tambah max_length supaya reason tidak overflow reply.
+                // Sebelumnya, default Discord max 6000 char bisa bikin AFK reply
+                // (yang gabung multiple mentions) exceed 2000 char limit → gagal kirim.
+                { type: 3, name: 'reason', description: 'Alasan AFK (mis. "Makan dulu, 30 menit")', required: false, max_length: 200 }
             ]
         },
         {

@@ -70,8 +70,22 @@ async function handlePollButton(interaction) {
         // bisa: klik-1 toggle ON, klik-2 toggle OFF. Hasil: vote hilang
         // padahal user merasa sudah vote. Lock memaksa klik-2 baca data
         // terbaru setelah klik-1 selesai.
+        //
+        // v3.9.17 FIX: bedain lock-failed vs poll-not-found. Sebelumnya,
+        // withUserLock return null kalau lock gagal ATAU fn() return null
+        // (poll tidak ada). User lihat "klik terlalu cepat" padahal poll
+        // sudah dihapus admin. Sekarang: fn() return object { type, poll }
+        // supaya caller bisa bedain.
         const result = await withUserLock('poll', interaction.user.id, () => {
-            return votePoll(pollId, interaction.user.id, optionIndex);
+            const r = votePoll(pollId, interaction.user.id, optionIndex);
+            if (r === null) {
+                // Poll tidak ada atau option invalid
+                return { type: 'notfound_or_invalid' };
+            }
+            if (r.closed) {
+                return { type: 'closed', poll: r };
+            }
+            return { type: 'voted', poll: r };
         });
 
         if (result === null) {
@@ -81,17 +95,19 @@ async function handlePollButton(interaction) {
                 flags: MessageFlags.Ephemeral
             });
         }
-        if (!result) {
+        if (result.type === 'notfound_or_invalid') {
             return interaction.reply({
-                content: '❌ Gagal vote. Option mungkin tidak valid.',
+                content: '❌ Poll tidak ditemukan atau option tidak valid (mungkin sudah dihapus admin).',
                 flags: MessageFlags.Ephemeral
             });
         }
-        if (result.closed) {
+        if (result.type === 'closed') {
             return interaction.reply({ content: '❌ Poll sudah ditutup.', flags: MessageFlags.Ephemeral });
         }
-        await updatePollVoteMessage(interaction, result);
-        const opt = result.options[optionIndex];
+        // result.type === 'voted'
+        const poll = result.poll;
+        await updatePollVoteMessage(interaction, poll);
+        const opt = poll.options[optionIndex];
         const voted = opt.votes.includes(interaction.user.id);
         return interaction.reply({
             content: voted ? `✅ Vote tercatat untuk **${opt.label}**!` : `🚪 Vote dibatalkan untuk **${opt.label}**.`,

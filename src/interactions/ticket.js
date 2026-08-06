@@ -37,6 +37,25 @@ const { createTicket, closeTicket, sendInvoice, getTicketMeta } = require('../da
 const { addKey, getActiveKeysByUserAndRole, formatRemaining } = require('../data/keyManager');
 const { scheduleRoleRemoval } = require('../data/roleScheduler');
 
+/**
+ * v3.9.17 FIX: helper untuk cek verified role — konsisten di semua handler.
+ * Policy: kalau config.roles.verified belum di-set, ALLOW through (jangan
+ * lockout admin yang belum setup). Kalau sudah di-set, user harus punya role itu.
+ * Sebelumnya, 2 handler pakai `if (!config.roles.verified || ...)` (block kalau
+ * unset), 2 handler lain pakai `if (config.roles.verified && ...)` (allow kalau
+ * unset). Inkonsistensi ini bikin UX confusing.
+ *
+ * @returns {boolean} true kalau user LULUS check (boleh lanjut), false kalau ditolak.
+ */
+function passesVerifiedCheck(interaction, config) {
+    // Kalau member.roles gak ada (partial member / user leave), anggap ditolak.
+    if (!interaction.member?.roles?.cache) return false;
+    // Kalau verified role belum di-set di config, allow through.
+    if (!config.roles.verified) return true;
+    // Kalau sudah di-set, user harus punya role itu.
+    return interaction.member.roles.cache.has(config.roles.verified);
+}
+
 module.exports = async function (interaction) {
     const config = getConfig();
 
@@ -67,7 +86,8 @@ module.exports = async function (interaction) {
             });
         }
 
-        if (config.roles.verified && !interaction.member.roles.cache.has(config.roles.verified)) {
+        // v3.9.17: pakai helper passesVerifiedCheck (konsisten di semua handler).
+        if (!passesVerifiedCheck(interaction, config)) {
             return interaction.reply({ content: '❌ Verifikasi dulu!', flags: MessageFlags.Ephemeral });
         }
 
@@ -133,8 +153,8 @@ module.exports = async function (interaction) {
             });
         }
 
-        // Cek verified role (sama seperti tombol lain)
-        if (config.roles.verified && !interaction.member.roles.cache.has(config.roles.verified)) {
+        // v3.9.17: pakai helper passesVerifiedCheck (konsisten di semua handler).
+        if (!passesVerifiedCheck(interaction, config)) {
             return interaction.reply({ content: '❌ Verifikasi dulu!', flags: MessageFlags.Ephemeral });
         }
 
@@ -186,7 +206,8 @@ module.exports = async function (interaction) {
     // === TIKET: TOMBOL TRANSAKSI → DROPDOWN PRODUK (LEGACY) ===
     // ====================================================
     if (interaction.isButton() && interaction.customId === 'ticket_trade') {
-        if (!config.roles.verified || !interaction.member.roles.cache.has(config.roles.verified)) {
+        // v3.9.17: pakai helper passesVerifiedCheck (konsisten di semua handler).
+        if (!passesVerifiedCheck(interaction, config)) {
             return interaction.reply({ content: '❌ Verifikasi dulu!', flags: MessageFlags.Ephemeral });
         }
         if (!config.products || config.products.length === 0) {
@@ -219,7 +240,8 @@ module.exports = async function (interaction) {
         (interaction.isStringSelectMenu() && interaction.customId === 'select_product') ||
         (interaction.isButton() && (interaction.customId === 'ticket_help' || interaction.customId === 'ticket_report'))
     ) {
-        if (!config.roles.verified || !interaction.member.roles.cache.has(config.roles.verified)) {
+        // v3.9.17: pakai helper passesVerifiedCheck (konsisten di semua handler).
+        if (!passesVerifiedCheck(interaction, config)) {
             return interaction.reply({ content: '❌ Verifikasi dulu!', flags: MessageFlags.Ephemeral });
         }
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -515,31 +537,35 @@ module.exports = async function (interaction) {
         }
 
         // === 1. Simpan key baru (independent expireAt) ===
-        const keyEntry = addKey({
-            key: keyValue,
-            userId: member.id,
-            username: member.user.tag,
-            roleId: role.id,
-            productName: product.label,
-            days: product.days || 0,
-            guildId: interaction.guild.id // v3.9.3: simpan guildId supaya cross-guild wipe akurat
-        });
-
-        // === 2. Berikan role ke member ===
+        // v3.9.17 FIX: wrap addKey di try/catch. Sebelumnya, kalau key duplikat,
+        // addKey throw "Key sudah ada" → propagate ke global handler → admin
+        // lihat error generik "Terjadi error, coba lagi" tanpa tahu penyebabnya.
+        // Sekarang: catch spesifik, balas dengan pesan jelas.
+        let keyEntry;
         try {
-            if (!member.roles.cache.has(role.id)) {
-                await member.roles.add(role);
-            }
-        } catch (err) {
-            console.error('Gagal add role saat set key:', err.message);
+            keyEntry = addKey({
+                key: keyValue,
+                userId: member.id,
+                username: member.user.tag,
+                roleId: role.id,
+                productName: product.label,
+                days: product.days || 0,
+                guildId: interaction.guild.id // v3.9.3: simpan guildId supaya cross-guild wipe akurat
+            });
+        } catch (keyErr) {
+            console.warn('⚠️ Gagal simpan key (kemungkinan duplikat):', keyErr.message);
             return safeEditReply(interaction, {
-                content: `❌ Gagal memberikan role ${role}. Pastikan role bot ada di ATAS role tersebut.\n\nKey tetap disimpan di keys.json.`
+                content: `❌ Gagal simpan key: ${keyErr.message}\n\n💡 Coba pakai key lain, atau hapus key lama via \`/list-keys\` dulu.`
             });
         }
 
-        // === 3. Schedule role removal (MAX EXTEND) ===
-        // Wrap try/catch. Kalau gagal, key + role udah tersimpan. Admin klik "Set Key"
-        // lagi bisa bikin duplicate key — ini yg mau dicegah.
+        // === 2. Schedule role removal (MAX EXTEND) — v3.9.17: pindah SEBELUM addRole ===
+        // v3.9.17 FIX: reorder. Sebelumnya: addKey → addRole → scheduleRoleRemoval.
+        // Kalau bot crash setelah addRole tapi sebelum schedule, role menempel tanpa
+        // auto-expire. Sekarang: addKey → scheduleRoleRemoval → addRole.
+        // Kalau crash setelah schedule tapi sebelum addRole: schedule entry orphan
+        // (roleId ter-schedule tapi user belum dapat role) — scheduler tick akan
+        // detect "member tidak punya role" dan skip, lebih aman dari role permanen.
         let scheduleResult;
         try {
             scheduleResult = scheduleRoleRemoval({
@@ -552,9 +578,28 @@ module.exports = async function (interaction) {
             });
         } catch (schedErr) {
             console.error(
-                `⚠️ Gagal scheduleRoleRemoval saat set-key (key + role tetap tersimpan): ${schedErr.message}`
+                `⚠️ Gagal scheduleRoleRemoval saat set-key (key tetap tersimpan, role TIDAK diberikan): ${schedErr.message}`
             );
-            scheduleResult = { extended: false, permanent: false, error: schedErr.message };
+            // Catatan: key yang barusan di-add tersimpan tanpa auto-expire schedule.
+            // Tidak ada API targeted removal untuk single key di keyManager (hanya
+            // removeAllKeysByUser yang terlalu broad). Admin bisa manual remove via
+            // /list-keys kalau perlu. Log warning supaya kelihatan.
+            console.warn(`⚠️ Schedule gagal — key "${keyValue}" tersimpan tanpa auto-expire. Admin perlu manual remove via /list-keys jika perlu.`);
+            return safeEditReply(interaction, {
+                content: `❌ Gagal schedule auto-expire role: ${schedErr.message}\n\nKey sudah tersimpan tapi role BELUM diberikan. Coba Set Key lagi, atau hubungi dev.`
+            });
+        }
+
+        // === 3. Berikan role ke member ===
+        try {
+            if (!member.roles.cache.has(role.id)) {
+                await member.roles.add(role);
+            }
+        } catch (err) {
+            console.error('Gagal add role saat set key:', err.message);
+            return safeEditReply(interaction, {
+                content: `❌ Gagal memberikan role ${role}. Pastikan role bot ada di ATAS role tersebut.\n\nKey + schedule sudah tersimpan. Hubungi admin untuk add role manual.`
+            });
         }
 
         // === 4. DM member ===
@@ -581,13 +626,16 @@ module.exports = async function (interaction) {
                 content:
                     `🎁 **Transaksi Sukses!**\n\n` +
                     `Terima kasih sudah membeli **${product.label}** di **${guild.name}**.\n\n` +
-                    `🔑 **Key kamu:**\n\`\`\`\n${keyValue}\n\`\`\`\n` +
+                    // v3.9.17 FIX: sanitize backticks di keyValue. Sebelumnya, kalau
+                    // key mengandung triple backtick (```), code block break dan sisa
+                    // keyValue di-render sebagai markdown. Sekarang: escape backtick.
+                    `🔑 **Key kamu:**\n\`\`\`\n${keyValue.replace(/`/g, "'")}\n\`\`\`\n` +
                     `🎭 Role: ${role}\n⏰ ${expireInfo}\n\n` +
                     `📋 **Semua key aktif kamu untuk role ini:**\n${keyList}\n\n` +
                     `💡 Simpan key ini baik-baik. Kalau role tiba-tiba hilang padahal masih ada key aktif, hubungi admin.`
             });
             dmSent = true;
-        } catch (dmErr) {
+        } catch (_dmErr) {
             console.log(`ℹ️ Tidak bisa kirim DM ke ${member.user.tag} (mungkin DM ditutup).`);
         }
 

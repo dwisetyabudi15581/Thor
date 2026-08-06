@@ -22,18 +22,34 @@ const levelManager = require('../../data/levelManager');
 // Discord bakal kirim message.content kosong kalo intentnya belum di-on.
 // Akibatnya: auto-responder, anti-spam, AFK reply gak jalan.
 // Set ini cuma buat nge-warning sekali per server biar console gak kebanjiran.
-const _intentWarnedGuilds = new Set();
+//
+// v3.9.17 FIX: cleanup periodic. Sebelumnya, Set tumbuh terus selama process
+// lifetime (untuk bot yang sering join/leave guild). Sekarang: cleanup tiap
+// 24 jam, hapus guild yang sudah >24 jam tidak terdeteksi lagi.
+const _intentWarnedGuilds = new Map(); // guildId → timestamp terakhir warning
+const INTENT_WARN_TTL_MS = 24 * 60 * 60 * 1000; // 24 jam
 function debugLogIntentMissing(message) {
     const gid = message.guild.id;
-    if (_intentWarnedGuilds.has(gid)) return;
-    _intentWarnedGuilds.add(gid);
+    const now = Date.now();
+    if (_intentWarnedGuilds.has(gid)) {
+        // Update timestamp supaya gak di-cleanup selama masih aktif.
+        _intentWarnedGuilds.set(gid, now);
+        return;
+    }
+    _intentWarnedGuilds.set(gid, now);
     console.warn(
         `⚠️ [HINT] Pesan dari ${message.author?.tag} di server "${message.guild.name}" isinya kosong.\n` +
             `   Biasanya karena "Message Content Intent" belum di-enable di Developer Portal.\n` +
             `   Cek: https://discord.com/developers/applications → Bot → Privileged Gateway Intents\n` +
             `   Akibatnya: auto-responder, anti-spam kata/link, dan AFK mention reply gak bakal jalan.\n` +
-            `   (warning ini cuma muncul sekali per server, sampai bot direstart)`
+            `   (warning ini cuma muncul sekali per 24 jam per server)`
     );
+    // v3.9.17: cleanup entries yang sudah >24 jam tidak terdeteksi.
+    if (_intentWarnedGuilds.size > 100) {
+        for (const [k, ts] of _intentWarnedGuilds) {
+            if (now - ts > INTENT_WARN_TTL_MS) _intentWarnedGuilds.delete(k);
+        }
+    }
 }
 
 async function onMessageCreate(message) {
@@ -67,7 +83,11 @@ async function onMessageCreate(message) {
         } catch (err) {
             console.error('MessageCreate hook error:', err.message);
         }
-    } catch (_) {}
+    } catch (err) {
+        // v3.9.17 FIX: log error outer. Sebelumnya `catch (_) {}` menelan
+        // semua error tanpa log — bug di hook manapun silent fail tanpa jejak.
+        console.error('MessageCreate outer error:', err.message);
+    }
 }
 
 /**
@@ -187,7 +207,12 @@ async function hookAutoResponder(message) {
                 .setDescription(responder.reply)
                 .setColor(0x5865f2)
                 .setFooter({ text: `Auto-responder: ${responder.trigger}` });
-            await message.reply({ embeds: [embed] });
+            // v3.9.17 FIX: tambah allowedMentions: { parse: [] } supaya
+            // @everyone/@here/<@&ROLE> di reply TIDAK trigger ping.
+            // Sebelumnya, mode embed TIDAK set allowedMentions → fallback ke
+            // Discord default (parse: ['everyone', 'roles', 'users']) →
+            // member bisa abuse trigger keyword untuk mass-ping @everyone.
+            await message.reply({ embeds: [embed], allowedMentions: { parse: [] } });
         } else {
             await message.reply({ content: responder.reply, allowedMentions: { parse: [] } });
         }
@@ -232,7 +257,7 @@ async function hookAfkSystem(message) {
                 content: `👋 Welcome back, ${message.author}! Status AFK kamu sudah di-clear.\n\n${afkReplies.join('\n')}`,
                 allowedMentions: { users: [] }
             });
-            setTimeout(() => reply.delete().catch(() => {}), 30000);
+            setTimeout(() => reply.delete().catch(() => {}), 30000).unref();
         } catch (_) {}
         return;
     }
@@ -245,7 +270,7 @@ async function hookAfkSystem(message) {
                 allowedMentions: { users: [] }
             });
             // Hapus pesan welcome back setelah 5 detik biar channel gak berantakan
-            setTimeout(() => welcomeBack.delete().catch(() => {}), 5000);
+            setTimeout(() => welcomeBack.delete().catch(() => {}), 5000).unref();
         } catch (_) {}
         return;
     }
@@ -257,7 +282,7 @@ async function hookAfkSystem(message) {
                 content: afkReplies.join('\n'),
                 allowedMentions: { users: [] }
             });
-            setTimeout(() => reply.delete().catch(() => {}), 30000);
+            setTimeout(() => reply.delete().catch(() => {}), 30000).unref();
         } catch (_) {}
     }
 }
