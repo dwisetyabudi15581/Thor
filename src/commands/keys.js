@@ -120,8 +120,11 @@ module.exports = async function (interaction) {
         }
 
         // 4. DM member
-        // v3.9.22: DM format sama dengan ticket Set Key — emoji + role.name (bukan
-        // mention) + inline code untuk key (HP-friendly tap-to-copy).
+        // v3.9.22: /set-key tujuan awalnya buat GIFT (hadiah dari admin ke member),
+        // BUKAN transaksi beli. Jadi DM-nya bilang "kamu dapat hadiah" — bukan
+        // "transaksi selesai" (itu cuma untuk ticket Set Key).
+        // Format tetap sama: emoji + role.name (bukan mention) + inline code
+        // untuk key (HP-friendly tap-to-copy).
         let dmSent = false;
         try {
             let expireInfo;
@@ -146,7 +149,7 @@ module.exports = async function (interaction) {
 
             await member.send({
                 content:
-                    `Halo ${member.user.username}! Transaksi kamu udah selesai 🎉\n\n` +
+                    `Halo ${member.user.username}! Kamu dapat hadiah dari admin 🎁\n\n` +
                     `📦 Produk: ${product.label}\n` +
                     `🌐 Server: ${guild.name}\n\n` +
                     `🔑 KEY:\n` +
