@@ -326,43 +326,48 @@ Bot akan:
 **Perubahan dari v3.9.20:**
 
 - **DM ke member** sekarang pakai inline code (`` `key` ``) bukan codeblock. Di Discord mobile, long-press inline code langsung muncul menu Copy. Bahasa juga lebih santai, gak terlalu kaku.
-- **Di channel tiket**, bot cuma kirim pesan teks singkat "key udah dikirim ke DM" (bukan embed hijau). Tombol Tutup Tiket gak diduplikat — admin pakai tombol yang udah ada di pesan awal tiket.
+- **Di channel tiket**, bot cuma kirim pesan teks singkat buat user — bukan untuk admin.
+
+### v3.9.22: DM pakai emoji + role pakai nama (bukan mention)
+
+**Perubahan dari v3.9.21:**
+
+- **DM ke member** sekarang pakai emoji biar gak sepi (📦🌐🔑🎭⏰📋💡). Role pakai `role.name` (nama role) bukan mention (`${role}`), karena di DM mention role gak ke-resolve (muncul "unknown role" atau @role mentah).
+- **Notif di channel** dibikin lebih singkat & targeting user (bukan admin). Cuma ngasih tau "key udah dikirim via DM, cek ya". Kalau DM gagal, fallback kasih tau user supaya nunggu admin kirim manual.
 
 **Contoh DM yang dikirim ke member:**
 
 ```
-Halo UserKamu! Transaksi kamu udah selesai 🎉
+Halo thor064747! Transaksi kamu udah selesai 🎉
 
-Produk: VIP 30 Hari
-Server: Server Saya
+📦 Produk: 3 DAYS
+🌐 Server: Chronos
 
-Ini key kamu (tahan/long-press untuk copy):
-`ABCDE-12345-FGHIJ-67890`
+🔑 KEY:
+`Abgs-1828`
 
-Role: @VIP
-Expire: 30 hari lagi
+🎭 Role: VIP 3 Days
+⏰ Expire: 3 hari lagi
 
-Key aktif kamu untuk role ini:
-1. `ABCDE-12345` (sisa 29 hari lagi)
-2. `FGHIJ-67890` (sisa 25 hari lagi)
+📋 Key aktif kamu untuk role ini:
+1. `Test-1233` (sisa 3 hari lagi)
+2. `12345` (sisa 3 hari lagi)
+3. `Test-2910` (sisa 3 hari lagi)
+4. `Abgs-1828` (sisa 3 hari lagi)
 
-Simpan keynya ya. Kalau role tiba-tiba hilang padahal key masih aktif, hubungi admin.
+💡 Simpan keynya. Kalau role tiba-tiba hilang padahal key masih aktif, hubungi admin.
 ```
 
-**Contoh pesan yang muncul di channel tiket (bukan embed):**
+**Contoh notif yang muncul di channel tiket (untuk user, bukan admin):**
 
+Kalau DM sukses:
 ```
-✅ Key udah dikirim ke DM @user. Kalau member gak terima DM, klik Set Key lagi atau kirim manual.
-
-Kalau udah selesai Q&A, klik 🔒 Tutup Tiket di pesan atas.
+Halo @user! 🔑 Key kamu udah dikirim via DM, cek ya 📬
 ```
 
-Atau kalau DM gagal:
-
+Kalau DM gagal:
 ```
-⚠️ Gagal kirim DM ke @user. Key: `ABCDE-12345`
-
-Tolong kirim manual ke member ya. Kalau udah selesai, klik 🔒 Tutup Tiket di pesan atas.
+⚠️ @user — gagal kirim DM (kemungkinan DM ditutup). Admin akan kirim key manual ya.
 ```
 
 ### v3.9.20: Perubahan penting Set Key & Tutup Tiket

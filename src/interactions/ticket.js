@@ -664,12 +664,10 @@ module.exports = async function (interaction) {
         }
 
         // === 4. DM member ===
-        // v3.9.21: DM format diubah jadi lebih natural & HP-friendly:
-        //   - Key pakai inline code (`` `key` ``) bukan codeblock. Di Discord
-        //     mobile, long-press inline code → muncul menu "Copy" langsung.
-        //     Codeblock juga support tap-to-copy, tapi inline code lebih clean
-        //     & gak makan banyak layar di HP.
-        //   - Bahasa lebih santai, gak terlalu kaku/robotik.
+        // v3.9.22: DM format sesuai template user — pakai emoji supaya lebih
+        // ramai & gak sepi. Role pakai nama role (role.name) bukan mention
+        // (`${role}`), karena di DM mention role gak ke-resolve (muncul
+        // "unknown role" atau @role mentah).
         let dmSent = false;
         try {
             let expireInfo;
@@ -696,14 +694,14 @@ module.exports = async function (interaction) {
             await member.send({
                 content:
                     `Halo ${member.user.username}! Transaksi kamu udah selesai 🎉\n\n` +
-                    `Produk: ${product.label}\n` +
-                    `Server: ${guild.name}\n\n` +
-                    `Ini key kamu (tahan/long-press untuk copy):\n` +
+                    `📦 Produk: ${product.label}\n` +
+                    `🌐 Server: ${guild.name}\n\n` +
+                    `🔑 KEY:\n` +
                     `\`${safeKey}\`\n\n` +
-                    `Role: ${role}\n` +
-                    `Expire: ${expireInfo}\n\n` +
-                    `Key aktif kamu untuk role ini:\n${keyList}\n\n` +
-                    `Simpan keynya ya. Kalau role tiba-tiba hilang padahal key masih aktif, hubungi admin.`
+                    `🎭 Role: ${role.name}\n` +
+                    `⏰ Expire: ${expireInfo}\n\n` +
+                    `📋 Key aktif kamu untuk role ini:\n${keyList}\n\n` +
+                    `💡 Simpan keynya. Kalau role tiba-tiba hilang padahal key masih aktif, hubungi admin.`
             });
             dmSent = true;
         } catch (_dmErr) {
@@ -765,9 +763,12 @@ module.exports = async function (interaction) {
         }
 
         try {
+            // v3.9.22: Notif di channel TIDAK untuk admin — untuk user.
+            // Cukup kasih tau kalau key udah dikirim via DM. Singkat & jelas.
+            // Kalau DM gagal, fallback kasih tau admin supaya kirim manual.
             const noticeMsg = dmSent
-                ? `✅ Key udah dikirim ke DM <@${userId}>. Kalau member gak terima DM, klik Set Key lagi atau kirim manual.\n\nKalau udah selesai Q&A, klik **🔒 Tutup Tiket** di pesan atas.`
-                : `⚠️ Gagal kirim DM ke <@${userId}>. Key: \`${keyValue.replace(/`/g, "'")}\`\n\nTolong kirim manual ke member ya. Kalau udah selesai, klik **🔒 Tutup Tiket** di pesan atas.`;
+                ? `Halo <@${userId}>! 🔑 Key kamu udah dikirim via DM, cek ya 📬`
+                : `⚠️ <@${userId}> — gagal kirim DM (kemungkinan DM ditutup). Admin akan kirim key manual ya.`;
 
             await interaction.channel.send({
                 content: noticeMsg
