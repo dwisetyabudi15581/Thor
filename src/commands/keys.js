@@ -23,8 +23,11 @@ const {
     trackPurchase,
     sendInvoice,
     logAudit,
-    safeEditReply
+    safeEditReply,
+    getActiveKeysByUserAndRole
 } = require('./_shared');
+// v3.9.22: formatRemaining di-import langsung dari keyManager (gak ada di _shared).
+const { formatRemaining } = require('../data/keyManager');
 
 module.exports = async function (interaction) {
     const config = getConfig();
@@ -117,22 +120,41 @@ module.exports = async function (interaction) {
         }
 
         // 4. DM member
+        // v3.9.22: DM format sama dengan ticket Set Key — emoji + role.name (bukan
+        // mention) + inline code untuk key (HP-friendly tap-to-copy).
         let dmSent = false;
         try {
             let expireInfo;
             if (keyEntry.expireAt === null) {
-                expireInfo = 'Role bersifat **permanen**.';
+                expireInfo = 'permanen (gak akan hilang)';
             } else {
                 const days = Math.ceil((keyEntry.expireAt - Date.now()) / 86400000);
-                expireInfo = `Role akan otomatis dihapus setelah **${days} hari** (mengikuti sisa key terbanyak).`;
+                expireInfo = `${days} hari lagi`;
             }
+
+            // Cek semua key aktif buat info tambahan
+            const activeKeys = getActiveKeysByUserAndRole(member.id, role.id);
+            const keyList = activeKeys
+                .map((k, i) => {
+                    const rem = formatRemaining(k);
+                    return `${i + 1}. \`${k.key}\` (sisa ${rem})`;
+                })
+                .join('\n');
+
+            // v3.9.17 FIX: sanitize backtick di keyValue.
+            const safeKey = keyValue.replace(/`/g, "'");
+
             await member.send({
                 content:
-                    `🎁 **Key Baru!**\n\n` +
-                    `Admin memberimu key untuk produk **${product.label}** di **${guild.name}**.\n\n` +
-                    // v3.9.17 FIX: sanitize backticks di keyValue (sama seperti ticket.js).
-                    `🔑 **Key:**\n\`\`\`\n${keyValue.replace(/`/g, "'")}\n\`\`\`\n` +
-                    `🎭 Role: ${role}\n⏰ ${expireInfo}`
+                    `Halo ${member.user.username}! Transaksi kamu udah selesai 🎉\n\n` +
+                    `📦 Produk: ${product.label}\n` +
+                    `🌐 Server: ${guild.name}\n\n` +
+                    `🔑 KEY:\n` +
+                    `\`${safeKey}\`\n\n` +
+                    `🎭 Role: ${role.name}\n` +
+                    `⏰ Expire: ${expireInfo}\n\n` +
+                    `📋 Key aktif kamu untuk role ini:\n${keyList}\n\n` +
+                    `💡 Simpan keynya. Kalau role tiba-tiba hilang padahal key masih aktif, hubungi admin.`
             });
             dmSent = true;
         } catch (_) {}
