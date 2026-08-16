@@ -66,8 +66,8 @@ module.exports = async function (interaction) {
     // Saat panel pakai use_dropdown=true, kategori dirender sebagai select menu.
     // User pilih kategori di dropdown → handler ini jalan.
     // Behavior sama seperti button ticket_cat:<id>:
-    //   - help/report → langsung create ticket
-    //   - lainnya → tampilkan dropdown produk
+    //   - requiresKey=false (help/report/claim_giveaway/dll) → langsung create ticket
+    //   - requiresKey=true (transaksi) → tampilkan dropdown produk
     if (interaction.isStringSelectMenu() && interaction.customId === 'ticket_cat_select') {
         const categoryId = interaction.values && interaction.values[0];
         if (!categoryId) {
@@ -91,15 +91,24 @@ module.exports = async function (interaction) {
             return interaction.reply({ content: '❌ Verifikasi dulu!', flags: MessageFlags.Ephemeral });
         }
 
-        // help/report → langsung buat tiket
-        if (catConfig.requiresKey === false && (categoryId === 'help' || categoryId === 'report')) {
-            const label = categoryId === 'help' ? 'Bantuan Staff' : 'Laporkan Member';
-            const product = { label, duration: '-', price: '-', isHelp: true, category: categoryId };
+        // v3.9.18 FIX: semua kategori dengan requiresKey=false → langsung buat tiket
+        // tanpa produk. Sebelumnya HANYA help & report yang di-skip, jadi kategori
+        // custom seperti claim_giveaway atau partnership dst. malah muncul error
+        // "Belum ada produk" padahal jelas-jelas kategori non-transaksi.
+        // Sekarang: pakai catConfig.label sebagai label produk (bukan hardcode).
+        if (catConfig.requiresKey === false) {
+            const product = {
+                label: catConfig.label || 'Bantuan',
+                duration: '-',
+                price: '-',
+                isHelp: true,
+                category: categoryId
+            };
             await interaction.deferReply({ flags: MessageFlags.Ephemeral });
             return createTicket(interaction, product);
         }
 
-        // Transaksi → tampilkan dropdown produk
+        // Transaksi (requiresKey=true) → tampilkan dropdown produk filtered by category
         const productsInCat = (config.products || []).filter(p => {
             const pCat = p.category || 'transaction';
             return pCat === categoryId;
@@ -139,8 +148,9 @@ module.exports = async function (interaction) {
     // === customId: ticket_cat:<categoryId>                ===
     // ====================================================
     // Saat user klik tombol kategori di panel tiket dinamis, tampilkan dropdown
-    // produk yang hanya punya category == categoryId. Kalau kategori adalah help/report
-    // (requiresKey=false, bukan transaksi), langsung buat tiket tanpa pilih produk.
+    // produk yang hanya punya category == categoryId. Kalau kategori requiresKey=false
+    // (bukan transaksi — mis. help, report, claim_giveaway), langsung buat tiket
+    // tanpa pilih produk.
     if (interaction.isButton() && interaction.customId.startsWith('ticket_cat:')) {
         const categoryId = interaction.customId.split(':')[1];
         const categories = config.ticketCategories || [];
@@ -158,15 +168,21 @@ module.exports = async function (interaction) {
             return interaction.reply({ content: '❌ Verifikasi dulu!', flags: MessageFlags.Ephemeral });
         }
 
-        // Kategori help/report → langsung buat ticket tanpa produk
-        if (catConfig.requiresKey === false && (categoryId === 'help' || categoryId === 'report')) {
-            const label = categoryId === 'help' ? 'Bantuan Staff' : 'Laporkan Member';
-            const product = { label, duration: '-', price: '-', isHelp: true, category: categoryId };
+        // v3.9.18 FIX: semua kategori dengan requiresKey=false → langsung buat ticket
+        // tanpa produk (bukan hanya help/report). Pakai catConfig.label sebagai label.
+        if (catConfig.requiresKey === false) {
+            const product = {
+                label: catConfig.label || 'Bantuan',
+                duration: '-',
+                price: '-',
+                isHelp: true,
+                category: categoryId
+            };
             await interaction.deferReply({ flags: MessageFlags.Ephemeral });
             return createTicket(interaction, product);
         }
 
-        // Kategori transaksi → filter produk berdasarkan category
+        // Kategori transaksi (requiresKey=true) → filter produk berdasarkan category
         const productsInCat = (config.products || []).filter(p => {
             const pCat = p.category || 'transaction';
             return pCat === categoryId;
@@ -252,14 +268,15 @@ module.exports = async function (interaction) {
             product = config.products.find(p => p.value === selectedValue);
             if (!product) return safeEditReply(interaction, { content: '❌ Produk tidak ditemukan.' });
         } else if (interaction.customId === 'ticket_help') {
-            // v3.9.11 Phase 1: pakai isHelp flag, bukan magic string label.
-            product = { label: 'Bantuan Staff', duration: '-', price: '-', isHelp: true, category: 'help' };
+            // v3.9.18: label diupdate dari "Bantuan Staff" → "Help" (sesuai default baru).
+            product = { label: 'Help', duration: '-', price: '-', isHelp: true, category: 'help' };
         } else if (interaction.customId === 'ticket_report') {
-            product = { label: 'Laporkan Member', duration: '-', price: '-', isHelp: true, category: 'report' };
+            // v3.9.18: label diupdate dari "Laporkan Member" → "Report" (sesuai default baru).
+            product = { label: 'Report', duration: '-', price: '-', isHelp: true, category: 'report' };
         } else {
             // v3.9.11 Phase 3: multi-panel ticket — customId `ticket_cat:<categoryId>`
             // akan di-handle di sini. Untuk sekarang, fallback ke help.
-            product = { label: 'Bantuan', duration: '-', price: '-', isHelp: true, category: 'help' };
+            product = { label: 'Help', duration: '-', price: '-', isHelp: true, category: 'help' };
         }
         return createTicket(interaction, product);
     }
@@ -280,12 +297,20 @@ module.exports = async function (interaction) {
         const meta = getTicketMeta(interaction.channel.id, interaction.channel?.topic || '');
         const productName = meta?.productName || 'Unknown';
         const productCategory = meta?.category || null;
+        // v3.9.18: generalize isTransaction check — pakai meta.requiresKey flag
+        // (dari createTicket) sebagai sumber kebenaran, bukan magic-string productName.
+        // Sebelumnya: cek 5 string literal ('help', 'report', 'Bantuan Staff',
+        // 'Laporkan Member', 'Bantuan/Lapor') yang rapuh kalau label diubah.
+        // Sekarang: isTransaction = meta.requiresKey === true ATAU (fallback kalau
+        // meta lama gak punya requiresKey) category bukan help/report.
         const isTransaction =
-            productCategory !== 'help' &&
-            productCategory !== 'report' &&
-            productName !== 'Bantuan Staff' &&
-            productName !== 'Laporkan Member' &&
-            productName !== 'Bantuan/Lapor';
+            meta?.requiresKey === true ||
+            (meta?.requiresKey === undefined &&
+                productCategory !== 'help' &&
+                productCategory !== 'report' &&
+                productName !== 'Bantuan Staff' &&
+                productName !== 'Laporkan Member' &&
+                productName !== 'Bantuan/Lapor');
         // v3.9.16: requiresKey — kalau false, transaksi non-key butuh tombol "Pesanan Sukses"
         // supaya admin bisa catat sukses + kirim invoice/testimoni.
         const requiresKey = meta?.requiresKey !== undefined ? meta.requiresKey : isTransaction;
@@ -425,15 +450,18 @@ module.exports = async function (interaction) {
         const meta = getTicketMeta(interaction.channel.id, interaction.channel?.topic || '');
         const productName = meta?.productName || null;
         const productCategory = meta?.category || null;
-        // v3.9.11 Phase 1: hapus magic string 'Bantuan/Lapor'. Pakai category field.
-        if (
-            !productName ||
-            productCategory === 'help' ||
-            productCategory === 'report' ||
-            productName === 'Bantuan Staff' ||
-            productName === 'Laporkan Member' ||
-            productName === 'Bantuan/Lapor'
-        ) {
+        // v3.9.18: generalize check — pakai meta.requiresKey flag sebagai sumber kebenaran.
+        // Set Key hanya untuk tiket transaksi (requiresKey=true).
+        // Fallback ke cek category untuk tiket lama yang belum punya requiresKey di meta.
+        const isTransactionForSetKey =
+            meta?.requiresKey === true ||
+            (meta?.requiresKey === undefined &&
+                productCategory !== 'help' &&
+                productCategory !== 'report' &&
+                productName !== 'Bantuan Staff' &&
+                productName !== 'Laporkan Member' &&
+                productName !== 'Bantuan/Lapor');
+        if (!productName || !isTransactionForSetKey) {
             return interaction.reply({
                 content: '❌ Tombol Set Key hanya untuk tiket transaksi.',
                 flags: MessageFlags.Ephemeral

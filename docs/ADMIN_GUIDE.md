@@ -133,9 +133,42 @@ Untuk setiap produk, set role mana yang akan didapat pembeli + durasi expire:
 /setup-ticket
 ```
 
-Bot akan kirim embed + 3 tombol (Beli Key / Bantuan Staff / Laporkan Member) ke channel tempat command dijalankan. Member klik → bot buat channel tiket private.
+Bot akan kirim embed + 4 tombol default (Beli Key / Transaksi, Help, Report, Claim Giveaway) ke channel tempat command dijalankan. Member klik → bot buat channel tiket private.
+
+> **v3.9.18:** Label tombol default sudah diubah ke **Help** & **Report** (sebelumnya "Bantuan Staff" & "Laporkan Member"). Kategori contoh **Claim Giveaway** juga ditambahkan — bisa dihapus dengan `/remove-category id:claim_giveaway` kalau tidak dibutuhkan.
 
 **Rekomendasi:** Pasang di `#information` atau channel khusus `#order-here`, pin pesannya.
+
+#### Custom Tombol Tiket (v3.9.18+)
+
+Sekarang semua tombol tiket **100% dinamis** — bisa CRUD dari Discord tanpa edit code:
+
+```
+# Lihat semua kategori
+/list-categories
+
+# Tambah kategori baru (contoh: tombol "Partnership")
+/add-category id:partnership label:"Partnership" emoji:"🤝" style:"Primary" requires_key:false
+
+# Hapus kategori (kecuali default: transaction, help, report)
+/remove-category id:claim_giveaway
+
+# Setelah ubah kategori, refresh panel yang sudah terpasang:
+/refresh-panel id:<panel-id>
+```
+
+**Tipe kategori:**
+
+- `requires_key: true` → tiket transaksi (munculin dropdown produk, ada tombol Set Key). Contoh: `transaction`.
+- `requires_key: false` → tiket non-transaksi (langsung buat channel, tanpa produk). Contoh: `help`, `report`, `claim_giveaway`, `partnership`, dll.
+
+**Migration otomatis (v3.9.18):**
+
+Saat bot start, config lama akan otomatis di-migrate:
+
+- Label `"Bantuan Staff"` → `"Help"` (hanya kalau belum di-customize admin)
+- Label `"Laporkan Member"` → `"Report"` (hanya kalau belum di-customize admin)
+- Kategori `claim_giveaway` ditambahkan kalau belum ada (sekali saja — kalau admin hapus, tidak akan ditambah lagi)
 
 ### Step 7: (Opsional) Pasang Self-Role Panel
 

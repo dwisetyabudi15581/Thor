@@ -554,13 +554,189 @@ test('help.js: help embed mentions new v3.9.14+ commands', async () => {
     assert.match(allText, /update-panel/);
     assert.match(allText, /refresh-panel/);
     assert.match(allText, /use_dropdown/);
-    assert.match(allText, /v3\.9\.17/);
+    assert.match(allText, /v3\.9\.18/);
 });
 
 // === Router test ===
 test('commands/index.js: routes new panel-mgmt commands', () => {
     const router = require('../../src/commands');
     assert.strictEqual(typeof router, 'function');
+});
+
+// === v3.9.18 tests: rename Bantuan→Help, Laporkan→Report, tambah claim_giveaway ===
+
+test('configManager.DEFAULTS: ticketCategories pakai label "Help" & "Report" (bukan "Bantuan Staff")', () => {
+    const { DEFAULTS } = require('../../src/data/configManager');
+    const help = DEFAULTS.ticketCategories.find(c => c.id === 'help');
+    const report = DEFAULTS.ticketCategories.find(c => c.id === 'report');
+    assert.ok(help, 'help category should exist in DEFAULTS');
+    assert.ok(report, 'report category should exist in DEFAULTS');
+    assert.strictEqual(help.label, 'Help', 'help.label should be "Help"');
+    assert.strictEqual(report.label, 'Report', 'report.label should be "Report"');
+    // Pastikan label lama sudah tidak dipakai
+    assert.notStrictEqual(help.label, 'Bantuan Staff');
+    assert.notStrictEqual(report.label, 'Laporkan Member');
+});
+
+test('configManager.DEFAULTS: claim_giveaway ada sebagai contoh kategori custom', () => {
+    const { DEFAULTS } = require('../../src/data/configManager');
+    const claimGiveaway = DEFAULTS.ticketCategories.find(c => c.id === 'claim_giveaway');
+    assert.ok(claimGiveaway, 'claim_giveaway category should exist in DEFAULTS');
+    assert.strictEqual(claimGiveaway.label, 'Claim Giveaway');
+    assert.strictEqual(claimGiveaway.emoji, '🎁');
+    assert.strictEqual(claimGiveaway.style, 'Success');
+    assert.strictEqual(claimGiveaway.requiresKey, false);
+    // isDefault=false supaya admin bisa /remove-category kalau tidak mau
+    assert.strictEqual(claimGiveaway.isDefault, false);
+});
+
+test('configManager.getConfig: migration rename label "Bantuan Staff" → "Help"', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const configPath = path.join(__dirname, '..', '..', 'data', 'config.json');
+    // Backup existing config if any
+    let backup = null;
+    if (fs.existsSync(configPath)) {
+        backup = fs.readFileSync(configPath, 'utf8');
+        fs.unlinkSync(configPath);
+    }
+    try {
+        // Write config with OLD labels
+        const oldConfig = {
+            roles: { admin: '123' },
+            ticketCategories: [
+                { id: 'transaction', label: 'Beli Key', emoji: '🔑', style: 'Primary', requiresKey: true, isDefault: true },
+                { id: 'help', label: 'Bantuan Staff', emoji: '📞', style: 'Secondary', requiresKey: false, isDefault: true },
+                { id: 'report', label: 'Laporkan Member', emoji: '⚠️', style: 'Danger', requiresKey: false, isDefault: true }
+            ]
+        };
+        fs.writeFileSync(configPath, JSON.stringify(oldConfig), 'utf8');
+
+        // getConfig should trigger migration
+        const { getConfig } = require('../../src/data/configManager');
+        const config = getConfig();
+
+        const help = config.ticketCategories.find(c => c.id === 'help');
+        const report = config.ticketCategories.find(c => c.id === 'report');
+        assert.strictEqual(help.label, 'Help', 'migration should rename help label to "Help"');
+        assert.strictEqual(report.label, 'Report', 'migration should rename report label to "Report"');
+
+        // claim_giveaway should be auto-added
+        const claimGiveaway = config.ticketCategories.find(c => c.id === 'claim_giveaway');
+        assert.ok(claimGiveaway, 'migration should add claim_giveaway category');
+    } finally {
+        // Restore or delete
+        if (backup !== null) {
+            fs.writeFileSync(configPath, backup, 'utf8');
+        } else if (fs.existsSync(configPath)) {
+            fs.unlinkSync(configPath);
+        }
+    }
+});
+
+test('configManager.getConfig: migration TIDAK ubah label yang sudah di-customize admin', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const configPath = path.join(__dirname, '..', '..', 'data', 'config.json');
+    let backup = null;
+    if (fs.existsSync(configPath)) {
+        backup = fs.readFileSync(configPath, 'utf8');
+        fs.unlinkSync(configPath);
+    }
+    try {
+        const customConfig = {
+            roles: { admin: '123' },
+            ticketCategories: [
+                { id: 'transaction', label: 'Beli Key', emoji: '🔑', style: 'Primary', requiresKey: true, isDefault: true },
+                { id: 'help', label: 'Tanya Admin', emoji: '💬', style: 'Secondary', requiresKey: false, isDefault: true },
+                { id: 'report', label: 'Lapor Siapa Aja', emoji: '📢', style: 'Danger', requiresKey: false, isDefault: true }
+            ]
+        };
+        fs.writeFileSync(configPath, JSON.stringify(customConfig), 'utf8');
+
+        const { getConfig } = require('../../src/data/configManager');
+        const config = getConfig();
+
+        const help = config.ticketCategories.find(c => c.id === 'help');
+        const report = config.ticketCategories.find(c => c.id === 'report');
+        // Labels should NOT be changed since admin customized them
+        assert.strictEqual(help.label, 'Tanya Admin', 'custom help label should be preserved');
+        assert.strictEqual(report.label, 'Lapor Siapa Aja', 'custom report label should be preserved');
+    } finally {
+        if (backup !== null) {
+            fs.writeFileSync(configPath, backup, 'utf8');
+        } else if (fs.existsSync(configPath)) {
+            fs.unlinkSync(configPath);
+        }
+    }
+});
+
+test('panels.buildTicketPanel: kategori requiresKey=false (claim_giveaway) tetap di-render sebagai button', () => {
+    const { buildTicketPanel } = require('../../src/commands/panels');
+    const panel = {
+        title: 'X',
+        body: 'X',
+        color: null,
+        categoryIds: [], // show all
+        useDropdown: false
+    };
+    const ctx = {
+        guild: { name: 'T' },
+        client: { user: { username: 'B', displayAvatarURL: () => 'http://x' } },
+        config: {
+            ticketCategories: [
+                { id: 'transaction', label: 'Beli', emoji: '🔑', style: 'Primary', requiresKey: true },
+                { id: 'help', label: 'Help', emoji: '📞', style: 'Secondary', requiresKey: false },
+                { id: 'report', label: 'Report', emoji: '⚠️', style: 'Danger', requiresKey: false },
+                { id: 'claim_giveaway', label: 'Claim Giveaway', emoji: '🎁', style: 'Success', requiresKey: false }
+            ],
+            products: [],
+            messages: { ticketTitle: 'T', ticketBody: 'B', ticketPriceHeader: 'P' }
+        }
+    };
+    const { components } = buildTicketPanel(panel, ctx);
+    // 4 categories → 1 row with 4 buttons (max 5 per row)
+    assert.strictEqual(components.length, 1);
+    assert.strictEqual(components[0].components.length, 4);
+    // Verify claim_giveaway button exists
+    const btns = components[0].components;
+    const claimBtn = btns.find(b => b.data.custom_id === 'ticket_cat:claim_giveaway');
+    assert.ok(claimBtn, 'claim_giveaway button should be rendered');
+    assert.strictEqual(claimBtn.data.label, 'Claim Giveaway');
+});
+
+test('panels.buildTicketPanel: dropdown description generic untuk kategori non-transaksi', () => {
+    const { buildTicketPanel } = require('../../src/commands/panels');
+    const panel = {
+        title: 'X',
+        body: 'X',
+        color: null,
+        categoryIds: [],
+        useDropdown: true
+    };
+    const ctx = {
+        guild: { name: 'T' },
+        client: { user: { username: 'B', displayAvatarURL: () => 'http://x' } },
+        config: {
+            ticketCategories: [
+                { id: 'transaction', label: 'Beli', emoji: '🔑', style: 'Primary', requiresKey: true },
+                { id: 'claim_giveaway', label: 'Claim Giveaway', emoji: '🎁', style: 'Success', requiresKey: false }
+            ],
+            products: [],
+            messages: { ticketTitle: 'T', ticketBody: 'B', ticketPriceHeader: 'P' }
+        }
+    };
+    const { components } = buildTicketPanel(panel, ctx);
+    const menu = components[0].components[0];
+    const opts = menu.options;
+    assert.strictEqual(opts.length, 2);
+    // discord.js v14: option data disimpan di .data.description (bukan .description langsung)
+    const transaksiDesc = opts[0].data?.description || opts[0].description;
+    const nonTransaksiDesc = opts[1].data?.description || opts[1].description;
+    // Transaksi → "Transaksi (pakai key)"
+    assert.strictEqual(transaksiDesc, 'Transaksi (pakai key)');
+    // Non-transaksi → "Bantuan / non-transaksi" (bukan "Bantuan / report")
+    assert.strictEqual(nonTransaksiDesc, 'Bantuan / non-transaksi');
 });
 
 // Cleanup

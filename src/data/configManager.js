@@ -32,8 +32,12 @@ const DEFAULTS = {
         emoji: '✅',
         style: 'Success' // Primary | Secondary | Success | Danger
     },
-    // v3.9.11 Phase 2: ticket categories (default 3 kategori built-in)
-    // Generic community — bisa dipakai buat server jualan apapun, bukan cuma MLBB.
+    // v3.9.18: ticket categories (default 4 kategori built-in)
+    // - "Bantuan Staff" → "Help" (rename, lebih simpel & internasional)
+    // - "Laporkan Member" → "Report" (rename)
+    // - Tambahan: "Claim Giveaway" sebagai contoh kategori custom tanpa produk.
+    //   Admin bisa hapus dengan /remove-category (isDefault=false) atau tambah
+    //   kategori baru lain via /add-category.
     ticketCategories: [
         {
             id: 'transaction',
@@ -43,8 +47,16 @@ const DEFAULTS = {
             requiresKey: true,
             isDefault: true
         },
-        { id: 'help', label: 'Bantuan Staff', emoji: '📞', style: 'Secondary', requiresKey: false, isDefault: true },
-        { id: 'report', label: 'Laporkan Member', emoji: '⚠️', style: 'Danger', requiresKey: false, isDefault: true }
+        { id: 'help', label: 'Help', emoji: '📞', style: 'Secondary', requiresKey: false, isDefault: true },
+        { id: 'report', label: 'Report', emoji: '⚠️', style: 'Danger', requiresKey: false, isDefault: true },
+        {
+            id: 'claim_giveaway',
+            label: 'Claim Giveaway',
+            emoji: '🎁',
+            style: 'Success',
+            requiresKey: false,
+            isDefault: false
+        }
     ],
     // v3.9.13: Leveling system config
     leveling: {
@@ -152,6 +164,52 @@ function getConfig() {
         config.products = config.products.map(p =>
             p && p.category === 'mlbb_key' ? { ...p, category: 'transaction' } : p
         );
+    }
+
+    // === v3.9.18 MIGRATION: rename default labels & tambah claim_giveaway ===
+    // Tujuan: existing server yang sudah punya config.json lama otomatis dapat
+    // label baru "Help"/"Report" (menggantikan "Bantuan Staff"/"Laporkan Member"),
+    // serta kategori contoh "Claim Giveaway" ditambahkan kalau belum ada.
+    //
+    // Migration ini konservatif:
+    //   - Hanya rename label kalau masih pakai label default lama. Kalau admin
+    //     sudah customize label (mis. "Tanya Admin"), TIDAK diubah.
+    //   - claim_giveaway hanya ditambah kalau belum ada kategori dengan id itu.
+    //     Kalau admin sudah pernah hapus, tidak akan ditambah lagi.
+    let _migrationChanged = false;
+    if (Array.isArray(config.ticketCategories)) {
+        config.ticketCategories = config.ticketCategories.map(cat => {
+            if (cat && cat.id === 'help' && (cat.label === 'Bantuan Staff' || cat.label === 'Bantuan')) {
+                _migrationChanged = true;
+                return { ...cat, label: 'Help' };
+            }
+            if (cat && cat.id === 'report' && (cat.label === 'Laporkan Member' || cat.label === 'Laporkan')) {
+                _migrationChanged = true;
+                return { ...cat, label: 'Report' };
+            }
+            return cat;
+        });
+        // Tambah claim_giveaway kalau belum ada (sekali saja — kalau admin hapus, tidak ditambah lagi)
+        const hasClaimGiveaway = config.ticketCategories.some(c => c && c.id === 'claim_giveaway');
+        if (!hasClaimGiveaway) {
+            config.ticketCategories.push({
+                id: 'claim_giveaway',
+                label: 'Claim Giveaway',
+                emoji: '🎁',
+                style: 'Success',
+                requiresKey: false,
+                isDefault: false
+            });
+            _migrationChanged = true;
+        }
+    }
+    if (_migrationChanged) {
+        try {
+            saveConfig(config);
+            console.log('📦 v3.9.18 migration: ticket categories updated (Help/Report rename + claim_giveaway added).');
+        } catch (migErr) {
+            console.warn('⚠️ Gagal save migration ticket categories:', migErr.message);
+        }
     }
 
     return config;

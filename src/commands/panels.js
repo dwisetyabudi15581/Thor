@@ -183,10 +183,12 @@ function buildTicketPanel(panel, ctx) {
     const components = [];
     if (panel.useDropdown) {
         // Select menu — 1 row, 1 menu, max 25 options.
+        // v3.9.18: description generic — pakai label kategori (bukan hardcode "Bantuan / report")
+        // supaya kategori custom seperti claim_giveaway juga jelas deskripsinya.
         const options = categoriesToShow.map(cat => ({
             label: (cat.label || cat.id).slice(0, 100),
             value: cat.id,
-            description: cat.requiresKey ? 'Transaksi (pakai key)' : 'Bantuan / report',
+            description: (cat.requiresKey ? 'Transaksi (pakai key)' : 'Bantuan / non-transaksi').slice(0, 100),
             emoji: cat.emoji || '🎫'
         }));
         if (options.length === 0) {

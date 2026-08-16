@@ -564,19 +564,23 @@ async function closeTicket(channel, closer, isSuccess) {
             }
         }
 
-        // Kirim invoice HANYA untuk transaksi sukses (bukan help/report).
+        // Kirim invoice HANYA untuk transaksi sukses (bukan help/report/custom non-key).
         // v3.9.16: fix bug — sebelumnya help/report yang diklik "Selesai" juga kekirim invoice
         // padahal bukan transaksi jualan. Sekarang cek category dulu.
-        //   - category 'help' / 'report'           → skip invoice (bukan jualan)
-        //   - productName 'Bantuan Staff' dll      → skip invoice (legacy backward compat)
-        //   - lainnya + isSuccess=true + userId    → kirim invoice
+        // v3.9.18: generalize — pakai meta.requiresKey sebagai sumber kebenaran.
+        //   - meta.requiresKey === false            → skip invoice (kategori non-transaksi)
+        //   - meta.requiresKey === true             → kirim invoice kalau sukses
+        //   - meta.requiresKey undefined (tiket lama) → fallback ke cek category & magic-string
+        //     untuk backward compat dengan tiket yang dibuat sebelum v3.9.16.
         const ticketCategory = meta?.category || null;
         const isHelpOrReport =
-            ticketCategory === 'help' ||
-            ticketCategory === 'report' ||
-            productName === 'Bantuan Staff' ||
-            productName === 'Laporkan Member' ||
-            productName === 'Bantuan/Lapor';
+            meta?.requiresKey === false ||
+            (meta?.requiresKey === undefined &&
+                (ticketCategory === 'help' ||
+                    ticketCategory === 'report' ||
+                    productName === 'Bantuan Staff' ||
+                    productName === 'Laporkan Member' ||
+                    productName === 'Bantuan/Lapor'));
 
         if (isSuccess && userId && !isHelpOrReport) {
             try {

@@ -81,7 +81,7 @@ module.exports = async function (interaction) {
                 `${emoji} Emoji: ${emoji}\n` +
                 `🎨 Style: ${style}\n` +
                 `🔑 Requires Key: ${newCategory.requiresKey ? 'Yes' : 'No'}\n\n` +
-                `💡 Pakai \`/setup-ticket\` lagi untuk pasang panel baru dengan kategori ini.`
+                `💡 Pakai \`/setup-ticket\` (atau \`/refresh-panel <id>\` kalau panel sudah ada) untuk menerapkan kategori baru.`
         });
     }
 
@@ -93,7 +93,7 @@ module.exports = async function (interaction) {
         if (categories.length === 0) {
             return safeEditReply(interaction, {
                 content:
-                    '📭 Belum ada kategori. Default 3 kategori (transaction, help, report) akan dipakai kalau config kosong.'
+                    '📭 Belum ada kategori. Default 4 kategori (transaction, help, report, claim_giveaway) akan dipakai kalau config kosong.'
             });
         }
 

@@ -196,6 +196,7 @@ module.exports = async function (interaction) {
         if (btnCount > 0) rows.push(currentRow);
 
         // Fallback kalau categories kosong: pakai tombol legacy (ticket_trade, ticket_help, ticket_report)
+        // v3.9.18: label diupdate ke "Help" & "Report" (sebelumnya "Bantuan Staff" & "Laporkan Member").
         if (rows.length === 0) {
             const fallbackRow = new ActionRowBuilder().addComponents(
                 new ButtonBuilder()
@@ -205,12 +206,12 @@ module.exports = async function (interaction) {
                     .setStyle(ButtonStyle.Primary),
                 new ButtonBuilder()
                     .setCustomId('ticket_help')
-                    .setLabel('Bantuan Staff')
+                    .setLabel('Help')
                     .setEmoji('📞')
                     .setStyle(ButtonStyle.Secondary),
                 new ButtonBuilder()
                     .setCustomId('ticket_report')
-                    .setLabel('Laporkan Member')
+                    .setLabel('Report')
                     .setEmoji('⚠️')
                     .setStyle(ButtonStyle.Danger)
             );
