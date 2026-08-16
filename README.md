@@ -1,9 +1,9 @@
 # 🤖 Community Bot — All-in-One Discord Bot
 
-Bot Discord serbaguna untuk komunitas apapun — gaming, content creator, online community, server jualan, dll. Penuh fitur: welcome/goodbye, verifikasi, tiket transaksi (multi-kategori), key-driven VIP role, self-role, temp voice, giveaway, scheduled announcements, embed builder, backup, warn system, stats/leaderboard, poll, **auto-responder, anti-spam & auto-mod, AFK system, leveling system**.
+Bot Discord serbaguna buat komunitas apapun — gaming, content creator, online community, server jualan, dll. Penuh fitur: welcome/goodbye, verifikasi, tiket transaksi (multi-kategori), key-driven VIP role, self-role, temp voice, giveaway, scheduled announcements, embed builder, backup, warn system, stats/leaderboard, poll, **auto-responder, anti-spam & auto-mod, AFK system, leveling system**.
 
-> **Version:** 3.9.13 — 60+ slash commands, 94+ tests passing, fully configurable from Discord.
-> See [docs/ADMIN_GUIDE.md](./docs/ADMIN_GUIDE.md) untuk panduan admin.
+> **Version:** 3.9.21 — 60+ slash commands, 150+ tests passing, fully configurable dari Discord.
+> See [docs/ADMIN_GUIDE.md](./docs/ADMIN_GUIDE.md) untuk panduan admin lengkap.
 
 ---
 
@@ -66,10 +66,12 @@ Bot Discord serbaguna untuk komunitas apapun — gaming, content creator, online
 
 ### 📦 Produk & Key Manager
 
-- Produk dengan kategori & `requiresKey` flag
+- Produk dengan kategori & `requiresKey` flag (bisa campur key & non-key)
 - Key-driven VIP role (MAX EXTEND model)
 - Auto-expire role sesuai durasi key
 - Guild-scoped (cross-guild safe)
+- Set Key sukses → DM member + role + schedule (channel gak auto-close, biar admin & member bisa Q&A dulu)
+- Transcript otomatis tersimpan saat admin Tutup Tiket
 
 ### 🎉 Giveaway, Poll, Warn, Stats
 

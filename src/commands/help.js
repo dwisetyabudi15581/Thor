@@ -13,7 +13,7 @@ module.exports = async function (interaction) {
         .setTitle('🤖 COMMUNITY BOT — HELP')
         .setDescription(
             `Halo ${interaction.user}! Anda terverifikasi sebagai **Admin/Staff**.\n` +
-                `Berikut daftar lengkap command yang tersedia (v3.9.20).`
+                `Berikut daftar lengkap command yang tersedia (v3.9.21).`
         )
         .setColor(0x5865f2)
         .addFields(
@@ -209,7 +209,7 @@ module.exports = async function (interaction) {
             }
         )
         .setFooter({
-            text: `${interaction.client.user.username} v3.9.20 — All-in-One Community Bot`,
+            text: `${interaction.client.user.username} v3.9.21 — All-in-One Community Bot`,
             iconURL: interaction.client.user.displayAvatarURL({ dynamic: true })
         })
         .setTimestamp();

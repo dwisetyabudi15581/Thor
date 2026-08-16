@@ -664,47 +664,46 @@ module.exports = async function (interaction) {
         }
 
         // === 4. DM member ===
-        // v3.9.20: DM format diformat HP-friendly:
-        //   - Key pakai inline code (`key`) bukan codeblock multi-line. Di mobile
-        //     Discord, tap inline code → muncul menu "Copy" → gampang copas.
-        //   - Setiap info di baris sendiri, tidak ada bold yang berlebihan.
-        //   - Struktur: header → info transaksi → KEY (highlighted) → info role
-        //     → list key aktif → tips.
+        // v3.9.21: DM format diubah jadi lebih natural & HP-friendly:
+        //   - Key pakai inline code (`` `key` ``) bukan codeblock. Di Discord
+        //     mobile, long-press inline code → muncul menu "Copy" langsung.
+        //     Codeblock juga support tap-to-copy, tapi inline code lebih clean
+        //     & gak makan banyak layar di HP.
+        //   - Bahasa lebih santai, gak terlalu kaku/robotik.
         let dmSent = false;
         try {
             let expireInfo;
             if (keyEntry.expireAt === null) {
-                expireInfo = 'Permanen (tidak akan dihapus otomatis)';
+                expireInfo = 'permanen (gak akan hilang)';
             } else {
                 const days = Math.ceil((keyEntry.expireAt - Date.now()) / 86400000);
                 expireInfo = `${days} hari lagi`;
             }
 
-            // Cek semua key aktif untuk info tambahan
+            // Cek semua key aktif buat info tambahan
             const activeKeys = getActiveKeysByUserAndRole(member.id, role.id);
             const keyList = activeKeys
                 .map((k, i) => {
                     const rem = formatRemaining(k);
-                    return `${i + 1}. \`${k.key}\` — ${rem}`;
+                    return `${i + 1}. \`${k.key}\` (sisa ${rem})`;
                 })
                 .join('\n');
 
-            // v3.9.17 FIX: sanitize backticks di keyValue. Kalau key mengandung
+            // v3.9.17 FIX: sanitize backtick di keyValue. Kalau key mengandung
             // backtick, inline code bisa break. Ganti dengan single quote.
             const safeKey = keyValue.replace(/`/g, "'");
 
             await member.send({
                 content:
-                    `🎁 TRANSAKSI SUKSES\n` +
-                    `──────────────────\n\n` +
+                    `Halo ${member.user.username}! Transaksi kamu udah selesai 🎉\n\n` +
                     `Produk: ${product.label}\n` +
                     `Server: ${guild.name}\n\n` +
-                    `🔑 KEY (tap untuk copy):\n` +
-                    `${'```'}\n${safeKey}\n${'```'}\n\n` +
-                    `🎭 Role: ${role}\n` +
-                    `⏰ Expire: ${expireInfo}\n\n` +
-                    `📋 Key aktif kamu untuk role ini:\n${keyList}\n\n` +
-                    `💡 Simpan key baik-baik. Kalau role hilang padahal key masih aktif, hubungi admin.`
+                    `Ini key kamu (tahan/long-press untuk copy):\n` +
+                    `\`${safeKey}\`\n\n` +
+                    `Role: ${role}\n` +
+                    `Expire: ${expireInfo}\n\n` +
+                    `Key aktif kamu untuk role ini:\n${keyList}\n\n` +
+                    `Simpan keynya ya. Kalau role tiba-tiba hilang padahal key masih aktif, hubungi admin.`
             });
             dmSent = true;
         } catch (_dmErr) {
@@ -751,18 +750,10 @@ module.exports = async function (interaction) {
             });
         } catch (_) {}
 
-        // === v3.9.20: JANGAN hapus channel otomatis setelah Set Key. ===
-        // Sebelumnya: Set Key sukses → channel langsung di-delete. Masalah:
-        //   1. Member gak sempat nanya kalau belum paham cara pakai key.
-        //   2. Admin gak sempat kasih info tambahan (cara aktivasi, dll).
-        //   3. Transcript gak ke-save karena channel di-delete tanpa lewat
-        //      closeTicket (yang manggil saveTranscript).
-        //
-        // Sekarang:
-        //   - Update meta: isCompleted=true, keySetAt, keySetBy.
-        //   - Kirim embed "Transaksi Selesai" ke channel + tombol Tutup Tiket.
-        //   - Admin bisa Q&A dulu, lalu klik Tutup Tiket → closeTicket →
-        //     saveTranscript otomatis ke channel transcript.
+        // === v3.9.21: Jangan munculin embed/panel baru di channel. ===
+        // Cukup kirim pesan teks simpel yang bilang "key sudah dikirim via DM".
+        // Tombol Tutup Tiket dari pesan awal createTicket masih ada — admin bisa
+        // klik itu kalau udah selesai Q&A sama member.
         try {
             patchTicketMeta(interaction.channel.id, {
                 isCompleted: true,
@@ -774,35 +765,15 @@ module.exports = async function (interaction) {
         }
 
         try {
-            const { EmbedBuilder } = require('discord.js');
-            const completedEmbed = new EmbedBuilder()
-                .setTitle('✅ TRANSAKSI SELESAI')
-                .setDescription(
-                    `Key sudah diberikan ke <@${userId}>.\n\n` +
-                    `📦 Produk: **${product.label}**\n` +
-                    `🎭 Role: ${role}\n` +
-                    `${dmSent ? '📬 DM berhasil terkirim ke member.' : '⚠️ DM gagal — tolong kirim key manual.'}\n\n` +
-                    `💬 Tiket ini **tidak otomatis ditutup**. Kamu masih bisa ngobrol / Q&A dengan member di sini.\n\n` +
-                    `Klik **🔒 Tutup Tiket** di bawah kalau sudah selesai. Transcript akan otomatis tersimpan.`
-                )
-                .setColor(0x57f287)
-                .setFooter({ text: interaction.client.user.username, iconURL: interaction.client.user.displayAvatarURL({ dynamic: true }) })
-                .setTimestamp();
-
-            const closeBtn = new ButtonBuilder()
-                .setCustomId('ticket_close')
-                .setLabel('🔒 Tutup Tiket')
-                .setStyle(ButtonStyle.Danger);
-
-            const closeRow = new ActionRowBuilder().addComponents(closeBtn);
+            const noticeMsg = dmSent
+                ? `✅ Key udah dikirim ke DM <@${userId}>. Kalau member gak terima DM, klik Set Key lagi atau kirim manual.\n\nKalau udah selesai Q&A, klik **🔒 Tutup Tiket** di pesan atas.`
+                : `⚠️ Gagal kirim DM ke <@${userId}>. Key: \`${keyValue.replace(/`/g, "'")}\`\n\nTolong kirim manual ke member ya. Kalau udah selesai, klik **🔒 Tutup Tiket** di pesan atas.`;
 
             await interaction.channel.send({
-                content: `<@${userId}>`,
-                embeds: [completedEmbed],
-                components: [closeRow]
+                content: noticeMsg
             });
         } catch (sendErr) {
-            console.warn('⚠️ Gagal kirim embed "Transaksi Selesai" ke channel:', sendErr.message);
+            console.warn('⚠️ Gagal kirim notice "key sudah dikirim" ke channel:', sendErr.message);
         }
 
         // === 7. Log sukses (channel TIDAK dihapus — admin yang close manual) ===
