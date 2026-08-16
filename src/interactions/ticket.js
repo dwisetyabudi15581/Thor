@@ -33,7 +33,13 @@ const {
     TextInputStyle
 } = require('discord.js');
 const { getConfig, safeEditReply, logAudit, checkIsAdmin } = require('../commands/_shared');
-const { createTicket, closeTicket, sendInvoice, getTicketMeta } = require('../data/ticketManager');
+const {
+    createTicket,
+    closeTicket,
+    sendInvoice,
+    getTicketMeta,
+    patchTicketMeta
+} = require('../data/ticketManager');
 const { addKey, getActiveKeysByUserAndRole, formatRemaining } = require('../data/keyManager');
 const { scheduleRoleRemoval } = require('../data/roleScheduler');
 
@@ -310,8 +316,16 @@ module.exports = async function (interaction) {
         // supaya admin bisa catat sukses + kirim invoice/testimoni.
         const requiresKey = meta?.requiresKey !== undefined ? meta.requiresKey : isTransaction;
 
-        // 3 skenario tombol konfirmasi close:
-        // - Transaksi pakai key (requiresKey=true):
+        // v3.9.20: cek apakah Set Key sudah dilakukan. Kalau ya, transaksi sudah
+        // sukses → tombol close hanya "Selesai" (skip "Tidak Jadi Beli").
+        const isCompleted = meta?.isCompleted === true;
+
+        // 4 skenario tombol konfirmasi close:
+        // - Transaksi pakai key + SUDAH Set Key (isCompleted=true):
+        //     • ✅ Selesai (close sukses — kirim invoice & transcript)
+        //     • ⏏️ Batal Tutup
+        //
+        // - Transaksi pakai key + BELUM Set Key (requiresKey=true, isCompleted=false):
         //     • ❌ Tidak Jadi Beli (close tanpa invoice)
         //     • ⏏️ Batal Tutup
         //   (sukses ditandai via Set Key, jadi gak perlu tombol sukses di sini)
@@ -326,7 +340,21 @@ module.exports = async function (interaction) {
         //     • 🚪 Tutup Tanpa Selesai (close batal)
         //     • ⏏️ Batal Tutup
         const confirmRow = new ActionRowBuilder();
-        if (isTransaction && requiresKey) {
+        if (isTransaction && requiresKey && isCompleted) {
+            // v3.9.20: Set Key sudah dilakukan → transaksi sudah sukses.
+            // Hanya tampilkan "Selesai" + "Batal Tutup" (tidak ada "Tidak Jadi Beli"
+            // karena key sudah dikirim & role sudah diberikan).
+            confirmRow.addComponents(
+                new ButtonBuilder()
+                    .setCustomId('ticket_close_success')
+                    .setLabel('✅ Selesai')
+                    .setStyle(ButtonStyle.Success),
+                new ButtonBuilder()
+                    .setCustomId('ticket_close_abort')
+                    .setLabel('⏏️ Batal Tutup')
+                    .setStyle(ButtonStyle.Secondary)
+            );
+        } else if (isTransaction && requiresKey) {
             // Transaksi pakai key — sukses via Set Key, di sini cuma batal/abort
             confirmRow.addComponents(
                 new ButtonBuilder()
@@ -371,11 +399,21 @@ module.exports = async function (interaction) {
                     .setStyle(ButtonStyle.Secondary)
             );
         }
-        const msg = isTransaction
-            ? (requiresKey
-                ? '⚠️ Tutup tiket tanpa memberi key? Klik **❌ Tidak Jadi Beli**.'
-                : '⚠️ Tutup tiket transaksi ini?\n• **✅ Pesanan Sukses** — transaksi berhasil, kirim invoice/testimoni\n• **❌ Tidak Jadi Beli** — batal, tanpa invoice')
-            : '⚠️ Selesaikan tiket ini?';
+        // v3.9.20: pesan konfirmasi berbeda untuk 4 skenario.
+        let msg;
+        if (isTransaction && requiresKey && isCompleted) {
+            // Set Key sudah dilakukan → transaksi sukses → close + save transcript.
+            msg = '✅ Transaksi sudah sukses (Set Key sudah dilakukan).\nKlik **✅ Selesai** untuk menutup tiket & menyimpan transcript.';
+        } else if (isTransaction && requiresKey) {
+            msg = '⚠️ Tutup tiket tanpa memberi key? Klik **❌ Tidak Jadi Beli**.';
+        } else if (isTransaction && !requiresKey) {
+            msg =
+                '⚠️ Tutup tiket transaksi ini?\n' +
+                '• **✅ Pesanan Sukses** — transaksi berhasil, kirim invoice/testimoni\n' +
+                '• **❌ Tidak Jadi Beli** — batal, tanpa invoice';
+        } else {
+            msg = '⚠️ Selesaikan tiket ini?';
+        }
         return interaction.reply({ content: msg, components: [confirmRow], flags: MessageFlags.Ephemeral });
     }
 
@@ -626,14 +664,20 @@ module.exports = async function (interaction) {
         }
 
         // === 4. DM member ===
+        // v3.9.20: DM format diformat HP-friendly:
+        //   - Key pakai inline code (`key`) bukan codeblock multi-line. Di mobile
+        //     Discord, tap inline code → muncul menu "Copy" → gampang copas.
+        //   - Setiap info di baris sendiri, tidak ada bold yang berlebihan.
+        //   - Struktur: header → info transaksi → KEY (highlighted) → info role
+        //     → list key aktif → tips.
         let dmSent = false;
         try {
             let expireInfo;
             if (keyEntry.expireAt === null) {
-                expireInfo = 'Role ini bersifat **permanen**.';
+                expireInfo = 'Permanen (tidak akan dihapus otomatis)';
             } else {
                 const days = Math.ceil((keyEntry.expireAt - Date.now()) / 86400000);
-                expireInfo = `Role akan otomatis dihapus setelah **${days} hari** (mengikuti sisa key terbanyak).`;
+                expireInfo = `${days} hari lagi`;
             }
 
             // Cek semua key aktif untuk info tambahan
@@ -641,21 +685,26 @@ module.exports = async function (interaction) {
             const keyList = activeKeys
                 .map((k, i) => {
                     const rem = formatRemaining(k);
-                    return `\`${i + 1}.\` \`${k.key}\` — ${k.productName} — ${rem}`;
+                    return `${i + 1}. \`${k.key}\` — ${rem}`;
                 })
                 .join('\n');
 
+            // v3.9.17 FIX: sanitize backticks di keyValue. Kalau key mengandung
+            // backtick, inline code bisa break. Ganti dengan single quote.
+            const safeKey = keyValue.replace(/`/g, "'");
+
             await member.send({
                 content:
-                    `🎁 **Transaksi Sukses!**\n\n` +
-                    `Terima kasih sudah membeli **${product.label}** di **${guild.name}**.\n\n` +
-                    // v3.9.17 FIX: sanitize backticks di keyValue. Sebelumnya, kalau
-                    // key mengandung triple backtick (```), code block break dan sisa
-                    // keyValue di-render sebagai markdown. Sekarang: escape backtick.
-                    `🔑 **Key kamu:**\n\`\`\`\n${keyValue.replace(/`/g, "'")}\n\`\`\`\n` +
-                    `🎭 Role: ${role}\n⏰ ${expireInfo}\n\n` +
-                    `📋 **Semua key aktif kamu untuk role ini:**\n${keyList}\n\n` +
-                    `💡 Simpan key ini baik-baik. Kalau role tiba-tiba hilang padahal masih ada key aktif, hubungi admin.`
+                    `🎁 TRANSAKSI SUKSES\n` +
+                    `──────────────────\n\n` +
+                    `Produk: ${product.label}\n` +
+                    `Server: ${guild.name}\n\n` +
+                    `🔑 KEY (tap untuk copy):\n` +
+                    `${'```'}\n${safeKey}\n${'```'}\n\n` +
+                    `🎭 Role: ${role}\n` +
+                    `⏰ Expire: ${expireInfo}\n\n` +
+                    `📋 Key aktif kamu untuk role ini:\n${keyList}\n\n` +
+                    `💡 Simpan key baik-baik. Kalau role hilang padahal key masih aktif, hubungi admin.`
             });
             dmSent = true;
         } catch (_dmErr) {
@@ -702,12 +751,63 @@ module.exports = async function (interaction) {
             });
         } catch (_) {}
 
-        // === 6. Hapus channel tiket ===
-        await interaction.channel.delete().catch(() => {});
+        // === v3.9.20: JANGAN hapus channel otomatis setelah Set Key. ===
+        // Sebelumnya: Set Key sukses → channel langsung di-delete. Masalah:
+        //   1. Member gak sempat nanya kalau belum paham cara pakai key.
+        //   2. Admin gak sempat kasih info tambahan (cara aktivasi, dll).
+        //   3. Transcript gak ke-save karena channel di-delete tanpa lewat
+        //      closeTicket (yang manggil saveTranscript).
+        //
+        // Sekarang:
+        //   - Update meta: isCompleted=true, keySetAt, keySetBy.
+        //   - Kirim embed "Transaksi Selesai" ke channel + tombol Tutup Tiket.
+        //   - Admin bisa Q&A dulu, lalu klik Tutup Tiket → closeTicket →
+        //     saveTranscript otomatis ke channel transcript.
+        try {
+            patchTicketMeta(interaction.channel.id, {
+                isCompleted: true,
+                keySetAt: Date.now(),
+                keySetBy: interaction.user.id
+            });
+        } catch (patchErr) {
+            console.warn('⚠️ Gagal patch meta (isCompleted):', patchErr.message);
+        }
 
-        // === 7. Log sukses (feedback ephemeral sudah dikirim di atas) ===
+        try {
+            const { EmbedBuilder } = require('discord.js');
+            const completedEmbed = new EmbedBuilder()
+                .setTitle('✅ TRANSAKSI SELESAI')
+                .setDescription(
+                    `Key sudah diberikan ke <@${userId}>.\n\n` +
+                    `📦 Produk: **${product.label}**\n` +
+                    `🎭 Role: ${role}\n` +
+                    `${dmSent ? '📬 DM berhasil terkirim ke member.' : '⚠️ DM gagal — tolong kirim key manual.'}\n\n` +
+                    `💬 Tiket ini **tidak otomatis ditutup**. Kamu masih bisa ngobrol / Q&A dengan member di sini.\n\n` +
+                    `Klik **🔒 Tutup Tiket** di bawah kalau sudah selesai. Transcript akan otomatis tersimpan.`
+                )
+                .setColor(0x57f287)
+                .setFooter({ text: interaction.client.user.username, iconURL: interaction.client.user.displayAvatarURL({ dynamic: true }) })
+                .setTimestamp();
+
+            const closeBtn = new ButtonBuilder()
+                .setCustomId('ticket_close')
+                .setLabel('🔒 Tutup Tiket')
+                .setStyle(ButtonStyle.Danger);
+
+            const closeRow = new ActionRowBuilder().addComponents(closeBtn);
+
+            await interaction.channel.send({
+                content: `<@${userId}>`,
+                embeds: [completedEmbed],
+                components: [closeRow]
+            });
+        } catch (sendErr) {
+            console.warn('⚠️ Gagal kirim embed "Transaksi Selesai" ke channel:', sendErr.message);
+        }
+
+        // === 7. Log sukses (channel TIDAK dihapus — admin yang close manual) ===
         console.log(
-            `✅ Set Key sukses: ${member.user.tag} | produk=${product.label} | role=${role.name} | extend=${scheduleResult.extended} | permanen=${scheduleResult.permanent} | dm=${dmSent}`
+            `✅ Set Key sukses: ${member.user.tag} | produk=${product.label} | role=${role.name} | extend=${scheduleResult.extended} | permanen=${scheduleResult.permanent} | dm=${dmSent} | channel TIDAK dihapus (menunggu admin close manual)`
         );
         return;
     }

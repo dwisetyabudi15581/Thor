@@ -554,7 +554,7 @@ test('help.js: help embed mentions new v3.9.14+ commands', async () => {
     assert.match(allText, /update-panel/);
     assert.match(allText, /refresh-panel/);
     assert.match(allText, /use_dropdown/);
-    assert.match(allText, /v3\.9\.19/);
+    assert.match(allText, /v3\.9\.20/);
 });
 
 // === Router test ===
@@ -843,6 +843,94 @@ test('v3.9.19: kategori transaction campur key & non-key → semua muncul di dro
     const nonKeyProducts = productsInCat.filter(p => p.requiresKey === false);
     assert.strictEqual(keyProducts.length, 1, '1 key product (VIP)');
     assert.strictEqual(nonKeyProducts.length, 2, '2 non-key products (Joki, Booster)');
+});
+
+// === v3.9.20 tests: Set Key tidak auto-close, DM HP-friendly, isCompleted flag ===
+
+test('ticketManager: patchTicketMeta melakukan partial update tanpa overwrite field lain', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const ticketsPath = path.join(__dirname, '..', '..', 'data', 'tickets.json');
+    // Backup existing
+    let backup = null;
+    if (fs.existsSync(ticketsPath)) {
+        backup = fs.readFileSync(ticketsPath, 'utf8');
+        fs.unlinkSync(ticketsPath);
+    }
+    try {
+        const { setTicketMeta, patchTicketMeta, getTicketMeta, invalidateCache } = require('../../src/data/ticketManager');
+        // invalidateCache tidak ada — tidak masalah, ticketsManager pakai readFileSync fresh
+        // Set initial meta
+        setTicketMeta('ch-1', {
+            userId: 'user-1',
+            productName: 'VIP 30 Hari',
+            price: 'Rp 50.000',
+            guildId: 'g-1',
+            category: 'transaction',
+            requiresKey: true
+        });
+
+        // Verify initial
+        const before = getTicketMeta('ch-1');
+        assert.strictEqual(before.userId, 'user-1');
+        assert.strictEqual(before.productName, 'VIP 30 Hari');
+        assert.strictEqual(before.isCompleted, false);
+        assert.strictEqual(before.keySetAt, null);
+
+        // Patch hanya isCompleted, keySetAt, keySetBy
+        const patched = patchTicketMeta('ch-1', {
+            isCompleted: true,
+            keySetAt: 1700000000000,
+            keySetBy: 'admin-1'
+        });
+        assert.strictEqual(patched, true, 'patchTicketMeta should return true on success');
+
+        // Verify: other fields PRESERVED
+        const after = getTicketMeta('ch-1');
+        assert.strictEqual(after.userId, 'user-1', 'userId should be preserved');
+        assert.strictEqual(after.productName, 'VIP 30 Hari', 'productName should be preserved');
+        assert.strictEqual(after.price, 'Rp 50.000', 'price should be preserved');
+        assert.strictEqual(after.category, 'transaction', 'category should be preserved');
+        assert.strictEqual(after.requiresKey, true, 'requiresKey should be preserved');
+        // Patched fields updated
+        assert.strictEqual(after.isCompleted, true, 'isCompleted should be updated');
+        assert.strictEqual(after.keySetAt, 1700000000000, 'keySetAt should be updated');
+        assert.strictEqual(after.keySetBy, 'admin-1', 'keySetBy should be updated');
+    } finally {
+        // Restore
+        if (backup !== null) {
+            fs.writeFileSync(ticketsPath, backup, 'utf8');
+        } else if (fs.existsSync(ticketsPath)) {
+            fs.unlinkSync(ticketsPath);
+        }
+    }
+});
+
+test('ticketManager: patchTicketMeta returns false kalau channel tidak ada di meta', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const ticketsPath = path.join(__dirname, '..', '..', 'data', 'tickets.json');
+    let backup = null;
+    if (fs.existsSync(ticketsPath)) {
+        backup = fs.readFileSync(ticketsPath, 'utf8');
+        fs.unlinkSync(ticketsPath);
+    }
+    try {
+        const { patchTicketMeta } = require('../../src/data/ticketManager');
+        const result = patchTicketMeta('nonexistent-channel', { isCompleted: true });
+        assert.strictEqual(result, false, 'should return false for non-existent channel');
+    } finally {
+        if (backup !== null) {
+            fs.writeFileSync(ticketsPath, backup, 'utf8');
+        } else if (fs.existsSync(ticketsPath)) {
+            fs.unlinkSync(ticketsPath);
+        }
+    }
+});
+
+test('ticketManager exports: patchTicketMeta di-export', () => {
+    const ticketManager = require('../../src/data/ticketManager');
+    assert.strictEqual(typeof ticketManager.patchTicketMeta, 'function', 'patchTicketMeta should be exported');
 });
 
 // Cleanup

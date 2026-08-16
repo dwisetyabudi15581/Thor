@@ -303,15 +303,61 @@ Bot akan:
 3. Member kirim bukti pembayaran
 4. Admin konfirmasi → klik **🔑 Set Key** di tiket
 5. Modal muncul → admin ketik key → submit
-6. Bot otomatis: simpan key, beri role, schedule, DM member, kirim invoice, hapus channel tiket
+6. Bot otomatis: simpan key, beri role, schedule, DM member, kirim invoice
+7. **v3.9.20:** Channel tiket TIDAK otomatis dihapus. Bot kirim embed
+   "✅ Transaksi Selesai" + tombol Tutup Tiket baru. Admin bisa Q&A dengan
+   member dulu (mis. member nanya cara pakai key).
+8. Kalau sudah selesai, admin klik **🔒 Tutup Tiket** → pilih **✅ Selesai** →
+   bot save transcript otomatis ke channel transcript, lalu hapus channel.
 
 **Tips:**
 
 - Sebelum klik Set Key, pastikan pembayaran sudah masuk
 - Key bisa apa saja (string bebas), mis. `ABCDE-12345-FGHIJ-67890`
-- Bot akan DM member dengan key + info expire + list semua key aktif
+- Bot akan DM member dengan key + info expire + list semua key aktif (format HP-friendly, tap untuk copy)
 - Invoice otomatis terkirim ke channel invoice (testimoni)
-- Metadata tiket (userId, productName, price) disimpan di `tickets.json` — bukan di channel topic (anti spoof/edit)
+- Transcript otomatis tersimpan ke channel transcript saat admin Tutup Tiket
+- Metadata tiket (userId, productName, price, isCompleted) disimpan di `tickets.json` — bukan di channel topic (anti spoof/edit)
+
+### v3.9.20: Perubahan Penting Set Key & Tutup Tiket
+
+**Sebelum v3.9.20:**
+
+- Set Key sukses → channel otomatis dihapus → transcript TIDAK tersimpan (karena hapus channel tanpa lewat closeTicket)
+- Member gak sempat nanya kalau belum paham cara pakai key
+
+**Sekarang (v3.9.20):**
+
+- Set Key sukses → channel TETAP TERBUKA + embed "Transaksi Selesai" muncul + tombol Tutup Tiket baru
+- Admin & member bisa Q&A dulu di channel tiket
+- Saat admin klik Tutup Tiket → karena `meta.isCompleted=true`, hanya muncul tombol "✅ Selesai" (tidak ada "Tidak Jadi Beli" karena transaksi sudah sukses)
+- Klik "✅ Selesai" → closeTicket(isSuccess=true) → transcript otomatis tersimpan ke channel transcript + kirim invoice (kalau belum) → hapus channel
+
+**Format DM member (HP-friendly):**
+
+```
+🎁 TRANSAKSI SUKSES
+──────────────────
+
+Produk: VIP 30 Hari
+Server: Server Saya
+
+🔑 KEY (tap untuk copy):
+```
+ABCDE-12345-FGHIJ-67890
+```
+
+🎭 Role: @VIP
+⏰ Expire: 30 hari lagi
+
+📋 Key aktif kamu untuk role ini:
+1. `ABCDE-12345` — 29 hari lagi
+2. `FGHIJ-67890` — 25 hari lagi
+
+💡 Simpan key baik-baik. Kalau role hilang padahal key masih aktif, hubungi admin.
+```
+
+Di Discord mobile, tap pada codeblock key → muncul menu "Copy" → gampang paste ke tempat lain.
 
 ### Tutup Tiket Tanpa Transaksi
 

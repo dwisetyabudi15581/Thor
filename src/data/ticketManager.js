@@ -72,7 +72,14 @@ function setTicketMeta(channelId, meta) {
         // v3.9.11 Phase 2: requiresKey flag (kalau true, ticket tampilkan tombol Set Key).
         requiresKey: meta.requiresKey !== undefined ? meta.requiresKey : null,
         // v3.9.11 Phase 3: deliveryFields — data yang user isi di modal form.
-        deliveryFields: meta.deliveryFields || null
+        deliveryFields: meta.deliveryFields || null,
+        // v3.9.20: flag bahwa Set Key sudah dilakukan. Dipakai di ticket_close
+        // untuk menampilkan tombol "Selesai" (bukan "Tidak Jadi Beli") karena
+        // transaksi sudah sukses. Juga dipakai supaya transcript mencatat
+        // status sukses saat admin close tiket yang sudah Set Key.
+        isCompleted: meta.isCompleted || false,
+        keySetAt: meta.keySetAt || null,
+        keySetBy: meta.keySetBy || null
     };
     saveTickets(all);
 }
@@ -111,6 +118,19 @@ function removeTicketMeta(channelId) {
     const all = loadTickets();
     if (!all[channelId]) return false;
     delete all[channelId];
+    saveTickets(all);
+    return true;
+}
+
+/**
+ * v3.9.20: Patch (partial update) metadata tiket — gak overwrite field lain.
+ * Dipakai saat Set Key sukses: update isCompleted=true, keySetAt, keySetBy
+ * tanpa harus re-set semua field (userId, productName, dll).
+ */
+function patchTicketMeta(channelId, patch) {
+    const all = loadTickets();
+    if (!all[channelId]) return false;
+    all[channelId] = { ...all[channelId], ...patch };
     saveTickets(all);
     return true;
 }
@@ -551,6 +571,13 @@ async function closeTicket(channel, closer, isSuccess) {
         const productName = meta?.productName || 'Unknown';
         const price = meta?.price || 'Unknown';
 
+        // v3.9.20: kalau Set Key sudah dilakukan (meta.isCompleted=true),
+        // anggap isSuccess=true supaya transcript & invoice mencatat status sukses.
+        // Admin bisa close tanpa harus klik "Selesai" — meta yang penting.
+        if (meta?.isCompleted === true) {
+            isSuccess = true;
+        }
+
         // v3.9.11 Phase 3: auto-save transcript ke channel transcript (kalau di-set).
         // Dilakukan SEBELUM delete channel supaya messages masih bisa di-fetch.
         // Failure tidak block close — log warning saja.
@@ -624,4 +651,12 @@ async function closeTicket(channel, closer, isSuccess) {
     }
 }
 
-module.exports = { createTicket, closeTicket, sendInvoice, getTicketMeta, setTicketMeta, removeTicketMeta };
+module.exports = {
+    createTicket,
+    closeTicket,
+    sendInvoice,
+    getTicketMeta,
+    setTicketMeta,
+    patchTicketMeta,
+    removeTicketMeta
+};
