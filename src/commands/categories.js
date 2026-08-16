@@ -176,4 +176,80 @@ module.exports = async function (interaction) {
                     : `ℹ️ Tidak ada produk yang pakai kategori ini.`)
         });
     }
+
+    // === UPDATE CATEGORY (v3.9.19) ===
+    // Edit kategori existing tanpa harus hapus + add ulang.
+    // Semua field optional — hanya field yang diisi yang akan diupdate.
+    if (interaction.commandName === 'update-category') {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+        const id = interaction.options.getString('id');
+        const newLabel = interaction.options.getString('label');
+        const newEmoji = interaction.options.getString('emoji');
+        const newStyle = interaction.options.getString('style');
+        const newRequiresKey = interaction.options.getBoolean('requires_key');
+
+        const categories = config.ticketCategories || [];
+        const idx = categories.findIndex(c => c.id === id);
+
+        if (idx === -1) {
+            return safeEditReply(interaction, {
+                content: `❌ Kategori \`${id}\` tidak ditemukan. Pakai /list-categories untuk lihat daftar.`
+            });
+        }
+
+        // Validate style kalau diisi
+        if (newStyle !== null) {
+            const validStyles = ['Primary', 'Secondary', 'Success', 'Danger'];
+            if (!validStyles.includes(newStyle)) {
+                return safeEditReply(interaction, { content: '❌ `style` tidak valid.' });
+            }
+        }
+
+        const before = { ...categories[idx] };
+        const changes = [];
+
+        if (newLabel !== null) {
+            categories[idx].label = newLabel.slice(0, 80);
+            changes.push(`label: \`${before.label}\` → \`${categories[idx].label}\``);
+        }
+        if (newEmoji !== null) {
+            categories[idx].emoji = newEmoji;
+            changes.push(`emoji: ${before.emoji} → ${newEmoji}`);
+        }
+        if (newStyle !== null) {
+            categories[idx].style = newStyle;
+            changes.push(`style: ${before.style} → ${newStyle}`);
+        }
+        if (newRequiresKey !== null) {
+            categories[idx].requiresKey = newRequiresKey;
+            changes.push(`requiresKey: ${before.requiresKey} → ${newRequiresKey}`);
+        }
+
+        if (changes.length === 0) {
+            return safeEditReply(interaction, {
+                content:
+                    `ℹ️ Tidak ada perubahan dilakukan. Berikan minimal 1 field untuk diupdate (label/emoji/style/requires_key).\n\n` +
+                    `Kategori **${before.label}** (\`${before.id}\`) tetap seperti sebelumnya.`
+            });
+        }
+
+        config.ticketCategories = categories;
+        saveConfig(config);
+
+        await logAudit(interaction.client, {
+            action: 'UPDATE_CATEGORY',
+            actorId: interaction.user.id,
+            actorTag: interaction.user.tag,
+            details: `Update kategori tiket: **${before.label}** (\`${before.id}\`) — ${changes.join('; ')}`,
+            guildId: interaction.guild.id
+        });
+
+        return safeEditReply(interaction, {
+            content:
+                `✅ Kategori **${categories[idx].label}** (\`${categories[idx].id}\`) berhasil diupdate!\n\n` +
+                `📝 Perubahan:\n${changes.map(c => `• ${c}`).join('\n')}\n\n` +
+                `💡 Pakai \`/refresh-panel <id>\` untuk re-render panel yang sudah terpasang.`
+        });
+    }
 };

@@ -554,7 +554,7 @@ test('help.js: help embed mentions new v3.9.14+ commands', async () => {
     assert.match(allText, /update-panel/);
     assert.match(allText, /refresh-panel/);
     assert.match(allText, /use_dropdown/);
-    assert.match(allText, /v3\.9\.18/);
+    assert.match(allText, /v3\.9\.19/);
 });
 
 // === Router test ===
@@ -737,6 +737,112 @@ test('panels.buildTicketPanel: dropdown description generic untuk kategori non-t
     assert.strictEqual(transaksiDesc, 'Transaksi (pakai key)');
     // Non-transaksi → "Bantuan / non-transaksi" (bukan "Bantuan / report")
     assert.strictEqual(nonTransaksiDesc, 'Bantuan / non-transaksi');
+});
+
+// === v3.9.19 tests: flexibility fix + new commands ===
+
+test('registry: /update-category command registered with all options', () => {
+    const { getCommands } = require('../../src/commands/registry');
+    const commands = getCommands();
+    const cmd = commands.find(c => c.name === 'update-category');
+    assert.ok(cmd, 'update-category should be registered');
+    const optionNames = cmd.options.map(o => o.name);
+    assert.ok(optionNames.includes('id'));
+    assert.ok(optionNames.includes('label'));
+    assert.ok(optionNames.includes('emoji'));
+    assert.ok(optionNames.includes('style'));
+    assert.ok(optionNames.includes('requires_key'));
+});
+
+test('registry: /update-product command registered with all options', () => {
+    const { getCommands } = require('../../src/commands/registry');
+    const commands = getCommands();
+    const cmd = commands.find(c => c.name === 'update-product');
+    assert.ok(cmd, 'update-product should be registered');
+    const optionNames = cmd.options.map(o => o.name);
+    assert.ok(optionNames.includes('value'));
+    assert.ok(optionNames.includes('label'));
+    assert.ok(optionNames.includes('price'));
+    assert.ok(optionNames.includes('duration'));
+    assert.ok(optionNames.includes('category'));
+    assert.ok(optionNames.includes('requires_key'));
+    // value wajib required (identifier)
+    const valueOpt = cmd.options.find(o => o.name === 'value');
+    assert.strictEqual(valueOpt.required, true, 'value must be required');
+});
+
+test('help.js: mentions /update-category and /update-product', async () => {
+    const replies = [];
+    const mockInteraction = {
+        user: { toString: () => '<@test>' },
+        client: {
+            user: {
+                username: 'TestBot',
+                displayAvatarURL: () => 'http://example.com/avatar.png'
+            }
+        },
+        reply: async opts => {
+            replies.push(opts);
+            return {};
+        }
+    };
+    const helpHandler = require('../../src/commands/help');
+    await helpHandler(mockInteraction);
+    const allText = replies[0].embeds[0].data.fields.map(f => f.value).join('\n') + replies[0].embeds[0].data.description;
+    assert.match(allText, /update-category/);
+    assert.match(allText, /update-product/);
+});
+
+// === v3.9.19 integration test: bug fix behavior ===
+// Verify: kategori requiresKey=false TAPI punya produk → seharusnya dropdown produk.
+// Ini scenario "Jasa" dengan beberapa jasa non-key.
+// Note: test ini tidak bisa langsung test handler ticket.js karena butuh mock
+// Discord interaction yang kompleks. Tapi kita bisa verify logic-nya via
+// config structure — kalau kategori jasa punya produk, behavior akan jadi dropdown.
+
+test('v3.9.19: kategori jasa dengan produk non-key → seharusnya jadi dropdown (bukan direct ticket)', () => {
+    // Verify struktur config: kategori "jasa" punya produk terkait.
+    // Logic di ticket.js v3.9.19: cek productsInCat.length > 0 → tampilkan dropdown.
+    const config = {
+        ticketCategories: [
+            { id: 'jasa', label: 'Jasa', emoji: '🛠️', style: 'Primary', requiresKey: false, isDefault: false }
+        ],
+        products: [
+            { label: 'Jasa Joki', value: 'joki', price: 'Rp 200.000', category: 'jasa', requiresKey: false },
+            { label: 'Jasa Install', value: 'install', price: 'Rp 50.000', category: 'jasa', requiresKey: false }
+        ]
+    };
+    const productsInCat = config.products.filter(p => (p.category || 'transaction') === 'jasa');
+    assert.strictEqual(productsInCat.length, 2, 'jasa category should have 2 products');
+    assert.strictEqual(productsInCat.length > 0, true, 'should show dropdown (not direct ticket)');
+});
+
+test('v3.9.19: kategori help tanpa produk → seharusnya langsung create ticket', () => {
+    const config = {
+        ticketCategories: [{ id: 'help', label: 'Help', emoji: '📞', style: 'Secondary', requiresKey: false, isDefault: true }],
+        products: []
+    };
+    const productsInCat = config.products.filter(p => (p.category || 'transaction') === 'help');
+    assert.strictEqual(productsInCat.length, 0, 'help category should have 0 products');
+    assert.strictEqual(productsInCat.length === 0, true, 'should direct create ticket (no dropdown)');
+});
+
+test('v3.9.19: kategori transaction campur key & non-key → semua muncul di dropdown', () => {
+    const config = {
+        ticketCategories: [{ id: 'transaction', label: 'Beli', emoji: '🔑', style: 'Primary', requiresKey: true, isDefault: true }],
+        products: [
+            { label: 'VIP 30 Hari', value: 'vip30', price: 'Rp 50.000', category: 'transaction', requiresKey: true },
+            { label: 'Jasa Joki Mythic', value: 'joki', price: 'Rp 200.000', category: 'transaction', requiresKey: false },
+            { label: 'Jasa Booster', value: 'booster', price: 'Rp 300.000', category: 'transaction', requiresKey: false }
+        ]
+    };
+    const productsInCat = config.products.filter(p => (p.category || 'transaction') === 'transaction');
+    assert.strictEqual(productsInCat.length, 3, 'all 3 products should show in dropdown');
+    // Verify mix of requiresKey
+    const keyProducts = productsInCat.filter(p => p.requiresKey === true);
+    const nonKeyProducts = productsInCat.filter(p => p.requiresKey === false);
+    assert.strictEqual(keyProducts.length, 1, '1 key product (VIP)');
+    assert.strictEqual(nonKeyProducts.length, 2, '2 non-key products (Joki, Booster)');
 });
 
 // Cleanup

@@ -150,6 +150,9 @@ Sekarang semua tombol tiket **100% dinamis** — bisa CRUD dari Discord tanpa ed
 # Tambah kategori baru (contoh: tombol "Partnership")
 /add-category id:partnership label:"Partnership" emoji:"🤝" style:"Primary" requires_key:false
 
+# Update kategori existing tanpa hapus+add ulang (v3.9.19)
+/update-category id:partnership label:"Kerjasama" emoji:"💼" style:"Success"
+
 # Hapus kategori (kecuali default: transaction, help, report)
 /remove-category id:claim_giveaway
 
@@ -161,6 +164,37 @@ Sekarang semua tombol tiket **100% dinamis** — bisa CRUD dari Discord tanpa ed
 
 - `requires_key: true` → tiket transaksi (munculin dropdown produk, ada tombol Set Key). Contoh: `transaction`.
 - `requires_key: false` → tiket non-transaksi (langsung buat channel, tanpa produk). Contoh: `help`, `report`, `claim_giveaway`, `partnership`, dll.
+
+**Behavior v3.9.19 (FLEKSIBEL — berbasis "ada produk atau tidak"):**
+
+| Skenario Kategori | Produk di kategori | Behavior |
+|---|---|---|
+| `transaction` (requires_key: true) | Ada produk key | Dropdown produk → Set Key |
+| `transaction` (requires_key: true) | Campur key & non-key | Dropdown produk → Set Key untuk key, Pesanan Sukses untuk non-key |
+| `jasa` (requires_key: false) | Ada produk jasa | Dropdown produk → Pesanan Sukses (tanpa Set Key) |
+| `help` (requires_key: false) | Kosong | Langsung create ticket |
+| `report` (requires_key: false) | Kosong | Langsung create ticket |
+| `claim_giveaway` (requires_key: false) | Kosong | Langsung create ticket |
+| `partnership` (requires_key: false) | Kosong | Langsung create ticket |
+
+**Jadi kamu fleksibel mau pilih cara mana:**
+
+- **Cara 1 (sederhana)**: Taruh semua produk (key + jasa) di kategori `transaction`. User pilih lewat 1 dropdown.
+- **Cara 2 (terpisah)**: Bikin kategori `jasa` khusus, isi dengan produk jasa. User pilih kategori dulu → dropdown jasa muncul.
+- **Cara 3 (quick action)**: Bikin kategori tanpa produk (mis. `claim_giveaway`) untuk akses cepat tanpa pilih produk.
+
+**Update produk existing (v3.9.19):**
+
+```
+# Edit produk tanpa hapus+add ulang
+/update-product value:vip30 label:"VIP 30 Hari Promo" price:"Rp 40.000"
+
+# Pindah kategori produk
+/update-product value:joki category:jasa
+
+# Ubah requires_key (dari key ke non-key atau sebaliknya)
+/update-product value:joki requires_key:false
+```
 
 **Migration otomatis (v3.9.18):**
 

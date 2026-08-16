@@ -13,7 +13,7 @@ module.exports = async function (interaction) {
         .setTitle('🤖 COMMUNITY BOT — HELP')
         .setDescription(
             `Halo ${interaction.user}! Anda terverifikasi sebagai **Admin/Staff**.\n` +
-                `Berikut daftar lengkap command yang tersedia (v3.9.18).`
+                `Berikut daftar lengkap command yang tersedia (v3.9.19).`
         )
         .setColor(0x5865f2)
         .addFields(
@@ -47,8 +47,10 @@ module.exports = async function (interaction) {
                 name: '🎫 Kategori Tiket (CRUD)',
                 value: [
                     '• `/add-category id:jasa label:"Jasa" emoji:🎮 style:Success requires_key:false`',
+                    '• `/update-category id:jasa label:"Jasa Premium" emoji:"🛠️"` — edit tanpa hapus',
                     '• `/list-categories` — lihat semua kategori',
-                    '• `/remove-category id:jasa` — hapus kategori (default dilindungi)'
+                    '• `/remove-category id:jasa` — hapus kategori (default dilindungi)',
+                    '💡 v3.9.19: behavior fleksibel — kategori dengan produk → dropdown, kategori tanpa produk → langsung bikin tiket.'
                 ].join('\n'),
                 inline: false
             },
@@ -130,8 +132,9 @@ module.exports = async function (interaction) {
                 name: '📦 Produk & Auto-Role',
                 value: [
                     '• `/add-product` `/remove-product` `/list-products`',
+                    '• `/update-product value:vip30 label:"VIP 30 Hari" price:"Rp 30.000"` — edit tanpa hapus',
                     '• `/set-product-role` `/remove-product-role` `/list-product-roles`',
-                    '💡 VIP role + auto-expire (days)'
+                    '💡 VIP role + auto-expire (days). Bisa campur produk key & non-key (jasa).'
                 ].join('\n'),
                 inline: false
             },
@@ -206,7 +209,7 @@ module.exports = async function (interaction) {
             }
         )
         .setFooter({
-            text: `${interaction.client.user.username} v3.9.18 — All-in-One Community Bot`,
+            text: `${interaction.client.user.username} v3.9.19 — All-in-One Community Bot`,
             iconURL: interaction.client.user.displayAvatarURL({ dynamic: true })
         })
         .setTimestamp();

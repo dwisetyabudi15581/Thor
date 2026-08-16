@@ -201,6 +201,36 @@ function getCommands() {
             options: [{ type: 3, name: 'id', description: 'ID kategori yang akan dihapus', required: true }]
         },
 
+        // v3.9.19: update kategori existing (label/emoji/style/requires_key) tanpa hapus+add
+        {
+            name: 'update-category',
+            description: 'Edit kategori tiket existing (label/emoji/style/requires_key) tanpa hapus+add ulang',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
+            options: [
+                { type: 3, name: 'id', description: 'ID kategori yang akan diupdate', required: true, min_length: 1, max_length: 30 },
+                { type: 3, name: 'label', description: 'Label tombol baru (maks 80 char)', required: false, min_length: 1, max_length: 80 },
+                { type: 3, name: 'emoji', description: 'Emoji tombol baru (unicode atau custom <:name:id>)', required: false },
+                {
+                    type: 3,
+                    name: 'style',
+                    description: 'Warna tombol baru',
+                    required: false,
+                    choices: [
+                        { name: '🔵 Primary (Blurple)', value: 'Primary' },
+                        { name: '⚪ Secondary (Grey)', value: 'Secondary' },
+                        { name: '🟢 Success (Green)', value: 'Success' },
+                        { name: '🔴 Danger (Red)', value: 'Danger' }
+                    ]
+                },
+                {
+                    type: 5,
+                    name: 'requires_key',
+                    description: 'Apakah kategori ini butuh tombol Set Key?',
+                    required: false
+                }
+            ]
+        },
+
         // v3.9.11 Phase 3: multi-panel ticket (v3.9.14: full customization)
         {
             name: 'setup-ticket-panel',
@@ -376,6 +406,40 @@ function getCommands() {
             name: 'list-products',
             description: 'Lihat semua produk saat ini',
             defaultMemberPermissions: PermissionFlagsBits.ManageGuild
+        },
+
+        // v3.9.19: update produk existing tanpa hapus+add ulang
+        // value TIDAK bisa diubah (dipakai sebagai customId di modal_set_key).
+        {
+            name: 'update-product',
+            description: 'Edit produk existing (label/price/duration/category/requires_key) tanpa hapus+add ulang',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
+            options: [
+                {
+                    type: 3,
+                    name: 'value',
+                    description: 'Value produk yang akan diupdate (identifier — tidak berubah)',
+                    required: true,
+                    min_length: 1,
+                    max_length: 50
+                },
+                { type: 3, name: 'label', description: 'Label produk baru (maks 80 char)', required: false, min_length: 1, max_length: 80 },
+                { type: 3, name: 'price', description: 'Harga baru (mis. "Rp 25.000")', required: false, min_length: 1, max_length: 100 },
+                {
+                    type: 3,
+                    name: 'duration',
+                    description: 'Durasi baru (kosongkan string untuk hapus duration)',
+                    required: false,
+                    max_length: 100
+                },
+                { type: 3, name: 'category', description: 'Kategori baru (lihat /list-categories)', required: false, min_length: 1, max_length: 30 },
+                {
+                    type: 5,
+                    name: 'requires_key',
+                    description: 'Apakah produk ini butuh Set Key? (true=key, false=jasa/non-key)',
+                    required: false
+                }
+            ]
         },
 
         // === CONFIG SHOW ===

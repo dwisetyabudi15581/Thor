@@ -210,4 +210,94 @@ module.exports = async function (interaction) {
         const embed = embeds.info('🎁 AUTO-ROLE PER PRODUK', list);
         return safeEditReply(interaction, { embeds: [embed] });
     }
+
+    // === UPDATE PRODUCT (v3.9.19) ===
+    // Edit produk existing tanpa harus hapus + add ulang.
+    // Semua field optional (kecuali `value` sebagai identifier).
+    // Catatan: `value` sendiri TIDAK bisa diubah karena dipakai sebagai customId
+    // di modal_set_key:${value} — mengubah value akan break tiket yang sedang aktif.
+    if (interaction.commandName === 'update-product') {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+
+        const value = interaction.options.getString('value');
+        const newLabel = interaction.options.getString('label');
+        const newPrice = interaction.options.getString('price');
+        const newDuration = interaction.options.getString('duration');
+        const newCategory = interaction.options.getString('category');
+        const newRequiresKey = interaction.options.getBoolean('requires_key');
+
+        const product = config.products.find(p => p.value === value);
+        if (!product) {
+            return safeEditReply(interaction, {
+                content: `❌ Produk dengan value \`${value}\` tidak ditemukan. Pakai \`/list-products\` untuk lihat daftar.`
+            });
+        }
+
+        // Validate category kalau diisi
+        if (newCategory !== null) {
+            const categories = config.ticketCategories || [];
+            const categoryExists = categories.some(c => c.id === newCategory);
+            if (!categoryExists) {
+                return safeEditReply(interaction, {
+                    content: `❌ Kategori \`${newCategory}\` tidak ditemukan. Pakai /list-categories untuk lihat daftar.`
+                });
+            }
+        }
+
+        const before = { ...product };
+        const changes = [];
+
+        if (newLabel !== null) {
+            product.label = newLabel.slice(0, 80);
+            changes.push(`label: \`${before.label}\` → \`${product.label}\``);
+        }
+        if (newPrice !== null) {
+            product.price = newPrice;
+            changes.push(`price: \`${before.price}\` → \`${newPrice}\``);
+        }
+        if (newDuration !== null) {
+            // Empty string → hapus field duration
+            if (newDuration === '') {
+                if (product.duration !== undefined) {
+                    delete product.duration;
+                    changes.push(`duration: \`${before.duration || '-'}\` → (dihapus)`);
+                }
+            } else {
+                product.duration = newDuration;
+                changes.push(`duration: \`${before.duration || '-'}\` → \`${newDuration}\``);
+            }
+        }
+        if (newCategory !== null) {
+            product.category = newCategory;
+            changes.push(`category: \`${before.category || 'transaction'}\` → \`${newCategory}\``);
+        }
+        if (newRequiresKey !== null) {
+            product.requiresKey = newRequiresKey;
+            changes.push(`requiresKey: ${before.requiresKey} → ${newRequiresKey}`);
+        }
+
+        if (changes.length === 0) {
+            return safeEditReply(interaction, {
+                content:
+                    `ℹ️ Tidak ada perubahan dilakukan. Berikan minimal 1 field untuk diupdate (label/price/duration/category/requires_key).\n\n` +
+                    `Produk **${before.label}** (\`${before.value}\`) tetap seperti sebelumnya.`
+            });
+        }
+
+        saveConfig(config);
+        await logAudit(interaction.client, {
+            action: 'EDIT_PRODUCT',
+            actorId: interaction.user.id,
+            actorTag: interaction.user.tag,
+            details: `Update produk: **${before.label}** (\`${before.value}\`) — ${changes.join('; ')}`,
+            guildId: interaction.guild.id
+        });
+
+        return safeEditReply(interaction, {
+            content:
+                `✅ Produk **${product.label}** (\`${product.value}\`) berhasil diupdate!\n\n` +
+                `📝 Perubahan:\n${changes.map(c => `• ${c}`).join('\n')}\n\n` +
+                `💡 Pakai \`/refresh-panel <id>\` untuk re-render panel yang sudah terpasang.`
+        });
+    }
 };

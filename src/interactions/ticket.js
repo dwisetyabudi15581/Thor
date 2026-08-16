@@ -65,9 +65,9 @@ module.exports = async function (interaction) {
     // ====================================================
     // Saat panel pakai use_dropdown=true, kategori dirender sebagai select menu.
     // User pilih kategori di dropdown → handler ini jalan.
-    // Behavior sama seperti button ticket_cat:<id>:
-    //   - requiresKey=false (help/report/claim_giveaway/dll) → langsung create ticket
-    //   - requiresKey=true (transaksi) → tampilkan dropdown produk
+    // v3.9.19: Behavior berbasis "ada produk atau tidak" (fleksibel):
+    //   - Kategori dengan produk → tampilkan dropdown produk
+    //   - Kategori tanpa produk → langsung create ticket (help/report/claim_giveaway/dll)
     if (interaction.isStringSelectMenu() && interaction.customId === 'ticket_cat_select') {
         const categoryId = interaction.values && interaction.values[0];
         if (!categoryId) {
@@ -91,38 +91,37 @@ module.exports = async function (interaction) {
             return interaction.reply({ content: '❌ Verifikasi dulu!', flags: MessageFlags.Ephemeral });
         }
 
-        // v3.9.18 FIX: semua kategori dengan requiresKey=false → langsung buat tiket
-        // tanpa produk. Sebelumnya HANYA help & report yang di-skip, jadi kategori
-        // custom seperti claim_giveaway atau partnership dst. malah muncul error
-        // "Belum ada produk" padahal jelas-jelas kategori non-transaksi.
-        // Sekarang: pakai catConfig.label sebagai label produk (bukan hardcode).
-        if (catConfig.requiresKey === false) {
-            const product = {
-                label: catConfig.label || 'Bantuan',
-                duration: '-',
-                price: '-',
-                isHelp: true,
-                category: categoryId
-            };
-            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-            return createTicket(interaction, product);
-        }
-
-        // Transaksi (requiresKey=true) → tampilkan dropdown produk filtered by category
+        // v3.9.19 FLEXIBILITY FIX: logic sekarang berbasis "ada produk atau tidak",
+        // bukan requiresKey. Ini lebih intuitive & fleksibel:
+        //   - Kategori dengan produk (transaction, jasa, dll)     → tampilkan dropdown
+        //     produk. Bisa campur produk key & non-key.
+        //   - Kategori tanpa produk (help, report, claim_giveaway) → langsung buat
+        //     tiket tanpa produk. Pakai catConfig.label sebagai label.
+        //
+        // Sebelumnya (v3.9.18): pakai requiresKey=false untuk skip dropdown. Tapi
+        // ini bikin kategori "jasa" yang punya beberapa produk non-key malah skip
+        // dropdown → user gak bisa pilih jasa yang mana. Bug fixed sekarang.
         const productsInCat = (config.products || []).filter(p => {
             const pCat = p.category || 'transaction';
             return pCat === categoryId;
         });
 
         if (productsInCat.length === 0) {
-            return interaction.reply({
-                content:
-                    `❌ Belum ada produk di kategori **${catConfig.label}**.\n\n` +
-                    `💡 Admin: pakai \`/add-product category:${categoryId}\` untuk tambah produk ke kategori ini.`,
-                flags: MessageFlags.Ephemeral
-            });
+            // Tidak ada produk di kategori ini → langsung buat tiket.
+            const product = {
+                label: catConfig.label || 'Bantuan',
+                duration: '-',
+                price: '-',
+                isHelp: true,
+                category: categoryId,
+                // v3.9.19: requiresKey=false supaya tombol Set Key tidak muncul.
+                requiresKey: false
+            };
+            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+            return createTicket(interaction, product);
         }
 
+        // Ada produk → tampilkan dropdown produk filtered by category
         const selectMenu = new ActionRowBuilder().addComponents(
             new StringSelectMenuBuilder()
                 .setCustomId('select_product')
@@ -147,10 +146,11 @@ module.exports = async function (interaction) {
     // === v3.9.11 Phase 2: TIKET KATEGORI BUTTON → DROPDOWN PRODUK FILTERED ===
     // === customId: ticket_cat:<categoryId>                ===
     // ====================================================
-    // Saat user klik tombol kategori di panel tiket dinamis, tampilkan dropdown
-    // produk yang hanya punya category == categoryId. Kalau kategori requiresKey=false
-    // (bukan transaksi — mis. help, report, claim_giveaway), langsung buat tiket
-    // tanpa pilih produk.
+    // v3.9.19: Saat user klik tombol kategori di panel tiket dinamis:
+    //   - Kalau kategori punya produk → tampilkan dropdown produk filtered.
+    //   - Kalau kategori kosong produk → langsung buat tiket (help/report/custom).
+    // Bisa campur produk key & non-key dalam 1 kategori (mis. "Jasa" dengan
+    // "Joki" non-key + "Booster" pakai key).
     if (interaction.isButton() && interaction.customId.startsWith('ticket_cat:')) {
         const categoryId = interaction.customId.split(':')[1];
         const categories = config.ticketCategories || [];
@@ -168,36 +168,31 @@ module.exports = async function (interaction) {
             return interaction.reply({ content: '❌ Verifikasi dulu!', flags: MessageFlags.Ephemeral });
         }
 
-        // v3.9.18 FIX: semua kategori dengan requiresKey=false → langsung buat ticket
-        // tanpa produk (bukan hanya help/report). Pakai catConfig.label sebagai label.
-        if (catConfig.requiresKey === false) {
-            const product = {
-                label: catConfig.label || 'Bantuan',
-                duration: '-',
-                price: '-',
-                isHelp: true,
-                category: categoryId
-            };
-            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-            return createTicket(interaction, product);
-        }
-
-        // Kategori transaksi (requiresKey=true) → filter produk berdasarkan category
+        // v3.9.19 FLEXIBILITY FIX: logic sama dengan ticket_cat_select di atas.
+        //   - Ada produk di kategori → tampilkan dropdown produk.
+        //   - Tidak ada produk         → langsung buat tiket (help/report/custom).
+        // Bisa campur produk key & non-key dalam 1 kategori (mis. "Jasa" dengan
+        // "Joki" non-key + "Booster" pakai key).
         const productsInCat = (config.products || []).filter(p => {
             const pCat = p.category || 'transaction';
             return pCat === categoryId;
         });
 
         if (productsInCat.length === 0) {
-            return interaction.reply({
-                content:
-                    `❌ Belum ada produk di kategori **${catConfig.label}**.\n\n` +
-                    `💡 Admin: pakai \`/add-product category:${categoryId}\` untuk tambah produk ke kategori ini.`,
-                flags: MessageFlags.Ephemeral
-            });
+            // Tidak ada produk → langsung buat tiket dengan label = catConfig.label.
+            const product = {
+                label: catConfig.label || 'Bantuan',
+                duration: '-',
+                price: '-',
+                isHelp: true,
+                category: categoryId,
+                requiresKey: false
+            };
+            await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+            return createTicket(interaction, product);
         }
 
-        // Build dropdown menu
+        // Ada produk → tampilkan dropdown produk filtered by category
         const selectMenu = new ActionRowBuilder().addComponents(
             new StringSelectMenuBuilder()
                 .setCustomId('select_product')
