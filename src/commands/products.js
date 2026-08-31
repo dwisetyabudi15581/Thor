@@ -32,6 +32,13 @@ module.exports = async function (interaction) {
             });
         }
 
+        // v3.9.26 FIX: cap label/price di handler (konsisten dengan /update-product
+        // yang sudah slice ke 80). Registry sudah max_length, tapi data LAMA atau
+        // hasil restore backup bisa tetap panjang — dropdown tiket mem-slice
+        // defensif, simpanan config juga biar rapi.
+        const safeLabel = label.slice(0, 80);
+        const safePrice = price.slice(0, 100);
+
         if (config.products.some(p => p.value === value)) {
             return safeEditReply(interaction, { content: `❌ Produk dengan value \`${value}\` sudah ada.` });
         }
@@ -62,7 +69,7 @@ module.exports = async function (interaction) {
         }
 
         // Hanya simpan duration kalau diisi
-        const newProduct = { label, value, price };
+        const newProduct = { label: safeLabel, value, price: safePrice };
         if (duration) newProduct.duration = duration;
         newProduct.category = finalCategory;
         newProduct.requiresKey = finalRequiresKey;

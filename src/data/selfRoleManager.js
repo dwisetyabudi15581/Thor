@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { safeWriteJSON } = require('../infra/safeWrite');
+const { safeWriteJSON, quarantineCorruptFile } = require('../infra/safeWrite');
 
 const selfRolesPath = path.join(__dirname, '..', '..', 'data', 'selfRoles.json');
 
@@ -41,6 +41,8 @@ function loadPanels() {
         return JSON.parse(fs.readFileSync(selfRolesPath, 'utf8'));
     } catch (err) {
         console.error('Error load selfRoles.json:', err.message);
+        // v3.9.26: karantina file korup sebelum fallback (lihat safeWrite.js).
+        quarantineCorruptFile(selfRolesPath);
         return [];
     }
 }

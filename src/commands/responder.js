@@ -6,10 +6,14 @@
  * Admin set trigger keyword → bot auto-reply saat member kirim pesan yang diawali trigger.
  */
 
-const { EmbedBuilder, MessageFlags } = require('./_shared');
-const { getConfig, saveConfig, logAudit, safeEditReply } = require('./_shared');
+// v3.9.24: merge 2 require _shared yang duplikat jadi 1.
+const { EmbedBuilder, MessageFlags, getConfig, saveConfig, logAudit, safeEditReply } = require('./_shared');
 
 const responderManager = require('../data/responderManager');
+// v3.9.24: normalisasi \n literal → newline asli (input command di PC tidak bisa Enter).
+// Deskripsi opsi /add-responder memang meng-claim "support \n" — sebelumnya
+// klaim itu BOHONG (teks disimpan mentah, reply berisi literal backslash-n).
+const { normalizeNewlines } = require('../infra/text');
 
 module.exports = async function (interaction) {
     // === ADD RESPONDER ===
@@ -17,7 +21,7 @@ module.exports = async function (interaction) {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const trigger = interaction.options.getString('trigger');
-        const reply = interaction.options.getString('reply');
+        const reply = normalizeNewlines(interaction.options.getString('reply'));
         const replyType = interaction.options.getString('reply_type') || 'text';
         const cooldown = interaction.options.getInteger('cooldown');
 

@@ -50,6 +50,17 @@ async function handleSelfRoleButton(interaction) {
         return interaction.reply({ content: '❌ Role tidak ditemukan di server.', flags: MessageFlags.Ephemeral });
     }
 
+    // v3.9.24 FIX: pastikan roleId benar-benar anggota panel ini. Sebelumnya
+    // customId forged/legacy (sr_btn:<panel>:<roleLain>) bisa toggle role guild
+    // apa pun selama role-nya ada — padahal role itu tidak pernah ditawarkan
+    // panel (bot butuh role hierarchy, tapi tetap lubang yang tidak perlu).
+    if (!panel.roles.some(r => r.roleId === roleId)) {
+        return interaction.reply({
+            content: '❌ Role ini tidak terdaftar di panel self-role tersebut.',
+            flags: MessageFlags.Ephemeral
+        });
+    }
+
     // v3.9.11 Phase 3: conditional role check.
     // Kalau role punya requiresRoleId, user harus sudah punya role itu untuk bisa ambil.
     const roleConfig = panel.roles.find(r => r.roleId === roleId);

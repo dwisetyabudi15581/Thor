@@ -36,7 +36,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { safeWriteJSON } = require('../infra/safeWrite');
+const { safeWriteJSON, quarantineCorruptFile } = require('../infra/safeWrite');
 
 const filePath = path.join(__dirname, '..', '..', 'data', 'stats.json');
 const FLUSH_INTERVAL_MS = 30 * 1000; // 30 detik
@@ -140,6 +140,8 @@ function load() {
         }
     } catch (err) {
         console.warn('⚠️ stats.json rusak:', err.message);
+        // v3.9.26: karantina file korup sebelum fallback (lihat safeWrite.js).
+        quarantineCorruptFile(filePath);
         cache = {};
     }
     // v3.9.4: jalankan migrasi legacy kalau defaultGuildId sudah di-set.

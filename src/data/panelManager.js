@@ -45,7 +45,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { safeWriteJSON } = require('../infra/safeWrite');
+const { safeWriteJSON, quarantineCorruptFile } = require('../infra/safeWrite');
 
 const panelsPath = path.join(__dirname, '..', '..', 'data', 'panels.json');
 
@@ -77,12 +77,17 @@ function loadPanels() {
         _cache = JSON.parse(raw);
         if (!_cache || typeof _cache !== 'object' || Array.isArray(_cache)) {
             console.warn('⚠️ panels.json format invalid (bukan object), reset ke {}.');
+            // v3.9.26: karantina sebelum reset — isinya valid JSON tapi struktur
+            // salah; simpan bekasnya supaya admin bisa pulihkan manual.
+            quarantineCorruptFile(panelsPath);
             _cache = {};
         }
         _cacheLoadedAt = now;
         return _cache;
     } catch (err) {
         console.warn('⚠️ panels.json rusak:', err.message);
+        // v3.9.26: karantina file korup sebelum fallback (lihat safeWrite.js).
+        quarantineCorruptFile(panelsPath);
         _cache = {};
         _cacheLoadedAt = now;
         return _cache;
@@ -132,9 +137,7 @@ function upsertPanel(panel) {
         imageUrl: panel.imageUrl ?? existing?.imageUrl ?? null,
         thumbnailUrl: panel.thumbnailUrl ?? existing?.thumbnailUrl ?? null,
         footerText: panel.footerText ?? existing?.footerText ?? null,
-        categoryIds: Array.isArray(panel.categoryIds)
-            ? panel.categoryIds
-            : existing?.categoryIds || [],
+        categoryIds: Array.isArray(panel.categoryIds) ? panel.categoryIds : existing?.categoryIds || [],
         useDropdown: panel.useDropdown ?? existing?.useDropdown ?? false,
         createdAt: existing?.createdAt || panel.createdAt || Date.now(),
         createdBy: existing?.createdBy || panel.createdBy || null,

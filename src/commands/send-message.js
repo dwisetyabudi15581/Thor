@@ -13,6 +13,8 @@
  */
 
 const { MessageFlags, ChannelType, logAudit, safeEditReply, DISCORD_LIMITS } = require('./_shared');
+// v3.9.24: normalisasi \n literal → newline asli (input command di PC tidak bisa Enter).
+const { normalizeNewlines } = require('../infra/text');
 
 module.exports = async function (interaction) {
     if (interaction.commandName !== 'send-message') return;
@@ -49,8 +51,11 @@ module.exports = async function (interaction) {
         });
     }
 
-    // === Proses pesan: unescape \\n → \n (Discord slash command otomatis escape backslash) ===
-    const message = rawMessage.replace(/\\n/g, '\n');
+    // === Proses pesan: unescape \n / \r\n literal → newline asli ===
+    // v3.9.24: pindah ke helper bersama (infra/text) supaya konsisten dengan
+    // /announce, /announce-schedule, /setup-ticket-panel, dan /add-responder.
+    // Sebelumnya inline di sini aja (satu-satunya command yang support \n).
+    const message = normalizeNewlines(rawMessage);
 
     // === Validasi panjang pesan (Discord limit 2000 char) ===
     if (message.length > DISCORD_LIMITS.MESSAGE_CONTENT) {

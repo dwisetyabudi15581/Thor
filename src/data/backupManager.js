@@ -1,16 +1,12 @@
 /**
  * Auto-Backup System — backup file JSON penting ke folder backups/.
  *
- * File yang di-backup:
- *   - config.json
- *   - keys.json
- *   - scheduledRoles.json
- *   - selfRoles.json
- *   - giveaways.json (kalau ada)
- *   - warns.json (kalau ada)
- *   - polls.json (kalau ada)
- *   - scheduledAnnouncements.json (kalau ada)
- *   - tempVoice.json (v3.8, kalau ada)
+ * v3.9.24 FIX: FILES_TO_BACKUP sebelumnya bolong — 5 file data live TIDAK
+ * pernah di-backup: automod.json (word rules!), levels.json, responders.json,
+ * afk.json, panels.json. Akibatnya /restore-backup tidak bisa memulihkan
+ * konfigurasi auto-mod & leveling sama sekali. Sekarang semua file data
+ * layer ada di list (dijaga test: setiap file data/*.json live wajib ada
+ * di FILES_TO_BACKUP).
  *
  * Struktur folder:
  *   backups/
@@ -37,6 +33,9 @@ const backupsDir = path.join(rootDir, 'backups');
 
 // v3.9.10: file JSON data sekarang ada di data/ folder (sebelumnya di root).
 // FILES_TO_BACKUP tetap list nama file, tapi path prefix pakai dataDir.
+// v3.9.24: + automod.json, levels.json, responders.json, afk.json, panels.json
+// (sebelumnya 5 file ini TIDAK di-backup padahal dipakai live oleh fitur
+// auto-mod word rules, leveling, responder, AFK, dan panel tiket).
 const FILES_TO_BACKUP = [
     'config.json',
     'keys.json',
@@ -48,7 +47,13 @@ const FILES_TO_BACKUP = [
     'scheduledAnnouncements.json',
     'stats.json',
     'tempVoice.json',
-    'tickets.json'
+    'tickets.json',
+    // v3.9.24 tambahan:
+    'automod.json',
+    'levels.json',
+    'responders.json',
+    'afk.json',
+    'panels.json'
 ];
 
 // v3.9.10: helper untuk resolve path file data (ke data/ folder).
@@ -304,14 +309,25 @@ function _restoreBackupImpl(name) {
         invalidateAdminRoleCache();
     } catch (_) {}
 
-    // v3.9.8 FIX: invalidate selfRoleManager cache juga. Sebelumnya cache di
-    // configManager getConfig() baca fresh (no cache), tapi selfRoleManager
-    // beberapa operasi mungkin pakai data cache. Defensive invalidate.
+    // v3.9.8 FIX: invalidate cache panel setelah restore. Sebelumnya (salah sasaran)
+    // memanggil selfRoleManager.invalidateCache — fungsi itu TIDAK PERNAH ADA di
+    // selfRoleManager (silent no-op). Yang benar: panelManager punya cache 30s
+    // (panels.json) — dan sejak v3.9.24 panels.json ikut di-restore, cache lama
+    // harus di-invalidate supaya panel hasil restore langsung terpakai.
     try {
-        const selfRole = require('./selfRoleManager');
-        // Kalau ada invalidate function, panggil. Defensive: cek dulu.
-        if (typeof selfRole.invalidateCache === 'function') selfRole.invalidateCache();
+        const panelManager = require('./panelManager');
+        if (typeof panelManager.invalidateCache === 'function') panelManager.invalidateCache();
     } catch (_) {}
+
+    // v3.9.26: invalidate cache manager yang baru dapat read-through cache
+    // (automod/afk/responders/levels). Semua file ini ikut di-restore — tanpa
+    // invalidasi, hot path masih baca cache 15 detik yang isinya data LAMA.
+    for (const mod of ['./automodManager', './afkManager', './responderManager', './levelManager']) {
+        try {
+            const m = require(mod);
+            if (typeof m.invalidateCache === 'function') m.invalidateCache();
+        } catch (_) {}
+    }
 
     return result;
 }

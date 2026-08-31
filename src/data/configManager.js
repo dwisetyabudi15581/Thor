@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { safeWriteJSON } = require('../infra/safeWrite');
+const { safeWriteJSON, quarantineCorruptFile } = require('../infra/safeWrite');
 
 const configPath = path.join(__dirname, '..', '..', 'data', 'config.json');
 
@@ -96,12 +96,19 @@ function getConfig() {
         if (err.code !== 'ENOENT') {
             // File ada tapi rusak — log warning. Kalau ENOENT (file belum ada), silent.
             console.warn('⚠️ config.json rusak, pakai DEFAULTS. Pesan:', err.message);
+            // v3.9.26: karantina file korup SEBELUM lanjut pakai DEFAULTS. Tanpa ini,
+            // setField()/saveConfig() berikutnya menulis config BARU di atas file
+            // korup — semua setting (roles/channels/products) hilang permanen tanpa
+            // bekas. Dengan karantina, isi lama tersimpan sebagai
+            // config.json.corrupt-<ts> untuk inspeksi/pulihkan manual.
+            quarantineCorruptFile(configPath);
         }
         raw = {};
     }
 
     // === AUTO-MIGRATE v1 -> v2 ===
     // v1 punya field flat: verifiedRoleId, unverifiedRoleId, invoiceChannelId, welcomeChannelId, goodbyeChannelId
+    let didV1Migration = false;
     if (raw.verifiedRoleId || raw.invoiceChannelId) {
         if (!raw.roles) raw.roles = {};
         if (raw.verifiedRoleId && !raw.roles.verified) raw.roles.verified = raw.verifiedRoleId;
@@ -113,19 +120,23 @@ function getConfig() {
         if (raw.welcomeChannelId && !raw.channels.welcome) raw.channels.welcome = raw.welcomeChannelId;
         if (raw.goodbyeChannelId && !raw.channels.goodbye) raw.channels.goodbye = raw.goodbyeChannelId;
 
-        // Auto-save hasil migrasi supaya next time bersih
-        try {
-            saveConfig({
-                roles: raw.roles,
-                channels: raw.channels,
-                messages: raw.messages || DEFAULTS.messages,
-                colors: raw.colors || DEFAULTS.colors,
-                products: raw.products || DEFAULTS.products
-            });
-            console.log('✅ config.json lama (v1) otomatis di-migrate ke v2.');
-        } catch (e) {
-            console.warn('⚠️ Gagal auto-save migrasi:', e.message);
+        // v3.9.26 FIX: hapus flat key v1 dari raw — sebelumnya save migrasi cuma
+        // nulis {roles, channels, messages, colors, products} ke disk, jadi file
+        // CAMPURAN (v2 + sisa flat key v1, mis. hasil edit manual / restore lama)
+        // kehilangan ticketCategories, leveling, levelRoles, verifyButton, dan
+        // field custom admin saat auto-save. Sekarang: flat key dihapus dari raw,
+        // save dilakukan SETELAH merge penuh (di bawah) → tidak ada field yang drop.
+        for (const flatKey of [
+            'verifiedRoleId',
+            'unverifiedRoleId',
+            'adminRoleId',
+            'invoiceChannelId',
+            'welcomeChannelId',
+            'goodbyeChannelId'
+        ]) {
+            delete raw[flatKey];
         }
+        didV1Migration = true;
     }
 
     // === MERGE dengan DEFAULTS (deep untuk messages) ===
@@ -189,9 +200,15 @@ function getConfig() {
             }
             return cat;
         });
-        // Tambah claim_giveaway kalau belum ada (sekali saja — kalau admin hapus, tidak ditambah lagi)
+        // Tambah claim_giveaway kalau belum ada (sekali saja — kalau admin hapus,
+        // tidak ditambah lagi karena flag claimGiveawayDismissed di-set oleh
+        // /remove-category, lihat categories.js)
+        // v3.9.26 FIX: sebelumnya komentar di atas BOHONG — tidak ada flag,
+        // /remove-category claim_giveaway berhasil, lalu getConfig() BERIKUTNYA
+        // (jalan di setiap pesan!) re-add kategori + auto-save config. Kategori
+        // "hidup lagi" diam-diam — mustahil dihapus permanen.
         const hasClaimGiveaway = config.ticketCategories.some(c => c && c.id === 'claim_giveaway');
-        if (!hasClaimGiveaway) {
+        if (!hasClaimGiveaway && !config.claimGiveawayDismissed) {
             config.ticketCategories.push({
                 id: 'claim_giveaway',
                 label: 'Claim Giveaway',
@@ -201,6 +218,17 @@ function getConfig() {
                 isDefault: false
             });
             _migrationChanged = true;
+        }
+    }
+    // v3.9.26: save migrasi v1→v2 sekarang SETELAH merge penuh — hasil save
+    // berisi schema lengkap (ticketCategories, leveling, levelRoles, verifyButton,
+    // field custom) bukan cuma 5 key utama.
+    if (didV1Migration) {
+        try {
+            saveConfig(config);
+            console.log('✅ config.json lama (v1) otomatis di-migrate ke v2 (field modern preserve).');
+        } catch (e) {
+            console.warn('⚠️ Gagal auto-save migrasi v1:', e.message);
         }
     }
     if (_migrationChanged) {

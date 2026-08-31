@@ -47,7 +47,7 @@ const { handlePanelModal: panelModalHandler } = require('../commands/panels-mgmt
 // `btn_verify` di-handle exact-match (lihat helper `pickDomain`).
 const PREFIX_TO_DOMAIN = [
     { prefix: 'btn_verify', domain: 'verify', exact: true },
-    { prefix: 'select_product', domain: 'ticket' },
+    { prefix: 'select_product', domain: 'ticket', exact: true },
     // v3.9.14: dropdown select menu dari panel (customId: ticket_cat_select)
     { prefix: 'ticket_cat_select', domain: 'ticket', exact: true },
     { prefix: 'modal_set_key:', domain: 'ticket' },

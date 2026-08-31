@@ -1,9 +1,9 @@
-# 🤖 Thor Bot v3.9.7
+# 🤖 Community Bot (Thor) v3.9.26
 
-Bot Discord untuk manajemen server community — dengan **temp voice system**, **model key-driven VIP** (MAX EXTEND), **self-role fleksibel**, **audit log lengkap**, dan berbagai fitur engagement (giveaway, poll, leaderboard, dll).
+Bot Discord all-in-one untuk manajemen server community — **tiket multi-kategori & multi-panel**, **model key-driven VIP** (MAX EXTEND), **self-role fleksibel**, **temp voice**, **auto-responder**, **anti-spam & auto-mod**, **AFK**, **leveling**, **giveaway**, **poll**, **backup**, **audit log lengkap**, dan berbagai fitur engagement.
 
-> **v3.9.x — Stability & Security Hardening**
-> Patch fokus pada data integrity, race condition, dan validasi input.
+> **81 slash command** • 190+ unit test • fully configurable dari Discord
+> Changelog terbaru: lihat [README.md](../README.md) root repo.
 
 ## ✨ Fitur Utama
 
@@ -11,7 +11,11 @@ Bot Discord untuk manajemen server community — dengan **temp voice system**, *
 
 - 👋 **Welcome / Goodbye** otomatis saat member join/leave (deteksi kick vs leave vs ban via audit log)
 - ✅ **Verifikasi** dengan tombol (auto hapus role Unverified, kasih role Verified)
-- 🎫 **Sistem Tiket** dengan dropdown produk (Beli / Bantuan / Lapor) + race-condition protection
+- 🎫 **Sistem Tiket multi-kategori** (Beli Key/Transaksi, Help, Report, Claim Giveaway + kategori custom) + multi-panel + race-condition protection
+- 💬 **Auto-Responder** — trigger keyword → auto-reply text/embed (cooldown per-user)
+- 🛡️ **Anti-Spam & Auto-Mod** — spam/link/word filter (whole-word, action per kata, exempt) / mass-mention
+- 💤 **AFK System** — auto-reply saat di-mention + auto-clear
+- 📊 **Leveling System** — XP per pesan + role reward per level + leaderboard
 - 🧾 **Invoice otomatis** ke channel testimoni (dari `/set-key` DAN dari modal set key di tiket)
 - ⚙️ **Fully configurable** — semua setting bisa diubah lewat slash command, tanpa edit file
 - 🔒 **Atomic JSON writes** — semua file JSON ditulis via pattern `tmp + rename` supaya tidak corrupt kalau bot crash / power loss di tengah write
@@ -48,7 +52,7 @@ Member bisa ambil & lepas role sendiri tanpa minta ke admin:
 - **Multi-panel**: admin bisa bikin banyak panel (di channel berbeda)
 - **2 tipe UI**: `button` (≤25 role) atau `select` (dropdown, ≤25 role)
 - **2 mode**: `multi` (boleh banyak role) atau `exclusive` (hanya 1 role pada satu waktu)
-- Setiap role bisa custom: label, emoji, description
+- Setiap role bisa custom: label, emoji, description, **warna tombol (style)**, dan **role prerequisite** (`requires_role` — role bertingkat)
 - Panel message auto-update saat admin add/remove role
 
 ### 📢 Announce & Embed Builder
@@ -87,7 +91,7 @@ Member bisa ambil & lepas role sendiri tanpa minta ke admin:
 ## 📋 Daftar Slash Command
 
 > Semua command admin-only (butuh permission `ManageGuild` atau role Admin yang di-set via `/set-role admin`).
-> Exception: `/leaderboard` dan `/my-stats` boleh dipakai member biasa.
+> Exception (public): `/leaderboard`, `/my-stats`, `/rank`, `/leaderboard-level`, `/afk`, `/afk-clear`.
 
 ### Panel Setup
 
@@ -131,7 +135,8 @@ Member bisa ambil & lepas role sendiri tanpa minta ke admin:
 
 ### Manajemen Produk
 
-- `/add-product label value price duration` — tambah produk
+- `/add-product label value price duration category requires_key` — tambah produk (maks 25, label maks 80 char)
+- `/update-product value: price: label: duration: category:` — edit produk tanpa hapus+add ulang
 - `/remove-product value` — hapus produk
 - `/list-products` — lihat semua produk
 
@@ -184,6 +189,54 @@ Member bisa ambil & lepas role sendiri tanpa minta ke admin:
 - Satu member hanya bisa punya 1 temp voice aktif
 - Kalau owner leave tapi masih ada member lain → ownership otomatis pindah
 - Channel otomatis dihapus saat semua member keluar
+
+### 💬 Auto-Responder
+
+- `/add-responder trigger:"!sosmed" reply:"..." reply_type:text|embed cooldown:3` — daftar auto-reply (maks 50/guild, support `\n` multi-baris)
+- `/list-responder` — lihat semua responder + stats trigger
+- `/remove-responder trigger:"!sosmed"` — hapus
+
+### 🛡️ Anti-Spam & Auto-Mod
+
+- `/set-automod spam_action word_action mention_action` — konfigurasi global
+- `/automod-toggle enabled:true|false` — on/off
+- `/automod-show` — lihat config lengkap
+- `/add-word words:"kata1 kata2" tipe:blocklist action:delete_only` — tambah kata blocklist/exempt
+- `/remove-word word:kata1 tipe:blocklist` — hapus kata
+- `/list-words` — daftar kata + action per kata
+- `/add-link-whitelist channel:#ch` / `/remove-link-whitelist channel:#ch` — whitelist link
+
+Matching **whole-word** default ("asu" tidak match "asus"). Action: `delete_only`, `warn`, `mute_10m`, `mute_1h`, `kick`.
+
+### 💤 AFK
+
+- `/afk reason:"Tidur\nJangan ganggu"` — set AFK (reason support `\n`, tidak bisa mass-ping)
+- `/afk-clear` — clear status AFK sendiri
+- `/afk-list` — (admin) lihat semua yang AFK
+
+### 📊 Leveling
+
+- `/setup-leveling enabled:true xp_per_message:15 cooldown:60 announce_levelup:true`
+- `/add-level-role level:10 role:@Aktif` / `/list-level-roles` / `/remove-level-role level:10`
+- `/rank` — kartu level pribadi (public)
+- `/leaderboard-level` — top 10 level (public)
+
+### 🎫 Kategori Tiket & Multi-Panel
+
+- `/add-category id:jasa label:"Jasa" emoji:🛠️ style:Success requires_key:false` — kategori custom (maks 25)
+- `/list-categories` / `/remove-category id:` / `/update-category id: label: emoji: style: requires_key:`
+- `/setup-ticket-panel channel: title: body: color: image: thumbnail: footer: categories: use_dropdown:` — panel custom persisten (support template `{server}` `{price_list}` `{price_list:<kat>}` + `\n`)
+- `/list-panels` / `/update-panel id: field:` / `/refresh-panel id:` / `/delete-panel id:`
+- `/set-transcript-channel #ch` — transcript tiket otomatis tersimpan
+- `/set-verify-button label:"Verifikasi Saya" emoji:✅ style:Success` — kustomisasi tombol verifikasi
+
+### 📝 Edit Pesan & Kirim Pesan
+
+- `/set-message welcomeBody teks:"Halo {user}\nSelamat datang"` — ubah teks pesan (support `\n` untuk tipe Body)
+- `/edit-message ticketBody` — buka **modal editor** (di modal, Enter = baris baru asli)
+- `/list-messages` — lihat semua teks
+- `/send-message channel:#ch message:"teks\nmulti-baris"` — kirim plain text (support `\n` + mention)
+- `/help` — daftar command lengkap di Discord
 
 ### 📢 Announce & Embed Builder
 
@@ -252,12 +305,10 @@ Member bisa ambil & lepas role sendiri tanpa minta ke admin:
 4. Maksimal 25 produk (batas dropdown Discord)
 5. Maksimal 25 role per panel self-role (batas Discord)
 6. `GUILD_ID` wajib di-set di `.env` untuk registrasi command instan (1 detik vs 1 jam)
-7. File yang di-exclude dari git (lihat `.gitignore`):
-    - `config.json`, `keys.json`, `scheduledRoles.json`, `selfRoles.json`
-    - `giveaways.json`, `polls.json`, `warns.json`, `stats.json`, `scheduledAnns.json`
-    - `tempVoice.json`, `tickets.json` — data runtime
-    - `.env` — token bot
-    - `backups/` — folder backup
+7. Semua file data runtime ada di folder **`data/`** dan di-exclude dari git (`data/*.json`):
+    - config, keys, scheduledRoles, selfRoles, giveaways, polls, warns, stats
+    - scheduledAnnouncements, tempVoice, tickets, **automod, levels, responders, afk, panels**
+    - `.env` — token bot • `backups/` — folder backup (maks 7 terbaru, auto-clean)
 8. Setelah `/restore-backup` selesai, **RESTART bot** (`npm start`) supaya semua cache konsisten.
 9. **Jangan pernah share `DISCORD_TOKEN`** — siapa pun yang punya token bisa kontrol bot penuh. Kalau bocor, langsung Reset Token di Developer Portal.
 
@@ -265,40 +316,33 @@ Member bisa ambil & lepas role sendiri tanpa minta ke admin:
 
 ```
 Thor/
-├── index.js                          # Entry point — client init, event handlers, voice state handler
-├── package.json
-├── .env.example                      # Template env (copy ke .env)
-├── .gitignore
-├── README.md                         # File ini
-├── ADMIN_GUIDE.md                    # Panduan detail untuk admin server
-├── handlers/
-│   ├── commandHandler.js             # Slash command handler (47 commands)
-│   ├── interactionHandler.js         # Button/select/modal handler (termasuk temp voice)
-│   └── memberHandler.js              # Welcome/goodbye + kick/ban detection
-└── utils/
-    ├── commandDefinitions.js         # Definisi slash command
-    ├── schedulerTasks.js             # processExpiredRole, processGiveawayEnd, dll
-    ├── configManager.js              # CRUD config.json (atomic + prototype pollution guard)
-    ├── constants.js                  # Magic numbers, Discord limits, timing
-    ├── permissions.js                # isAdmin check (TTL-cached admin role)
-    ├── safeWrite.js                  # Atomic JSON write (tmp + rename)
-    ├── userLock.js                   # Per-user in-process lock (TOCTOU guard)
-    ├── tempVoiceManager.js           # CRUD tempVoice.json (data layer)
-    ├── tempVoiceControlPanel.js      # Render panel embed + button (UI builder)
-    ├── keyManager.js                 # CRUD keys.json (key-driven model, cross-guild)
-    ├── roleScheduler.js              # Schedule role removal (MAX EXTEND, cross-guild)
-    ├── selfRoleManager.js            # CRUD selfRoles.json
-    ├── selfRolePanelBuilder.js       # Render panel embed + components
-    ├── ticketManager.js              # Create/close ticket + invoice (metadata di tickets.json)
-    ├── auditLog.js                   # Kirim audit log (retry 1x bila transient error)
-    ├── backupManager.js              # Auto + manual backup (restore lock + path traversal guard)
-    ├── giveawayManager.js            # CRUD giveaways.json
-    ├── scheduledAnnouncements.js     # CRUD scheduledAnns.json (range validation)
-    ├── warnManager.js                # CRUD warns.json (cross-guild)
-    ├── statsManager.js               # CRUD stats.json (cache + reload)
-    ├── pollManager.js                # CRUD polls.json + poll session store
-    ├── embedBuilder.js               # Embed helper
-    └── embedBuilderSessions.js       # Session manager /embed-builder
+├── index.js                      # Entry point — client init, event loader, graceful shutdown
+├── package.json                  # v3.9.26, engines node>=18
+├── .env.example                  # Template env (DISCORD_TOKEN, GUILD_ID)
+├── README.md                     # Changelog & overview (root)
+├── docs/
+│   ├── README.md                 # File ini
+│   └── ADMIN_GUIDE.md            # Panduan admin lengkap
+├── data/                         # Semua file data runtime (di-gitignore)
+├── backups/                      # Backup otomatis + manual (maks 7)
+├── scripts/                      # Utilitas dev: smoke test, validasi registry, cleanup
+├── tests/unit/                   # 190+ unit test (sandbox, tidak sentuh data produksi)
+├── .github/workflows/ci.yml      # CI: lint + test
+└── src/
+    ├── bot/
+    │   ├── events/               # messageCreate, interactionCreate, ready, member, voice
+    │   └── memberHandler.js      # Welcome/goodbye + deteksi kick/ban via audit log
+    ├── commands/                 # 81 slash command per domain (config, keys, products,
+    │   │                         #   announce, giveaway, warn, automod, afk, leveling, ...)
+    │   ├── registry.js           # Definisi semua command (sumber tunggal)
+    │   ├── index.js              # Router COMMAND_TO_DOMAIN + guard
+    │   └── _shared.js            # Dependency injection untuk semua command
+    ├── interactions/             # Handler button/select/modal (ticket, giveaway, poll,
+    │                             #   tempvoice, embed builder, backup, selfrole, verify)
+    ├── data/                     # Manager per file JSON (atomic write + cache + karantina korup)
+    ├── services/schedulerTasks.js# processExpiredRole, processGiveawayEnd, GC harian
+    ├── ui/                       # Builder embed/komponen (panel self-role, temp voice)
+    └── infra/                    # safeWrite, userLock, permissions, auditLog, text, colors
 ```
 
 ## 📚 Dokumentasi

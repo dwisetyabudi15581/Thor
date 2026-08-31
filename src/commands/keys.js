@@ -203,12 +203,16 @@ module.exports = async function (interaction) {
 
         const expireStr =
             keyEntry.expireAt === null ? 'permanen' : `${Math.ceil((keyEntry.expireAt - Date.now()) / 86400000)} hari`;
+        // v3.9.26 FIX: tampilkan key ter-truncate di reply konfirmasi. Key bisa
+        // 200 char; wrapper reply (+info lain) bikin > 2000 → 50035 SETELAH semua
+        // operasi sukses → admin lihat error generik dan mungkin retry (duplicate key).
+        const keyDisplay = keyValue.length > 80 ? `${keyValue.slice(0, 60)}…(${keyValue.length} char)` : keyValue;
         return safeEditReply(interaction, {
             content:
                 `✅ **Set Key sukses!**\n\n` +
                 `👤 User: ${member}\n` +
                 `📦 Produk: ${product.label}\n` +
-                `🔑 Key: \`${keyValue}\`\n` +
+                `🔑 Key: \`${keyDisplay}\`\n` +
                 `🎭 Role: ${role}\n` +
                 `⏰ Expire: ${expireStr}\n` +
                 `${schedResult.extended ? '↳ Schedule di-extend (MAX EXTEND).' : schedResult.permanent ? '↳ Permanen, schedule lama dihapus.' : '↳ Schedule baru dibuat.'}\n` +
@@ -304,9 +308,7 @@ module.exports = async function (interaction) {
                 //   1. config.products (yang masih ada di config)
                 //   2. scheduledRoles yang baru dihapus (removedSchedules)
                 //      — bisa contain roleId untuk produk yang sudah dihapus dari config
-                const productRoleIds = new Set(
-                    (config.products || []).filter(p => p.roleId).map(p => p.roleId)
-                );
+                const productRoleIds = new Set((config.products || []).filter(p => p.roleId).map(p => p.roleId));
                 // Tambahkan roleId dari schedule entries yang baru dihapus.
                 // removeAllSchedulesByUser return count, tapi kita butuh list roleId.
                 // Solusi: baca scheduledRoles.json SEBELUM hapus (tapi sudah terlanjur

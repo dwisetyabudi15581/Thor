@@ -1,4 +1,4 @@
-# 📖 ADMIN GUIDE — Community Bot v3.9.7
+# 📖 ADMIN GUIDE — Community Bot v3.9.26
 
 Panduan lengkap untuk admin server Discord yang menjalankan bot ini. Cocok untuk admin baru yang baru pertama kali setup, maupun admin yang sudah ada untuk referensi harian.
 
@@ -12,10 +12,11 @@ Panduan lengkap untuk admin server Discord yang menjalankan bot ini. Cocok untuk
 4. [Operasional Harian](#4-operasional-harian)
 5. [Moderation (Warn System)](#5-moderation-warn-system)
 6. [Engagement (Giveaway & Poll)](#6-engagement-giveaway--poll)
-7. [Backup & Restore](#7-backup--restore)
-8. [Troubleshooting](#8-troubleshooting)
-9. [Best Practices](#9-best-practices)
-10. [Apa yang Baru di v3.9.x](#10-apa-yang-baru-di-v39x)
+7. [Fitur Komunitas Lanjutan](#7-fitur-komunitas-lanjutan)
+8. [Backup & Restore](#8-backup--restore)
+9. [Troubleshooting](#9-troubleshooting)
+10. [Best Practices](#10-best-practices)
+11. [Apa yang Baru di v3.9.x](#11-apa-yang-baru-di-v39x)
 
 ---
 
@@ -23,7 +24,7 @@ Panduan lengkap untuk admin server Discord yang menjalankan bot ini. Cocok untuk
 
 ### Prasyarat
 
-- Node.js 16.11+ (rekomendasi 18+)
+- Node.js 18+ (`engines` di package.json mensyaratkan >= 18)
 - Bot udah di-invite ke server dengan permission: Manage Roles, Manage Channels, Send Messages, Embed Links, View Audit Log, Moderate Members, Move Members
 - **3 Privileged Intents** udah di-enable di Discord Developer Portal (https://discord.com/developers/applications → pilih bot → tab "Bot" → scroll ke "Privileged Gateway Intents"):
     - ✅ **Server Members Intent** — buat welcome/goodbye, auto-role, member sync
@@ -42,9 +43,9 @@ npm start
 
 ### Verifikasi
 
-- Cek console muncul: `✅ Bot online sebagai NamaBot#1234`
+- Cek console muncul: `✅ Bot online sebagai NamaBot`
 - Cek console muncul: `✅ Slash Commands terdaftar ke guild: Nama Server (instan!)`
-- Cek di Discord, ketik `/` — semua 47 slash command harus muncul
+- Cek di Discord, ketik `/` — semua 81 slash command harus muncul
 - Kalau command tidak muncul, pastikan `GUILD_ID` di `.env` benar
 
 ---
@@ -82,7 +83,7 @@ Urutan ini **rekomendasi** untuk server baru. Skip yang sudah pernah di-set.
 - `welcome` — channel tempat bot kirim welcome message saat member join
 - `goodbye` — channel tempat bot kirim goodbye message saat member leave/kick/ban
 - `invoice` — channel testimoni transaksi (otomatis terisi setiap Set Key sukses)
-- `audit-log` — channel tempat bot catat SEMUA admin action (24 action types)
+- `audit-log` — channel tempat bot catat SEMUA admin action (49 action types)
     - Audit log di-retry 1x otomatis bila gagal kirim (rate limit/network blip)
 
 ### Step 3: Pasang Panel Verifikasi
@@ -167,15 +168,15 @@ Sekarang semua tombol tiket **100% dinamis** — bisa CRUD dari Discord tanpa ed
 
 **Behavior v3.9.19 (FLEKSIBEL — berbasis "ada produk atau tidak"):**
 
-| Skenario Kategori | Produk di kategori | Behavior |
-|---|---|---|
-| `transaction` (requires_key: true) | Ada produk key | Dropdown produk → Set Key |
-| `transaction` (requires_key: true) | Campur key & non-key | Dropdown produk → Set Key untuk key, Pesanan Sukses untuk non-key |
-| `jasa` (requires_key: false) | Ada produk jasa | Dropdown produk → Pesanan Sukses (tanpa Set Key) |
-| `help` (requires_key: false) | Kosong | Langsung create ticket |
-| `report` (requires_key: false) | Kosong | Langsung create ticket |
-| `claim_giveaway` (requires_key: false) | Kosong | Langsung create ticket |
-| `partnership` (requires_key: false) | Kosong | Langsung create ticket |
+| Skenario Kategori                      | Produk di kategori   | Behavior                                                          |
+| -------------------------------------- | -------------------- | ----------------------------------------------------------------- |
+| `transaction` (requires_key: true)     | Ada produk key       | Dropdown produk → Set Key                                         |
+| `transaction` (requires_key: true)     | Campur key & non-key | Dropdown produk → Set Key untuk key, Pesanan Sukses untuk non-key |
+| `jasa` (requires_key: false)           | Ada produk jasa      | Dropdown produk → Pesanan Sukses (tanpa Set Key)                  |
+| `help` (requires_key: false)           | Kosong               | Langsung create ticket                                            |
+| `report` (requires_key: false)         | Kosong               | Langsung create ticket                                            |
+| `claim_giveaway` (requires_key: false) | Kosong               | Langsung create ticket                                            |
+| `partnership` (requires_key: false)    | Kosong               | Langsung create ticket                                            |
 
 **Jadi kamu fleksibel mau pilih cara mana:**
 
@@ -202,7 +203,7 @@ Saat bot start, config lama akan otomatis di-migrate:
 
 - Label `"Bantuan Staff"` → `"Help"` (hanya kalau belum di-customize admin)
 - Label `"Laporkan Member"` → `"Report"` (hanya kalau belum di-customize admin)
-- Kategori `claim_giveaway` ditambahkan kalau belum ada (sekali saja — kalau admin hapus, tidak akan ditambah lagi)
+- Kategori `claim_giveaway` ditambahkan kalau belum ada. Kalau admin hapus via `/remove-category`, bot menandai `claimGiveawayDismissed` (v3.9.26) dan **tidak akan menambah ulang** — sebelumnya kategori ini "hidup lagi" diam-diam setiap getConfig() berikutnya.
 
 ### Step 7: (Opsional) Pasang Self-Role Panel
 
@@ -210,9 +211,15 @@ Untuk member yang mau ambil role sendiri (mis. role notif game):
 
 ```
 /setup-selfrole title:"Pilih Notif Game" description:"Klik role yang kamu mau" type:button exclusive:false
-/selfrole-add panel_id:sr_xxx role:@Notif ML label:"Notif ML" emoji:"🎮"
-/selfrole-add panel_id:sr_xxx role:@Notif PUBG label:"Notif PUBG" emoji:"🔫"
+/selfrole-add panel_id:sr_xxx role:@Notif ML label:"Notif ML" emoji:"🎮" style:Primary
+/selfrole-add panel_id:sr_xxx role:@Notif PUBG label:"Notif PUBG" emoji:"🔫" style:Success
 ```
+
+Opsi lanjutan `/selfrole-add` (v3.9.11+):
+
+- `style` — warna tombol: Primary (blurple), Secondary (abu), Success (hijau), Danger (merah)
+- `requires_role` — role "prerequisite": role ini baru muncul bisa diambil kalau member sudah punya role lain (berguna untuk role bertingkat)
+- `type:select` di `/setup-selfrole` — pakai dropdown (rapi untuk banyak role)
 
 ### Step 8: Cek Konfigurasi
 
@@ -233,15 +240,16 @@ Akan tampil embed dengan semua setting saat ini: roles, channels, products, key 
 /set-product-role value:60d role:@VIP 60 Days days:60
 ```
 
-### Ubah Harga Produk
+### Ubah Produk (label / harga / durasi / kategori)
 
-Hapus + tambah ulang (bot belum punya edit product):
+Sejak v3.9.19 ada `/update-product` — tidak perlu hapus + tambah ulang:
 
 ```
-/remove-product value:60d
-/add-product label:"60 Days" value:60d price:"Rp. 175.000" duration:"60 Hari"
-/set-product-role value:60d role:@VIP 60 Days days:60
+/update-product value:60d price:"Rp. 175.000"
+/update-product value:60d label:"60 Days+" duration:"60 Hari" category:transaction
 ```
+
+Semua field opsional — hanya yang diisi yang berubah. Tombol Set Key di tiket lama tetap jalan setelah rename (v3.9.26: lookup produk sekarang pakai `value` yang stabil, bukan label).
 
 ### Lihat Semua Produk
 
@@ -361,11 +369,13 @@ Halo thor064747! Transaksi kamu udah selesai 🎉
 **Contoh notif yang muncul di channel tiket (untuk user, bukan admin):**
 
 Kalau DM sukses:
+
 ```
 Halo @user! 🔑 Key kamu udah dikirim via DM, cek ya 📬
 ```
 
 Kalau DM gagal:
+
 ```
 ⚠️ @user — gagal kirim DM (kemungkinan DM ditutup). Admin akan kirim key manual ya.
 ```
@@ -556,7 +566,116 @@ Bot akan disable semua tombol + tampilkan hasil akhir.
 
 ---
 
-## 7. Backup & Restore
+## 7. Fitur Komunitas Lanjutan
+
+Fitur berikut ditambahkan sejak v3.9.13 — semuanya bisa dikonfigurasi penuh dari Discord.
+
+### Auto-Responder
+
+Bot membalas pesan otomatis saat member mengetik trigger di awal pesan (case-insensitive).
+
+```
+/add-responder trigger:"!sosmed" reply:"Instagram: ig.com/serverkita\nYouTube: yt.com/@serverkita" reply_type:embed
+/list-responder
+/remove-responder trigger:"!sosmed"
+```
+
+- `reply_type`: `text` (plain) atau `embed`
+- Support `\n` untuk multi-baris (v3.9.24)
+- Cooldown default 3 detik per-user (bisa diatur per responder, `0` = mati)
+- Maks 50 responder per guild
+- Anti mass-ping: mention di reply tidak men-trigger ping (`allowedMentions` dikunci)
+
+### Anti-Spam & Auto-Mod
+
+```
+/set-automod spam_action:mute_10m word_action:delete_only mention_action:warn
+/automod-toggle enabled:true
+/automod-show
+/add-word words:"kata1 kata2" tipe:blocklist action:mute_10m
+/remove-word word:kata1
+/list-words
+/add-link-whitelist channel:#share-link
+/remove-link-whitelist channel:#share-link
+```
+
+- **Spam**: N pesan dalam window (default 5/10 detik) → action
+- **Word filter (v3.9.23 WORD FLEX)**: tambah kata satu per satu, action per kata, exempt word, matching **whole-word** ("asu" TIDAK match "asus")
+- **Link block** + whitelist channel/role
+- **Mass-mention** (default >5 mention/pesan)
+- Action: `delete_only`, `warn`, `mute_10m`, `mute_1h`, `kick`
+- Admin & whitelisted user otomatis kebal
+
+### AFK System
+
+```
+/afk reason:"Tidur\nJangan ganggu"
+/afk-clear
+/afk-list
+```
+
+- Saat di-mention, bot auto-reply dengan reason + durasi AFK (auto-delete 30 detik)
+- AFK auto-clear saat user kirim pesan lagi (bot sapa "welcome back")
+- Reason support `\n` multi-baris (v3.9.25) dan tidak bisa mass-ping
+
+### Leveling System
+
+```
+/setup-leveling enabled:true xp_per_message:15 cooldown:60 announce_levelup:true
+/add-level-role level:10 role:@Member Aktif
+/list-level-roles
+/remove-level-role level:10
+/rank
+/leaderboard-level
+```
+
+- XP per pesan dengan cooldown per-user (anti spam chat)
+- Role reward otomatis saat level up (bisa bertingkat)
+- `/rank` menampilkan kartu level pribadi, `/leaderboard-level` top 10
+
+### Temp Voice
+
+```
+/setup-tempvoice channel:#Join For Voice
+/tempvoice-remove
+```
+
+- Member join channel trigger → bot bikin voice channel pribadi (owner otomatis)
+- Kontrol via panel: rename, lock, limit user, transfer ownership, delete
+- Channel kosong otomatis dihapus; owner keluar → auto-transfer ke member lain
+
+### Multi-Panel Tiket + Kustomisasi
+
+```
+/setup-ticket-panel channel:#tiket title:"Klik untuk order" body:"Harga:\n{price_list}" color:#ff5733
+/list-panels
+/update-panel id:tp_xxx field:image
+/refresh-panel id:tp_xxx
+/delete-panel id:tp_xxx
+/set-transcript-channel #transcript
+```
+
+- Beberapa panel berbeda di channel berbeda, masing-masing bisa filter kategori (`categories:transaction,help`)
+- Semua field bisa dikustom: title, body (support template `{server}` `{price_list}` `{price_list:<kategori>}` + `\n`), warna, image, thumbnail, footer, tombol/dropdown
+- Panel terdaftar persisten di `data/panels.json` (ikut backup)
+- Transcript tiket otomatis tersimpan ke channel transcript sebelum close
+
+### Edit Teks Pesan (modal + newline)
+
+```
+/set-message tipe:welcomeBody teks:"Halo {user}\nSelamat datang di {server}"
+/edit-message tipe:ticketBody    ← buka modal editor (Enter di modal = baris baru asli)
+/list-messages
+/reset-message tipe:welcomeBody
+```
+
+- Input slash command di PC **tidak bisa Enter** (Enter = kirim) — tulis `\n` untuk baris baru
+- Berlaku untuk: `\n` di send-message, announce, set-message (tipe Body), setup-ticket-panel, responder, afk, warn, selfrole (v3.9.24-25)
+- ⚠️ Tipe **Title** sengaja TIDAK dikonversi (embed title Discord menolak newline)
+
+---
+
+## 8. Backup & Restore
 
 ### Backup Manual
 
@@ -564,7 +683,7 @@ Bot akan disable semua tombol + tampilkan hasil akhir.
 /backup-now
 ```
 
-Bot buat folder `backups/YYYY-MM-DD_HH-mm-ss/` berisi copy semua JSON files (config, keys, scheduledRoles, selfRoles, giveaways, polls, warns, stats, scheduledAnns, tempVoice, tickets).
+Bot buat folder `backups/YYYY-MM-DD_HH-mm-ss/` berisi copy **semua 16 file data** dari folder `data/`: config, keys, scheduledRoles, selfRoles, giveaways, polls, warns, stats, scheduledAnns, tempVoice, tickets, **automod, levels, responders, afk, panels** (5 file terakhir ditambahkan v3.9.24 — sebelumnya word filter, leveling, auto-responder, AFK, dan panel multi-tiket TIDAK ikut di-backup).
 
 ### Auto-Backup
 
@@ -591,7 +710,7 @@ Akan tampil semua backup termasuk safety backup `pre-restore_*` (kalau pernah re
 1. Bot kirim embed konfirmasi dengan 2 tombol: **Ya, Restore Sekarang** dan **Batal**
 2. Admin klik tombol → restore dijalankan
 3. Bot otomatis buat safety backup `pre-restore_*` sebelum overwrite (jaga-jaga kalau salah restore bisa undo)
-4. Setelah restore selesai, cache in-memory di-reload otomatis (sejak v3.9.1 — `statsManager.reload()`)
+4. Setelah restore selesai, semua cache in-memory di-reload otomatis (stats, panels, permissions; sejak v3.9.26 juga automod/afk/responders/levels)
 5. **RESTART bot** (`Ctrl+C` lalu `npm start`) tetap direkomendasikan untuk konsistensi penuh
 
 **Proteksi (v3.9.1+):**
@@ -603,7 +722,7 @@ Akan tampil semua backup termasuk safety backup `pre-restore_*` (kalau pernah re
 
 ---
 
-## 8. Troubleshooting
+## 9. Troubleshooting
 
 ### Bot tidak online
 
@@ -692,7 +811,7 @@ Cooldown-nya **per-user** — user A trigger gak ngarang ke user B.
 
 - Sejak v3.9.1, `statsManager.reload()` otomatis invalidate cache setelah restore.
 - Untuk konsistensi penuh, **RESTART bot** tetap direkomendasikan.
-- Manager lain (keyManager, roleScheduler, dll) baca dari disk setiap call — tidak ada cache.
+- Manager lain membaca dari disk; sejak v3.9.26 automod/afk/responder/levels memakai cache 15 detik yang otomatis di-invalidasi setelah restore dan setiap kali data ditulis.
 
 ### Pesan "Tunggu sebentar, kamu lagi klik terlalu cepat"
 
@@ -702,7 +821,7 @@ Cooldown-nya **per-user** — user A trigger gak ngarang ke user B.
 
 ---
 
-## 9. Best Practices
+## 10. Best Practices
 
 ### Keamanan
 
@@ -744,7 +863,42 @@ Cooldown-nya **per-user** — user A trigger gak ngarang ke user B.
 
 ---
 
-## 10. Apa yang Baru di v3.9.x
+## 11. Apa yang Baru di v3.9.x
+
+### v3.9.26 — Audit menyeluruh (single-guild) + hardening
+
+- **`/update-panel` image/thumbnail/footer FIXED** — sebelumnya tersimpan di key yang salah (no-op diam-diam)
+- **`/giveaway list` & `/poll list` dibatasi 15 terbaru** — sebelumnya mati permanen di ~30 entry (limit 4096)
+- **Poll create divalidasi** (question maks 250, channel harus text) — sebelumnya entry zombie + admin stuck "Bot is thinking..."
+- **claim_giveaway bisa dihapus permanen** — sebelumnya "hidup lagi" diam-diam tiap pesan
+- **Karantina file korup** — semua 16 file data di-rename `.corrupt-<ts>` sebelum fallback default (tidak lagi tertimpa diam-diam)
+- **GC harian** — giveaway/poll/announcement lama (>30 hari) otomatis dipangkas
+- **Hot-path cache** — automod/afk/responder/levels (dulu 5-7 readFileSync sync per pesan)
+- **GUILD_ID guard** di semua event (asuransi kalau bot tak sengaja di-invite ke server lain)
+- Migrasi v1→v2 config tidak lagi drop field modern; emoji tervalidasi (anti poison panel); per-hook try/catch di messageCreate; DM set-key & transcript tahan data panjang
+
+### v3.9.25 — Newline everywhere
+
+- `\n` support ditambahkan ke /set-message (Body), /afk, /warn, /setup-selfrole, /selfrole-add
+
+### v3.9.24 — Newline + hardening (full codebase review)
+
+- `\n` untuk send-message, announce, announce-schedule, setup-ticket-panel, add-responder
+- Router `/update-category` & `/update-product` FIXED (sebelumnya selalu error "belum didukung")
+- Backup +5 file (automod, levels, responders, afk, panels)
+- Crash exit code 0 → 1 (PM2/systemd kini restart dengan benar)
+- Test sandbox (tidak lagi menghapus data produksi)
+- ready.js per-langkah, userLock owner-token, re-check admin di tombol destruktif, dll.
+
+### v3.9.23 — Auto-mod WORD FLEX
+
+- Word filter per kata + action per kata + exempt + whole-word matching + `/add-word`, `/remove-word`, `/list-words`, `/remove-link-whitelist`
+
+### v3.9.13–v3.9.22 — Fitur komunitas besar
+
+- v3.9.13: Auto-Responder, Anti-Spam/Auto-Mod, AFK, Leveling
+- v3.9.14: Multi-panel tiket persisten + kustomisasi penuh
+- v3.9.15-22: set key via tiket (tanpa auto-close), DM HP-friendly, transcript otomatis, Set Key DM "kamu dapat hadiah", stabilisasi tiket/panel
 
 ### v3.9.7 — Embed Builder hotfix
 
@@ -820,11 +974,11 @@ Kalau ada masalah yang tidak ada di Troubleshooting:
 1. **Cek console output bot** — pesan error biasanya ada di sana
 2. **Cek `/config-show`** — pastikan semua setting benar
 3. **Cek `#audit-log`** — lihat action terakhir yang mungkin trigger masalah
-4. **Cek file JSON** di folder root — apakah formatnya valid (bisa dibuka di text editor)
+4. **Cek file JSON** di folder `data/` — apakah formatnya valid (bisa dibuka di text editor). Kalau ada file `*.corrupt-<timestamp>`, itu file yang gagal di-parse dan otomatis di-karantina bot (v3.9.26) — isinya bisa diperiksa/dipulihkan manual sebelum di-rename balik.
 5. **Backup dulu** (`/backup-now`) sebelum debugging lebih lanjut
 
 ---
 
-**Versi dokumen:** v3.9.2  
-**Last updated:** July 2026  
-**Bot version:** 3.9.2
+**Versi dokumen:** v3.9.26  
+**Last updated:** September 2026  
+**Bot version:** 3.9.26

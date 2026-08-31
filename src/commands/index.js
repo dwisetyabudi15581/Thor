@@ -179,6 +179,12 @@ const COMMAND_TO_DOMAIN = {
     'add-category': 'categories',
     'list-categories': 'categories',
     'remove-category': 'categories',
+    // v3.9.24 FIX: dua command ini sebelumnya TERDAFTAR di registry + punya
+    // handler + diiklankan di /help, tapi TIDAK di-map di sini → selalu error
+    // "Command belum didukung oleh router". Bug ini ketutup karena router
+    // gak error, cuma balas pesan "hubungi dev".
+    'update-category': 'categories',
+    'update-product': 'products',
 
     // v3.9.11 Phase 1 & 3: panels (verify button, multi-panel ticket, transcript)
     'set-verify-button': 'panels',
@@ -201,6 +207,11 @@ const COMMAND_TO_DOMAIN = {
     'automod-show': 'automod',
     'automod-toggle': 'automod',
     'add-link-whitelist': 'automod',
+    // v3.9.23: word flex — kelola kata blocklist/exempt per kata
+    'add-word': 'automod',
+    'remove-word': 'automod',
+    'list-words': 'automod',
+    'remove-link-whitelist': 'automod',
 
     // v3.9.13: AFK System
     afk: 'afk',
@@ -253,5 +264,11 @@ async function routeCommand(interaction) {
         flags: MessageFlags.Ephemeral
     });
 }
+
+// v3.9.24: export mapping domain supaya bisa di-unit-test (guard anti
+// "command terdaftar di registry tapi tidak pernah di-route" — bug yang
+// persis kejadian pada /update-category & /update-product sebelum fix ini).
+routeCommand.COMMAND_TO_DOMAIN = COMMAND_TO_DOMAIN;
+routeCommand.DOMAIN_HANDLERS = DOMAIN_HANDLERS;
 
 module.exports = routeCommand;

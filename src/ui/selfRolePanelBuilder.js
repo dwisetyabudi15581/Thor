@@ -59,10 +59,7 @@ function buildPanelEmbed(panel, client) {
         // Hitung berapa role yang berhasil ditampilkan (count bullet points)
         const displayedCount = (truncated.match(/^• /gm) || []).length;
         const hiddenCount = Math.max(0, panel.roles.length - displayedCount);
-        fullDesc =
-            header +
-            truncated +
-            `\n... +${hiddenCount} lainnya (lihat via /selfrole-list)`;
+        fullDesc = header + truncated + `\n... +${hiddenCount} lainnya (lihat via /selfrole-list)`;
     } else {
         fullDesc = header + rolesText;
     }

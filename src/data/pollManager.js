@@ -21,7 +21,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { safeWriteJSON } = require('../infra/safeWrite');
+const { safeWriteJSON, quarantineCorruptFile } = require('../infra/safeWrite');
 
 const filePath = path.join(__dirname, '..', '..', 'data', 'polls.json');
 
@@ -31,6 +31,8 @@ function load() {
         return JSON.parse(fs.readFileSync(filePath, 'utf8'));
     } catch (err) {
         console.warn('⚠️ polls.json rusak:', err.message);
+        // v3.9.26: karantina file korup sebelum fallback (lihat safeWrite.js).
+        quarantineCorruptFile(filePath);
         return [];
     }
 }
@@ -113,7 +115,10 @@ function deletePollSession(id) {
 function create(data) {
     const list = load();
     const poll = {
-        id: genId(),
+        // v3.9.26: caller boleh supply id sendiri (interactions/poll.js membangun
+        // tombol dengan id SEBELUM persist — render-first supaya entry tidak
+        // jadi zombie kalau embed build throw). Tanpa id, generate seperti biasa.
+        id: data.id || genId(),
         guildId: data.guildId,
         channelId: data.channelId,
         messageId: null,
@@ -226,6 +231,25 @@ function getTotalVotes(poll) {
     return unique.size;
 }
 
+/**
+ * v3.9.26 (GC): hapus poll yang sudah closed lebih dari `olderThanMs` lalu.
+ * Poll closed tidak pernah dihapus sebelumnya → polls.json tumbuh tanpa batas.
+ * Dipanggil scheduler harian. Return jumlah entry yang dihapus.
+ */
+function pruneClosedOlderThan(olderThanMs) {
+    const list = load();
+    const cutoff = Date.now() - olderThanMs;
+    const keep = list.filter(p => {
+        if (!p) return false;
+        if (!p.closed) return true; // aktif tidak di-touch
+        const closedAt = p.closedAt || p.createdAt || 0;
+        return closedAt > cutoff;
+    });
+    const removedCount = list.length - keep.length;
+    if (removedCount > 0) save(keep);
+    return removedCount;
+}
+
 module.exports = {
     create,
     setMessageId,
@@ -239,5 +263,7 @@ module.exports = {
     // v3.9.1: poll session (in-memory, for modal customId safety)
     createPollSession,
     getPollSession,
-    deletePollSession
+    deletePollSession,
+    // v3.9.26
+    pruneClosedOlderThan
 };

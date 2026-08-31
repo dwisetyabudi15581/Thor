@@ -9,12 +9,16 @@
 
 const { EmbedBuilder, MessageFlags, safeEditReply } = require('./_shared');
 
+// v3.9.25: konversi \n literal → newline asli (fitur multi-line PC)
+const { normalizeNewlines } = require('../infra/text');
+
 const afkManager = require('../data/afkManager');
 
 module.exports = async function (interaction) {
     // === AFK (set status AFK) ===
     if (interaction.commandName === 'afk') {
-        const reason = interaction.options.getString('reason') || 'AFK';
+        // v3.9.25: \n literal → newline asli biar reason AFK bisa multi-baris
+        const reason = normalizeNewlines(interaction.options.getString('reason') || 'AFK');
 
         afkManager.setAFK(interaction.guild.id, interaction.user.id, reason);
 

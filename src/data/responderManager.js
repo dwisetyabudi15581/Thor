@@ -26,22 +26,43 @@
 
 const fs = require('fs');
 const path = require('path');
-const { safeWriteJSON } = require('../infra/safeWrite');
+const { safeWriteJSON, quarantineCorruptFile } = require('../infra/safeWrite');
 
 const filePath = path.join(__dirname, '..', '..', 'data', 'responders.json');
 
+// v3.9.26: read-through cache (pola panelManager). findMatch dibaca di
+// messageCreate PER PESAN — sebelumnya 1 readFileSync sync per pesan walau
+// tidak ada responder sama sekali. Cache 15s TTL + update-on-save.
+const CACHE_TTL_MS = 15 * 1000;
+let _cache = null; // { data, at }
+
 function load() {
     try {
-        if (!fs.existsSync(filePath)) return {};
-        return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+        if (_cache && Date.now() - _cache.at < CACHE_TTL_MS) return _cache.data;
+        if (!fs.existsSync(filePath)) {
+            _cache = { data: {}, at: Date.now() };
+            return _cache.data;
+        }
+        const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+        _cache = { data, at: Date.now() };
+        return data;
     } catch (err) {
-        console.warn('⚠️ responders.json rusak:', err.message);
-        return {};
+        // v3.9.26: karantina file korup SEBELUM fallback (lihat safeWrite.js).
+        quarantineCorruptFile(filePath);
+        _cache = { data: {}, at: Date.now() };
+        return _cache.data;
     }
 }
 
 function save(data) {
     safeWriteJSON(filePath, data);
+    // v3.9.26: update cache supaya read berikutnya konsisten dengan yang baru di-write
+    _cache = { data, at: Date.now() };
+}
+
+/** v3.9.26: paksa read fresh berikutnya (restore backup / test). */
+function invalidateCache() {
+    _cache = null;
 }
 
 function genId() {
@@ -175,5 +196,6 @@ module.exports = {
     addResponder,
     removeResponder,
     findMatch,
-    markUsed
+    markUsed,
+    invalidateCache
 };

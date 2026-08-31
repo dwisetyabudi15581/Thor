@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { safeWriteJSON } = require('../infra/safeWrite');
+const { safeWriteJSON, quarantineCorruptFile } = require('../infra/safeWrite');
 
 const scheduledPath = path.join(__dirname, '..', '..', 'data', 'scheduledRoles.json');
 
@@ -35,6 +35,8 @@ function loadScheduled() {
         return JSON.parse(fs.readFileSync(scheduledPath, 'utf8'));
     } catch (err) {
         console.error('Error load scheduledRoles.json:', err.message);
+        // v3.9.26: karantina file korup sebelum fallback (lihat safeWrite.js).
+        quarantineCorruptFile(scheduledPath);
         return [];
     }
 }

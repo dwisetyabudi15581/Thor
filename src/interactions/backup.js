@@ -31,10 +31,22 @@ module.exports = async function (interaction) {
         return handleResetConfigConfirm(interaction);
     }
     if (interaction.isButton() && interaction.customId === 'reset_config_cancel') {
-        return interaction.update({
-            content: '✅ Reset config dibatalkan. Tidak ada perubahan yang dilakukan.',
-            components: []
-        });
+        // v3.9.26: wrap update — kalau ephemeral sudah di-dismiss sebelum tombol
+        // diklik, update() throw 10008 → tanpa catch, user lihat "interaction failed"
+        // tanpa pesan (asimetris dengan tombol confirm yang sudah di-handle).
+        try {
+            return await interaction.update({
+                content: '✅ Reset config dibatalkan. Tidak ada perubahan yang dilakukan.',
+                components: []
+            });
+        } catch (_) {
+            return interaction
+                .reply({
+                    content: '✅ Reset config dibatalkan (konfirmasi sudah kedaluwarsa).',
+                    flags: MessageFlags.Ephemeral
+                })
+                .catch(() => {});
+        }
     }
 
     // ====================================================
@@ -52,10 +64,21 @@ module.exports = async function (interaction) {
                 flags: MessageFlags.Ephemeral
             });
         }
-        return interaction.update({
-            content: '✅ Restore backup dibatalkan. Tidak ada perubahan yang dilakukan.',
-            components: []
-        });
+        // v3.9.26: wrap update — symetris dengan reset_config_cancel (ephemeral
+        // di-dismiss → update throw 10008).
+        try {
+            return await interaction.update({
+                content: '✅ Restore backup dibatalkan. Tidak ada perubahan yang dilakukan.',
+                components: []
+            });
+        } catch (_) {
+            return interaction
+                .reply({
+                    content: '✅ Restore backup dibatalkan (konfirmasi sudah kedaluwarsa).',
+                    flags: MessageFlags.Ephemeral
+                })
+                .catch(() => {});
+        }
     }
 };
 

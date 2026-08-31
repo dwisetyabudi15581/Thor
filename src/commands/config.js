@@ -32,6 +32,9 @@ const {
 // v3.9.12: ModalBuilder untuk /edit-message
 const { ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
 
+// v3.9.25: konversi \n literal → newline asli (fitur multi-line PC)
+const { normalizeNewlines } = require('../infra/text');
+
 module.exports = async function (interaction) {
     const embeds = new Embeds(interaction.client);
     const config = getConfig();
@@ -294,12 +297,17 @@ module.exports = async function (interaction) {
     if (interaction.commandName === 'set-message') {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         const tipe = interaction.options.getString('tipe');
-        const teks = interaction.options.getString('teks');
+        const rawTeks = interaction.options.getString('teks');
 
         // P2-10 FIX: validasi panjang sesuai Discord embed limits.
         // Sebelumnya: admin bisa set teks sepanjang apapun → saat embed dikirim,
         // `setTitle` / `setDescription` throw error → silent failure.
         const isTitle = tipe.endsWith('Title');
+        // v3.9.25: \n literal → newline asli untuk tipe Body (slash command input
+        // di PC/HP tidak bisa Enter). Tipe *Title sengaja TIDAL dikonversi:
+        // embed title Discord menolak newline — kalau dikonversi, panel verifikasi/
+        // welcome bakal gagal kirim saat setup.
+        const teks = isTitle ? rawTeks : normalizeNewlines(rawTeks);
         const limit = isTitle ? EMBED_LIMITS.TITLE : EMBED_LIMITS.DESCRIPTION;
         const limitLabel = isTitle ? 'title (max 256)' : 'body (max 4096)';
         if (teks.length > limit) {

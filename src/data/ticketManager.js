@@ -10,7 +10,7 @@ const { getConfig } = require('./configManager');
 const { safeEditReply } = require('../infra/safeReply');
 const fs = require('fs');
 const path = require('path');
-const { safeWriteJSON } = require('../infra/safeWrite');
+const { safeWriteJSON, quarantineCorruptFile } = require('../infra/safeWrite');
 
 // P2-2 FIX: per-user lock supaya tidak bisa buka 2 tiket bersamaan (race condition).
 // Sebelumnya: 2 klik tombol <100ms → kedua interaction lolos check existing ticket
@@ -46,6 +46,8 @@ function loadTickets() {
         return JSON.parse(fs.readFileSync(ticketsPath, 'utf8'));
     } catch (err) {
         console.warn('⚠️ tickets.json rusak:', err.message);
+        // v3.9.26: karantina file korup sebelum fallback (lihat safeWrite.js).
+        quarantineCorruptFile(ticketsPath);
         return {};
     }
 }
@@ -252,7 +254,9 @@ async function createTicket(interaction, product) {
                     c => c.name === '🎫 TICKETS' && c.type === ChannelType.GuildCategory
                 );
                 if (!category) {
-                    throw new Error(`Gagal buat kategori tiket "${targetCategoryName}". Cek permission Manage Channels.`);
+                    throw new Error(
+                        `Gagal buat kategori tiket "${targetCategoryName}". Cek permission Manage Channels.`
+                    );
                 }
             }
         }
@@ -510,11 +514,24 @@ async function saveTranscript(ticketChannel, meta, closer, isSuccess) {
         // Pecah per baris, gabung sampai mendekati CHUNK_SIZE
         let current = '';
         for (const line of lines) {
-            if ((current + '\n' + line).length > CHUNK_SIZE) {
+            // v3.9.26 FIX: hard-split baris yang sendirinya > CHUNK_SIZE. Satu
+            // pesan user bisa 2000 char → satu "line" > 1900 → chunk jadi
+            // > limit → send throw → SELURUH text transcript hilang (catch
+            // di closeTicket menelan). Sekarang baris panjang dipecah paksa.
+            let l = line;
+            while (l.length > CHUNK_SIZE) {
+                if (current) {
+                    chunks.push(current);
+                    current = '';
+                }
+                chunks.push(l.slice(0, CHUNK_SIZE));
+                l = l.slice(CHUNK_SIZE);
+            }
+            if ((current + '\n' + l).length > CHUNK_SIZE) {
                 chunks.push(current);
-                current = line;
+                current = l;
             } else {
-                current = current ? current + '\n' + line : line;
+                current = current ? current + '\n' + l : l;
             }
         }
         if (current) chunks.push(current);

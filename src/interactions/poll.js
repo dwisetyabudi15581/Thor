@@ -16,7 +16,7 @@
  */
 
 const { EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder, MessageFlags } = require('discord.js');
-const { logAudit, withUserLock } = require('../commands/_shared');
+const { logAudit, withUserLock, safeEditReply } = require('../commands/_shared');
 // votePoll / getPollByMessage / removePoll / getPollSession / deletePollSession
 // tidak di-export _shared, import langsung dari pollManager.
 const {
@@ -215,21 +215,22 @@ async function handlePollModalCreate(interaction) {
             return interaction.reply({ content: '❌ Channel tidak ditemukan.', flags: MessageFlags.Ephemeral });
         }
 
-        // Create poll entry
-        const poll = createPoll({
-            guildId: interaction.guild.id,
-            channelId: channel.id,
-            question,
-            options,
-            multiple,
-            creatorId: interaction.user.id,
-            creatorTag: interaction.user.tag
-        });
+        // v3.9.26 FIX: BUILD embed + tombol DULU, PERSIST belakangan.
+        // Sebelumnya createPoll() menulis polls.json SEBELUM setTitle() —
+        // question panjang/bentuk aneh membuat setTitle throw (>256) SETELAH
+        // entry tersimpan → zombie poll (messageId:null) + user stuck
+        // "Bot is thinking..." karena catch memanggil reply() setelah deferReply
+        // sukses (InteractionAlreadyAcknowledged, ditelan .catch).
+        // Validasi question sudah di command (/poll create, maks 250), tapi
+        // reorder ini menutup jalur error sisanya + membuat rollback tidak
+        // perlu untuk kasus render-gagal.
 
         // Build embed + buttons
+        const pollId = `poll_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+        const createdAt = Date.now();
         const total = 0;
-        const lines = poll.options
-            .map((opt, i) => {
+        const lines = options
+            .map(opt => {
                 const pct = 0;
                 const bar = '░'.repeat(10);
                 return `${opt.emoji} **${opt.label}** — 0 votes (0%)\n\`${bar}\``;
@@ -242,22 +243,22 @@ async function handlePollModalCreate(interaction) {
                 `${lines}\n\n` +
                     `🗳️ Total votes: **0**\n` +
                     `🔄 Mode: ${multiple ? 'Multi-vote (boleh pilih banyak)' : 'Single-vote (pilih satu)'}\n` +
-                    `⏰ Dibuat: <t:${Math.floor(poll.createdAt / 1000)}:R>\n\n` +
+                    `⏰ Dibuat: <t:${Math.floor(createdAt / 1000)}:R>\n\n` +
                     `👇 Klik tombol di bawah untuk vote (toggle)`
             )
             .setColor(0x5865f2)
-            .setFooter({ text: `Poll by ${interaction.user.tag} | ID: ${poll.id}` })
+            .setFooter({ text: `Poll by ${interaction.user.tag} | ID: ${pollId}` })
             .setTimestamp();
 
         // Build buttons — 5 per row (Discord limit), wrap to next row if more
         const rows = [];
-        for (let i = 0; i < poll.options.length; i += 5) {
+        for (let i = 0; i < options.length; i += 5) {
             const row = new ActionRowBuilder();
-            for (let j = i; j < Math.min(i + 5, poll.options.length); j++) {
-                const opt = poll.options[j];
+            for (let j = i; j < Math.min(i + 5, options.length); j++) {
+                const opt = options[j];
                 row.addComponents(
                     new ButtonBuilder()
-                        .setCustomId(`poll_vote:${poll.id}:${j}`)
+                        .setCustomId(`poll_vote:${pollId}:${j}`)
                         .setLabel(opt.label.slice(0, 80))
                         .setEmoji(opt.emoji)
                         .setStyle(ButtonStyle.Primary)
@@ -265,6 +266,24 @@ async function handlePollModalCreate(interaction) {
             }
             rows.push(row);
         }
+
+        // v3.9.24 FIX: defer SEBELUM channel.send (operasi lambat). Sebelumnya
+        // modal ini tidak pernah defer — kalau send lambat / retry jaringan,
+        // window 3-detik ack Discord terlewati → "This interaction failed".
+        // Validasi di atas cepat (in-memory), jadi defer di titik ini pas.
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral }).catch(() => {});
+
+        // Persist poll entry SETELAH render sukses (v3.9.26)
+        const poll = createPoll({
+            id: pollId,
+            guildId: interaction.guild.id,
+            channelId: channel.id,
+            question,
+            options,
+            multiple,
+            creatorId: interaction.user.id,
+            creatorTag: interaction.user.tag
+        });
 
         const msg = await channel
             .send({ embeds: [embed], components: rows, content: `📊 **POLL BARU** oleh ${interaction.user}` })
@@ -275,9 +294,8 @@ async function handlePollModalCreate(interaction) {
                 removePoll(poll.id);
             } catch (_) {}
             deletePollSession(sessionId);
-            return interaction.reply({
-                content: `❌ Gagal kirim poll ke ${channel}. Cek permission bot. Entry di-rollback.`,
-                flags: MessageFlags.Ephemeral
+            return safeEditReply(interaction, {
+                content: `❌ Gagal kirim poll ke ${channel}. Cek permission bot. Entry di-rollback.`
             });
         }
         setPollMessageId(poll.id, msg.id);
@@ -293,16 +311,17 @@ async function handlePollModalCreate(interaction) {
                 guildId: interaction.guild.id
             });
         } catch (_) {}
-        return interaction.reply({
-            content: `✅ Poll dibuat di ${channel}!\n🆔 \`${poll.id}\`\n💡 Tutup pakai \`/poll close id:${poll.id}\``,
-            flags: MessageFlags.Ephemeral
+        return safeEditReply(interaction, {
+            content: `✅ Poll dibuat di ${channel}!\n🆔 \`${poll.id}\`\n💡 Tutup pakai \`/poll close id:${poll.id}\``
         });
     } catch (err) {
         console.error('Poll modal create error:', err);
-        if (interaction.isRepliable() && !interaction.replied) {
-            await interaction
-                .reply({ content: '❌ Terjadi error: ' + err.message, flags: MessageFlags.Ephemeral })
-                .catch(() => {});
-        }
+        // v3.9.26 FIX: pakai safeEditReply, bukan reply(). deferReply sudah jalan
+        // di jalur sukses → reply() throw InteractionAlreadyAcknowledged (ditelan
+        // .catch) → user stuck "Bot is thinking..." 15 menit tanpa pesan error.
+        // safeEditReply handle kasus deferred/replied/belum-apa-apa dengan benar.
+        await safeEditReply(interaction, {
+            content: '❌ Terjadi error saat membuat poll: ' + (err.message || 'unknown')
+        }).catch(() => {});
     }
 }

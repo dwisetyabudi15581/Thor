@@ -25,8 +25,11 @@ module.exports = async function (interaction) {
 
         const updates = { ...(config.leveling || {}) };
         if (enabled !== null) updates.enabled = enabled;
-        if (xpPerMessage !== null) updates.xpPerMessage = xpPerMessage;
-        if (cooldown !== null) updates.cooldownMs = cooldown * 1000;
+        // v3.9.26: clamp nilai absurd. Registry sudah min_value/max_value, tapi
+        // data lama / config manual bisa berisi nilai aneh (xpPerMessage: -50 →
+        // user BUSA XP tiap pesan; cooldownMs negatif → cooldown mati).
+        if (xpPerMessage !== null) updates.xpPerMessage = Math.max(1, Math.min(1000, xpPerMessage));
+        if (cooldown !== null) updates.cooldownMs = Math.max(0, Math.min(3600, cooldown)) * 1000;
         if (announceLevelUp !== null) updates.announceLevelUp = announceLevelUp;
 
         config.leveling = updates;

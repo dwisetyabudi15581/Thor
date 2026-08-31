@@ -21,6 +21,7 @@ const {
     ModalBuilder,
     TextInputBuilder,
     TextInputStyle,
+    ChannelType,
     createPoll,
     getPoll,
     getPollsByGuild,
@@ -37,7 +38,17 @@ module.exports = async function (interaction) {
     // ====================================================
     if (interaction.commandName !== 'poll') return;
 
-    const sub = interaction.options.getSubcommand();
+    // v3.9.26 FIX: getSubcommand(false). Registry menandai semua subcommand
+    // required:false → Discord BOLEH kirim /poll tanpa subcommand → getSubcommand()
+    // throw CommandInteractionOptionNoSubcommand (unhandled, stack penuh di log,
+    // user lihat error generik). Sekarang: hint penggunaan yang jelas.
+    const sub = interaction.options.getSubcommand(false);
+    if (!sub) {
+        return interaction.reply({
+            content: '❌ Pakai subcommand: `/poll create`, `/poll list`, atau `/poll close`.',
+            flags: MessageFlags.Ephemeral
+        });
+    }
 
     // --- /poll create ---
     if (sub === 'create') {
@@ -45,6 +56,25 @@ module.exports = async function (interaction) {
         const question = interaction.options.getString('question');
         const multiple = interaction.options.getBoolean('multiple') || false;
 
+        // v3.9.26 FIX: validasi SEBELUM session/modal. Question > ~250 char membuat
+        // `setTitle(\`📊 ${question}\`)` throw (>256) NANTI di modal handler —
+        // setelah poll PERSIST ke polls.json (zombie) dan setelah deferReply
+        // (error reply ditelan → user stuck "Bot is thinking..."). Cek di sini
+        // = murah + pesan jelas.
+        if (!question || question.length > 250) {
+            return interaction.reply({
+                content: `❌ Pertanyaan poll wajib diisi dan maksimal 250 karakter (dapat: ${question ? question.length : 0}).`,
+                flags: MessageFlags.Ephemeral
+            });
+        }
+        // v3.9.26: poll cuma masuk akal di text channel (voice/category bikin
+        // channel.send gagal di modal handler dengan pesan menyesatkan).
+        if (!channel || (channel.type !== ChannelType.GuildText && channel.type !== ChannelType.GuildAnnouncement)) {
+            return interaction.reply({
+                content: '❌ Channel harus berupa text channel (atau announcement).',
+                flags: MessageFlags.Ephemeral
+            });
+        }
         // v3.9.1 FIX: simpan data poll di in-memory session, bukan di customId.
         // Sebelumnya customId = `poll_modal_create:${channel.id}:${multiple}:${encodeURIComponent(question)}`
         // yang bisa overflow 100-char Discord limit kalau question panjang
@@ -82,16 +112,24 @@ module.exports = async function (interaction) {
         if (polls.length === 0) {
             return safeEditReply(interaction, { content: '📭 Belum ada poll di guild ini.' });
         }
-        const lines = polls
+        // v3.9.26 FIX: bound description. Poll closed tidak pernah dihapus dari
+        // polls.json — di ~25-30 poll, total lines > 4096 → setDescription THROW
+        // → /poll list (dan satu-satunya cara lihat ID untuk /poll close) mati
+        // permanen. Sekarang: tampilkan 15 terbaru + ringkas sisanya.
+        const MAX_SHOWN = 15;
+        const shown = polls.slice(-MAX_SHOWN);
+        const hidden = polls.length - shown.length;
+        const lines = shown
             .map(p => {
                 const status = p.closed ? '🔒 Closed' : '🟢 Active';
                 const total = getPollTotalVotes(p);
                 return `• ❓ **${p.question}** — ${status}\n  🆔 \`${p.id}\` | 👥 ${p.options.length} options | 🗳️ ${total} votes\n  📍 <#${p.channelId}> | ⏰ <t:${Math.floor(p.createdAt / 1000)}:R>`;
             })
             .join('\n\n');
+        const header = `Total **${polls.length}** poll${hidden > 0 ? ` (menampilkan ${shown.length} terbaru — ${hidden} lama disembunyikan)` : ''}.`;
         const embed = new EmbedBuilder()
             .setTitle('📊 DAFTAR POLL')
-            .setDescription(`Total **${polls.length}** poll.\n\n${lines}`)
+            .setDescription(`${header}\n\n${lines.slice(0, 3900)}`)
             .setColor(0x5865f2)
             .setFooter({
                 text: interaction.client.user.username,
@@ -111,6 +149,12 @@ module.exports = async function (interaction) {
             return safeEditReply(interaction, { content: '❌ Poll ini bukan dari guild ini.' });
         if (poll.closed) return safeEditReply(interaction, { content: `❌ Poll sudah closed.` });
         const updated = closePoll(id);
+        // v3.9.26 FIX: guard null — poll bisa kehapus (rollback/refresh) di antara
+        // getPoll dan closePoll; tanpa guard, updatePollMessage(interaction, null)
+        // TypeError di poll.channelId.
+        if (!updated) {
+            return safeEditReply(interaction, { content: `❌ Poll \`${id}\` sudah tidak ada (barusan dihapus?).` });
+        }
         await updatePollMessage(interaction, updated);
         await logAudit(interaction.client, {
             action: 'POLL_CLOSE',

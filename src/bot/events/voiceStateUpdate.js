@@ -22,6 +22,10 @@ async function onVoiceStateUpdate(oldState, newState) {
     try {
         if (!newState.guild) return;
         if (newState.member?.user?.bot) return;
+        // v3.9.26 (single-guild hardening): abaikan voice event dari guild lain —
+        // tanpa ini, member guild kedua yang join trigger channel akan bikin temp
+        // voice ter-register ke tempVoice.json guild kedua (data nyasar).
+        if (process.env.GUILD_ID && newState.guild.id !== process.env.GUILD_ID) return;
 
         const guildId = newState.guild.id;
         const userId = newState.id;

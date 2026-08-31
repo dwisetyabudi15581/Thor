@@ -26,6 +26,9 @@ const {
     safeEditReply
 } = require('./_shared');
 
+// v3.9.25: konversi \n literal → newline asli (fitur multi-line PC)
+const { normalizeNewlines } = require('../infra/text');
+
 module.exports = async function (interaction) {
     // ====================================================
     // === SELF-ROLE: /setup-selfrole ===
@@ -34,7 +37,8 @@ module.exports = async function (interaction) {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const title = interaction.options.getString('title');
-        const description = interaction.options.getString('description');
+        // v3.9.25: \n literal → newline asli biar deskripsi panel multi-baris
+        const description = normalizeNewlines(interaction.options.getString('description'));
         const type = interaction.options.getString('type') || 'button';
         const exclusive = interaction.options.getBoolean('exclusive') || false;
 
@@ -106,7 +110,8 @@ module.exports = async function (interaction) {
         const role = interaction.options.getRole('role');
         const label = interaction.options.getString('label');
         const emoji = interaction.options.getString('emoji') || '';
-        const description = interaction.options.getString('description') || '';
+        // v3.9.25: \n literal → newline asli untuk deskripsi role
+        const description = normalizeNewlines(interaction.options.getString('description') || '');
         // v3.9.11 Phase 3: per-role style & conditional role
         const style = interaction.options.getString('style');
         const requiresRole = interaction.options.getRole('requires_role');

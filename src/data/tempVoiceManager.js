@@ -30,7 +30,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { safeWriteJSON } = require('../infra/safeWrite');
+const { safeWriteJSON, quarantineCorruptFile } = require('../infra/safeWrite');
 
 const filePath = path.join(__dirname, '..', '..', 'data', 'tempVoice.json');
 
@@ -40,6 +40,8 @@ function load() {
         return JSON.parse(fs.readFileSync(filePath, 'utf8'));
     } catch (err) {
         console.warn('⚠️ tempVoice.json rusak:', err.message);
+        // v3.9.26: karantina file korup sebelum fallback (lihat safeWrite.js).
+        quarantineCorruptFile(filePath);
         return {};
     }
 }

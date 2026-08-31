@@ -23,6 +23,8 @@ const {
     safeEditReply,
     EMBED_LIMITS
 } = require('./_shared');
+// v3.9.24: normalisasi \n literal → newline asli (input command di PC tidak bisa Enter).
+const { normalizeNewlines } = require('../infra/text');
 
 module.exports = async function (interaction) {
     // ====================================================
@@ -33,7 +35,9 @@ module.exports = async function (interaction) {
 
         const channel = interaction.options.getChannel('channel');
         const title = interaction.options.getString('title');
-        const description = interaction.options.getString('description');
+        // v3.9.24: dukung \n literal → newline asli (dulu cuma /send-message yang support).
+        // Normalisasi SEBELUM validasi panjang supaya limit dihitung pada teks final.
+        const description = normalizeNewlines(interaction.options.getString('description'));
         const colorStr = interaction.options.getString('color');
         const image = interaction.options.getString('image');
         const thumbnail = interaction.options.getString('thumbnail');
@@ -164,7 +168,8 @@ module.exports = async function (interaction) {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         const channel = interaction.options.getChannel('channel');
         const title = interaction.options.getString('title');
-        const description = interaction.options.getString('description');
+        // v3.9.24: dukung \n literal → newline asli (konsisten dengan /announce).
+        const description = normalizeNewlines(interaction.options.getString('description'));
         const at = interaction.options.getString('at');
         const color = interaction.options.getString('color');
         const image = interaction.options.getString('image');

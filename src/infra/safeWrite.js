@@ -136,8 +136,35 @@ function safeWriteJSONWithBackup(filePath, data, opts = {}) {
     }
 }
 
+/**
+ * v3.9.26: Karantina file data yang korup sebelum manager fallback ke default.
+ *
+ * MASALAH: semua manager punya pola `catch → return {}` saat JSON.parse gagal.
+ * Isi file korup (hasil crash manual / edit salah / disk bad sector) lalu
+ * HILANG PERMANEN saat save() berikutnya menulis state kosong — tanpa bekas.
+ *
+ * SOLUSI: rename file korup → `<file>.corrupt-<timestamp>` SEBELUM return
+ * fallback. Isi asli preserved, admin bisa inspeksi/pulihkan manual, dan file
+ * baru ditulis fresh oleh save() berikutnya. Best-effort: kalau rename gagal
+ * (permission/lock), lanjut tanpa karantina — jangan bikin load() throw.
+ *
+ * @param {string} filePath - path file yang gagal di-parse
+ */
+function quarantineCorruptFile(filePath) {
+    try {
+        if (!fs.existsSync(filePath)) return false;
+        const quarantined = `${filePath}.corrupt-${Date.now()}`;
+        fs.renameSync(filePath, quarantined);
+        console.warn(`🧪 File data korup di-karantina: ${filePath} → ${quarantined}`);
+        return true;
+    } catch (_) {
+        return false;
+    }
+}
+
 module.exports = {
     safeWriteJSON,
     safeWriteText,
-    safeWriteJSONWithBackup
+    safeWriteJSONWithBackup,
+    quarantineCorruptFile
 };

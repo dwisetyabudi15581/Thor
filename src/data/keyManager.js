@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const { safeWriteJSON } = require('../infra/safeWrite');
+const { safeWriteJSON, quarantineCorruptFile } = require('../infra/safeWrite');
 
 const keysPath = path.join(__dirname, '..', '..', 'data', 'keys.json');
 
@@ -32,6 +32,10 @@ function loadKeys() {
         return JSON.parse(fs.readFileSync(keysPath, 'utf8'));
     } catch (err) {
         console.error('Error load keys.json:', err.message);
+        // v3.9.26: karantina file korup SEBELUM return [] — tanpa ini save()
+        // berikutnya menimpa file korup dengan state kosong → SEMUA VIP key
+        // hilang permanen. (keys.json = data paling kritis di bot ini.)
+        quarantineCorruptFile(keysPath);
         return [];
     }
 }

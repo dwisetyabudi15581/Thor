@@ -24,7 +24,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { safeWriteJSON } = require('../infra/safeWrite');
+const { safeWriteJSON, quarantineCorruptFile } = require('../infra/safeWrite');
 
 const filePath = path.join(__dirname, '..', '..', 'data', 'giveaways.json');
 
@@ -34,6 +34,8 @@ function load() {
         return JSON.parse(fs.readFileSync(filePath, 'utf8'));
     } catch (err) {
         console.warn('⚠️ giveaways.json rusak, mulai dari array kosong:', err.message);
+        // v3.9.26: karantina file korup sebelum fallback (lihat safeWrite.js).
+        quarantineCorruptFile(filePath);
         return [];
     }
 }
@@ -226,6 +228,28 @@ function formatTimeLeft(ms) {
     return `${secs}dtk`;
 }
 
+/**
+ * v3.9.26 (GC): hapus giveaway yang sudah ended lebih dari `olderThanMs` lalu.
+ * Giveaway ended TIDAK PERNAH dihapus sebelumnya → giveaways.json tumbuh tanpa
+ * batas (1 entry+/giveaway, selamanya) → /giveaway list makin berat tiap bulan.
+ * Dipanggil scheduler harian (schedulerTasks.js). Return jumlah entry yang dihapus.
+ */
+function pruneEndedOlderThan(olderThanMs) {
+    const list = load();
+    const cutoff = Date.now() - olderThanMs;
+    const keep = list.filter(g => {
+        if (!g) return false;
+        if (!g.ended) return true; // aktif tidak pernah di-touch
+        // endedAt tidak selalu ada — fallback ke endsAt (giveaway ended pasti
+        // lewat endsAt).
+        const endedAt = g.endedAt || g.endsAt || 0;
+        return endedAt > cutoff;
+    });
+    const removedCount = list.length - keep.length;
+    if (removedCount > 0) save(keep);
+    return removedCount;
+}
+
 module.exports = {
     create,
     setMessageId,
@@ -240,5 +264,7 @@ module.exports = {
     reroll,
     remove,
     pickWinners,
-    shuffle
+    shuffle,
+    // v3.9.26
+    pruneEndedOlderThan
 };

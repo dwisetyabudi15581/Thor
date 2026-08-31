@@ -54,34 +54,68 @@ function debugLogIntentMissing(message) {
 
 async function onMessageCreate(message) {
     try {
-        if (message.author?.bot) return;
+        // v3.9.24 FIX: guard gabungan + filter webhook.
+        // Sebelumnya: line 57 cek `message.author?.bot` (null-safe), tapi baris
+        // di bawah dereference `message.author.id` TANPA guard — author null
+        // (webhook/partial edge) → TypeError yang ditelan outer catch.
+        // Bonus: webhook message sekarang di-skip (automod/AFK/leveling tidak
+        // memproses pesan webhook), dan cek `client.user.id` yang dead-code dihapus
+        // (pesan bot sudah di-return di guard ini).
+        if (!message.author || message.author.bot || message.webhookId) return;
         if (!message.guild) return;
+
+        // v3.9.26 (single-guild hardening): kalau GUILD_ID di-set di .env, abaikan
+        // pesan dari guild lain. Bot single-guild — kalau tak sengaja di-invite ke
+        // server lain, tanpa guard ini: leveling jalan (config global!), XP tercecer
+        // ke levels.json, role ID guild utama di-add ke member guild lain (gagal),
+        // audit log nyasar ke channel guild utama. Guard = asuransi murah.
+        if (process.env.GUILD_ID && message.guild.id !== process.env.GUILD_ID) return;
 
         // Deteksi kalo Message Content Intent belum di-enable.
         // Kalo pesan user lain isinya kosong padahal bukan attachment/sticker, kemungkinan besar intent missing.
         // Skip warning kalau pesan cuma berisi attachment/sticker (memang gak ada content-nya).
-        if (!message.content && message.author.id !== message.client.user.id) {
+        if (!message.content) {
             if (!message.attachments?.size && !message.stickers?.size && !message.components?.length) {
                 debugLogIntentMissing(message);
             }
         }
 
-        // Catat pesan ke stats leaderboard
+        // Jalanin 4 hook community. Urutan: automod dulu (kalo pesan ke-delete,
+        // hook lainnya diskip) — soalnya kalo pesan udah ke-delete, message.reply
+        // bakal error "Unknown Message".
+        try {
+            const deleted = await hookAutoMod(message);
+            if (deleted) return;
+        } catch (err) {
+            console.error('MessageCreate hook error:', err.message);
+        }
+
+        // v3.9.24 FIX: stats tracking dipindah SETELAH automod. Sebelumnya pesan
+        // spam/kata terlarang yang ke-delete tetap terhitung di leaderboard pesan,
+        // padahal XP leveling-nya di-skip — treatment inkonsisten untuk pesan yang sama.
         try {
             trackMessage(message.guild.id, message.author.id);
         } catch (_) {}
 
-        // Jalanin 4 hook community. Urutan: automod dulu (kalo pesan ke-delete, hook lainnya diskip).
-        // Soalnya kalo pesan udah ke-delete, message.reply bakal error "Unknown Message".
-        // Dulu error ini tertelan diam-diam, jadi auto-responder/AFK reply kelihatan rusak padahal bukan.
+        // v3.9.26 FIX: try/catch PER HOOK. Sebelumnya responder+AFK+leveling
+        // share satu catch — kalau clearAFK() throw (disk penuh/EROFS),
+        // hookLeveling TIDAK JALAN sama sekali → user diam-diam kehilangan XP
+        // di setiap pesan sampai disk pulih. Sekarang hook yang error mati
+        // sendirian, sisanya tetap jalan, dan log menyebut nama hook + stack.
         try {
-            const deleted = await hookAutoMod(message);
-            if (deleted) return;
             await hookAutoResponder(message);
+        } catch (err) {
+            console.error('MessageCreate hook [autoResponder] error:', err);
+        }
+        try {
             await hookAfkSystem(message);
+        } catch (err) {
+            console.error('MessageCreate hook [afk] error:', err);
+        }
+        try {
             await hookLeveling(message);
         } catch (err) {
-            console.error('MessageCreate hook error:', err.message);
+            console.error('MessageCreate hook [leveling] error:', err);
         }
     } catch (err) {
         // v3.9.17 FIX: log error outer. Sebelumnya `catch (_) {}` menelan
@@ -125,12 +159,15 @@ async function hookAutoMod(message) {
     }
 
     // 3. Cek kata terlarang
-    if (!shouldDelete && config.blockWords?.length > 0) {
-        const badWord = automodManager.containsBlockedWord(content, config.blockWords);
-        if (badWord) {
+    // v3.9.23: pakai findViolatedWord — support whole-word matching, exempt list,
+    // dan action per-kata. Kata lama dari blockWords sudah auto-migrate ke wordRules.
+    if (!shouldDelete) {
+        const violation = automodManager.findViolatedWord(content, config);
+        if (violation) {
             shouldDelete = true;
-            actionReason = `Kata terlarang: "${badWord}"`;
-            actionToTake = config.wordAction;
+            actionReason = `Kata terlarang: "${violation.word}"`;
+            // Action per-kata (dari /add-word action:...) — fallback ke wordAction global.
+            actionToTake = violation.action || config.wordAction;
         }
     }
 
@@ -150,7 +187,14 @@ async function hookAutoMod(message) {
     let deleted = false;
     try {
         if (shouldDelete) {
-            await message.delete().catch(() => {});
+            // v3.9.24: log kalau delete GAGAL (mis. bot kehilangan Manage Messages).
+            // Sebelumnya `.catch(() => {})` menelan error diam-diam — admin tidak
+            // pernah tahu kenapa kata terlarang masih kelihatan padahal automod aktif.
+            await message.delete().catch(err => {
+                console.warn(`⚠️ Auto-mod gagal hapus pesan (bot butuh Manage Messages): ${err.message}`);
+            });
+            // Tetap dianggap "deleted" (flagged) supaya responder/AFK/leveling
+            // tidak memproses pesan pelanggaran, dan action (mute/kick) tetap jalan.
             deleted = true;
         }
 
@@ -236,17 +280,20 @@ async function hookAfkSystem(message) {
     }
 
     // Kumpulkan info user AFK yang di-mention di pesan ini
+    // v3.9.26: batch check — sebelumnya getAFK() per mention = 1+N baca afk.json
+    // per pesan yang ada mention. Sekarang 1 baca untuk semua mention.
     const afkReplies = [];
     if (message.mentions?.users && message.mentions.users.size > 0) {
+        const mentionedIds = [];
         for (const [userId, user] of message.mentions.users) {
             if (userId === message.author.id) continue; // skip mention diri sendiri
             if (user.bot) continue;
-
-            const afkData = afkManager.getAFK(message.guild.id, userId);
-            if (afkData) {
-                const duration = afkManager.formatDuration(afkData.since);
-                afkReplies.push(`💤 <@${userId}> lagi AFK: **${afkData.reason}** *(${duration})*`);
-            }
+            mentionedIds.push(userId);
+        }
+        const afkMap = afkManager.getAFKBatch(message.guild.id, mentionedIds);
+        for (const [userId, afkData] of Object.entries(afkMap)) {
+            const duration = afkManager.formatDuration(afkData.since);
+            afkReplies.push(`💤 <@${userId}> lagi AFK: **${afkData.reason}** *(${duration})*`);
         }
     }
 
@@ -255,7 +302,10 @@ async function hookAfkSystem(message) {
         try {
             const reply = await message.reply({
                 content: `👋 Welcome back, ${message.author}! Status AFK kamu sudah di-clear.\n\n${afkReplies.join('\n')}`,
-                allowedMentions: { users: [] }
+                // v3.9.24 FIX: tambah parse: [] supaya reason AFK user (mis. berisi
+                // @everyone / <@&role>) tidak bisa mass-ping — konsisten dengan
+                // hardening responder v3.9.17. (users: [] sudah ada, parse belum.)
+                allowedMentions: { parse: [], users: [] }
             });
             setTimeout(() => reply.delete().catch(() => {}), 30000).unref();
         } catch (_) {}
@@ -267,7 +317,7 @@ async function hookAfkSystem(message) {
         try {
             const welcomeBack = await message.reply({
                 content: `👋 Welcome back, ${message.author}! Status AFK kamu sudah di-clear.`,
-                allowedMentions: { users: [] }
+                allowedMentions: { parse: [], users: [] }
             });
             // Hapus pesan welcome back setelah 5 detik biar channel gak berantakan
             setTimeout(() => welcomeBack.delete().catch(() => {}), 5000).unref();
@@ -280,7 +330,7 @@ async function hookAfkSystem(message) {
         try {
             const reply = await message.reply({
                 content: afkReplies.join('\n'),
-                allowedMentions: { users: [] }
+                allowedMentions: { parse: [], users: [] }
             });
             setTimeout(() => reply.delete().catch(() => {}), 30000).unref();
         } catch (_) {}

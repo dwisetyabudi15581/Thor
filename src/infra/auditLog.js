@@ -81,6 +81,8 @@ const ACTION_LABELS = {
     SET_AUTOMOD: '🛡️ Set Auto-Mod Config',
     TOGGLE_AUTOMOD: '🔄 Toggle Auto-Mod',
     AUTOMOD_WHITELIST: '✅ Whitelist Channel/Role untuk Link',
+    // v3.9.23: word flex
+    AUTOMOD_WORD: '📝 Kelola Kata Auto-Mod (Add/Remove)',
     // Categories
     ADD_CATEGORY: '🎫 Tambah Kategori Tiket',
     REMOVE_CATEGORY: '🗑️ Hapus Kategori Tiket',
@@ -133,15 +135,27 @@ async function logAudit(client, data) {
     if (!channel) return false;
 
     const label = ACTION_LABELS[data.action] || data.action;
+    // v3.9.26 FIX: truncate detail ke 1024 (limit embed field value). Sebelumnya,
+    // details panjang (mis. daftar winner 20 mention) bikin addFields throw
+    // SEBELUM retry try/catch → caller yang tidak wrap (backup.js, panels-mgmt)
+    // menganggap operasi gagal padahal sudah sukses.
+    const detailsText =
+        typeof data.details === 'string' && data.details.length > 1024
+            ? data.details.slice(0, 1010) + '…(dipotong)'
+            : data.details || '_(tidak ada detail)_';
     const embed = new EmbedBuilder()
-        .setTitle(`🔧 AUDIT: ${label}`)
+        .setTitle(`🔧 AUDIT: ${label}`.slice(0, 256))
         .setColor(0x2c2f33)
         .addFields(
-            { name: '👤 Admin', value: `<@${data.actorId}> (\`${data.actorTag || data.actorId}\`)`, inline: true },
+            {
+                name: '👤 Admin',
+                value: `<@${data.actorId}> (\`${data.actorTag || data.actorId}\`)`.slice(0, 1024),
+                inline: true
+            },
             { name: '🕐 Waktu', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: true },
-            { name: '📋 Detail', value: data.details || '_(tidak ada detail)_' }
+            { name: '📋 Detail', value: detailsText }
         )
-        .setFooter({ text: `Action: ${data.action}` })
+        .setFooter({ text: `Action: ${data.action}`.slice(0, 2048) })
         .setTimestamp();
 
     if (data.guildId) embed.addFields({ name: '🏠 Guild', value: `\`${data.guildId}\``, inline: true });

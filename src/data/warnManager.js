@@ -31,7 +31,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { safeWriteJSON } = require('../infra/safeWrite');
+const { safeWriteJSON, quarantineCorruptFile } = require('../infra/safeWrite');
 
 const filePath = path.join(__dirname, '..', '..', 'data', 'warns.json');
 
@@ -60,6 +60,8 @@ function load() {
         raw = JSON.parse(fs.readFileSync(filePath, 'utf8'));
     } catch (err) {
         console.warn('⚠️ warns.json rusak:', err.message);
+        // v3.9.26: karantina file korup sebelum fallback (lihat safeWrite.js).
+        quarantineCorruptFile(filePath);
         return {};
     }
 
@@ -82,7 +84,9 @@ function load() {
             for (const w of warns) {
                 if (!w.guildId) {
                     // v3.9.17: assign ke default guild 'legacy' supaya entry tidak hilang.
-                    console.warn(`⚠️ Warn entry ${w.id} untuk user ${k} tidak punya guildId, assign ke guild 'legacy'.`);
+                    console.warn(
+                        `⚠️ Warn entry ${w.id} untuk user ${k} tidak punya guildId, assign ke guild 'legacy'.`
+                    );
                     w.guildId = DEFAULT_GUILD_ID;
                 }
                 const newKey = keyFor(w.guildId, k);

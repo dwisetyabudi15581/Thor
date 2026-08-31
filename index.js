@@ -17,11 +17,10 @@
  *   - src/data/            (JSON persistence layer)
  *   - src/services/        (scheduler tasks, business logic)
  *   - src/ui/              (embed/panel builders)
- *   - src/infra/           (safeWrite, safeReply, userLock, permissions, constants, auditLog)
+ *   - src/infra/           (safeWrite, safeReply, userLock, permissions, constants, auditLog, text)
  *   - src/bot/events/      (Discord event handlers)
  *
- * Legacy handlers/ tetap dipertahankan sebagai fallback selama migrasi
- * per-domain command/interaction ke src/commands/ dan src/interactions/.
+ * v3.9.24: legacy handlers/ sudah lama dihapus — komentar fallback dibuang.
  */
 
 const { Client, GatewayIntentBits, Partials } = require('discord.js');
@@ -95,7 +94,21 @@ process.on('unhandledRejection', reason => {
 });
 process.on('uncaughtException', err => {
     console.error('⚠️ Uncaught Exception (will shutdown after log):', err);
-    gracefulShutdown('uncaughtException');
+    // v3.9.24 FIX: exit code 1 (bukan 0). Sebelumnya exit(0) — systemd/PM2/Docker
+    // menganggap "clean exit" dan TIDAK me-restart bot setelah crash sungguhan.
+    gracefulShutdown('uncaughtException', 1);
+});
+
+// v3.9.24: observabilitas gateway — tanpa ini, disconnect/reconnect storm
+// dari Discord tidak kelihatan sama sekali di log (bot cuma diam).
+client.on('shardError', err => {
+    console.error('⚠️ Discord gateway error:', err?.message ?? err);
+});
+client.on('shardDisconnect', (event, id) => {
+    console.warn(`⚠️ Discord shard #${id} disconnect (code ${event?.code}) — reconnect otomatis.`);
+});
+client.on('shardReconnecting', id => {
+    console.warn(`🔄 Discord shard #${id} reconnecting...`);
 });
 
 // === LOAD EVENT HANDLERS ===
@@ -109,10 +122,16 @@ const eventHandlers = [
 ];
 
 for (const handler of eventHandlers) {
+    // v3.9.24: safety net — kalau handler lupa try/catch internal, error tetap
+    // ter-log DENGAN nama event (bukan cuma unhandledRejection tanpa konteks).
+    const wrapper = (...args) =>
+        Promise.resolve(handler.execute(...args)).catch(err => {
+            console.error(`[${handler.name}] event handler error:`, err);
+        });
     if (handler.once) {
-        client.once(handler.name, (...args) => handler.execute(...args));
+        client.once(handler.name, wrapper);
     } else {
-        client.on(handler.name, (...args) => handler.execute(...args));
+        client.on(handler.name, wrapper);
     }
 }
 
@@ -124,7 +143,17 @@ client.refreshGlobalControlPanel = voiceStateHandler.refreshGlobalControlPanel;
 // v3.9.8: async supaya shutdownStats() (yang butuh write file ke disk) benar-benar selesai sebelum exit.
 const { shutdown: shutdownStats } = require('./src/data/statsManager');
 
-async function gracefulShutdown(signal) {
+// v3.9.24 FIX: re-entry guard. Sebelumnya, SIGINT kedua (atau uncaughtException
+// saat shutdown jalan) menjalankan gracefulShutdown LAGI secara paralel →
+// double flush + double client.destroy(). Sekarang: panggilan kedua di-ignore.
+let isShuttingDown = false;
+
+async function gracefulShutdown(signal, exitCode = 0) {
+    if (isShuttingDown) {
+        console.log(`⚠️ Shutdown sudah berjalan — sinyal ${signal} diabaikan.`);
+        return;
+    }
+    isShuttingDown = true;
     console.log(`\n⚠️ Received ${signal}, flushing stats & shutting down...`);
     try {
         await Promise.race([Promise.resolve(shutdownStats()), new Promise(resolve => setTimeout(resolve, 3000))]);
@@ -132,10 +161,10 @@ async function gracefulShutdown(signal) {
     try {
         client.destroy();
     } catch (_) {}
-    process.exit(0);
+    process.exit(exitCode);
 }
-process.on('SIGINT', () => gracefulShutdown('SIGINT'));
-process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT', 0));
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM', 0));
 
 // === LOGIN ===
 client.login(process.env.DISCORD_TOKEN).catch(err => {

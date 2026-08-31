@@ -14,10 +14,21 @@
  * supaya bisa dipanggil dari commandHandler untuk `/giveaway end` & `/giveaway reroll`.
  */
 
-const { getExpired, removeEntry, updateExpireAt } = require('../data/roleScheduler');
+// v3.9.24: getExpired dihapus dari import — tidak pernah dipakai di file ini
+// (hanya dipakai ready.js); salah satu sumber lint warning.
+const { removeEntry, updateExpireAt } = require('../data/roleScheduler');
 const { hasPermanentKey, getMaxExpireAtByUserAndRole } = require('../data/keyManager');
-const { end: endGiveaway, pickWinners: pickGiveawayWinners } = require('../data/giveawayManager');
-const { markSent: markAnnSent, remove: removeAnn } = require('../data/scheduledAnnouncements');
+const {
+    end: endGiveaway,
+    pickWinners: pickGiveawayWinners,
+    pruneEndedOlderThan: pruneOldGiveaways
+} = require('../data/giveawayManager');
+const {
+    markSent: markAnnSent,
+    remove: removeAnn,
+    pruneSentOlderThan: pruneOldAnns
+} = require('../data/scheduledAnnouncements');
+const { pruneClosedOlderThan: pruneOldPolls } = require('../data/pollManager');
 const { recordGiveawayWin: trackGiveawayWin } = require('../data/statsManager');
 
 // v3.9.8 FIX: in-memory guard supaya giveaway/announcement yang sama tidak
@@ -396,6 +407,43 @@ async function processScheduledAnnouncement(client, ann) {
 }
 
 /**
+ * v3.9.26 (GC): prune data lama yang tumbuh tanpa batas.
+ * - Giveaway ended > 30 hari → dihapus dari giveaways.json
+ * - Poll closed > 30 hari → dihapus dari polls.json
+ * - Scheduled announcement terkirim > 30 hari → dihapus (recurring tetap
+ *   jalan — entry BARU untuk cycle berikutnya tidak pernah `sent`)
+ * Data aktif TIDAK PERNAH di-touch. Dijalankan sekali/hari oleh scheduler
+ * (guard lastDataPruneDay supaya tidak jalan tiap tick 60 detik).
+ */
+const PRUNE_OLDER_THAN_MS = 30 * 24 * 60 * 60 * 1000; // 30 hari
+let lastDataPruneDay = 0;
+
+function pruneStaleData() {
+    const today = Math.floor(Date.now() / 86400000);
+    if (today === lastDataPruneDay) return; // sudah jalan hari ini
+    lastDataPruneDay = today;
+
+    try {
+        const gwRemoved = pruneOldGiveaways(PRUNE_OLDER_THAN_MS);
+        if (gwRemoved > 0) console.log(`🧹 GC: ${gwRemoved} giveaway ended >30h dihapus.`);
+    } catch (err) {
+        console.warn('⚠️ GC giveaway error:', err.message);
+    }
+    try {
+        const pollRemoved = pruneOldPolls(PRUNE_OLDER_THAN_MS);
+        if (pollRemoved > 0) console.log(`🧹 GC: ${pollRemoved} poll closed >30h dihapus.`);
+    } catch (err) {
+        console.warn('⚠️ GC poll error:', err.message);
+    }
+    try {
+        const annRemoved = pruneOldAnns(PRUNE_OLDER_THAN_MS);
+        if (annRemoved > 0) console.log(`🧹 GC: ${annRemoved} scheduled announcement terkirim >30h dihapus.`);
+    } catch (err) {
+        console.warn('⚠️ GC announcement error:', err.message);
+    }
+}
+
+/**
  * Attach semua function ke client supaya commandHandler bisa akses.
  * Dipanggil sekali saat bot ready.
  */
@@ -409,5 +457,6 @@ module.exports = {
     processGiveawayEnd,
     announceRerollWinner,
     processScheduledAnnouncement,
+    pruneStaleData,
     attachToClient
 };

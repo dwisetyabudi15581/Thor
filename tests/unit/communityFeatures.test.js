@@ -300,3 +300,308 @@ test('configManager: leveling config defaults applied', () => {
     assert.ok('cooldownMs' in config.leveling);
     assert.ok(Array.isArray(config.levelRoles));
 });
+
+// ============ v3.9.23: AUTOMOD WORD FLEX ============
+// - addWords: append tanpa replace daftar lama + dedupe + action per kata
+// - removeWord: hapus 1 kata spesifik
+// - matchWord: whole-word vs substring
+// - findViolatedWord: action per kata + exempt list
+// - migrasi legacy blockWords → wordRules
+
+test('automodWordFlex: getDefaultConfig has new v3.9.23 fields', () => {
+    const { getDefaultConfig } = require('../../src/data/automodManager');
+    const config = getDefaultConfig();
+    assert.ok(Array.isArray(config.wordRules), 'wordRules should be array');
+    assert.ok(Array.isArray(config.exemptWords), 'exemptWords should be array');
+    assert.strictEqual(config.wordMatchMode, 'whole_word', 'default match mode should be whole_word');
+});
+
+test('automodWordFlex: addWords appends without destroying existing list', () => {
+    const { addWords, getGuildConfig } = require('../../src/data/automodManager');
+    // Guild ID unik per run — test ini APPEND data, jadi gak boleh nabrak residue run sebelumnya
+    // (pola sama dengan levelManager tests: 'test_guild_lvl_' + Date.now()).
+    const gid = 'test_guild_wflex_add_' + Date.now();
+    const uid = 'admin_user';
+
+    // Tambah batch pertama
+    const r1 = addWords(gid, 'kata1, kata2', null, uid);
+    assert.deepStrictEqual(r1.added, ['kata1', 'kata2']);
+    assert.strictEqual(r1.skipped.length, 0);
+
+    // Tambah batch kedua — daftar lama HARUS tetap ada (append, bukan replace)
+    const r2 = addWords(gid, 'kata3', 'mute_10m', uid);
+    assert.deepStrictEqual(r2.added, ['kata3']);
+
+    const config = getGuildConfig(gid);
+    const words = config.wordRules.map(r => r.word);
+    assert.deepStrictEqual(words, ['kata1', 'kata2', 'kata3'], 'old words must survive append');
+    // kata3 punya action khusus, kata1/kata2 tidak (null → fallback global)
+    const kata3 = config.wordRules.find(r => r.word === 'kata3');
+    assert.strictEqual(kata3.action, 'mute_10m');
+    const kata1 = config.wordRules.find(r => r.word === 'kata1');
+    assert.strictEqual(kata1.action, null);
+});
+
+test('automodWordFlex: addWords skips duplicate words', () => {
+    const { addWords, getGuildConfig } = require('../../src/data/automodManager');
+    const gid = 'test_guild_wflex_dup_' + Date.now();
+
+    addWords(gid, 'spamword', null, 'u');
+    const r2 = addWords(gid, 'spamword, otherword', null, 'u');
+    assert.deepStrictEqual(r2.skipped, ['spamword'], 'duplicate should be skipped');
+    assert.deepStrictEqual(r2.added, ['otherword']);
+
+    const config = getGuildConfig(gid);
+    assert.strictEqual(config.wordRules.length, 2, 'no duplicate entries');
+});
+
+test('automodWordFlex: addWords rejects invalid action', () => {
+    const { addWords, getGuildConfig } = require('../../src/data/automodManager');
+    const gid = 'test_guild_wflex_badact_' + Date.now();
+    const r = addWords(gid, 'kata', 'bogus_action', 'u');
+    assert.ok(r.error, 'invalid action should return error');
+    const config = getGuildConfig(gid);
+    assert.strictEqual(config, null, 'nothing persisted on invalid action');
+});
+
+test('automodWordFlex: removeWord removes only the target word', () => {
+    const { addWords, removeWord, getGuildConfig } = require('../../src/data/automodManager');
+    const gid = 'test_guild_wflex_rm_' + Date.now();
+
+    addWords(gid, 'kataa, kata b, katac', null, 'u');
+    const r = removeWord(gid, 'Kata B'); // case-insensitive input
+    assert.ok(r.ok);
+    assert.strictEqual(r.removed, 'kata b');
+
+    const config = getGuildConfig(gid);
+    const words = config.wordRules.map(w => w.word);
+    assert.deepStrictEqual(words, ['kataa', 'katac'], 'other words untouched');
+
+    // Remove kata yang tidak ada → ok:false, error message
+    const r2 = removeWord(gid, 'tidakada');
+    assert.ok(!r2.ok);
+});
+
+test('automodWordFlex: matchWord whole-word does not match substrings', () => {
+    const { matchWord } = require('../../src/data/automodManager');
+    // whole_word: "asu" TIDAK match "asus" (anti false-positive)
+    assert.ok(matchWord('asu banget', 'asu', 'whole_word'));
+    assert.ok(matchWord('kamu asu!', 'asu', 'whole_word'), 'punctuation counts as boundary');
+    assert.ok(matchWord('ASU KAMU', 'asu', 'whole_word'), 'case-insensitive');
+    assert.ok(matchWord('asu', 'asu', 'whole_word'), 'exact single word');
+    assert.ok(!matchWord('asus bagus', 'asu', 'whole_word'), 'must NOT match inside asus');
+    assert.ok(!matchWord('biasasaja', 'asu', 'whole_word'), 'must NOT match inside word');
+    // substring mode: behavior lama
+    assert.ok(matchWord('asus bagus', 'asu', 'substring'), 'substring mode matches inside word');
+});
+
+test('automodWordFlex: findViolatedWord returns per-word action', () => {
+    const { addWords, getGuildConfig, findViolatedWord } = require('../../src/data/automodManager');
+    const gid = 'test_guild_wflex_action_' + Date.now();
+
+    addWords(gid, 'ringan', 'delete_only', 'u');
+    addWords(gid, 'berat', 'mute_1h', 'u');
+    addWords(gid, 'normal', null, 'u'); // fallback global
+
+    const config = getGuildConfig(gid);
+
+    const v1 = findViolatedWord('ini ringan banget', config);
+    assert.strictEqual(v1.word, 'ringan');
+    assert.strictEqual(v1.action, 'delete_only');
+
+    const v2 = findViolatedWord('ini berat banget', config);
+    assert.strictEqual(v2.action, 'mute_1h');
+
+    // Kata tanpa action khusus → action null (caller fallback ke config.wordAction)
+    const v3 = findViolatedWord('ini normal banget', config);
+    assert.strictEqual(v3.action, null);
+
+    assert.strictEqual(findViolatedWord('pesan bersih', config), null);
+});
+
+test('automodWordFlex: exempt words cancel false-positive matches', () => {
+    const {
+        addWords,
+        addExemptWords,
+        getGuildConfig,
+        findViolatedWord,
+        removeExemptWord
+    } = require('../../src/data/automodManager');
+    const gid = 'test_guild_wflex_exempt_' + Date.now();
+
+    // Mode substring: block "asu" akan false-positive pada "asus" — exempt menyelamatkan.
+    addWords(gid, 'asu', null, 'u');
+    setGuildModeSubstring(gid);
+
+    // Tanpa exempt → "asus bagus" kena flag (substring match)
+    let config = getGuildConfig(gid);
+    assert.ok(findViolatedWord('asus bagus', config), 'substring mode should flag asus');
+
+    // Tambah exempt "asus" → pesan berisi asus tidak di-flag
+    const r = addExemptWords(gid, 'asus');
+    assert.deepStrictEqual(r.added, ['asus']);
+    config = getGuildConfig(gid);
+    assert.strictEqual(findViolatedWord('asus bagus', config), null, 'exempt word should cancel flag');
+    // Tapi "asu" berdiri sendiri tetap di-flag
+    assert.ok(findViolatedWord('asu banget', config), 'standalone blocked word still flagged');
+
+    // Hapus exempt → flag balik
+    const rm = removeExemptWord(gid, 'asus');
+    assert.ok(rm.ok);
+    config = getGuildConfig(gid);
+    assert.ok(findViolatedWord('asus bagus', config), 'flag returns after exempt removed');
+});
+
+test('automodWordFlex: legacy blockWords auto-migrate to wordRules', () => {
+    const { setGuildConfig, getGuildConfig } = require('../../src/data/automodManager');
+    const gid = 'test_guild_wflex_migrate_' + Date.now();
+
+    // Simulasi config lama v3.9.22 (flat blockWords array)
+    setGuildConfig(gid, {
+        blockWords: ['katalama1', 'KataLama2', 'katalama1'], // ada duplicate & case beda
+        wordRules: undefined // pastikan kosong dulu (bukan default [])
+    });
+
+    const config = getGuildConfig(gid);
+    assert.ok(Array.isArray(config.wordRules), 'wordRules created after migration');
+    const words = config.wordRules.map(r => r.word);
+    assert.ok(words.includes('katalama1'), 'legacy word migrated');
+    assert.ok(words.includes('katalama2'), 'legacy word lowercased during migration');
+    assert.strictEqual(words.length, 2, 'duplicates deduped during migration');
+    assert.strictEqual(config.blockWords.length, 0, 'legacy field cleared after migration');
+    assert.strictEqual(config.wordMatchMode, 'whole_word', 'match mode defaulted');
+});
+
+test('automodWordFlex: setGuildConfig bulk replace via wordRules (pattern /set-automod block_words)', () => {
+    const { addWords, setGuildConfig, getGuildConfig } = require('../../src/data/automodManager');
+    const gid = 'test_guild_wflex_bulk_' + Date.now();
+
+    addWords(gid, 'lama1, lama2', null, 'u');
+    // Bulk replace — seperti yang dilakukan handler /set-automod block_words
+    setGuildConfig(gid, {
+        wordRules: [{ word: 'baru1', action: null, addedBy: 'u', addedAt: Date.now() }],
+        blockWords: []
+    });
+
+    const config = getGuildConfig(gid);
+    const words = config.wordRules.map(r => r.word);
+    assert.deepStrictEqual(words, ['baru1'], 'bulk replace swaps entire list');
+});
+
+test('automodWordFlex: word with regex special chars matches safely', () => {
+    const { matchWord, addWords, getGuildConfig, findViolatedWord } = require('../../src/data/automodManager');
+    const gid = 'test_guild_wflex_regex_' + Date.now();
+
+    // Kata dengan karakter special regex — tidak boleh crash atau mismatch
+    addWords(gid, 'a.b*c', null, 'u');
+    const config = getGuildConfig(gid);
+
+    assert.ok(matchWord('cek a.b*c dong', 'a.b*c', 'whole_word'), 'special chars word matches');
+    assert.ok(!matchWord('cek aXbYc dong', 'a.b*c', 'whole_word'), 'regex chars must be escaped (literal match)');
+
+    const v = findViolatedWord('pesan a.b*c di sini', config);
+    assert.ok(v, 'findViolatedWord handles regex-special word');
+    assert.strictEqual(v.word, 'a.b*c');
+});
+
+test('registry: /add-word /remove-word /list-words /remove-link-whitelist registered (v3.9.23)', () => {
+    const { getCommands } = require('../../src/commands/registry');
+    const commands = getCommands();
+
+    const addWord = commands.find(c => c.name === 'add-word');
+    assert.ok(addWord, 'add-word should be registered');
+    const addOpts = addWord.options.map(o => o.name);
+    assert.ok(addOpts.includes('words'));
+    assert.ok(addOpts.includes('tipe'));
+    assert.ok(addOpts.includes('action'));
+    const tipeChoices = addWord.options.find(o => o.name === 'tipe').choices.map(c => c.value);
+    assert.ok(tipeChoices.includes('blocklist'));
+    assert.ok(tipeChoices.includes('exempt'));
+
+    const removeWord = commands.find(c => c.name === 'remove-word');
+    assert.ok(removeWord, 'remove-word should be registered');
+    assert.ok(removeWord.options.map(o => o.name).includes('word'));
+
+    assert.ok(
+        commands.find(c => c.name === 'list-words'),
+        'list-words should be registered'
+    );
+
+    const removeWL = commands.find(c => c.name === 'remove-link-whitelist');
+    assert.ok(removeWL, 'remove-link-whitelist should be registered');
+    assert.ok(removeWL.options.map(o => o.name).includes('channel'));
+    assert.ok(removeWL.options.map(o => o.name).includes('role'));
+});
+
+test('router: automod domain routes new word commands (v3.9.23)', () => {
+    // v3.9.24: cek mapping lewat objek RUNTIME yang di-export router — bukan
+    // grep source text (grep tetap lolos walau dispatch rusak).
+    const routeCommand = require('../../src/commands');
+    const map = routeCommand.COMMAND_TO_DOMAIN;
+    for (const cmd of ['add-word', 'remove-word', 'list-words', 'remove-link-whitelist']) {
+        assert.strictEqual(map[cmd], 'automod', `${cmd} should be mapped to automod domain`);
+    }
+    assert.ok(typeof routeCommand === 'function');
+});
+
+// ====================================================
+// === v3.9.24: cleanup residue guild test dari file data ===
+// ====================================================
+// Test automod/level/responder sebelumnya menulis entry guild test
+// (test_guild_*, smoke_guild_*) ke data/automod.json, levels.json, dll dan
+// tidak pernah membersihkannya — file data produksi makin bengkak setiap
+// kali npm test jalan. Test ini menghapus semua residue di akhir run.
+test('v3.9.24 cleanup: hapus residue guild test dari file data', () => {
+    const fs = require('fs');
+    const path = require('path');
+    const { safeWriteJSON } = require('../../src/infra/safeWrite');
+    const dataDir = path.join(__dirname, '..', '..', 'data');
+    const TEST_KEY_RE = /^(test_guild|smoke_guild)/;
+    let totalRemoved = 0;
+
+    for (const file of ['automod.json', 'levels.json', 'responders.json', 'afk.json', 'stats.json']) {
+        const p = path.join(dataDir, file);
+        if (!fs.existsSync(p)) continue;
+        try {
+            const data = JSON.parse(fs.readFileSync(p, 'utf8'));
+            // Struktur harus object keyed top-level (bukan array) supaya aman di-scan.
+            if (!data || typeof data !== 'object' || Array.isArray(data)) continue;
+            let removed = 0;
+            for (const key of Object.keys(data)) {
+                if (TEST_KEY_RE.test(key)) {
+                    delete data[key];
+                    removed++;
+                }
+            }
+            if (removed > 0) {
+                safeWriteJSON(p, data);
+                totalRemoved += removed;
+            }
+        } catch (_) {
+            // File korup/bentuk aneh — bukan urusan test ini.
+        }
+    }
+    // v3.9.26: manager automod/afk/responders/levels sekarang punya read-through
+    // cache — file di-write langsung lewat safeWriteJSON (bypass manager), jadi
+    // cache harus di-invalidasi manual supaya run test berikutnya tidak baca stale.
+    for (const mod of [
+        '../../src/data/automodManager',
+        '../../src/data/afkManager',
+        '../../src/data/responderManager',
+        '../../src/data/levelManager'
+    ]) {
+        try {
+            const m = require(mod);
+            if (typeof m.invalidateCache === 'function') m.invalidateCache();
+        } catch (_) {}
+    }
+    // Tidak assert jumlah (boleh 0 kalau sudah bersih) — yang penting run ini
+    // tidak meninggalkan residue BARU.
+    assert.ok(true, `cleanup selesai (${totalRemoved} residue dihapus)`);
+});
+
+// Helper: set mode substring langsung lewat setGuildConfig (tipe internal).
+function setGuildModeSubstring(guildId) {
+    const { setGuildConfig } = require('../../src/data/automodManager');
+    setGuildConfig(guildId, { wordMatchMode: 'substring' });
+}

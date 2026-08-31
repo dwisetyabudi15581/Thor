@@ -98,7 +98,7 @@ function getCommands() {
                 {
                     type: 3,
                     name: 'teks',
-                    description: 'Teks baru. Pakai {user} {username} {server} {count} {action}',
+                    description: 'Teks baru (support \\n newline). Pakai {user} {username} {server} {count} {action}',
                     required: true
                 }
             ]
@@ -207,9 +207,28 @@ function getCommands() {
             description: 'Edit kategori tiket existing (label/emoji/style/requires_key) tanpa hapus+add ulang',
             defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
             options: [
-                { type: 3, name: 'id', description: 'ID kategori yang akan diupdate', required: true, min_length: 1, max_length: 30 },
-                { type: 3, name: 'label', description: 'Label tombol baru (maks 80 char)', required: false, min_length: 1, max_length: 80 },
-                { type: 3, name: 'emoji', description: 'Emoji tombol baru (unicode atau custom <:name:id>)', required: false },
+                {
+                    type: 3,
+                    name: 'id',
+                    description: 'ID kategori yang akan diupdate',
+                    required: true,
+                    min_length: 1,
+                    max_length: 30
+                },
+                {
+                    type: 3,
+                    name: 'label',
+                    description: 'Label tombol baru (maks 80 char)',
+                    required: false,
+                    min_length: 1,
+                    max_length: 80
+                },
+                {
+                    type: 3,
+                    name: 'emoji',
+                    description: 'Emoji tombol baru (unicode atau custom <:name:id>)',
+                    required: false
+                },
                 {
                     type: 3,
                     name: 'style',
@@ -237,7 +256,12 @@ function getCommands() {
             description: 'Pasang panel tiket dengan kustomisasi penuh (multi-panel support)',
             defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
             options: [
-                { type: 3, name: 'title', description: 'Judul embed (override global). Kosongkan = pakai config default', required: false },
+                {
+                    type: 3,
+                    name: 'title',
+                    description: 'Judul embed (override global). Kosongkan = pakai config default',
+                    required: false
+                },
                 {
                     type: 3,
                     name: 'categories',
@@ -247,7 +271,8 @@ function getCommands() {
                 {
                     type: 3,
                     name: 'body',
-                    description: 'Body embed custom (override global). Dukung template {server} {price_list} {categories_list} dll',
+                    description:
+                        'Body custom (override global). Support \\n newline & template {server} {price_list} {categories_list}',
                     required: false
                 },
                 {
@@ -370,9 +395,21 @@ function getCommands() {
             description: 'Tambah produk baru ke price list',
             defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
             options: [
-                { type: 3, name: 'label', description: 'Nama produk (mis. 7 Days)', required: true },
+                {
+                    type: 3,
+                    name: 'label',
+                    description: 'Nama produk (mis. 7 Days, maks 80 char)',
+                    required: true,
+                    max_length: 80
+                },
                 { type: 3, name: 'value', description: 'ID unik (mis. 7d)', required: true },
-                { type: 3, name: 'price', description: 'Harga (mis. Rp. 50.000)', required: true },
+                {
+                    type: 3,
+                    name: 'price',
+                    description: 'Harga (mis. Rp. 50.000, maks 100 char)',
+                    required: true,
+                    max_length: 100
+                },
                 {
                     type: 3,
                     name: 'duration',
@@ -423,8 +460,22 @@ function getCommands() {
                     min_length: 1,
                     max_length: 50
                 },
-                { type: 3, name: 'label', description: 'Label produk baru (maks 80 char)', required: false, min_length: 1, max_length: 80 },
-                { type: 3, name: 'price', description: 'Harga baru (mis. "Rp 25.000")', required: false, min_length: 1, max_length: 100 },
+                {
+                    type: 3,
+                    name: 'label',
+                    description: 'Label produk baru (maks 80 char)',
+                    required: false,
+                    min_length: 1,
+                    max_length: 80
+                },
+                {
+                    type: 3,
+                    name: 'price',
+                    description: 'Harga baru (mis. "Rp 25.000")',
+                    required: false,
+                    min_length: 1,
+                    max_length: 100
+                },
                 {
                     type: 3,
                     name: 'duration',
@@ -432,7 +483,14 @@ function getCommands() {
                     required: false,
                     max_length: 100
                 },
-                { type: 3, name: 'category', description: 'Kategori baru (lihat /list-categories)', required: false, min_length: 1, max_length: 30 },
+                {
+                    type: 3,
+                    name: 'category',
+                    description: 'Kategori baru (lihat /list-categories)',
+                    required: false,
+                    min_length: 1,
+                    max_length: 30
+                },
                 {
                     type: 5,
                     name: 'requires_key',
@@ -566,7 +624,13 @@ function getCommands() {
             options: [
                 { type: 6, name: 'user', description: 'User penerima key', required: true },
                 { type: 3, name: 'value', description: 'Value produk (mis. 30d)', required: true },
-                { type: 3, name: 'key', description: 'Key yang akan dikirim ke user', required: true }
+                {
+                    type: 3,
+                    name: 'key',
+                    description: 'Key yang akan dikirim ke user (maks 200 char)',
+                    required: true,
+                    max_length: 200
+                }
             ]
         },
         {
@@ -597,7 +661,7 @@ function getCommands() {
             defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
             options: [
                 { type: 3, name: 'title', description: 'Judul panel (mis. Pilih Role Notif)', required: true },
-                { type: 3, name: 'description', description: 'Deskripsi panel', required: true },
+                { type: 3, name: 'description', description: 'Deskripsi panel (support \\n newline)', required: true },
                 {
                     type: 3,
                     name: 'type',
@@ -633,7 +697,7 @@ function getCommands() {
                 {
                     type: 3,
                     name: 'description',
-                    description: 'Deskripsi (opsional, hanya untuk select menu)',
+                    description: 'Deskripsi (opsional, select menu, support \\n newline)',
                     required: false
                 },
                 // v3.9.11 Phase 3: per-role button style
@@ -754,7 +818,13 @@ function getCommands() {
                     required: false,
                     options: [
                         { type: 7, name: 'channel', description: 'Channel untuk giveaway', required: true },
-                        { type: 3, name: 'prize', description: 'Hadiah (mis. VIP 30 Hari)', required: true },
+                        {
+                            type: 3,
+                            name: 'prize',
+                            description: 'Hadiah (mis. VIP 30 Hari, maks 200 char)',
+                            required: true,
+                            max_length: 200
+                        },
                         { type: 4, name: 'duration', description: 'Durasi dalam menit (min 1)', required: true },
                         { type: 4, name: 'winners', description: 'Jumlah pemenang (1-20, default 1)', required: false },
                         {
@@ -855,7 +925,7 @@ function getCommands() {
             defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
             options: [
                 { type: 6, name: 'user', description: 'Member yang diwarn', required: true },
-                { type: 3, name: 'reason', description: 'Alasan warning', required: true }
+                { type: 3, name: 'reason', description: 'Alasan warning (support \\n newline)', required: true }
             ]
         },
         {
@@ -921,8 +991,23 @@ function getCommands() {
                     description: 'Buat poll baru (modal input untuk options)',
                     required: false,
                     options: [
-                        { type: 7, name: 'channel', description: 'Channel untuk poll', required: true },
-                        { type: 3, name: 'question', description: 'Pertanyaan poll', required: true },
+                        {
+                            type: 7,
+                            name: 'channel',
+                            description: 'Channel untuk poll',
+                            required: true,
+                            // v3.9.26: restrict ke text/announcement — tanpa ini admin
+                            // bisa pilih voice/category → channel.send gagal di modal
+                            // handler dengan pesan error yang menyesatkan.
+                            channel_types: [0, 5]
+                        },
+                        {
+                            type: 3,
+                            name: 'question',
+                            description: 'Pertanyaan poll (maks 250 char)',
+                            required: true,
+                            max_length: 250
+                        },
                         {
                             type: 5,
                             name: 'multiple',
@@ -1124,6 +1209,77 @@ function getCommands() {
             ]
         },
 
+        // === v3.9.23: AUTOMOD WORD FLEX ===
+        {
+            name: 'add-word',
+            description: 'Tambah kata ke blocklist/exempt auto-mod (append, tidak replace)',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
+            options: [
+                {
+                    type: 3,
+                    name: 'words',
+                    description: 'Kata yang mau ditambah (comma-separated, mis. kata1,kata2)',
+                    required: true,
+                    max_length: 500
+                },
+                {
+                    type: 3,
+                    name: 'tipe',
+                    description: 'Tambah ke daftar mana?',
+                    required: false,
+                    choices: [
+                        { name: 'Blocklist (kata di-block)', value: 'blocklist' },
+                        { name: 'Exempt (kata diizinkan)', value: 'exempt' }
+                    ]
+                },
+                {
+                    type: 3,
+                    name: 'action',
+                    description: 'Action khusus kata ini (kosong = pakai word_action global)',
+                    required: false,
+                    choices: [
+                        { name: 'Delete only', value: 'delete_only' },
+                        { name: 'Warn', value: 'warn' },
+                        { name: 'Mute 10 menit', value: 'mute_10m' },
+                        { name: 'Mute 1 jam', value: 'mute_1h' },
+                        { name: 'Kick', value: 'kick' }
+                    ]
+                }
+            ]
+        },
+        {
+            name: 'remove-word',
+            description: 'Hapus 1 kata dari blocklist/exempt auto-mod',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
+            options: [
+                { type: 3, name: 'word', description: 'Kata yang mau dihapus', required: true, max_length: 100 },
+                {
+                    type: 3,
+                    name: 'tipe',
+                    description: 'Hapus dari daftar mana?',
+                    required: false,
+                    choices: [
+                        { name: 'Blocklist (kata di-block)', value: 'blocklist' },
+                        { name: 'Exempt (kata diizinkan)', value: 'exempt' }
+                    ]
+                }
+            ]
+        },
+        {
+            name: 'list-words',
+            description: 'Lihat daftar kata blocklist + exempt + action per kata',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild
+        },
+        {
+            name: 'remove-link-whitelist',
+            description: 'Hapus channel/role dari whitelist link',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
+            options: [
+                { type: 7, name: 'channel', description: 'Channel yang dihapus dari whitelist', required: false },
+                { type: 8, name: 'role', description: 'Role yang dihapus dari whitelist', required: false }
+            ]
+        },
+
         // === v3.9.13: AFK SYSTEM ===
         {
             name: 'afk',
@@ -1132,7 +1288,13 @@ function getCommands() {
                 // v3.9.17: tambah max_length supaya reason tidak overflow reply.
                 // Sebelumnya, default Discord max 6000 char bisa bikin AFK reply
                 // (yang gabung multiple mentions) exceed 2000 char limit → gagal kirim.
-                { type: 3, name: 'reason', description: 'Alasan AFK (mis. "Makan dulu, 30 menit")', required: false, max_length: 200 }
+                {
+                    type: 3,
+                    name: 'reason',
+                    description: 'Alasan AFK (support \\n, mis. "Makan dulu, 30 menit")',
+                    required: false,
+                    max_length: 200
+                }
             ]
         },
         {
@@ -1152,8 +1314,22 @@ function getCommands() {
             defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
             options: [
                 { type: 5, name: 'enabled', description: 'Enable atau disable leveling?', required: true },
-                { type: 4, name: 'xp_per_message', description: 'XP per message (default: 15)', required: false },
-                { type: 4, name: 'cooldown', description: 'Cooldown dalam detik (default: 60)', required: false },
+                {
+                    type: 4,
+                    name: 'xp_per_message',
+                    description: 'XP per message (default: 15)',
+                    required: false,
+                    min_value: 1,
+                    max_value: 1000
+                },
+                {
+                    type: 4,
+                    name: 'cooldown',
+                    description: 'Cooldown dalam detik (default: 60)',
+                    required: false,
+                    min_value: 0,
+                    max_value: 3600
+                },
                 {
                     type: 5,
                     name: 'announce_levelup',

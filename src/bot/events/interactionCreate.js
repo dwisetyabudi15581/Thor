@@ -43,6 +43,13 @@ function isIgnorableReplyError(err) {
 
 async function onInteractionCreate(interaction) {
     try {
+        // v3.9.26 (single-guild hardening): kalau GUILD_ID di-set, abaikan
+        // interaction dari guild lain. Tanpa guard, command bisa dipakai di guild
+        // kedua (kalau bot tak sengaja di-invite): config global → roles/channels
+        // guild utama dipakai di sana → perilaku aneh + data nyasar.
+        if (process.env.GUILD_ID && interaction.guildId && interaction.guildId !== process.env.GUILD_ID) {
+            return;
+        }
         if (interaction.isChatInputCommand()) {
             await routeCommand(interaction);
         } else {
@@ -68,7 +75,11 @@ async function onInteractionCreate(interaction) {
 
         if (!isTransient && !isIgnorableReply && interaction.isRepliable()) {
             if (!interaction.replied && !interaction.deferred) {
-                interaction.reply({ content: '❌ Terjadi error. Coba lagi sebentar.', flags: 64 }).catch(() => {});
+                // v3.9.24: MessageFlags.Ephemeral (dulu magic number 64 padahal
+                // MessageFlags sudah di-import tapi tidak dipakai).
+                interaction
+                    .reply({ content: '❌ Terjadi error. Coba lagi sebentar.', flags: MessageFlags.Ephemeral })
+                    .catch(() => {});
             } else if (interaction.deferred && !interaction.replied) {
                 interaction.editReply({ content: '❌ Terjadi error. Coba lagi sebentar.' }).catch(() => {});
             }

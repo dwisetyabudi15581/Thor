@@ -16,22 +16,45 @@
 
 const fs = require('fs');
 const path = require('path');
-const { safeWriteJSON } = require('../infra/safeWrite');
+const { safeWriteJSON, quarantineCorruptFile } = require('../infra/safeWrite');
 
 const filePath = path.join(__dirname, '..', '..', 'data', 'afk.json');
 
+// v3.9.26: read-through cache (pola panelManager). messageCreate membaca
+// afk.json per pesan + per mention — sebelumnya itu 1+N readFileSync sync
+// per pesan. Cache 15s TTL + update-on-save; invalidasi manual via
+// invalidateCache() (dipakai restore backup & test cleanup).
+const CACHE_TTL_MS = 15 * 1000;
+let _cache = null; // { data, at }
+
 function load() {
     try {
-        if (!fs.existsSync(filePath)) return {};
-        return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+        if (_cache && Date.now() - _cache.at < CACHE_TTL_MS) return _cache.data;
+        if (!fs.existsSync(filePath)) {
+            _cache = { data: {}, at: Date.now() };
+            return _cache.data;
+        }
+        const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+        _cache = { data, at: Date.now() };
+        return data;
     } catch (err) {
-        console.warn('⚠️ afk.json rusak:', err.message);
-        return {};
+        // v3.9.26: karantina file korup SEBELUM fallback — tanpa ini, save()
+        // berikutnya menimpa isi file korup dengan state kosong (data hilang permanen).
+        quarantineCorruptFile(filePath);
+        _cache = { data: {}, at: Date.now() };
+        return _cache.data;
     }
 }
 
 function save(data) {
     safeWriteJSON(filePath, data);
+    // v3.9.26: update cache supaya read berikutnya konsisten dengan yang baru di-write
+    _cache = { data, at: Date.now() };
+}
+
+/** v3.9.26: paksa read fresh berikutnya (restore backup / test). */
+function invalidateCache() {
+    _cache = null;
 }
 
 function keyFor(guildId, userId) {
@@ -70,6 +93,26 @@ function isAFK(guildId, userId) {
 }
 
 /**
+ * v3.9.26: Batch check AFK untuk banyak user SEKALI load.
+ * messageCreate dulu manggil getAFK() per mention (1+N read per pesan yang
+ * ada mention). Sekarang satu load → semua mention ke-cover.
+ *
+ * @param {string} guildId
+ * @param {string[]} userIds
+ * @returns {Object<string, {reason, since, guildId, userId}>} map userId → data AFK (hanya yang AFK)
+ */
+function getAFKBatch(guildId, userIds) {
+    if (!Array.isArray(userIds) || userIds.length === 0) return {};
+    const all = load();
+    const result = {};
+    for (const uid of userIds) {
+        const entry = all[keyFor(guildId, uid)];
+        if (entry) result[uid] = entry;
+    }
+    return result;
+}
+
+/**
  * Format duration AFK (mis. "5 menit lalu", "2 jam lalu", "1 hari lalu").
  */
 function formatDuration(since, now = Date.now()) {
@@ -105,6 +148,8 @@ module.exports = {
     clearAFK,
     getAFK,
     isAFK,
+    getAFKBatch,
     formatDuration,
-    listGuildAFK
+    listGuildAFK,
+    invalidateCache
 };

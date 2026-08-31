@@ -13,7 +13,7 @@ module.exports = async function (interaction) {
         .setTitle('🤖 COMMUNITY BOT — HELP')
         .setDescription(
             `Halo ${interaction.user}! Anda terverifikasi sebagai **Admin/Staff**.\n` +
-                `Berikut daftar lengkap command yang tersedia (v3.9.22).`
+                `Berikut daftar lengkap command yang tersedia (v3.9.26).`
         )
         .setColor(0x5865f2)
         .addFields(
@@ -67,18 +67,19 @@ module.exports = async function (interaction) {
             {
                 name: '🛡️ Anti-Spam & Auto-Mod',
                 value: [
-                    '• `/set-automod` `/automod-show` `/automod-toggle` `/add-link-whitelist`',
-                    '💡 Auto-detect: spam, link, kata kasar, mass-mention → auto-action'
+                    '• `/set-automod` `/automod-show` `/automod-toggle`',
+                    '• `/add-word words:kata1,kata2 action:Mute_10_menit` — tambah kata (append)',
+                    '• `/remove-word word:kata` `/list-words` — hapus/lihat kata',
+                    '• `/add-word tipe:Exempt_(kata_diizinkan)` — whitelist kata anti false-positive',
+                    '• `/add-link-whitelist` `/remove-link-whitelist`',
+                    '💡 v3.9.23: action per kata + matching whole-word ("asu" tidak match "asus")'
                 ].join('\n'),
                 inline: false
             },
 
             {
                 name: '💤 AFK System',
-                value: [
-                    '• `/afk` `/afk-clear` `/afk-list`',
-                    '💡 Bot auto-reply saat user AFK di-mention.'
-                ].join('\n'),
+                value: ['• `/afk` `/afk-clear` `/afk-list`', '💡 Bot auto-reply saat user AFK di-mention.'].join('\n'),
                 inline: false
             },
 
@@ -104,7 +105,7 @@ module.exports = async function (interaction) {
             {
                 name: '📢 Atur Channel & Auto-Split Tiket',
                 value: [
-                    '• `/set-channel welcome #ch` — set (welcome/goodbye/invoice/audit-log/transcript)',
+                    '• `/set-channel welcome #ch` — set (welcome/goodbye/invoice/audit-log)',
                     '• `/set-transcript-channel #ch` — auto-save transcript tiket sebelum close',
                     '• `/remove-channel welcome` — hapus channel dari config',
                     '',
@@ -209,7 +210,7 @@ module.exports = async function (interaction) {
             }
         )
         .setFooter({
-            text: `${interaction.client.user.username} v3.9.22 — All-in-One Community Bot`,
+            text: `${interaction.client.user.username} v3.9.26 — All-in-One Community Bot`,
             iconURL: interaction.client.user.displayAvatarURL({ dynamic: true })
         })
         .setTimestamp();

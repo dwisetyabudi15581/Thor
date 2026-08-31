@@ -55,8 +55,11 @@ module.exports = async function (interaction) {
         // v3.9.6: tampilkan plain text message di preview ephemeral supaya
         // admin bisa lihat bagaimana message + embed akan terlihat saat dikirim.
         // Kalau tidak ada message, behavior lama (preview embed saja).
+        // v3.9.26 FIX: truncate isi message di preview. Message bisa 2000 char —
+        // wrapper preview (+70 char header/code fence) bikin reply > 2000 → 50035
+        // → error generik, preview tidak pernah terlihat justru saat paling panjang.
         const previewContent = session.data.content
-            ? `👁️ **Preview:**\n\n💬 **Plain text message:**\n\`\`\`\n${session.data.content}\n\`\`\`\n📋 **Embed:**`
+            ? `👁️ **Preview:**\n\n💬 **Plain text message:**\n\`\`\`\n${session.data.content.slice(0, 1850)}${session.data.content.length > 1850 ? '\n…(dipotong)' : ''}\n\`\`\`\n📋 **Embed:**`
             : '👁️ **Preview:**';
         return interaction.reply({ content: previewContent, embeds: [embed], flags: MessageFlags.Ephemeral });
     }

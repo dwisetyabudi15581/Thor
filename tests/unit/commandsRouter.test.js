@@ -101,3 +101,41 @@ test('router: unknown command returns "belum didukung" reply', async () => {
     assert.strictEqual(interaction._replies.length, 1);
     assert.match(interaction._replies[0].opts.content, /belum didukung|tidak dikenali|not registered/i);
 });
+
+// ====================================================
+// === v3.9.24: guard anti "command terdaftar tapi tidak di-route" ===
+// ====================================================
+// Bug nyata: /update-category & /update-product terdaftar di registry, punya
+// handler, diiklankan di /help — tapi tidak ada di COMMAND_TO_DOMAIN → selalu
+// error "belum didukung oleh router". Test ini memastikan TIDAK ADA command
+// registry yang lolos tanpa mapping (test lama yang grep source text tidak
+// bisa menangkap bug seperti ini).
+
+test('v3.9.24 GUARD: setiap command di registry punya mapping domain di router', () => {
+    const { getCommands } = require('../../src/commands/registry');
+    const routeCommand = require('../../src/commands');
+    const map = routeCommand.COMMAND_TO_DOMAIN;
+    const handlers = routeCommand.DOMAIN_HANDLERS;
+
+    const commands = getCommands();
+    assert.ok(commands.length >= 80, `registry seharusnya punya 80+ command, dapat ${commands.length}`);
+
+    for (const cmd of commands) {
+        const domain = map[cmd.name];
+        assert.ok(
+            domain,
+            `/${cmd.name} terdaftar di registry tapi TIDAK ada di COMMAND_TO_DOMAIN — akan selalu error "belum didukung router"!`
+        );
+        assert.ok(
+            handlers[domain],
+            `/${cmd.name} di-map ke domain "${domain}" tapi DOMAIN_HANDLERS tidak punya handler-nya!`
+        );
+    }
+});
+
+test('v3.9.24 FIX: /update-category & /update-product sekarang ter-route (bug lama: selalu error)', () => {
+    const routeCommand = require('../../src/commands');
+    const map = routeCommand.COMMAND_TO_DOMAIN;
+    assert.strictEqual(map['update-category'], 'categories', 'update-category harus ke domain categories');
+    assert.strictEqual(map['update-product'], 'products', 'update-product harus ke domain products');
+});

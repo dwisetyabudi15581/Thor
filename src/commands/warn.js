@@ -24,6 +24,9 @@ const {
     safeEditReply
 } = require('./_shared');
 
+// v3.9.25: konversi \n literal → newline asli (fitur multi-line PC)
+const { normalizeNewlines } = require('../infra/text');
+
 module.exports = async function (interaction) {
     // ====================================================
     // === /warn ===
@@ -31,7 +34,8 @@ module.exports = async function (interaction) {
     if (interaction.commandName === 'warn') {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         const user = interaction.options.getUser('user');
-        const reason = interaction.options.getString('reason');
+        // v3.9.25: \n literal → newline asli biar alasan warning bisa multi-baris
+        const reason = normalizeNewlines(interaction.options.getString('reason'));
 
         if (user.id === interaction.user.id) {
             return safeEditReply(interaction, { content: '❌ Tidak bisa warn diri sendiri.' });

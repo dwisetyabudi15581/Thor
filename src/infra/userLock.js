@@ -11,15 +11,25 @@
  *
  * Concurrency model: single-process Node.js, jadi Map + flag boolean cukup.
  * Tidak butuh mutex/atomic primitive.
+ *
+ * v3.9.24 FIX (owner token): sebelumnya `acquire` boolean + `release` hapus
+ * tanpa cek pemilik. Kalau critical section jalan lebih lama dari timeout,
+ * lock di-overtake pemegang baru — lalu `finally` pemegang LAMA menghapus
+ * lock milik pemegang BARU → pihak ketiga bisa masuk → 2 critical section
+ * jalan bersamaan. Lock gagal justru saat paling dibutuhkan (operasi lambat).
+ * Sekarang tiap akuisisi punya token unik; release hanya berlaku kalau token
+ * cocok (pemanggilan release tanpa token tetap boleh — kompatibel lama).
  */
 
-const locks = new Map(); // key: `${scope}:${userId}` -> { acquiredAt }
+const locks = new Map(); // key: `${scope}:${userId}` -> { acquiredAt, expiresAt, token, timeoutMs }
 
 const DEFAULT_TIMEOUT_MS = 5000; // 5 detik — seharusnya cukup untuk semua flow
 
 /**
  * Coba acquire lock untuk (scope, userId).
- * @returns {boolean} true kalau berhasil acquire, false kalau masih di-pegang.
+ * @returns {string|false} token lock (truthy) kalau berhasil, false kalau masih di-pegang.
+ *   v3.9.24: sebelumnya mengembalikan `true`; sekarang token unik (tetap truthy,
+ *   jadi `if (!acquire(...))` lama tetap valid). Token dipakai releaseLock.
  */
 function acquire(scope, userId, timeoutMs = DEFAULT_TIMEOUT_MS) {
     // v3.9.8 FIX: sebelumnya return true (bypass lock) kalau scope/userId invalid.
@@ -32,21 +42,32 @@ function acquire(scope, userId, timeoutMs = DEFAULT_TIMEOUT_MS) {
     const now = Date.now();
     const existing = locks.get(key);
     if (existing) {
-        if (now - existing.acquiredAt < timeoutMs) {
+        if (now < existing.expiresAt) {
             return false; // masih di-pegang
         }
-        // expired — overtake
+        // expired — overtake (holder lama tidak bisa melepas lock baru: token beda)
     }
-    locks.set(key, { acquiredAt: now });
-    return true;
+    const token = `${now}-${Math.random().toString(36).slice(2)}`;
+    locks.set(key, { acquiredAt: now, expiresAt: now + timeoutMs, token, timeoutMs });
+    return token;
 }
 
 /**
- * Release lock. Aman dipanggil walau lock tidak pernah di-acquire.
+ * Release lock.
+ * Aman dipanggil walau lock tidak pernah di-acquire.
+ * @param {string} [token] - token dari acquire(). Kalau diisi, lock hanya dihapus
+ *   kalau token cocok (owner check — cegah holder basi melepas lock holder baru).
+ *   Kalau tidak diisi, hapus tanpa cek (perilaku lama, kompatibel).
  */
-function release(scope, userId) {
+function release(scope, userId, token) {
     if (!scope || !userId) return;
-    locks.delete(`${scope}:${userId}`);
+    const key = `${scope}:${userId}`;
+    const existing = locks.get(key);
+    if (!existing) return;
+    // v3.9.24: owner check — kalau token dioper dan TIDAK cocok, ini release
+    // dari holder basi (lock-nya sudah di-overtake). No-op.
+    if (token !== undefined && existing.token !== token) return;
+    locks.delete(key);
 }
 
 /**
@@ -54,21 +75,27 @@ function release(scope, userId) {
  * @returns hasil fn, atau null kalau gagal acquire.
  */
 async function withLock(scope, userId, fn, timeoutMs = DEFAULT_TIMEOUT_MS) {
-    if (!acquire(scope, userId, timeoutMs)) return null;
+    const token = acquire(scope, userId, timeoutMs);
+    if (!token) return null;
     try {
         return await fn();
     } finally {
-        release(scope, userId);
+        // v3.9.24: release dengan token — kalau fn lambat dan lock sempat di-overtake,
+        // release ini otomatis no-op (tidak menghapus lock milik holder baru).
+        release(scope, userId, token);
     }
 }
 
 // Periodic cleanup — hapus lock yang sudah expired (defensive terhadap bug
 // yang lupa release). Run setiap 1 menit.
+// v3.9.24: pakai expiresAt per-entry (bukan DEFAULT_TIMEOUT_MS * 2 global),
+// jadi lock dengan custom timeout lama tidak ter-reap di tengah jalan.
 setInterval(() => {
     const now = Date.now();
     let cleaned = 0;
     for (const [key, val] of locks) {
-        if (now - val.acquiredAt > DEFAULT_TIMEOUT_MS * 2) {
+        // Grace 1x timeout tambahan setelah expiry sebelum dianggap sampah.
+        if (now > val.expiresAt + (val.timeoutMs || DEFAULT_TIMEOUT_MS)) {
             locks.delete(key);
             cleaned++;
         }

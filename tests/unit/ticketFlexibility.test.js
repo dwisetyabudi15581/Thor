@@ -13,6 +13,31 @@ const path = require('path');
 // === panelManager tests ===
 const panelsPath = path.join(__dirname, '..', '..', 'data', 'panels.json');
 
+// ====================================================
+// === v3.9.24 FIX: panels.json produksi di-snapshot & restore ===
+// ====================================================
+// resetPanelsFile() di bawah MENGHAPUS data/panels.json tanpa backup — kalau
+// npm test dijalankan di instance live, SEMUA panel tiket hilang. Sekarang:
+// file asli di-copy ke backup sebelum test, di-restore saat process exit.
+const panelsBackupPath = panelsPath + '.test-backup';
+let panelsBackedUp = false;
+if (fs.existsSync(panelsPath)) {
+    fs.copyFileSync(panelsPath, panelsBackupPath);
+    panelsBackedUp = true;
+}
+process.on('exit', () => {
+    // Harus sync (dalam exit handler).
+    try {
+        if (panelsBackedUp) {
+            fs.copyFileSync(panelsBackupPath, panelsPath);
+            fs.rmSync(panelsBackupPath, { force: true });
+        } else if (fs.existsSync(panelsPath)) {
+            // Tidak ada file asli → hapus file hasil test supaya checkout bersih.
+            fs.unlinkSync(panelsPath);
+        }
+    } catch (_) {}
+});
+
 function resetPanelsFile() {
     if (fs.existsSync(panelsPath)) {
         fs.unlinkSync(panelsPath);
@@ -103,7 +128,10 @@ test('panelManager: getPanelsByGuild filters by guildId', () => {
     upsertPanel({ guildId: 'g2', channelId: 'c3', title: 'P3' });
     const g1panels = getPanelsByGuild('g1');
     assert.strictEqual(g1panels.length, 2);
-    assert.strictEqual(g1panels.every(p => p.guildId === 'g1'), true);
+    assert.strictEqual(
+        g1panels.every(p => p.guildId === 'g1'),
+        true
+    );
     const g2panels = getPanelsByGuild('g2');
     assert.strictEqual(g2panels.length, 1);
 });
@@ -125,7 +153,12 @@ test('panelManager: deletePanel removes panel and returns true/false', () => {
 
 test('panelManager: deletePanelsByGuild removes all panels in guild', () => {
     resetPanelsFile();
-    const { upsertPanel, deletePanelsByGuild, getPanelsByGuild, invalidateCache } = require('../../src/data/panelManager');
+    const {
+        upsertPanel,
+        deletePanelsByGuild,
+        getPanelsByGuild,
+        invalidateCache
+    } = require('../../src/data/panelManager');
     invalidateCache();
     upsertPanel({ guildId: 'g1', channelId: 'c1' });
     upsertPanel({ guildId: 'g1', channelId: 'c2' });
@@ -144,6 +177,15 @@ test('panelManager: handles corrupted panels.json gracefully', () => {
     const all = loadPanels();
     assert.strictEqual(typeof all, 'object');
     assert.strictEqual(Object.keys(all).length, 0);
+    // v3.9.26: load sekarang mengkarantina file korup (rename .corrupt-<ts>)
+    // supaya isi lama tidak ditimpa diam-diam — bersihkan artefaknya setelah assert.
+    for (const f of fs.readdirSync(path.dirname(panelsPath))) {
+        if (f.startsWith('panels.json.corrupt-')) {
+            try {
+                fs.unlinkSync(path.join(path.dirname(panelsPath), f));
+            } catch (_) {}
+        }
+    }
 });
 
 test('panelManager: handles invalid format (array) panels.json gracefully', () => {
@@ -154,6 +196,14 @@ test('panelManager: handles invalid format (array) panels.json gracefully', () =
     const all = loadPanels();
     assert.strictEqual(typeof all, 'object');
     assert.strictEqual(Array.isArray(all), false);
+    // v3.9.26: idem — bersihkan artefak karantina (valid JSON tapi struktur salah).
+    for (const f of fs.readdirSync(path.dirname(panelsPath))) {
+        if (f.startsWith('panels.json.corrupt-')) {
+            try {
+                fs.unlinkSync(path.join(path.dirname(panelsPath), f));
+            } catch (_) {}
+        }
+    }
 });
 
 // === parseColor tests ===
@@ -241,9 +291,7 @@ test('panels.buildTicketPanel: builds embed with custom title/body/color', async
             ticketCategories: [
                 { id: 'transaction', label: 'Transaksi', emoji: '🔑', style: 'Primary', requiresKey: true }
             ],
-            products: [
-                { label: 'VIP 30 Hari', value: 'vip30', price: 'Rp 50.000', category: 'transaction' }
-            ],
+            products: [{ label: 'VIP 30 Hari', value: 'vip30', price: 'Rp 50.000', category: 'transaction' }],
             messages: {
                 ticketTitle: 'Default Title',
                 ticketBody: 'Default Body',
@@ -554,7 +602,7 @@ test('help.js: help embed mentions new v3.9.14+ commands', async () => {
     assert.match(allText, /update-panel/);
     assert.match(allText, /refresh-panel/);
     assert.match(allText, /use_dropdown/);
-    assert.match(allText, /v3\.9\.22/);
+    assert.match(allText, /v3\.9\.26/);
 });
 
 // === Router test ===
@@ -605,9 +653,30 @@ test('configManager.getConfig: migration rename label "Bantuan Staff" → "Help"
         const oldConfig = {
             roles: { admin: '123' },
             ticketCategories: [
-                { id: 'transaction', label: 'Beli Key', emoji: '🔑', style: 'Primary', requiresKey: true, isDefault: true },
-                { id: 'help', label: 'Bantuan Staff', emoji: '📞', style: 'Secondary', requiresKey: false, isDefault: true },
-                { id: 'report', label: 'Laporkan Member', emoji: '⚠️', style: 'Danger', requiresKey: false, isDefault: true }
+                {
+                    id: 'transaction',
+                    label: 'Beli Key',
+                    emoji: '🔑',
+                    style: 'Primary',
+                    requiresKey: true,
+                    isDefault: true
+                },
+                {
+                    id: 'help',
+                    label: 'Bantuan Staff',
+                    emoji: '📞',
+                    style: 'Secondary',
+                    requiresKey: false,
+                    isDefault: true
+                },
+                {
+                    id: 'report',
+                    label: 'Laporkan Member',
+                    emoji: '⚠️',
+                    style: 'Danger',
+                    requiresKey: false,
+                    isDefault: true
+                }
             ]
         };
         fs.writeFileSync(configPath, JSON.stringify(oldConfig), 'utf8');
@@ -647,9 +716,30 @@ test('configManager.getConfig: migration TIDAK ubah label yang sudah di-customiz
         const customConfig = {
             roles: { admin: '123' },
             ticketCategories: [
-                { id: 'transaction', label: 'Beli Key', emoji: '🔑', style: 'Primary', requiresKey: true, isDefault: true },
-                { id: 'help', label: 'Tanya Admin', emoji: '💬', style: 'Secondary', requiresKey: false, isDefault: true },
-                { id: 'report', label: 'Lapor Siapa Aja', emoji: '📢', style: 'Danger', requiresKey: false, isDefault: true }
+                {
+                    id: 'transaction',
+                    label: 'Beli Key',
+                    emoji: '🔑',
+                    style: 'Primary',
+                    requiresKey: true,
+                    isDefault: true
+                },
+                {
+                    id: 'help',
+                    label: 'Tanya Admin',
+                    emoji: '💬',
+                    style: 'Secondary',
+                    requiresKey: false,
+                    isDefault: true
+                },
+                {
+                    id: 'report',
+                    label: 'Lapor Siapa Aja',
+                    emoji: '📢',
+                    style: 'Danger',
+                    requiresKey: false,
+                    isDefault: true
+                }
             ]
         };
         fs.writeFileSync(configPath, JSON.stringify(customConfig), 'utf8');
@@ -788,7 +878,8 @@ test('help.js: mentions /update-category and /update-product', async () => {
     };
     const helpHandler = require('../../src/commands/help');
     await helpHandler(mockInteraction);
-    const allText = replies[0].embeds[0].data.fields.map(f => f.value).join('\n') + replies[0].embeds[0].data.description;
+    const allText =
+        replies[0].embeds[0].data.fields.map(f => f.value).join('\n') + replies[0].embeds[0].data.description;
     assert.match(allText, /update-category/);
     assert.match(allText, /update-product/);
 });
@@ -819,7 +910,9 @@ test('v3.9.19: kategori jasa dengan produk non-key → seharusnya jadi dropdown 
 
 test('v3.9.19: kategori help tanpa produk → seharusnya langsung create ticket', () => {
     const config = {
-        ticketCategories: [{ id: 'help', label: 'Help', emoji: '📞', style: 'Secondary', requiresKey: false, isDefault: true }],
+        ticketCategories: [
+            { id: 'help', label: 'Help', emoji: '📞', style: 'Secondary', requiresKey: false, isDefault: true }
+        ],
         products: []
     };
     const productsInCat = config.products.filter(p => (p.category || 'transaction') === 'help');
@@ -829,11 +922,25 @@ test('v3.9.19: kategori help tanpa produk → seharusnya langsung create ticket'
 
 test('v3.9.19: kategori transaction campur key & non-key → semua muncul di dropdown', () => {
     const config = {
-        ticketCategories: [{ id: 'transaction', label: 'Beli', emoji: '🔑', style: 'Primary', requiresKey: true, isDefault: true }],
+        ticketCategories: [
+            { id: 'transaction', label: 'Beli', emoji: '🔑', style: 'Primary', requiresKey: true, isDefault: true }
+        ],
         products: [
             { label: 'VIP 30 Hari', value: 'vip30', price: 'Rp 50.000', category: 'transaction', requiresKey: true },
-            { label: 'Jasa Joki Mythic', value: 'joki', price: 'Rp 200.000', category: 'transaction', requiresKey: false },
-            { label: 'Jasa Booster', value: 'booster', price: 'Rp 300.000', category: 'transaction', requiresKey: false }
+            {
+                label: 'Jasa Joki Mythic',
+                value: 'joki',
+                price: 'Rp 200.000',
+                category: 'transaction',
+                requiresKey: false
+            },
+            {
+                label: 'Jasa Booster',
+                value: 'booster',
+                price: 'Rp 300.000',
+                category: 'transaction',
+                requiresKey: false
+            }
         ]
     };
     const productsInCat = config.products.filter(p => (p.category || 'transaction') === 'transaction');
@@ -858,7 +965,12 @@ test('ticketManager: patchTicketMeta melakukan partial update tanpa overwrite fi
         fs.unlinkSync(ticketsPath);
     }
     try {
-        const { setTicketMeta, patchTicketMeta, getTicketMeta, invalidateCache } = require('../../src/data/ticketManager');
+        const {
+            setTicketMeta,
+            patchTicketMeta,
+            getTicketMeta,
+            invalidateCache
+        } = require('../../src/data/ticketManager');
         // invalidateCache tidak ada — tidak masalah, ticketsManager pakai readFileSync fresh
         // Set initial meta
         setTicketMeta('ch-1', {

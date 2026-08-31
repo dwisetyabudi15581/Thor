@@ -27,7 +27,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { safeWriteJSON } = require('../infra/safeWrite');
+const { safeWriteJSON, quarantineCorruptFile } = require('../infra/safeWrite');
 
 const filePath = path.join(__dirname, '..', '..', 'data', 'scheduledAnnouncements.json');
 
@@ -37,6 +37,8 @@ function load() {
         return JSON.parse(fs.readFileSync(filePath, 'utf8'));
     } catch (err) {
         console.warn('⚠️ scheduledAnnouncements.json rusak:', err.message);
+        // v3.9.26: karantina file korup sebelum fallback (lihat safeWrite.js).
+        quarantineCorruptFile(filePath);
         return [];
     }
 }
@@ -250,6 +252,26 @@ function formatTimeLeft(ms) {
     return `${mins}m`;
 }
 
+/**
+ * v3.9.26 (GC): hapus entry announcement yang sudah terkirim lebih dari
+ * `olderThanMs` lalu. Entry sent dipertahankan selamanya sebelumnya + setiap
+ * cycle recurring bikin entry BARU → 365 entry/tahun per announce harian.
+ * Dipanggil scheduler harian. Return jumlah entry yang dihapus.
+ */
+function pruneSentOlderThan(olderThanMs) {
+    const list = load();
+    const cutoff = Date.now() - olderThanMs;
+    const keep = list.filter(e => {
+        if (!e) return false;
+        if (!e.sent) return true; // pending tidak pernah di-touch
+        const sentAt = e.sentAt || e.sendAt || 0;
+        return sentAt > cutoff;
+    });
+    const removedCount = list.length - keep.length;
+    if (removedCount > 0) save(keep);
+    return removedCount;
+}
+
 module.exports = {
     create,
     get,
@@ -258,5 +280,7 @@ module.exports = {
     markSent,
     remove,
     computeNextRecurring,
-    parseTime
+    parseTime,
+    // v3.9.26
+    pruneSentOlderThan
 };

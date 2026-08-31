@@ -8,9 +8,39 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
 
-const { createBackup, listBackups, restoreBackup, formatSize } = require('../../src/data/backupManager');
+const {
+    createBackup,
+    listBackups,
+    restoreBackup,
+    formatSize,
+    FILES_TO_BACKUP
+} = require('../../src/data/backupManager');
+
+// ====================================================
+// === v3.9.24 FIX: sandbox backups/ produksi ===
+// ====================================================
+// Test sebelumnya bikin backup beneran di backups/ produksi DAN memicu
+// cleanOldBackups() (keep-7) yang meng-EVICT backup asli. Sekarang: folder
+// backups/ asli di-rename sementara saat test jalan, dikembalikan saat exit.
+const realBackupsDir = path.join(__dirname, '..', '..', 'backups');
+const stashBackupsDir = path.join(__dirname, '..', '..', 'backups_test_stash');
+let backupsStashed = false;
+if (fs.existsSync(realBackupsDir)) {
+    fs.renameSync(realBackupsDir, stashBackupsDir);
+    backupsStashed = true;
+}
+process.on('exit', () => {
+    // Harus sync (dalam exit handler). Restore backups/ asli, buang hasil test.
+    try {
+        if (fs.existsSync(realBackupsDir)) {
+            fs.rmSync(realBackupsDir, { recursive: true, force: true });
+        }
+        if (backupsStashed) {
+            fs.renameSync(stashBackupsDir, realBackupsDir);
+        }
+    } catch (_) {}
+});
 
 test('backupManager: formatSize handles various sizes', () => {
     assert.strictEqual(formatSize(0), '0 B');
@@ -86,4 +116,26 @@ test('backupManager: createBackup + listBackups integration', () => {
     const backups = listBackups();
     const found = backups.find(b => b.name === createResult.backupName);
     assert.ok(found, 'created backup should appear in listBackups');
+});
+
+// ====================================================
+// === v3.9.24 GUARD: FILES_TO_BACKUP tidak boleh bolong ===
+// ====================================================
+// Bug nyata: automod.json (word rules auto-mod), levels.json, responders.json,
+// afk.json, panels.json TIDAK pernah di-backup — /restore-backup tidak bisa
+// memulihkan fitur-fitur itu. Guard: setiap file JSON live di data/ WAJIB
+// ada di FILES_TO_BACKUP (test gagal kalau ada file baru yang lupa di-register).
+test('v3.9.24 GUARD: FILES_TO_BACKUP mencakup semua file JSON live di data/', () => {
+    const dataDir = path.join(__dirname, '..', '..', 'data');
+    if (!fs.existsSync(dataDir)) {
+        return; // fresh checkout tanpa data — tidak ada yang bisa bolong
+    }
+    const liveFiles = fs.readdirSync(dataDir).filter(f => f.endsWith('.json'));
+    assert.ok(liveFiles.length > 0, 'data/ seharusnya berisi minimal beberapa file JSON di repo dev ini');
+    for (const f of liveFiles) {
+        assert.ok(
+            FILES_TO_BACKUP.includes(f),
+            `File data live "${f}" TIDAK ada di FILES_TO_BACKUP — backup jadi bolong! Tambahkan ke src/data/backupManager.js`
+        );
+    }
 });

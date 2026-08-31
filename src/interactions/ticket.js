@@ -33,13 +33,7 @@ const {
     TextInputStyle
 } = require('discord.js');
 const { getConfig, safeEditReply, logAudit, checkIsAdmin } = require('../commands/_shared');
-const {
-    createTicket,
-    closeTicket,
-    sendInvoice,
-    getTicketMeta,
-    patchTicketMeta
-} = require('../data/ticketManager');
+const { createTicket, closeTicket, sendInvoice, getTicketMeta, patchTicketMeta } = require('../data/ticketManager');
 const { addKey, getActiveKeysByUserAndRole, formatRemaining } = require('../data/keyManager');
 const { scheduleRoleRemoval } = require('../data/roleScheduler');
 
@@ -128,14 +122,15 @@ module.exports = async function (interaction) {
         }
 
         // Ada produk → tampilkan dropdown produk filtered by category
+        // v3.9.26: label/price di-slice 100 (limit Discord select option).
         const selectMenu = new ActionRowBuilder().addComponents(
             new StringSelectMenuBuilder()
                 .setCustomId('select_product')
-                .setPlaceholder(`Pilih produk — ${catConfig.label}...`)
+                .setPlaceholder(`Pilih produk — ${catConfig.label}...`.slice(0, 100))
                 .addOptions(
                     productsInCat.map(p => ({
-                        label: p.label,
-                        description: p.price,
+                        label: String(p.label || 'Produk').slice(0, 100),
+                        description: String(p.price || '-').slice(0, 100),
                         value: p.value,
                         emoji: catConfig.emoji || '🎫'
                     }))
@@ -199,14 +194,17 @@ module.exports = async function (interaction) {
         }
 
         // Ada produk → tampilkan dropdown produk filtered by category
+        // v3.9.26: label/price di-slice 100 (Discord select option limit) — data
+        // lama/restore bisa melebihi batas → addOptions throw → flow tiket kategori
+        // ini mati total sampai produk diperbaiki.
         const selectMenu = new ActionRowBuilder().addComponents(
             new StringSelectMenuBuilder()
                 .setCustomId('select_product')
-                .setPlaceholder(`Pilih produk — ${catConfig.label}...`)
+                .setPlaceholder(`Pilih produk — ${catConfig.label}...`.slice(0, 100))
                 .addOptions(
                     productsInCat.map(p => ({
-                        label: p.label,
-                        description: p.price,
+                        label: String(p.label || 'Produk').slice(0, 100),
+                        description: String(p.price || '-').slice(0, 100),
                         value: p.value,
                         emoji: catConfig.emoji || '🎫'
                     }))
@@ -235,9 +233,10 @@ module.exports = async function (interaction) {
                 .setCustomId('select_product')
                 .setPlaceholder('Pilih durasi key yang ingin dibeli...')
                 .addOptions(
+                    // v3.9.26: slice 100 (limit Discord select option) — lihat ticket_cat:.
                     config.products.map(p => ({
-                        label: p.label,
-                        description: p.price,
+                        label: String(p.label || 'Produk').slice(0, 100),
+                        description: String(p.price || '-').slice(0, 100),
                         value: p.value,
                         emoji: '🔑'
                     }))
@@ -403,7 +402,8 @@ module.exports = async function (interaction) {
         let msg;
         if (isTransaction && requiresKey && isCompleted) {
             // Set Key sudah dilakukan → transaksi sukses → close + save transcript.
-            msg = '✅ Transaksi sudah sukses (Set Key sudah dilakukan).\nKlik **✅ Selesai** untuk menutup tiket & menyimpan transcript.';
+            msg =
+                '✅ Transaksi sudah sukses (Set Key sudah dilakukan).\nKlik **✅ Selesai** untuk menutup tiket & menyimpan transcript.';
         } else if (isTransaction && requiresKey) {
             msg = '⚠️ Tutup tiket tanpa memberi key? Klik **❌ Tidak Jadi Beli**.';
         } else if (isTransaction && !requiresKey) {
@@ -443,6 +443,24 @@ module.exports = async function (interaction) {
     if (interaction.isButton() && interaction.customId === 'ticket_close_success') {
         // Untuk tiket help/report (selesai) ATAU transaksi non-key (pesanan sukses).
         // isSuccess=true → closeTicket akan kirim invoice ke channel invoice (kalau di-set).
+        //
+        // v3.9.24 FIX: re-check admin + validasi channel adalah tiket terdaftar.
+        // Sebelumnya tombol konfirmasi ini langsung closeTicket TANPA cek apapun
+        // (aman cuma karena row-nya ephemeral — bukan karena cek server-side).
+        // closeTicket akan menghapus channel apa pun yang dikirim kepadanya,
+        // jadi forged/legacy customId bisa menghapus channel non-tiket.
+        if (!checkIsAdmin(interaction.member)) {
+            return interaction.reply({
+                content: '❌ Hanya Admin/Staff yang bisa menutup tiket!',
+                flags: MessageFlags.Ephemeral
+            });
+        }
+        if (!getTicketMeta(interaction.channel?.id, interaction.channel?.topic || '')) {
+            return interaction.reply({
+                content: '❌ Channel ini bukan tiket yang terdaftar (mungkin sudah ditutup admin lain).',
+                flags: MessageFlags.Ephemeral
+            });
+        }
         try {
             await interaction.deferUpdate();
         } catch (err) {
@@ -456,6 +474,19 @@ module.exports = async function (interaction) {
 
     if (interaction.isButton() && interaction.customId === 'ticket_close_cancel_trans') {
         // Tutup tiket transaksi tanpa kasih key (batal beli).
+        // v3.9.24 FIX: re-check admin + validasi tiket (sama seperti ticket_close_success).
+        if (!checkIsAdmin(interaction.member)) {
+            return interaction.reply({
+                content: '❌ Hanya Admin/Staff yang bisa menutup tiket!',
+                flags: MessageFlags.Ephemeral
+            });
+        }
+        if (!getTicketMeta(interaction.channel?.id, interaction.channel?.topic || '')) {
+            return interaction.reply({
+                content: '❌ Channel ini bukan tiket yang terdaftar (mungkin sudah ditutup admin lain).',
+                flags: MessageFlags.Ephemeral
+            });
+        }
         try {
             await interaction.deferUpdate();
         } catch (err) {
@@ -505,15 +536,21 @@ module.exports = async function (interaction) {
         // kalau admin somehow klik via customId lama / message lama yang belum di-update.
         if (meta?.requiresKey === false) {
             return interaction.reply({
-                content: '❌ Produk ini tidak memerlukan key (requiresKey=false). Tombol Set Key tidak tersedia untuk produk non-key.',
+                content:
+                    '❌ Produk ini tidak memerlukan key (requiresKey=false). Tombol Set Key tidak tersedia untuk produk non-key.',
                 flags: MessageFlags.Ephemeral
             });
         }
 
-        const product = config.products.find(p => p.label === productName);
+        // v3.9.26 FIX: lookup by value DULU, label sebagai fallback. Sebelumnya
+        // cuma by label — admin rename produk via /update-product membuat tombol
+        // Set Key di semua tiket lama error "Produk tidak ditemukan" (meta tiket
+        // menyimpan label beku saat tiket dibuat). value = ID stabil.
+        const product =
+            config.products.find(p => p.value === productName) || config.products.find(p => p.label === productName);
         if (!product) {
             return interaction.reply({
-                content: `❌ Produk "${productName}" tidak ditemukan di config. Cek /list-products.`,
+                content: `❌ Produk "${productName}" tidak ditemukan di config (mungkin sudah di-rename/dihapus). Cek /list-products.`,
                 flags: MessageFlags.Ephemeral
             });
         }
@@ -546,6 +583,18 @@ module.exports = async function (interaction) {
     // === MODAL SET KEY SUBMIT — FULL FLOW ===
     // ====================================================
     if (interaction.isModalSubmit() && interaction.customId.startsWith('modal_set_key:')) {
+        // v3.9.24 FIX: re-check admin di modal submit (defense-in-depth — sama
+        // seperti backup.js). Sebelumnya cek admin cuma ada di tombol ticket_set_key;
+        // modal bisa di-submit oleh user lain kalau somehow modalnya kebuka
+        // (customId forged / client state aneh).
+        if (!checkIsAdmin(interaction.member)) {
+            return interaction
+                .reply({
+                    content: '❌ Hanya Admin/Staff yang bisa set key!',
+                    flags: MessageFlags.Ephemeral
+                })
+                .catch(() => {});
+        }
         // v3.9.7: log deferReply failure (sama seperti embed builder modal)
         await interaction.deferReply({ flags: MessageFlags.Ephemeral }).catch(err => {
             console.warn(`[Set Key Modal] deferReply gagal untuk ${interaction.customId}: ${err.message}`);
@@ -645,7 +694,9 @@ module.exports = async function (interaction) {
             // Tidak ada API targeted removal untuk single key di keyManager (hanya
             // removeAllKeysByUser yang terlalu broad). Admin bisa manual remove via
             // /list-keys kalau perlu. Log warning supaya kelihatan.
-            console.warn(`⚠️ Schedule gagal — key "${keyValue}" tersimpan tanpa auto-expire. Admin perlu manual remove via /list-keys jika perlu.`);
+            console.warn(
+                `⚠️ Schedule gagal — key "${keyValue}" tersimpan tanpa auto-expire. Admin perlu manual remove via /list-keys jika perlu.`
+            );
             return safeEditReply(interaction, {
                 content: `❌ Gagal schedule auto-expire role: ${schedErr.message}\n\nKey sudah tersimpan tapi role BELUM diberikan. Coba Set Key lagi, atau hubungi dev.`
             });
@@ -680,12 +731,20 @@ module.exports = async function (interaction) {
 
             // Cek semua key aktif buat info tambahan
             const activeKeys = getActiveKeysByUserAndRole(member.id, role.id);
-            const keyList = activeKeys
-                .map((k, i) => {
-                    const rem = formatRemaining(k);
-                    return `${i + 1}. \`${k.key}\` (sisa ${rem})`;
-                })
-                .join('\n');
+            // v3.9.26 FIX: bound daftar key di DM. Key bisa 200 char; 4+ key panjang
+            // bikin DM > 2000 char → member.send throw → dmSent=false padahal
+            // key/role/schedule sudah sukses. Sekarang maks 5 key teratas + ringkasan.
+            const MAX_KEYS_IN_DM = 5;
+            const shownKeys = activeKeys.slice(0, MAX_KEYS_IN_DM);
+            const hiddenKeys = activeKeys.length - shownKeys.length;
+            const keyList =
+                shownKeys
+                    .map((k, i) => {
+                        const rem = formatRemaining(k);
+                        return `${i + 1}. \`${k.key}\` (sisa ${rem})`;
+                    })
+                    .join('\n') + (hiddenKeys > 0 ? `\n... +${hiddenKeys} key lainnya (tanya admin)` : '');
+            const keyListStr = activeKeys.length > 0 ? keyList : '_(belum ada)_';
 
             // v3.9.17 FIX: sanitize backtick di keyValue. Kalau key mengandung
             // backtick, inline code bisa break. Ganti dengan single quote.
@@ -700,7 +759,7 @@ module.exports = async function (interaction) {
                     `\`${safeKey}\`\n\n` +
                     `🎭 Role: ${role.name}\n` +
                     `⏰ Expire: ${expireInfo}\n\n` +
-                    `📋 Key aktif kamu untuk role ini:\n${keyList}\n\n` +
+                    `📋 Key aktif kamu untuk role ini:\n${keyListStr}\n\n` +
                     `💡 Simpan keynya. Kalau role tiba-tiba hilang padahal key masih aktif, hubungi admin.`
             });
             dmSent = true;

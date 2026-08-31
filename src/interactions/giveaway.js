@@ -59,8 +59,10 @@ async function handleGiveawayButton(interaction) {
             });
         }
 
-        // Cek required role
-        if (gw.requiredRoleId) {
+        // Cek required role — HANYA untuk join.
+        // v3.9.24 FIX: sebelumnya cek ini juga berlaku untuk LEAVE, jadi member
+        // yang kehilangan required role TIDAK BISA keluar dari giveaway (stuck).
+        if (gw.requiredRoleId && action === 'gw_join') {
             const member = await interaction.guild.members.fetch(interaction.user.id).catch(() => null);
             if (!member || !member.roles.cache.has(gw.requiredRoleId)) {
                 const role = interaction.guild.roles.cache.get(gw.requiredRoleId);

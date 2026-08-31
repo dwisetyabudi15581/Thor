@@ -27,13 +27,24 @@ const {
     EMBED_LIMITS
 } = require('./_shared');
 
-const {
-    getPanel,
-    getPanelsByGuild,
-    deletePanel,
-    patchPanel
-} = require('../data/panelManager');
+const { getPanel, getPanelsByGuild, deletePanel, patchPanel } = require('../data/panelManager');
 const { buildTicketPanel, parseColor, validateUrl } = require('./panels');
+
+// v3.9.26 FIX: mapping field command → key penyimpanan di panels.json.
+// SEBELUMNYA: /update-panel menulis patch `{ image: value }` (key = nama field
+// command), tapi panel builder + panelManager baca `panel.imageUrl` /
+// `panel.thumbnailUrl` / `panel.footerText`. Akibat: field image/thumbnail/footer
+// di-update "sukses" (metadata tersimpan di key yang salah) tapi TIDAK PERNAH
+// terlihat di panel — 3 dari 6 field iklankan adalah no-op diam-diam, dan
+// pre-fill modal selalu kosong padahal ada nilai.
+const FIELD_TO_STORAGE_KEY = {
+    title: 'title',
+    body: 'body',
+    color: 'color',
+    image: 'imageUrl',
+    thumbnail: 'thumbnailUrl',
+    footer: 'footerText'
+};
 
 // Fields yang bisa di-edit via /update-panel modal.
 const EDITABLE_FIELDS = {
@@ -89,9 +100,7 @@ module.exports = async function (interaction) {
                 const title = p.title ? `**${p.title}**` : '_(default title)_';
                 const catCount = Array.isArray(p.categoryIds) ? p.categoryIds.length : 0;
                 const layout = p.useDropdown ? 'Dropdown' : 'Buttons';
-                const date = p.createdAt
-                    ? new Date(p.createdAt).toLocaleDateString('id-ID')
-                    : '?';
+                const date = p.createdAt ? new Date(p.createdAt).toLocaleDateString('id-ID') : '?';
                 return (
                     `\`${i + 1}.\` 🆔 \`${p.id}\`\n` +
                     `   ${title} — di ${channelMention}\n` +
@@ -104,7 +113,9 @@ module.exports = async function (interaction) {
             .setTitle('🎫 DAFTAR PANEL TIKET')
             .setDescription(lines)
             .setColor(0x5865f2)
-            .setFooter({ text: `${panels.length} panel aktif • Pakai ID untuk /delete-panel, /update-panel, /refresh-panel` })
+            .setFooter({
+                text: `${panels.length} panel aktif • Pakai ID untuk /delete-panel, /update-panel, /refresh-panel`
+            })
             .setTimestamp();
 
         return safeEditReply(interaction, { embeds: [embed] });
@@ -171,8 +182,8 @@ module.exports = async function (interaction) {
         const status = messageDeleted
             ? '✅ Message panel dihapus dari channel + metadata dibersihkan.'
             : messageNotFound
-                ? 'ℹ️ Message panel sudah tidak ada di channel (mungkin dihapus manual). Metadata dibersihkan.'
-                : '✅ Metadata panel dibersihkan.';
+              ? 'ℹ️ Message panel sudah tidak ada di channel (mungkin dihapus manual). Metadata dibersihkan.'
+              : '✅ Metadata panel dibersihkan.';
 
         return safeEditReply(interaction, {
             content: `✅ Panel \`${panelId}\` berhasil dihapus.\n\n${status}`
@@ -278,7 +289,9 @@ module.exports = async function (interaction) {
         }
 
         // Pre-fill current value (atau kosong kalau masih default)
-        const currentValue = panel[field] != null ? String(panel[field]) : '';
+        // v3.9.26: baca via key penyimpanan yang BENAR (mapping), bukan nama field command.
+        const storageKey = FIELD_TO_STORAGE_KEY[field] || field;
+        const currentValue = panel[storageKey] != null ? String(panel[storageKey]) : '';
 
         const modal = new ModalBuilder()
             .setCustomId(`modal_panel_edit:${panelId}:${field}`)
@@ -316,6 +329,22 @@ module.exports.handlePanelModal = async function handlePanelModal(interaction) {
 
     await interaction.deferReply({ flags: MessageFlags.Ephemeral }).catch(() => {});
 
+    // v3.9.26 (hardening konsisten dengan modal_set_key / restore_backup_confirm):
+    // re-check admin saat modal di-submit — bukan cuma saat modal dibuka. Modal
+    // bisa dibiarkan terbuka berjam-jam; admin yang ke-depromote di jeda itu
+    // tetap bisa apply patch tanpa cek ulang di versi sebelumnya.
+    try {
+        const { isAdmin } = require('../infra/permissions');
+        if (!isAdmin(interaction.member)) {
+            return safeEditReply(interaction, {
+                content: '❌ Kamu tidak punya izin admin untuk edit panel.'
+            });
+        }
+    } catch (_) {
+        // Kalau cek admin gagal (mis. cache role error), jangan blokir edit —
+        // modal hanya bisa dibuka oleh admin yang sama kok.
+    }
+
     const panel = getPanel(panelId);
     if (!panel) {
         return safeEditReply(interaction, {
@@ -333,15 +362,19 @@ module.exports.handlePanelModal = async function handlePanelModal(interaction) {
     }
 
     // Validate & build patch object
+    // v3.9.26: patch ditulis dengan KEY PENYIMPANAN (mapping) — bukan nama field
+    // command — supaya panel builder (yang baca imageUrl/thumbnailUrl/footerText)
+    // benar-benar melihat perubahannya.
     const patch = {};
+    const storageKey = FIELD_TO_STORAGE_KEY[field] || field;
     if (newValue === '') {
         // Empty = clear field (fallback ke global default)
-        patch[field] = null;
+        patch[storageKey] = null;
     } else {
         // Validate per field type
         if (field === 'color') {
             try {
-                patch.color = parseColor(newValue);
+                patch[storageKey] = parseColor(newValue);
             } catch (colorErr) {
                 return safeEditReply(interaction, { content: `❌ ${colorErr.message}` });
             }
@@ -352,13 +385,13 @@ module.exports.handlePanelModal = async function handlePanelModal(interaction) {
                     content: `❌ URL ${field} tidak valid. Harus http(s)://...`
                 });
             }
-            patch[field] = validated;
+            patch[storageKey] = validated;
         } else if (newValue.length > fieldDef.max) {
             return safeEditReply(interaction, {
                 content: `❌ Teks terlalu panjang (${newValue.length} > ${fieldDef.max} char).`
             });
         } else {
-            patch[field] = newValue;
+            patch[storageKey] = newValue;
         }
     }
 

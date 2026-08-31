@@ -8,6 +8,7 @@
  */
 
 const { EmbedBuilder, MessageFlags, getConfig, saveConfig, logAudit, safeEditReply } = require('./_shared');
+const { isValidEmoji } = require('../infra/text');
 
 const CATEGORY_ID_REGEX = /^[a-zA-Z0-9_-]{1,30}$/;
 
@@ -35,6 +36,16 @@ module.exports = async function (interaction) {
         const validStyles = ['Primary', 'Secondary', 'Success', 'Danger'];
         if (!validStyles.includes(style)) {
             return safeEditReply(interaction, { content: '❌ `style` tidak valid.' });
+        }
+
+        // v3.9.26: validasi emoji SEBELUM save. Emoji invalid (string panjang /
+        // bukan emoji) tersimpan ke config → ButtonBuilder.setEmoji() throw saat
+        // panel dirender → /setup-ticket & /refresh-panel mati sampai config
+        // diperbaiki manual (poison persist).
+        if (!isValidEmoji(emoji)) {
+            return safeEditReply(interaction, {
+                content: '❌ `emoji` tidak valid. Pakai emoji unicode (mis. 🎫) atau custom emoji format `<:nama:id>`.'
+            });
         }
 
         // Check duplicate
@@ -141,6 +152,14 @@ module.exports = async function (interaction) {
         const [removed] = categories.splice(idx, 1);
         config.ticketCategories = categories;
 
+        // v3.9.26 FIX: tandai dismiss supaya migration claim_giveaway di
+        // configManager TIDAK menambah ulang kategori ini di getConfig()
+        // berikutnya (dulu: kategori "hidup lagi" diam-diam di run berikutnya
+        // karena migration re-add tanpa cek flag apa pun).
+        if (removed.id === 'claim_giveaway') {
+            config.claimGiveawayDismissed = true;
+        }
+
         // v3.9.17 FIX: implement fallback actual. Sebelumnya, pesan bilang
         // "produk akan fallback ke transaction" tapi tidak ada code yang update
         // product.category → produk jadi orphan (tidak muncul di panel manapun).
@@ -204,6 +223,13 @@ module.exports = async function (interaction) {
             if (!validStyles.includes(newStyle)) {
                 return safeEditReply(interaction, { content: '❌ `style` tidak valid.' });
             }
+        }
+
+        // v3.9.26: validasi emoji kalau diisi (anti poison config — lihat add-category)
+        if (newEmoji !== null && !isValidEmoji(newEmoji)) {
+            return safeEditReply(interaction, {
+                content: '❌ `emoji` tidak valid. Pakai emoji unicode (mis. 🎫) atau custom emoji format `<:nama:id>`.'
+            });
         }
 
         const before = { ...categories[idx] };

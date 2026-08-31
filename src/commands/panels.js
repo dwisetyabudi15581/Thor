@@ -28,6 +28,8 @@ const { fillTemplate } = require('../data/configManager');
 const { upsertPanel } = require('../data/panelManager');
 // v3.9.17: shared parseColor + parseColorOrError supaya konsisten di seluruh codebase.
 const { parseColorOrError } = require('../infra/colors');
+// v3.9.24: normalisasi \n literal → newline asli (input command di PC tidak bisa Enter).
+const { normalizeNewlines, isValidEmoji } = require('../infra/text');
 
 const VALID_STYLES = ['Primary', 'Secondary', 'Success', 'Danger'];
 const STYLE_MAP = {
@@ -123,16 +125,12 @@ function buildTicketPanel(panel, ctx) {
             ? productsInCategories.map(p => `• **${p.label}** — ${p.price}`).join('\n')
             : '_(belum ada produk — pakai `/add-product`)_';
 
-    const categoriesListStr = categoriesToShow
-        .map(c => `${c.emoji || '🎫'} **${c.label}**`)
-        .join(' • ');
+    const categoriesListStr = categoriesToShow.map(c => `${c.emoji || '🎫'} **${c.label}**`).join(' • ');
 
     const priceHeader = config.messages?.ticketPriceHeader || '💰 PRICE LIST 💰';
 
     // Body: pakai panel.body kalau di-override, else config.messages.ticketBody.
-    const bodyTemplate = panel.body != null && panel.body !== ''
-        ? panel.body
-        : config.messages.ticketBody;
+    const bodyTemplate = panel.body != null && panel.body !== '' ? panel.body : config.messages.ticketBody;
 
     const renderedBody = fillTemplate(bodyTemplate, {
         server: ctx.guild?.name || 'Server',
@@ -143,9 +141,7 @@ function buildTicketPanel(panel, ctx) {
     });
 
     // Title: pakai panel.title kalau di-override, else config default.
-    const title = panel.title != null && panel.title !== ''
-        ? panel.title
-        : config.messages.ticketTitle;
+    const title = panel.title != null && panel.title !== '' ? panel.title : config.messages.ticketTitle;
 
     // Color: parse dulu (bisa hex string dari JSON), fallback ke default orange.
     let color = 0xe67e22;
@@ -158,10 +154,7 @@ function buildTicketPanel(panel, ctx) {
         }
     }
 
-    const embed = new EmbedBuilder()
-        .setTitle(title)
-        .setDescription(renderedBody)
-        .setColor(color);
+    const embed = new EmbedBuilder().setTitle(title).setDescription(renderedBody).setColor(color);
 
     // Optional image & thumbnail
     const imageUrl = validateUrl(panel.imageUrl);
@@ -170,9 +163,10 @@ function buildTicketPanel(panel, ctx) {
     if (thumbUrl) embed.setThumbnail(thumbUrl);
 
     // Footer: pakai panel.footerText kalau di-override, else bot username.
-    const footerText = panel.footerText != null && panel.footerText !== ''
-        ? panel.footerText
-        : ctx.client?.user?.username || 'Community Bot';
+    const footerText =
+        panel.footerText != null && panel.footerText !== ''
+            ? panel.footerText
+            : ctx.client?.user?.username || 'Community Bot';
     embed.setFooter({
         text: footerText,
         iconURL: ctx.client?.user?.displayAvatarURL({ dynamic: true })
@@ -256,6 +250,15 @@ module.exports = async function (interaction) {
             });
         }
 
+        // v3.9.26: validasi emoji SEBELUM save (anti poison config). Emoji string
+        // bebas yang tersimpan bikin setEmoji() throw di /setup-verify nanti —
+        // panel verifikasi mati sampai config diperbaiki manual.
+        if (emoji && !isValidEmoji(emoji)) {
+            return safeEditReply(interaction, {
+                content: '❌ `emoji` tidak valid. Pakai emoji unicode (mis. ✅) atau custom emoji format `<:nama:id>`.'
+            });
+        }
+
         // Build new verifyButton config
         const newVerifyBtn = {
             ...(config.verifyButton || {}),
@@ -303,7 +306,9 @@ module.exports = async function (interaction) {
 
         const customTitle = interaction.options.getString('title');
         const categoriesFilter = interaction.options.getString('categories');
-        const customBody = interaction.options.getString('body');
+        // v3.9.24: dukung \n literal → newline asli di body panel (multi-line
+        // price list / instruksi). Footer tetap 1 baris (Discord render footer flat).
+        const customBody = normalizeNewlines(interaction.options.getString('body'));
         const colorInput = interaction.options.getString('color');
         const imageUrlInput = interaction.options.getString('image');
         const thumbnailInput = interaction.options.getString('thumbnail');
@@ -421,9 +426,10 @@ module.exports = async function (interaction) {
                 guildId: interaction.guild.id
             });
 
-            const missing = missingCategoryIds.length > 0
-                ? `\n\n⚠️ Kategori ID tidak ditemukan (diabaikan): \`${missingCategoryIds.join(', ')}\``
-                : '';
+            const missing =
+                missingCategoryIds.length > 0
+                    ? `\n\n⚠️ Kategori ID tidak ditemukan (diabaikan): \`${missingCategoryIds.join(', ')}\``
+                    : '';
 
             return safeEditReply(interaction, {
                 content:

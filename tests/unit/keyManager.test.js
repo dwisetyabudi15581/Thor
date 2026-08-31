@@ -8,23 +8,33 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
-const os = require('os');
 
-// Use a temp file for tests supaya gak pollute data/keys.json production
-const tempKeysPath = path.join(os.tmpdir(), `keys-test-${Date.now()}.json`);
-
-// Mock the keysPath di keyManager sebelum require
-const Module = require('module');
-const originalResolve = Module._resolveFilename;
-const keyManagerPath = require.resolve('../../src/data/keyManager');
-
-// Test setup: copy current keys.json (if any) to temp, point keyManager ke temp
+// ====================================================
+// === v3.9.24 FIX: keys.json produksi di-snapshot & restore ===
+// ====================================================
+// Test sebelumnya meng-claim pakai temp file (mock Module._resolveFilename),
+// tapi scaffolding itu TIDAK PERNAH BERFUNGSI — test menulis langsung ke
+// data/keys.json produksi. Sekarang: keys.json asli di-backup sebelum test
+// dan di-restore saat process exit (exit handler harus sync).
 const realKeysPath = path.join(__dirname, '..', '..', 'data', 'keys.json');
-
-test.before(() => {
-    // Ensure data dir exists
-    const dataDir = path.join(__dirname, '..', '..', 'data');
-    if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+const keysBackupPath = realKeysPath + '.test-backup';
+let keysBackedUp = false;
+if (fs.existsSync(realKeysPath)) {
+    fs.copyFileSync(realKeysPath, keysBackupPath);
+    keysBackedUp = true;
+    // Mulai dari state kosong yang deterministik (seperti fresh checkout).
+    fs.unlinkSync(realKeysPath);
+}
+process.on('exit', () => {
+    try {
+        if (keysBackedUp) {
+            fs.copyFileSync(keysBackupPath, realKeysPath);
+            fs.rmSync(keysBackupPath, { force: true });
+        } else if (fs.existsSync(realKeysPath)) {
+            // Tidak ada file asli → hapus file hasil test.
+            fs.unlinkSync(realKeysPath);
+        }
+    } catch (_) {}
 });
 
 test('keyManager: addKey throws on duplicate key (v3.9.8 fix)', () => {
