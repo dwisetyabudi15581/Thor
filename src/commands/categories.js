@@ -159,6 +159,11 @@ module.exports = async function (interaction) {
         if (removed.id === 'claim_giveaway') {
             config.claimGiveawayDismissed = true;
         }
+        // v3.9.32: sama untuk kategori midman/rekber — flag mencegah migration
+        // configManager menambah ulang kategori ini di getConfig() berikutnya.
+        if (removed.id === 'midman') {
+            config.midmanCategoryDismissed = true;
+        }
 
         // v3.9.17 FIX: implement fallback actual. Sebelumnya, pesan bilang
         // "produk akan fallback ke transaction" tapi tidak ada code yang update

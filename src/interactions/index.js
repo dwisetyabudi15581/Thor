@@ -9,6 +9,8 @@
  *   - btn_verify                              → verify.js      (exact match)
  *   - ticket_cat:, ticket_, select_product, modal_set_key:,
  *     modal_deliver_order:                    → ticket.js
+ *   - ticket_cat:midman (SEBELUM ticket_cat:),
+ *     modal_mm_, mm_                          → midman.js     (v3.9.32 rekber)
  *   - sr_btn:, sr_sel:                        → selfrole.js
  *   - emb_edit:, emb_preview:, emb_send:,
  *     emb_cancel:, emb_modal_                 → embed.js
@@ -29,6 +31,8 @@ const { checkAndMark } = require('./_dedup');
 // Domain handlers — masing-masing export `async function(interaction)`.
 const verifyDomain = require('./verify');
 const ticketDomain = require('./ticket');
+// v3.9.32: domain midman/rekber (deal escrow 3-pihak).
+const midmanDomain = require('./midman');
 const selfroleDomain = require('./selfrole');
 const embedDomain = require('./embed');
 const giveawayDomain = require('./giveaway');
@@ -56,6 +60,12 @@ const PREFIX_TO_DOMAIN = [
     // WAJIB explicit: prefix modal gak punya fallback generik — tanpa entry ini
     // submit modal tidak pernah sampai ke handler tiket (dead interaction).
     { prefix: 'modal_deliver_order:', domain: 'ticket' },
+    // v3.9.32: midman/rekber. WAJIB SEBELUM prefix `ticket_cat:` generik —
+    // `ticket_cat:midman` (tombol kategori rekber di panel) harus di-route ke
+    // domain midman, bukan ticket (kalau kena ticket_, customId tidak dikenal).
+    { prefix: 'ticket_cat:midman', domain: 'midman' },
+    { prefix: 'modal_mm_', domain: 'midman' },
+    { prefix: 'mm_', domain: 'midman' },
     { prefix: 'modal_edit_message:', domain: 'config' },
     // v3.9.14: panel edit modal (modal_panel_edit:<panelId>:<field>)
     { prefix: 'modal_panel_edit:', domain: 'panel-modal' },
@@ -83,6 +93,7 @@ const PREFIX_TO_DOMAIN = [
 const DOMAIN_HANDLERS = {
     verify: verifyDomain,
     ticket: ticketDomain,
+    midman: midmanDomain,
     selfrole: selfroleDomain,
     embed: embedDomain,
     giveaway: giveawayDomain,

@@ -1,7 +1,7 @@
 {
   "name": "community-bot",
-  "version": "3.9.31",
-  "description": "All-in-One Discord Community Bot — ticket panel (multi-category), auto-responder, anti-spam, AFK, leveling, key-driven VIP role, self-role, temp voice, giveaway, scheduled announcements, embed builder, backup, warn, stats, poll — fully configurable from Discord",
+  "version": "3.9.32",
+  "description": "All-in-One Discord Community Bot \u2014 ticket panel (multi-category), auto-responder, anti-spam, AFK, leveling, key-driven VIP role, self-role, temp voice, giveaway, scheduled announcements, embed builder, backup, warn, stats, poll, midman/rekber (deal escrow 3-pihak) \u2014 fully configurable from Discord",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",

@@ -7,6 +7,9 @@ const {
     ActionRowBuilder
 } = require('discord.js');
 const { getConfig } = require('./configManager');
+// v3.9.32: cek deal rekber aktif — user yang masih terlibat deal escrow tidak
+// boleh buka tiket reguler (anti-bypass alur rekber lewat tiket biasa).
+const { hasActiveDealFor } = require('./midmanManager');
 const { safeEditReply } = require('../infra/safeReply');
 const fs = require('fs');
 const path = require('path');
@@ -229,6 +232,36 @@ function classifyProduct(product) {
 }
 
 /**
+ * v3.9.32: cari tiket aktif milik user (dari tickets.json — sumber kebenaran).
+ * Di-ekstrak dari createTicket supaya bisa dipakai juga oleh deal rekber
+ * (interactions/midman.js: buyer tidak boleh punya tiket & deal aktif
+ * bersamaan — kebijakan 1 channel aktif per user).
+ *
+ * Termasuk self-healing: metadata zombie (channel sudah tidak ada) dihapus.
+ *
+ * @param {Guild} guild
+ * @param {string} userId
+ * @returns {Promise<GuildChannel|null>} channel tiket aktif, atau null.
+ */
+async function findActiveTicketFor(guild, userId) {
+    const ticketsData = loadTickets();
+    for (const [chId, meta] of Object.entries(ticketsData)) {
+        if (meta.userId === userId && meta.guildId === guild.id) {
+            const ch = guild.channels.cache.get(chId);
+            if (ch) return ch;
+            // v3.9.8: channel gak ter-cache, tapi metadata ada. Fetch dari API —
+            // kalau benar-benar hilang, cleanup metadata zombie.
+            try {
+                const fetched = await guild.channels.fetch(chId).catch(() => null);
+                if (fetched) return fetched;
+                removeTicketMeta(chId);
+            } catch (_) {}
+        }
+    }
+    return null;
+}
+
+/**
  * Buat channel tiket baru.
  * Tiket transaksi menampilkan tombol "Set Key" + "Tutup Tiket".
  * Tiket help/report menampilkan tombol "Tutup Tiket" saja.
@@ -257,30 +290,9 @@ async function createTicket(interaction, product) {
         //      Sebelumnya `cache.get(chId)` miss → duplicate ticket untuk user yang sama.
         //   2. Fix false-positive `startsWith` — tambah separator ` |` supaya
         //      user ID yang merupakan prefix dari user ID lain tidak false-match.
-        const ticketsData = loadTickets();
-        let existingTicket = null;
-        // Cek via tickets.json dulu
-        for (const [chId, meta] of Object.entries(ticketsData)) {
-            if (meta.userId === user.id && meta.guildId === guild.id) {
-                const ch = guild.channels.cache.get(chId);
-                if (ch) {
-                    existingTicket = ch;
-                    break;
-                } else {
-                    // v3.9.8: channel gak ter-cache, tapi metadata ada. Anggap aktif.
-                    // Fetch dari API untuk dapat object channel-nya.
-                    try {
-                        const fetched = await guild.channels.fetch(chId).catch(() => null);
-                        if (fetched) {
-                            existingTicket = fetched;
-                            break;
-                        }
-                        // Channel benar-benar hilang — cleanup metadata zombie.
-                        removeTicketMeta(chId);
-                    } catch (_) {}
-                }
-            }
-        }
+        // v3.9.32: loop tickets.json di bawah diekstrak ke findActiveTicketFor()
+        //      (dipakai ulang oleh deal rekber) — perilaku identik.
+        let existingTicket = await findActiveTicketFor(guild, user.id);
         // Fallback: scan channel topic (tiket lama)
         if (!existingTicket) {
             // v3.9.8: tambah ` |` supaya ID yang prefix dari ID lain tidak false-match.
@@ -290,6 +302,15 @@ async function createTicket(interaction, product) {
         }
         if (existingTicket) {
             return safeEditReply(interaction, { content: `❌ Kamu sudah punya tiket aktif di ${existingTicket}!` });
+        }
+
+        // v3.9.32: user yang masih terlibat deal rekber aktif (sebagai buyer ATAU
+        // seller) tidak boleh buka tiket reguler — cegah bypass alur escrow
+        // lewat tiket biasa (deal harus diselesaikan dulu).
+        if (hasActiveDealFor(guild.id, user.id)) {
+            return safeEditReply(interaction, {
+                content: '❌ Kamu masih punya **deal rekber aktif**. Selesaikan deal-mu dulu sebelum buka tiket baru.'
+            });
         }
 
         // Admin role wajib sudah di-set
@@ -804,6 +825,8 @@ module.exports = {
     createTicket,
     closeTicket,
     sendInvoice,
+    saveTranscript,
+    findActiveTicketFor,
     getTicketMeta,
     setTicketMeta,
     patchTicketMeta,

@@ -1,4 +1,4 @@
-# 📖 Admin Guide — Thor Bot v3.9.29
+# 📖 Admin Guide — Thor Bot v3.9.32
 
 Panduan lengkap untuk admin server Discord yang menjalankan bot ini — cocok untuk admin baru yang pertama kali setup, maupun admin yang sudah berjalan sebagai referensi harian.
 
@@ -47,7 +47,7 @@ npm start
 
 - Console menampilkan: `✅ Bot online sebagai NamaBot`
 - Console menampilkan: `✅ Slash Commands terdaftar ke guild: Nama Server (instan!)`
-- Di Discord, ketik `/` — semua **80 slash command** harus muncul
+- Di Discord, ketik `/` — semua **82 slash command** harus muncul
 - Jika command tidak muncul, pastikan `GUILD_ID` di `.env` benar
 
 ---
@@ -463,6 +463,44 @@ Bot mengirim draft + dropdown. Klik dropdown → pilih bagian (Title/Description
 /announce-cancel id:ann_xxx
 ```
 
+### 🤝 Midman / Rekber (Deal Escrow 3-Pihak)
+
+Layanan jasa tengah untuk transaksi antar-member: **pembeli + penjual + midman** dalam satu channel deal. Inti keamanannya: **Deal Board** (embed bot) jadi sumber kebenaran — chat cuma tempat bukti (screenshot transfer, bukti kirim barang), dan setiap langkah hanya bisa digerakkan oleh pihak yang berhak, lewat tombol.
+
+**Setup sekali (urutan bebas, semua wajib sebelum dipakai member):**
+
+```
+/set-role midman @Midman          ← role khusus tim rekber (siapa pun yang pegang role ini bisa handle deal)
+/set-midman-fee mode:Persen value:5   ← fee 5% dari harga deal (atau mode:flat value:5000 untuk nominal tetap)
+/set-channel tipe:invoice #testi     ← invoice deal sukses otomatis ke sini (sudah pernah? skip)
+/set-channel tipe:transcript #log    ← transcript deal otomatis ke sini (sudah pernah? skip)
+/setup-ticket                          ← pasang ulang panel — tombol 🤝 Rekber muncul otomatis
+```
+
+**Alur deal (versi cerita):**
+
+1. **Pembeli** klik 🤝 Rekber di panel → isi modal (item, harga, mention penjual) → bot buat channel di kategori `🤝 REKBER` + Deal Board.
+2. **Penjual** klik **🤝 Setuju Deal** → item & harga **TERKUNCI**. Mau ubah = batal & buat ulang.
+3. **Pembeli** transfer ke midman, kirim bukti di channel. **Midman** cek rekening → klik **✅ Dana Masuk**.
+4. **Penjual** kirim barang. **Pembeli** cek → klik **✅ Barang Diterima**.
+5. **Midman** transfer ke penjual (potong fee — jumlahnya sudah tertera di board) → klik **💸 Cairkan ke Penjual** → invoice + transcript + stats otomatis, channel close.
+
+**Kalau ada masalah:** siapa saja peserta klik **⚠️ Ada Masalah** → deal **DIBEKUKAN** (semua tombol mati, admin di-ping). Admin resolve: **⚖️ Resolve: Cairkan** (deal sukses) atau **↩️ Resolve: Refund** (dana kembali ke pembeli — midman wajib refund manual).
+
+**Monitoring:** `/midman-deals` (list semua deal aktif + status), `/config-show` (role midman + fee terpasang).
+
+**Yang dijaga bot secara struktural (tidak bisa diakali):**
+
+- Cairkan sebelum barang diterima → ditolak. Buyer klik "Dana Masuk" → ditolak (bukan midman).
+- Semua aksi saat dispute → mati. Hanya admin yang resolve.
+- Fee dari config, bukan ketikan — midman tidak bisa patok fee sembarangan.
+- Semua klik tercatat: siapa, kapan, event apa (history deal + audit log + ringkasan sebelum close).
+- 1 deal aktif per orang; user dengan deal aktif tidak bisa buka tiket biasa (anti-bypass).
+
+**Tidak jadi pakai fitur rekber?** `/remove-category midman` — tombol hilang dari panel dan tidak muncul lagi.
+
+**Catatan penting:** bot TIDAK memegang uang — transfer tetap manual oleh midman. Bot = buku besar + penjaga urutan + pencatat bukti. Pilih orang midman yang kamu percaya; bot memastikan semua tindakannya tercatat.
+
 ---
 
 ## 5. Moderation (Warn System)
@@ -877,12 +915,13 @@ Cooldown bersifat **per-user** — user A memicu tidak memengaruhi user B.
 
 ## 11. Riwayat Versi
 
-Riwayat lengkap semua versi (v3.9.0 – v3.9.30) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
+Riwayat lengkap semua versi (v3.9.0 – v3.9.32) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
 
 Ringkasan 3 versi terbaru:
 
+- **v3.9.32** (2026-09-02) — 🤝 fitur baru **Midman/Rekber**: deal escrow 3-pihak dengan Deal Board + state machine (gerbang ganda dana/barang), dispute & resolve admin, fee otomatis dari config, invoice/transcript/audit terintegrasi, `/set-midman-fee` + `/midman-deals`, kategori panel otomatis (total 82 command, 289 unit test).
+- **v3.9.31** (2026-09-01) — hardening hasil code review: orphan meta saat close, null-safety channel, snapshot clear-schedule, +10 unit test.
 - **v3.9.30** (2026-09-01) — `/set-transcript-channel` digabung ke `/set-channel tipe:transcript` — satu command untuk semua channel (total 80 command); `/remove-channel` & `/config-show` ikut mendukung transcript.
-- **v3.9.29** (2026-09-01) — fix URL image/thumbnail modal 500 → 2048 karakter + safety-net kategori kosong di `/setup-ticket-panel` & `/refresh-panel` + fix audit log `/update-panel`.
 - **v3.9.28** (2026-09-01) — kategori baru aman otomatis (`classifyProduct()`): semua id kategori selain `help`/`report` otomatis TRANSAKSI; fix deskripsi dropdown kategori campur.
 
 ---

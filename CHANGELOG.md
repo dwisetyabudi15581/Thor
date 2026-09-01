@@ -5,6 +5,25 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 Legend: 🔴 critical · 🟠 high · 🟡 medium · 🟢 improvement
 
+## [3.9.32] — 2026-09-02
+
+### Added — 🤝 FITUR BARU: Midman / Rekber (Deal Escrow 3-Pihak)
+
+Layanan rekber (jasa tengah) untuk transaksi antar-member: pembeli, penjual, dan midman dalam satu channel deal dengan **Deal Board** (embed bot) sebagai sumber kebenaran dan **state machine** yang menjaga urutan — uang jalan dulu → barang nyampe → baru uang cair, dan setiap perpindahan harus dikonfirmasi pihak yang berbeda.
+
+- **State machine escrow** (`src/data/midmanManager.js`): `WAITING_SELLER → WAITING_PAYMENT → WAITING_DELIVERY → WAITING_RELEASE → COMPLETED`, plus `DISPUTE` (freeze, hanya admin resolve: cairkan/refund) dan `CANCELLED`/`REFUNDED`. Setiap klik tombol divalidasi ganda — (1) urutan state harus mengizinkan event (`canTransition`), (2) kliker harus berperan sebagai aktor yang diizinkan (`actorAllowed`). Bot menolak struktural skema fraud klasik: cairkan sebelum barang diterima, buyer klik "Dana Masuk" menyamar midman, aksi apa pun saat dispute.
+- **Deal Board**: embed bot (item, harga, fee, diterima penjual, status, instruksi per state) yang di-edit otomatis tiap transisi — terms terkunci setelah seller setuju (ubah = batal & buat ulang). Board terhapus admin → self-healing (dikirim ulang). Tombol per state hanya merender aksi yang valid.
+- **Channel deal 3-pihak**: kategori `🤝 REKBER`, overwrites untuk buyer, seller, role midman, role admin. History lengkap per klik (siapa, kapan, event apa) tersimpan di `data/deals.json` + dikirim sebagai ringkasan sebelum close (ikut ke transcript).
+- **Integrasi ekosistem Thor**: invoice ke channel testimoni + `recordPurchase` stats saat deal COMPLETED (reuse `sendInvoice`), transcript otomatis (reuse `saveTranscript`), audit log setiap transisi (`MIDMAN_*`), lock per-channel anti double-click, cleanup meta hanya kalau channel benar-benar terhapus (pola v3.9.31).
+- **Anti-bypass**: user dengan deal aktif (buyer/seller) tidak bisa buka tiket reguler; buyer dengan tiket aktif tidak bisa buat deal; 1 deal aktif per orang (sebagai buyer/seller). Loop cek tiket di `createTicket` diekstrak ke `findActiveTicketFor()` (dipakai ulang).
+- **Commands**: `/set-role midman`, `/remove-role midman`, `/set-midman-fee` (persen 0–90% atau nominal flat; fee dihitung otomatis dari config — tidak bisa dipatok manual per deal), `/midman-deals` (list deal aktif), tampilan rekber di `/config-show`. Total **80 → 82 slash command**.
+- **Kategori panel `🤝 Rekber / Middleman`** otomatis ditambahkan (migration sekali-jalan, pola claim_giveaway): tombol di-intercept router → domain midman; dropdown di-redirect dari handler tiket. Tidak mau fitur rekber? `/remove-category midman` — flag `midmanCategoryDismissed` mencegah kategori "hidup lagi".
+- 31 unit test baru (`tests/unit/midman.test.js`): matriks state machine (happy path, gerbang ganda, dispute, terminal), matriks aktor, fee (persen/flat/cap/invalid), parser input modal, persistensi deals.json, migration kategori + flag dismissed, `findActiveTicketFor` (aktif/zombie-cleanup). Total **258 → 289 unit test**.
+
+### Fixed
+
+- 🟡 **`actorAllowed` key mismatch** (kelewat tanpa test): daftar aktor transisi memakai nama `buyer`/`seller`/... sementara pemanggil mengirim flags `isBuyer`/`isSeller`/... — mapping `ACTOR_KEY_MAP` menyatukan keduanya (tertangkap test aktor).
+
 ## [3.9.31] — 2026-09-01
 
 ### Fixed

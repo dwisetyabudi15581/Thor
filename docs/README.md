@@ -17,7 +17,7 @@ Kumpulan dokumen resmi untuk **Thor — All-in-One Discord Community Bot** (v3.9
 
 ## Statistik Project
 
-- **80 slash command** — semua fitur dapat dikonfigurasi dari Discord, tanpa edit file
+- **82 slash command** — semua fitur dapat dikonfigurasi dari Discord, tanpa edit file
 - **248 unit test** — `node:test`, sandbox (aman dijalankan di server live)
 - **discord.js v14** · Node.js 18+ · single-guild
 - **CI/CD** — GitHub Actions menjalankan lint + test pada setiap push (Node 18/20/22)

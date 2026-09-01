@@ -56,8 +56,30 @@ const DEFAULTS = {
             style: 'Success',
             requiresKey: false,
             isDefault: false
+        },
+        // v3.9.32: kategori rekber — deal escrow 3-pihak (buyer/seller/midman).
+        // Diintercept router (ticket_cat:midman → domain midman), TIDAK lewat
+        // createTicket. isDefault: false + flag midmanCategoryDismissed supaya
+        // admin yang tidak mau fitur rekber bisa hapus via /remove-category
+        // tanpa kategori "hidup lagi" di getConfig() berikutnya.
+        {
+            id: 'midman',
+            label: 'Rekber / Middleman',
+            emoji: '🤝',
+            style: 'Success',
+            requiresKey: false,
+            isDefault: false
         }
     ],
+    // v3.9.32: konfigurasi midman/rekber.
+    //   feeMode  : 'percent' (feeValue = persen) | 'flat' (feeValue = nominal Rp)
+    //   feeValue : nilai fee — dihitung OTOMATIS saat deal dibuat (tidak manual).
+    //   category : nama kategori channel deal (bisa dikustom).
+    midman: {
+        feeMode: 'percent',
+        feeValue: 5,
+        category: '🤝 REKBER'
+    },
     // v3.9.13: Leveling system config
     leveling: {
         enabled: false, // default off — admin harus enable via /setup-leveling
@@ -160,6 +182,8 @@ function getConfig() {
                 : DEFAULTS.ticketCategories,
         leveling: { ...DEFAULTS.leveling, ...(raw.leveling || {}) },
         levelRoles: Array.isArray(raw.levelRoles) ? raw.levelRoles : DEFAULTS.levelRoles,
+        // v3.9.32: merge midman config (field custom admin tetap preserve).
+        midman: { ...DEFAULTS.midman, ...(raw.midman || {}) },
         products: Array.isArray(raw.products) ? raw.products : DEFAULTS.products
     };
 
@@ -213,6 +237,21 @@ function getConfig() {
                 id: 'claim_giveaway',
                 label: 'Claim Giveaway',
                 emoji: '🎁',
+                style: 'Success',
+                requiresKey: false,
+                isDefault: false
+            });
+            _migrationChanged = true;
+        }
+        // v3.9.32: tambah kategori midman/rekber ke config lama (pola yang sama
+        // dengan claim_giveaway — sekali saja; kalau admin hapus via
+        // /remove-category, flag midmanCategoryDismissed mencegah re-add).
+        const hasMidmanCat = config.ticketCategories.some(c => c && c.id === 'midman');
+        if (!hasMidmanCat && !config.midmanCategoryDismissed) {
+            config.ticketCategories.push({
+                id: 'midman',
+                label: 'Rekber / Middleman',
+                emoji: '🤝',
                 style: 'Success',
                 requiresKey: false,
                 isDefault: false

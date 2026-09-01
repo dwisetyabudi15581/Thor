@@ -46,6 +46,8 @@ const {
 } = require('../data/ticketManager');
 const { addKey, getActiveKeysByUserAndRole, formatRemaining } = require('../data/keyManager');
 const { scheduleRoleRemoval } = require('../data/roleScheduler');
+// v3.9.32: redirect kategori midman/rekber (dropdown) ke domain midman.
+const midmanDomain = require('./midman');
 
 /**
  * v3.9.17 FIX: helper untuk cek verified role — konsisten di semua handler.
@@ -99,6 +101,13 @@ module.exports = async function (interaction) {
         // v3.9.17: pakai helper passesVerifiedCheck (konsisten di semua handler).
         if (!passesVerifiedCheck(interaction, config)) {
             return interaction.reply({ content: '❌ Verifikasi dulu!', flags: MessageFlags.Ephemeral });
+        }
+
+        // v3.9.32: kategori midman/rekber → buka modal deal rekber, BUKAN tiket.
+        // (Tombol `ticket_cat:midman` sudah di-intercept router → domain midman;
+        // redirect ini khusus path dropdown yang value-nya tidak bisa di-route.)
+        if (categoryId === 'midman') {
+            return midmanDomain.openCreateModal(interaction);
         }
 
         // v3.9.19 FLEXIBILITY FIX: logic sekarang berbasis "ada produk atau tidak",

@@ -31,7 +31,7 @@ function getCommands() {
         // === SET ROLE ===
         {
             name: 'set-role',
-            description: 'Atur role (verified / unverified / admin)',
+            description: 'Atur role (verified / unverified / admin / midman)',
             defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
             options: [
                 {
@@ -42,7 +42,9 @@ function getCommands() {
                     choices: [
                         { name: 'Verified', value: 'verified' },
                         { name: 'Unverified', value: 'unverified' },
-                        { name: 'Admin', value: 'admin' }
+                        { name: 'Admin', value: 'admin' },
+                        // v3.9.32: role midman/rekber — pegang deal escrow 3-pihak.
+                        { name: 'Midman (Rekber)', value: 'midman' }
                     ]
                 },
                 { type: 8, name: 'role', description: 'Role yang akan dipakai', required: true }
@@ -516,10 +518,43 @@ function getCommands() {
                     choices: [
                         { name: 'Verified', value: 'verified' },
                         { name: 'Unverified', value: 'unverified' },
-                        { name: 'Admin', value: 'admin' }
+                        { name: 'Admin', value: 'admin' },
+                        // v3.9.32: hapus role midman dari config.
+                        { name: 'Midman (Rekber)', value: 'midman' }
                     ]
                 }
             ]
+        },
+
+        // === MIDMAN / REKBER (v3.9.32) ===
+        {
+            name: 'set-midman-fee',
+            description: 'Atur fee rekber (persen harga deal atau nominal flat)',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
+            options: [
+                {
+                    type: 3,
+                    name: 'mode',
+                    description: 'Mode perhitungan fee',
+                    required: true,
+                    choices: [
+                        { name: 'Persen (%) dari harga deal', value: 'percent' },
+                        { name: 'Nominal flat (Rp per deal)', value: 'flat' }
+                    ]
+                },
+                {
+                    type: 10,
+                    name: 'value',
+                    description: 'Nilai fee (persen: 0-90, flat: nominal Rp). 0 = gratis',
+                    required: true,
+                    minValue: 0
+                }
+            ]
+        },
+        {
+            name: 'midman-deals',
+            description: 'Lihat semua deal rekber aktif di server',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild
         },
 
         // === REMOVE CHANNEL (hapus channel dari config) ===

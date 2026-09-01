@@ -67,6 +67,8 @@ const responderHandler = require('./responder');
 const automodHandler = require('./automod');
 const afkHandler = require('./afk');
 const levelingHandler = require('./leveling');
+// v3.9.32: midman/rekber commands (/set-midman-fee, /midman-deals)
+const midmanHandler = require('./midman');
 
 const DOMAIN_HANDLERS = {
     help: helpHandler,
@@ -92,7 +94,9 @@ const DOMAIN_HANDLERS = {
     afk: afkHandler,
     leveling: levelingHandler,
     // v3.9.14
-    'panels-mgmt': panelsMgmtHandler
+    'panels-mgmt': panelsMgmtHandler,
+    // v3.9.32
+    midman: midmanHandler
 };
 
 // Mapping commandName → domain key (di DOMAIN_HANDLERS).
@@ -114,6 +118,10 @@ const COMMAND_TO_DOMAIN = {
     'config-show': 'config',
     // v3.9.12: modal editor untuk message config
     'edit-message': 'config',
+
+    // v3.9.32: midman/rekber
+    'set-midman-fee': 'midman',
+    'midman-deals': 'midman',
 
     // products
     'add-product': 'products',

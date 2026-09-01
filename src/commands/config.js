@@ -426,7 +426,21 @@ module.exports = async function (interaction) {
                     value: [
                         `• Verified: ${fmt(config.roles.verified, '@&')}`,
                         `• Unverified: ${fmt(config.roles.unverified, '@&')}`,
-                        `• Admin: ${fmt(config.roles.admin, '@&')}`
+                        `• Admin: ${fmt(config.roles.admin, '@&')}`,
+                        `• Midman (Rekber): ${fmt(config.roles.midman, '@&')}`
+                    ].join('\n'),
+                    inline: false
+                },
+                {
+                    name: '🤝 Rekber (v3.9.32)',
+                    value: [
+                        `• Fee: ${
+                            config.midman?.feeMode === 'flat'
+                                ? `${config.midman?.feeValue ?? 0} flat per deal`
+                                : `${config.midman?.feeValue ?? 5}% dari harga deal`
+                        }`,
+                        `• Kategori channel: ${config.midman?.category || '🤝 REKBER'}`,
+                        '• Lihat deal aktif: `/midman-deals`'
                     ].join('\n'),
                     inline: false
                 },
