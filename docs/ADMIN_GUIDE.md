@@ -480,11 +480,17 @@ Layanan jasa tengah untuk transaksi antar-member: **pembeli + penjual + midman**
 
 **Alur deal (versi cerita):**
 
-1. **Pembeli** klik 🤝 Rekber di panel → isi modal (item + harga) → **pilih penjual dari dropdown daftar member** (tinggal ketik namanya di kolom pencarian — tidak perlu copy ID/mention) → bot buat channel di kategori `🤝 REKBER` + Deal Board.
-2. **Penjual** klik **🤝 Setuju Deal** → item & harga **TERKUNCI**. Mau ubah = batal & buat ulang.
+1. **Siapa saja** (pembeli, penjual, atau pihak yang menolong — mis. midman/staff) klik 🤝 Rekber di panel → isi **formulir 3 langkah**: (1) modal item + harga, (2) **pilih 🛒 pembeli** dari dropdown daftar member, (3) **pilih 🏷️ penjual** — semua tinggal ketik nama di kolom pencarian (tidak perlu copy ID/mention) → bot buat channel di kategori `🤝 REKBER` + Deal Board.
+2. **Pembeli & penjual** dua-duanya klik **🤝 Setuju Deal** → baru item & harga **TERKUNCI**. Board selalu menunjukkan siapa yang sudah/belum setuju. Mau ubah = batal & buat ulang.
 3. **Pembeli** transfer **Total Pembayaran** (harga + fee — nominalnya tertera di board) ke midman, kirim bukti di channel. **Midman** cek rekening → klik **✅ Dana Masuk**.
 4. **Penjual** kirim barang. **Pembeli** cek → klik **✅ Barang Diterima**.
 5. **Midman** transfer **PENUH** ke penjual sesuai jumlah di board (fee tetap milik midman — tidak dipotong dari dana penjual) → klik **💸 Cairkan ke Penjual** → invoice + transcript + stats otomatis, channel close.
+
+**Menambah / mengeluarkan orang di channel deal (mis. salah tambah, atau butuh saksi):**
+
+- Tombol **👥 Tambah Member** (baris ke-2 Deal Board — khusus midman/admin) → pilih user dari dropdown → dia dapat akses lihat & chat sebagai **member tambahan**. Observer TIDAK bisa menggerakkan deal apa pun (transisi tetap hak pembeli/penjual/midman/admin) — jadi aman buat saksi atau staff yang dilatih.
+- Tombol **➖ Keluarkan Member** → dropdown berisi member tambahan saat ini → pilih → aksesnya dihapus. Pembeli/penjual **tidak bisa** dikeluarkan lewat sini (urusan mereka hanya lewat batal deal / dispute).
+- Semua add/remove tercatat di history deal (muncul di ringkasan riwayat saat close), audit log, dan field **👀 Member Tambahan** di Deal Board — siapa pun di channel tahu siapa tamunya.
 
 **Kalau ada masalah:** siapa saja peserta klik **⚠️ Ada Masalah** → deal **DIBEKUKAN** (semua tombol mati, admin di-ping). Admin resolve: **⚖️ Resolve: Cairkan** (deal sukses) atau **↩️ Resolve: Refund** (dana kembali ke pembeli — midman wajib refund manual).
 
@@ -493,8 +499,10 @@ Layanan jasa tengah untuk transaksi antar-member: **pembeli + penjual + midman**
 **Yang dijaga bot secara struktural (tidak bisa diakali):**
 
 - Cairkan sebelum barang diterima → ditolak. Buyer klik "Dana Masuk" → ditolak (bukan midman).
+- Terms terkunci HANYA setelah pembeli & penjual **dua-duanya** setuju — siapa pun yang membuat deal, tidak ada satu orang yang bisa mengunci terms sendirian.
 - Semua aksi saat dispute → mati. Hanya admin yang resolve.
 - Fee dari config, bukan ketikan — midman tidak bisa patok fee sembarangan. Fee ditambah di atas harga (additive): penjual SELALU menerima harga penuh; pembeli membayar harga + fee.
+- Member tambahan (observer) tidak bisa menggerakkan deal; pembeli/penjual tidak bisa dikeluarkan dari deal-nya sendiri.
 - Semua klik tercatat: siapa, kapan, event apa (history deal + audit log + ringkasan sebelum close).
 - 1 deal aktif per orang; user dengan deal aktif tidak bisa buka tiket biasa (anti-bypass).
 
@@ -916,10 +924,11 @@ Cooldown bersifat **per-user** — user A memicu tidak memengaruhi user B.
 
 ## 11. Riwayat Versi
 
-Riwayat lengkap semua versi (v3.9.0 – v3.9.33) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
+Riwayat lengkap semua versi (v3.9.0 – v3.9.34) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
 
 Ringkasan 3 versi terbaru:
 
+- **v3.9.34** (2026-09-02) — 🤝 rekber redesign alur: deal bisa dibuka **siapa saja** (pembeli/penjual/pihak yang menolong) lewat **formulir 3 langkah** (item+harga → pilih pembeli → pilih penjual, semua via dropdown searchable), **persetujuan ganda** (state WAITING_AGREE — pembeli & penjual dua-duanya klik Setuju Deal sebelum terms terkunci; deal lama dimigrasi otomatis), tombol **👥 Tambah Member / ➖ Keluarkan Member** di Deal Board (midman/admin; observer hanya bisa lihat & chat; pembeli/penjual tidak bisa dikeluarkan; maks 10), Deal Board field baru 👀 Member Tambahan, add/remove tercatat di history + audit (total 82 command, 305 unit test).
 - **v3.9.33** (2026-09-02) — 🤝 rekber revisi: penjual dipilih via **dropdown member** (searchable — tanpa copy ID/mention; buat deal jadi 2 langkah), **fee additive** (ditambah di atas harga — penjual selalu terima harga penuh, contoh 100rb + 5% = pembeli bayar 105rb), Deal Board tampil `Total Dibayar Pembeli` + `Diterima Penjual` (penuh), invoice/stats pencatat pengeluaran nyata pembeli (harga+fee), fee snapshot ke deal (config berubah tidak mengubah deal berjalan), `parseSellerInput` dihapus (total 82 command, 291 unit test).
 - **v3.9.32** (2026-09-02) — 🤝 fitur baru **Midman/Rekber**: deal escrow 3-pihak dengan Deal Board + state machine (gerbang ganda dana/barang), dispute & resolve admin, fee otomatis dari config, invoice/transcript/audit terintegrasi, `/set-midman-fee` + `/midman-deals`, kategori panel otomatis (total 82 command, 289 unit test).
 - **v3.9.31** (2026-09-01) — hardening hasil code review: orphan meta saat close, null-safety channel, snapshot clear-schedule, +10 unit test.

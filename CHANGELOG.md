@@ -5,6 +5,25 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 Legend: 🔴 critical · 🟠 high · 🟡 medium · 🟢 improvement
 
+## [3.9.34] — 2026-09-02
+
+### Changed — 🤝 Rekber: buat deal oleh siapa saja (formulir eksplisit) + persetujuan ganda + kelola member di dalam channel deal
+
+Redesign alur buat deal berdasarkan arah pengguna: **siapa pun boleh open ticket rekber** (pembeli, penjual, atau pihak yang menolong) — yang penting **formulirnya jelas menyebut siapa pembeli & siapa penjual**, dan **member bisa ditambah/dikeluarkan di dalam channel deal**.
+
+- 🟢 **Formulir 3 langkah (peran eksplisit)** — sebelumnya yang klik tombol 🤝 Rekber otomatis dianggap pembeli (seller tidak bisa membuka deal; kalau nekat, perannya terbalik dan arus uang bisa terbalik). Sekarang: (1) modal item + harga, (2) **pilih 🛒 PEMBELI** via dropdown member searchable (`mm_pick_buyer`), (3) **pilih 🏷️ PENJUAL** (`mm_pick_seller`) → channel deal dibuat dengan peran yang benar. Semua pilihan tetap cukup ketik nama — tanpa mention/copy ID. Validasi (member ada, bukan bot, tidak pegang deal/tiket aktif) dijalankan pada pihak yang dipilih; validasi gagal → dropdown dirender ulang di pesan ephemeral yang sama (tidak perlu isi ulang modal). Creator pihak ketiga (mis. midman yang menolong) tetap dapat akses channel deal-nya.
+- 🟡 **Persetujuan ganda (state `WAITING_AGREE`)** — menggantikan `WAITING_SELLER`. Karena creator bisa siapa saja, terms (item+harga) terkunci HANYA setelah **pembeli & penjual dua-duanya** klik **🤝 Setuju Deal** (`applyAgreement()` pure — klik pertama = persetujuan parsial: tercatat di history, board update menampilkan ✅/⏳ per pihak, pihak yang belum di-ping; klik kedua = transisi `join` → `WAITING_PAYMENT`). Guard aktor join kini `buyer` + `seller`. Deal lama `WAITING_SELLER` **dimigrasi otomatis** saat load (buyerAgreed=true — pembeli lama = penulis terms, setuju implisit; sellerAgreed=false; field `observers` diisi `[]`).
+- 🟢 **👥 Tambah Member / ➖ Keluarkan Member di dalam channel deal** — tombol baru di baris ke-2 Deal Board (semua state non-terminal, khusus midman/admin; observer & peserta ditolak dengan pesan jelas). Tambah: dropdown member searchable (`mm_pick_member`) → grant akses lihat/chat/attach (bukan peserta transaksi — `resolveActor` tidak mengakuinya, jadi tidak bisa menggerakkan deal; maks 10 per deal). Keluarkan: dropdown berisi observer saat ini (`mm_remove_pick`) → hapus akses. **Pembeli/penjual tidak bisa dikeluarkan** — urusan mereka lewat batal deal/dispute. Setiap add/remove tercatat di history deal + audit log (`MIDMAN_MEMBER_ADD`/`MIDMAN_MEMBER_REMOVE`) + field baru **👀 Member Tambahan** di Deal Board. Ini juga solusi resmi untuk "salah menambahkan member": keluarkan lewat tombol (tercatat), bukan edit permission manual di UI Discord (tidak tercatat).
+- 🟢 Router: prefix `mm_` kini menangani user select (`mm_pick_buyer`, `mm_pick_member`) + string select (`mm_remove_pick`) — filter `isUserSelectMenu`/`isStringSelectMenu` sudah ada; hanya mapping domain yang dikonfirmasi.
+
+### Security
+
+- 🔴 Fix potensial saat build permissionOverwrites channel deal: overwrite creator pihak ketiga dibangun **kondisional** di array (bukan inline dengan `allow: undefined`) — pola lama pada percobaan awal berisiko menimpa deny `@everyone` dan membocorkan channel; versi final tidak menyentuh overwrite `@everyone`.
+
+### Tests
+
+- 🟢 +14 unit test (total **305**, dari 291): `applyAgreement` (parsial/both/double-click/non-peserta/urutan penjual-duluan), kontrak caller `applyAgreement`+`recordTransition`, observer (add/remove/principal/duplikat/limit 10/invalid), migration deal `WAITING_SELLER` (disk diverifikasi bentuk baru + idempotent + deal lain tak tersentuh), router dispatch `mm_pick_buyer`/`mm_pick_member`/`mm_remove_pick`, persistensi menyesuaikan field ternormalisasi.
+
 ## [3.9.33] — 2026-09-02
 
 ### Changed — 🤝 Rekber: pilih penjual via dropdown + fee ditambah di atas harga

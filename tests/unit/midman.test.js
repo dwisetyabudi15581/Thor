@@ -1,5 +1,5 @@
 /**
- * Unit tests v3.9.32/v3.9.33 — fitur Midman/Rekber (deal escrow 3-pihak).
+ * Unit tests v3.9.32–v3.9.34 — fitur Midman/Rekber (deal escrow 3-pihak).
  *
  * Yang diuji (lapisan pure — pola classifyProduct: logic inti di-ekstrak ke
  * midmanManager supaya bisa diuji tanpa mock Discord):
@@ -15,9 +15,11 @@
  *      (sekali saja — flag midmanCategoryDismissed mencegah re-add).
  *   9. findActiveTicketFor (ticketManager): meta ada → aktif; zombie meta
  *      (channel hilang) → di-cleanup & return null.
- *
- * v3.9.33: parseSellerInput DIHAPUS dari midmanManager — penjual kini dipilih
- * lewat User Select Menu (dropdown member searchable), bukan input teks.
+ *  10. v3.9.34: applyAgreement — persetujuan DUA pihak (parsial vs both vs
+ *      double-click vs non-peserta).
+ *  11. v3.9.34: observer (member tambahan) — canAddObserver/addObserver/
+ *      removeObserver + guard peserta/duplikat/limit.
+ *  12. v3.9.34: migration deal lama WAITING_SELLER → WAITING_AGREE.
  */
 
 const test = require('node:test');
@@ -74,8 +76,8 @@ function resetDataFile(name, content) {
 
 const mm = require('../../src/data/midmanManager');
 
-test('state machine: happy path lengkap seller→payment→delivery→release', () => {
-    let state = 'WAITING_SELLER';
+test('state machine: happy path lengkap agree→payment→delivery→release', () => {
+    let state = 'WAITING_AGREE';
     state = mm.nextState(state, 'join');
     assert.strictEqual(state, 'WAITING_PAYMENT');
     state = mm.nextState(state, 'fundin');
@@ -100,7 +102,7 @@ test('state machine: fundin dobel / join dobel ditolak', () => {
 });
 
 test('state machine: cancel hanya sebelum dana masuk', () => {
-    assert.strictEqual(mm.canTransition('WAITING_SELLER', 'cancel'), true);
+    assert.strictEqual(mm.canTransition('WAITING_AGREE', 'cancel'), true);
     assert.strictEqual(mm.canTransition('WAITING_PAYMENT', 'cancel'), true);
     // Setelah dana di midman — refund HARUS lewat dispute + admin resolve.
     assert.strictEqual(mm.canTransition('WAITING_DELIVERY', 'cancel'), false);
@@ -112,7 +114,7 @@ test('state machine: dispute valid di tengah jalan, tidak di awal/terminal', () 
     assert.strictEqual(mm.canTransition('WAITING_PAYMENT', 'dispute'), true);
     assert.strictEqual(mm.canTransition('WAITING_DELIVERY', 'dispute'), true);
     assert.strictEqual(mm.canTransition('WAITING_RELEASE', 'dispute'), true);
-    assert.strictEqual(mm.canTransition('WAITING_SELLER', 'dispute'), false);
+    assert.strictEqual(mm.canTransition('WAITING_AGREE', 'dispute'), false);
     assert.strictEqual(mm.canTransition('COMPLETED', 'dispute'), false);
 });
 
@@ -129,8 +131,8 @@ test('state machine: semua aksi mati saat DISPUTE & terminal state', () => {
 });
 
 test('state machine: event tidak dikenal → false (defensive)', () => {
-    assert.strictEqual(mm.canTransition('WAITING_SELLER', 'hack_the_system'), false);
-    assert.strictEqual(mm.nextState('WAITING_SELLER', ''), null);
+    assert.strictEqual(mm.canTransition('WAITING_AGREE', 'hack_the_system'), false);
+    assert.strictEqual(mm.nextState('WAITING_AGREE', ''), null);
     assert.strictEqual(mm.canTransition(null, 'join'), false);
 });
 
@@ -144,10 +146,14 @@ const MIDMAN = { isBuyer: false, isSeller: false, isMidman: true, isAdmin: false
 const ADMIN = { isBuyer: false, isSeller: false, isMidman: false, isAdmin: true };
 const OUTSIDER = { isBuyer: false, isSeller: false, isMidman: false, isAdmin: false };
 
-test('actor: hanya seller bisa join, hanya buyer bisa received', () => {
+test('actor: v3.9.34 — buyer DAN seller bisa join; hanya buyer bisa received', () => {
+    // Persetujuan ganda: siapa pun yang membuat deal, pembeli & penjual
+    // dua-duanya harus menyetujui terms.
     assert.strictEqual(mm.actorAllowed('join', SELLER), true);
-    assert.strictEqual(mm.actorAllowed('join', BUYER), false);
+    assert.strictEqual(mm.actorAllowed('join', BUYER), true);
     assert.strictEqual(mm.actorAllowed('join', MIDMAN), false);
+    assert.strictEqual(mm.actorAllowed('join', ADMIN), false);
+    assert.strictEqual(mm.actorAllowed('join', OUTSIDER), false);
     assert.strictEqual(mm.actorAllowed('received', BUYER), true);
     assert.strictEqual(mm.actorAllowed('received', SELLER), false);
     assert.strictEqual(mm.actorAllowed('received', MIDMAN), false);
@@ -286,7 +292,14 @@ test('deals.json: setDeal → getDeal → removeDeal', () => {
         state: 'WAITING_PAYMENT'
     };
     mm.setDeal('ch-deal-1', deal);
-    assert.deepStrictEqual(mm.getDeal('ch-deal-1'), deal);
+    // v3.9.34: loadDeals menormalkan field baru (observers/buyerAgreed/
+    // sellerAgreed) — getDeal mengembalikan bentuk lengkap.
+    assert.deepStrictEqual(mm.getDeal('ch-deal-1'), {
+        ...deal,
+        observers: [],
+        buyerAgreed: false,
+        sellerAgreed: false
+    });
     assert.strictEqual(mm.getDeal('ch-tidak-ada'), null);
     mm.removeDeal('ch-deal-1');
     assert.strictEqual(mm.getDeal('ch-deal-1'), null);
@@ -327,6 +340,176 @@ test('recordTransition: state berubah + history tercatat; event invalid → null
     assert.strictEqual(mm.recordTransition(deal, 'join', actor), null);
     assert.strictEqual(deal.state, 'WAITING_DELIVERY');
     assert.strictEqual(deal.history.length, 1); // tidak ada entry palsu
+});
+
+// ====================================================
+// === 6b. PERSETUJUAN GANDA (v3.9.34) ===
+// ====================================================
+
+function mkDeal(overrides = {}) {
+    return {
+        channelId: 'ch-x',
+        guildId: 'g1',
+        buyerId: 'buyer-1',
+        sellerId: 'seller-1',
+        buyerAgreed: false,
+        sellerAgreed: false,
+        observers: [],
+        state: 'WAITING_AGREE',
+        history: [],
+        ...overrides
+    };
+}
+
+test('applyAgreement: klik pertama = parsial, klik kedua = both', () => {
+    const deal = mkDeal();
+    // Pembeli setuju duluan — masih menunggu penjual.
+    let res = mm.applyAgreement(deal, 'buyer-1');
+    assert.deepStrictEqual(res, { ok: true, both: false, role: 'buyer' });
+    assert.strictEqual(deal.buyerAgreed, true);
+    assert.strictEqual(deal.sellerAgreed, false);
+    // Penjual menyusul → both = true (caller wajib recordTransition join).
+    res = mm.applyAgreement(deal, 'seller-1');
+    assert.deepStrictEqual(res, { ok: true, both: true, role: 'seller' });
+    assert.strictEqual(deal.state, 'WAITING_AGREE'); // manager tidak mengubah state
+});
+
+test('applyAgreement: urutan penjual-duluan juga valid (creator bisa siapa saja)', () => {
+    const deal = mkDeal();
+    let res = mm.applyAgreement(deal, 'seller-1');
+    assert.deepStrictEqual(res, { ok: true, both: false, role: 'seller' });
+    res = mm.applyAgreement(deal, 'buyer-1');
+    assert.deepStrictEqual(res, { ok: true, both: true, role: 'buyer' });
+});
+
+test('applyAgreement: double-click / pihak yang sudah setuju → ditolak', () => {
+    const deal = mkDeal({ buyerAgreed: true });
+    const res = mm.applyAgreement(deal, 'buyer-1');
+    assert.strictEqual(res.ok, false);
+    assert.strictEqual(res.both, false);
+    // Flag tidak berubah (tidak ada entry history palsu dari klik dobel).
+    assert.strictEqual(deal.buyerAgreed, true);
+    assert.strictEqual(deal.sellerAgreed, false);
+});
+
+test('applyAgreement: non-peserta (observer/luar) → ditolak', () => {
+    const deal = mkDeal();
+    assert.strictEqual(mm.applyAgreement(deal, 'random-guy').ok, false);
+    assert.strictEqual(mm.applyAgreement(deal, null).ok, false);
+    assert.strictEqual(mm.applyAgreement(null, 'buyer-1').ok, false);
+});
+
+test('applyAgreement + recordTransition: kontrak caller — join hanya direkam setelah kedua setuju', () => {
+    const deal = mkDeal();
+    const actor = { id: 'buyer-1', tag: 'budi#0001' };
+    // Klik pembeli saja → both=false → caller TIDAK memanggil recordTransition
+    // (state tetap WAITING_AGREE; persetujuan parsial tercatat caller di history).
+    const partial = mm.applyAgreement(deal, 'buyer-1');
+    assert.strictEqual(partial.both, false);
+    assert.strictEqual(deal.state, 'WAITING_AGREE');
+    // Penjual menyusul → both=true → SEKARANG recordTransition join valid.
+    const both = mm.applyAgreement(deal, 'seller-1');
+    assert.strictEqual(both.both, true);
+    const applied = mm.recordTransition(deal, 'join', actor);
+    assert.strictEqual(applied, deal);
+    assert.strictEqual(deal.state, 'WAITING_PAYMENT');
+    assert.strictEqual(deal.history.length, 1);
+    assert.strictEqual(deal.history[0].event, 'join');
+});
+
+// ====================================================
+// === 6c. OBSERVER / MEMBER TAMBAHAN (v3.9.34) ===
+// ====================================================
+
+test('observer: tambah & keluarkan member tambahan', () => {
+    const deal = mkDeal();
+    assert.strictEqual(mm.addObserver(deal, 'witness-1'), true);
+    assert.deepStrictEqual(deal.observers, ['witness-1']);
+    assert.strictEqual(mm.removeObserver(deal, 'witness-1'), true);
+    assert.deepStrictEqual(deal.observers, []);
+    // Keluarkan yang memang bukan observer → false.
+    assert.strictEqual(mm.removeObserver(deal, 'witness-1'), false);
+});
+
+test('observer: pembeli/penjual TIDAK bisa jadi member tambahan', () => {
+    const deal = mkDeal();
+    assert.deepStrictEqual(mm.canAddObserver(deal, 'buyer-1'), { ok: false, reason: 'principal' });
+    assert.deepStrictEqual(mm.canAddObserver(deal, 'seller-1'), { ok: false, reason: 'principal' });
+    assert.strictEqual(mm.addObserver(deal, 'buyer-1'), false);
+    assert.deepStrictEqual(deal.observers, []);
+});
+
+test('observer: duplikat & limit maksimal', () => {
+    const deal = mkDeal();
+    for (let i = 0; i < mm.MAX_OBSERVERS; i++) {
+        assert.strictEqual(mm.addObserver(deal, `obs-${i}`), true);
+    }
+    assert.deepStrictEqual(mm.canAddObserver(deal, 'obs-11'), { ok: false, reason: 'full' });
+    // Duplikat observer pertama.
+    assert.deepStrictEqual(mm.canAddObserver(deal, 'obs-0'), { ok: false, reason: 'duplicate' });
+    assert.strictEqual(mm.MAX_OBSERVERS, 10);
+});
+
+test('observer: input invalid ditolak defensive', () => {
+    assert.deepStrictEqual(mm.canAddObserver(mkDeal(), null), { ok: false, reason: 'invalid' });
+    assert.deepStrictEqual(mm.canAddObserver(null, 'x'), { ok: false, reason: 'invalid' });
+    assert.strictEqual(mm.addObserver(null, 'x'), false);
+    assert.strictEqual(mm.removeObserver(null, 'x'), false);
+    // Deal tanpa field observers (data lama) → removeObserver false, tidak crash.
+    assert.strictEqual(mm.removeObserver({ buyerId: 'b', sellerId: 's' }, 'x'), false);
+});
+
+// ====================================================
+// === 6d. MIGRATION deal lama WAITING_SELLER (v3.9.34) ===
+// ====================================================
+
+test('migration: deal v3.9.33 WAITING_SELLER → WAITING_AGREE + buyerAgreed=true', () => {
+    // Deal lama: creator = pembeli penulis terms (setuju implisit),
+    // penjual belum klik setuju.
+    resetDataFile('deals.json', {
+        'ch-old': {
+            channelId: 'ch-old',
+            guildId: 'g1',
+            buyerId: 'buyer-1',
+            sellerId: 'seller-1',
+            item: 'Akun',
+            priceNum: 100000,
+            state: 'WAITING_SELLER'
+        },
+        'ch-fresh': { guildId: 'g1', buyerId: 'b2', sellerId: 's2', state: 'WAITING_PAYMENT' }
+    });
+    // loadDeals menjalankan migrasi (module sudah ter-cache — panggil loadDeals
+    // langsung, pola persistence test di atas).
+    const all = mm.loadDeals();
+    const old = all['ch-old'];
+    assert.strictEqual(old.state, 'WAITING_AGREE');
+    assert.strictEqual(old.buyerAgreed, true, 'pembeli lama = penulis terms → setuju implisit');
+    assert.strictEqual(old.sellerAgreed, false);
+    assert.deepStrictEqual(old.observers, []);
+    // Deal lain tidak tersentuh.
+    assert.strictEqual(all['ch-fresh'].state, 'WAITING_PAYMENT');
+    // Migrasi di-save ke disk — file di disk sudah bentuk baru.
+    const raw = JSON.parse(fs.readFileSync(path.join(dataDir, 'deals.json'), 'utf8'));
+    assert.strictEqual(raw['ch-old'].state, 'WAITING_AGREE');
+});
+
+test('migration: deal baru sudah WAITING_AGREE tidak diubah (idempotent)', () => {
+    resetDataFile('deals.json', {
+        'ch-new': {
+            channelId: 'ch-new',
+            guildId: 'g1',
+            buyerId: 'b',
+            sellerId: 's',
+            buyerAgreed: true,
+            sellerAgreed: true,
+            observers: ['w1'],
+            state: 'WAITING_AGREE'
+        }
+    });
+    const all = mm.loadDeals();
+    assert.strictEqual(all['ch-new'].state, 'WAITING_AGREE');
+    assert.strictEqual(all['ch-new'].buyerAgreed, true);
+    assert.deepStrictEqual(all['ch-new'].observers, ['w1']);
 });
 
 // ====================================================

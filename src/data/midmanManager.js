@@ -1,14 +1,19 @@
 /**
  * Midman (Rekber) Manager — data layer & state machine deal escrow 3-pihak.
- * v3.9.32.
+ * v3.9.34.
  *
  * File: data/deals.json
  * {
  *   "<channelId>": {
  *     "channelId": "123...",
  *     "guildId":    "123...",
- *     "buyerId":    "123...",   // pembeli (pembuat deal)
+ *     "buyerId":    "123...",   // pembeli
  *     "sellerId":   "123...",   // penjual
+ *     // v3.9.34: deal bisa dibuka siapa saja (pembeli/penjual/pihak yang
+ *     // menolong) — peran eksplisit dipilih lewat formulir 3 langkah.
+ *     "buyerAgreed":  false,     // v3.9.34: persetujuan DUA pihak (WAITING_AGREE)
+ *     "sellerAgreed": false,
+ *     "observers":  ["123..."],  // v3.9.34: member tambahan (non-peserta) di channel deal
  *     "item":       "Akun ML Mythic",
  *     "priceNum":   100000,     // harga deal dalam rupiah (number)
  *     "priceText":  "Rp100.000",
@@ -37,8 +42,15 @@
  *   - Buyer klik "Dana Masuk" menyamar midman                  (aktor salah).
  *   - Semua aksi saat DISPUTE                                  (state dibekukan).
  *
+ * v3.9.34: state awal WAITING_AGREE — PEMBELI DAN PENJUAL dua-duanya harus
+ * klik "Setuju Deal" sebelum terms terkunci (dulu hanya penjual, karena
+ * creator deal selalu pembeli yang menulis terms). Sekarang creator bisa
+ * siapa saja, jadi persetujuan ganda menjaga prinsip "pihak yang TIDAK
+ * menulis terms harus menyetujuinya".
+ *
  * Fungsi pure (canTransition, nextState, actorAllowed, calcFee,
- * calcTotals, parsePriceNumber, formatRupiah) mengikuti pola
+ * calcTotals, parsePriceNumber, formatRupiah, applyAgreement,
+ * canAddObserver, addObserver, removeObserver) mengikuti pola
  * classifyProduct() v3.9.28: di-ekstrak supaya bisa di-unit-test tanpa mock
  * Discord.
  *
@@ -58,7 +70,10 @@ const dealsPath = path.join(__dirname, '..', '..', 'data', 'deals.json');
 // === STATE DEAL ===
 // ====================================================
 const STATES = {
-    WAITING_SELLER: { label: '⏳ Menunggu Penjual Setuju Deal', color: 0xf1c40f },
+    // v3.9.34: WAITING_SELLER diganti WAITING_AGREE — pembeli & penjual
+    // dua-duanya harus setuju (creator deal bisa siapa saja sekarang).
+    // Deal lama (WAITING_SELLER) dimigrasi otomatis saat load (lihat loadDeals).
+    WAITING_AGREE: { label: '⏳ Menunggu Pembeli & Penjual Setuju Deal', color: 0xf1c40f },
     WAITING_PAYMENT: { label: '💰 Menunggu Pembayaran ke Midman', color: 0xe67e22 },
     WAITING_DELIVERY: { label: '📦 Menunggu Barang Dikirim Penjual', color: 0x3498db },
     WAITING_RELEASE: { label: '✅ Barang Diterima — Menunggu Pencairan', color: 0x9b59b6 },
@@ -74,20 +89,25 @@ const TERMINAL_STATES = new Set(['COMPLETED', 'REFUNDED', 'CANCELLED']);
 // ====================================================
 // === TABEL TRANSISI — jantung escrow ===
 // ====================================================
-// Urutan normal: WAITING_SELLER → (seller join) → WAITING_PAYMENT → (midman
-// fundin) → WAITING_DELIVERY → (buyer received) → WAITING_RELEASE → (midman
-// release) → COMPLETED.
+// Urutan normal: WAITING_AGREE → (buyer & seller join) → WAITING_PAYMENT →
+// (midman fundin) → WAITING_DELIVERY → (buyer received) → WAITING_RELEASE →
+// (midman release) → COMPLETED.
 //
 // Dua "gerbang ganda" (inti keamanan escrow):
 //   - Barang boleh dikirim HANYA setelah midman konfirmasi dana masuk.
 //   - Dana boleh dicairkan HANYA setelah pembeli konfirmasi barang diterima.
+//   - v3.9.34: Terms terkunci HANYA setelah pembeli & penjual dua-duanya
+//     setuju (gerbang ketiga — creator deal bisa siapa saja).
 // Tidak ada satu orang pun yang bisa gerakkan deal sendirian melewati
 // gerbang yang bukan otoritasnya.
 const TRANSITIONS = {
-    join: { from: ['WAITING_SELLER'], to: 'WAITING_PAYMENT', actors: ['seller'] },
+    // v3.9.34: join = persetujuan pihak deal. Aktor boleh buyer ATAU seller;
+    // transisi ke WAITING_PAYMENT hanya terjadi setelah KEDUA pihak setuju
+    // (flag buyerAgreed/sellerAgreed — lihat applyAgreement).
+    join: { from: ['WAITING_AGREE'], to: 'WAITING_PAYMENT', actors: ['buyer', 'seller'] },
     // Cancel hanya sebelum dana masuk — setelah dana di midman, urusan
     // pengembalian dana HARUS lewat dispute + resolve admin (tercatat).
-    cancel: { from: ['WAITING_SELLER', 'WAITING_PAYMENT'], to: 'CANCELLED', actors: ['buyer', 'seller', 'admin'] },
+    cancel: { from: ['WAITING_AGREE', 'WAITING_PAYMENT'], to: 'CANCELLED', actors: ['buyer', 'seller', 'admin'] },
     fundin: { from: ['WAITING_PAYMENT'], to: 'WAITING_DELIVERY', actors: ['midman', 'admin'] },
     received: { from: ['WAITING_DELIVERY'], to: 'WAITING_RELEASE', actors: ['buyer'] },
     dispute: { from: ['WAITING_PAYMENT', 'WAITING_DELIVERY', 'WAITING_RELEASE'], to: 'DISPUTE', actors: ['buyer', 'seller', 'midman', 'admin'] },
@@ -109,7 +129,9 @@ function loadDeals() {
     try {
         const raw = fs.readFileSync(dealsPath, 'utf8');
         const parsed = JSON.parse(raw);
-        return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+        const all = parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+        migrateDeals(all);
+        return all;
     } catch (err) {
         if (err.code !== 'ENOENT') {
             console.warn('⚠️ deals.json rusak, pakai {}. Pesan:', err.message);
@@ -123,6 +145,40 @@ function loadDeals() {
 
 function saveDeals(all) {
     safeWriteJSON(dealsPath, all);
+}
+
+/**
+ * v3.9.34 migration (sekali jalan per deal, idempotent):
+ *   - WAITING_SELLER (v3.9.32/33: creator = pembeli, terms tertulis oleh
+ *     pembeli) → WAITING_AGREE dengan buyerAgreed=true (pembeli penulis terms
+ *     = sudah setuju implisit), sellerAgreed=false (tetap harus klik setuju).
+ *   - deal tanpa field `observers` → [] (field baru v3.9.34).
+ * Perubahan di-save langsung supaya file di disk selalu bentuk baru.
+ */
+function migrateDeals(all) {
+    let migrated = false;
+    for (const deal of Object.values(all)) {
+        if (!deal || typeof deal !== 'object') continue;
+        if (deal.state === 'WAITING_SELLER') {
+            deal.state = 'WAITING_AGREE';
+            if (deal.buyerAgreed === undefined) deal.buyerAgreed = true;
+            if (deal.sellerAgreed === undefined) deal.sellerAgreed = false;
+            migrated = true;
+        }
+        if (deal.observers === undefined) {
+            deal.observers = [];
+            migrated = true;
+        }
+        if (deal.buyerAgreed === undefined) {
+            deal.buyerAgreed = false;
+            migrated = true;
+        }
+        if (deal.sellerAgreed === undefined) {
+            deal.sellerAgreed = false;
+            migrated = true;
+        }
+    }
+    if (migrated) saveDeals(all);
 }
 
 function getDeal(channelId) {
@@ -295,6 +351,84 @@ function formatRupiah(n) {
 }
 
 /**
+ * v3.9.34: terapkan persetujuan pihak deal (mutate deal, tanpa IO).
+ *
+ * Dipanggil saat buyer/seller klik "Setuju Deal" di state WAITING_AGREE.
+ * Yang menjalankan transisi `join` (→ WAITING_PAYMENT) adalah caller, HANYA
+ * setelah fungsi ini return { ok: true, both: true }.
+ *
+ * @returns {{ok: boolean, both: boolean, role: string|null}}
+ *   ok=false   → userId bukan peserta deal, ATAU pihak itu sudah setuju
+ *                (double-click / tombol stale).
+ *   both=true  → kedua pihak sudah setuju → caller wajib recordTransition.
+ */
+function applyAgreement(deal, userId) {
+    if (!deal || !userId) return { ok: false, both: false, role: null };
+    let role = null;
+    if (userId === deal.buyerId) role = 'buyer';
+    else if (userId === deal.sellerId) role = 'seller';
+    if (!role) return { ok: false, both: false, role: null };
+    const flag = role === 'buyer' ? 'buyerAgreed' : 'sellerAgreed';
+    if (deal[flag]) return { ok: false, both: false, role };
+    deal[flag] = true;
+    const both = Boolean(deal.buyerAgreed && deal.sellerAgreed);
+    return { ok: true, both, role };
+}
+
+// ====================================================
+// === OBSERVER (member tambahan di channel deal) ===
+// ====================================================
+// v3.9.34: admin/midman bisa menambah member NON-PESERTA ke channel deal
+// (saksi, staff yang dilatih, midman cadangan). Observer dapat akses
+// lihat/chat/attach, tapi resolveActor tidak mengakuinya sebagai
+// buyer/seller — dia tidak bisa menggerakkan state deal. Observer yang
+// kebetulan punya role midman TETAP dihitung midman (fitur: midman
+// cadangan). Jumlah dibatasi supaya channel deal tidak jadi ruang publik.
+
+const MAX_OBSERVERS = 10;
+
+/**
+ * Bolehkah user jadi observer deal ini? (pure — tanpa IO)
+ * @returns {{ok: boolean, reason: string|null}} reason: 'principal' |
+ *   'duplicate' | 'full' | 'invalid' — null kalau ok.
+ */
+function canAddObserver(deal, userId) {
+    if (!deal || !userId) return { ok: false, reason: 'invalid' };
+    // Peserta deal (buyer/seller) TIDAK bisa jadi observer — mereka memang
+    // peserta. Add member bukan cara mengganti peran orang.
+    if (userId === deal.buyerId || userId === deal.sellerId) {
+        return { ok: false, reason: 'principal' };
+    }
+    const obs = Array.isArray(deal.observers) ? deal.observers : [];
+    if (obs.includes(userId)) return { ok: false, reason: 'duplicate' };
+    if (obs.length >= MAX_OBSERVERS) return { ok: false, reason: 'full' };
+    return { ok: true, reason: null };
+}
+
+/**
+ * Tambah observer (mutate deal). Return false kalau ditolak canAddObserver.
+ * Tidak menyimpan ke disk — caller panggil setDeal().
+ */
+function addObserver(deal, userId) {
+    if (!canAddObserver(deal, userId).ok) return false;
+    if (!Array.isArray(deal.observers)) deal.observers = [];
+    deal.observers.push(userId);
+    return true;
+}
+
+/**
+ * Hapus observer (mutate deal). Return false kalau userId memang bukan
+ * observer. Peserta deal tidak bisa dihapus lewat sini (bukan observer).
+ */
+function removeObserver(deal, userId) {
+    if (!deal || !Array.isArray(deal.observers)) return false;
+    const idx = deal.observers.indexOf(userId);
+    if (idx === -1) return false;
+    deal.observers.splice(idx, 1);
+    return true;
+}
+
+/**
  * Terapkan event ke deal (mutate): push history + set state.
  * TIDAK menyimpan ke disk — caller panggil setDeal() setelah ini.
  *
@@ -332,6 +466,13 @@ module.exports = {
     nextState,
     actorAllowed,
     recordTransition,
+    // persetujuan ganda v3.9.34 (pure, mutate deal tanpa IO)
+    applyAgreement,
+    // observer v3.9.34 (pure, mutate deal tanpa IO)
+    canAddObserver,
+    addObserver,
+    removeObserver,
+    MAX_OBSERVERS,
     // helpers (pure)
     calcFee,
     calcTotals,

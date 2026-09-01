@@ -10,8 +10,9 @@
  *   - ticket_cat:, ticket_, select_product, modal_set_key:,
  *     modal_deliver_order:                    → ticket.js
  *   - ticket_cat:midman (SEBELUM ticket_cat:),
- *     modal_mm_, mm_ (termasuk user select mm_pick_seller)
- *                                             → midman.js     (v3.9.32 rekber)
+ *     modal_mm_, mm_ (user select mm_pick_buyer/mm_pick_seller/
+ *     mm_pick_member, string select mm_remove_pick, tombol mm_*)
+ *                                             → midman.js     (v3.9.34 rekber)
  *   - sr_btn:, sr_sel:                        → selfrole.js
  *   - emb_edit:, emb_preview:, emb_send:,
  *     emb_cancel:, emb_modal_                 → embed.js
@@ -152,6 +153,8 @@ async function routeInteraction(interaction) {
     if (interaction.isChatInputCommand()) return; // slash command → command router
     // v3.9.33: tambah isUserSelectMenu — dropdown member (mm_pick_seller)
     // harus sampai ke domain midman (sebelumnya cuma button/string-select/modal).
+    // v3.9.34: dipakai juga mm_pick_buyer & mm_pick_member; string select
+    // mm_remove_pick tertangani isStringSelectMenu yang sudah ada.
     if (
         !interaction.isButton() &&
         !interaction.isStringSelectMenu() &&

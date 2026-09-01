@@ -83,6 +83,42 @@ test('interactions router: v3.9.33 — user select mm_pick_seller dispatched to 
     assert.ok(true, 'dispatched without error');
 });
 
+test('interactions router: v3.9.34 — user select mm_pick_buyer dispatched to midman domain', async () => {
+    const routeInteraction = require('../../src/interactions');
+    const interaction = makeMockInteraction({ customId: 'mm_pick_buyer', type: 'userselect' });
+    try {
+        await routeInteraction(interaction);
+    } catch (err) {
+        assert.ok(!/no handler/i.test(err.message), 'harus dispatch, bukan skip');
+        return;
+    }
+    assert.ok(true, 'dispatched without error');
+});
+
+test('interactions router: v3.9.34 — user select mm_pick_member dispatched to midman domain', async () => {
+    const routeInteraction = require('../../src/interactions');
+    const interaction = makeMockInteraction({ customId: 'mm_pick_member', type: 'userselect' });
+    try {
+        await routeInteraction(interaction);
+    } catch (err) {
+        assert.ok(!/no handler/i.test(err.message), 'harus dispatch, bukan skip');
+        return;
+    }
+    assert.ok(true, 'dispatched without error');
+});
+
+test('interactions router: v3.9.34 — string select mm_remove_pick dispatched to midman domain', async () => {
+    const routeInteraction = require('../../src/interactions');
+    const interaction = makeMockInteraction({ customId: 'mm_remove_pick', type: 'select' });
+    try {
+        await routeInteraction(interaction);
+    } catch (err) {
+        assert.ok(!/no handler/i.test(err.message), 'harus dispatch, bukan skip');
+        return;
+    }
+    assert.ok(true, 'dispatched without error');
+});
+
 test('interactions router: btn_verify dispatched to verify domain', async () => {
     const routeInteraction = require('../../src/interactions');
     const interaction = makeMockInteraction({ customId: 'btn_verify', type: 'button' });
