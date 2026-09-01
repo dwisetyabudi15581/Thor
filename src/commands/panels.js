@@ -183,11 +183,24 @@ function buildTicketPanel(panel, ctx) {
         // itu kategori jual-beli. Sekarang deskripsi berbasis KONTEN kategori:
         //   - punya produk → "Transaksi — N produk (pakai/tanpa key)"
         //   - tanpa produk → "Bantuan / buka tiket langsung" (help/report/custom)
+        // v3.9.28 FIX: hitung key dari PRODUK aktual, bukan flag kategori —
+        // kategori boleh campur (mis. "Akun ML" berisi 2 akun non-key + 1
+        // top-up pakai key). Flag kategori hanya fallback kalau gak ada produk
+        // key/non-key yang bisa disimpulkan.
         const options = categoriesToShow.map(cat => {
             const prods = productsInCategories.filter(p => (p.category || 'transaction') === cat.id);
             let desc;
             if (prods.length > 0) {
-                desc = `Transaksi — ${prods.length} produk (${cat.requiresKey ? 'pakai key' : 'tanpa key'})`;
+                const nonKeyCount = prods.filter(p => p.requiresKey === false).length;
+                let keyInfo;
+                if (nonKeyCount === 0) {
+                    keyInfo = 'pakai key';
+                } else if (nonKeyCount === prods.length) {
+                    keyInfo = 'tanpa key';
+                } else {
+                    keyInfo = `${nonKeyCount} tanpa key / ${prods.length - nonKeyCount} pakai key`;
+                }
+                desc = `Transaksi — ${prods.length} produk (${keyInfo})`;
             } else {
                 desc = 'Bantuan / buka tiket langsung';
             }

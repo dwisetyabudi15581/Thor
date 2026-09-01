@@ -202,6 +202,33 @@ function patchTicketMeta(channelId, patch) {
 }
 
 /**
+ * v3.9.28: Klasifikasi produk → tipe tiket (pure function, di-ekstrak dari
+ * createTicket supaya bisa di-unit-test — menjawab "apakah aman nambah
+ * kategori baru seperti akun_ml / lisensi_key?").
+ *
+ * Rule klasifikasi (BACKWARD-COMPATIBLE — perilaku createTicket lama):
+ *   - isTransaction = FALSE hanya kalau produk eksplisit help/report:
+ *       product.isHelp === true, ATAU category === 'help' / 'report'
+ *   - SEMUA kategori lain (transaction, akun_ml, lisensi_key, jasa, custom
+ *     apa pun) → isTransaction = true → masuk 🎫 TRANSAKSI, bukan Bantuan.
+ *   - requiresKey: pakai flag produk kalau ada; kalau tidak, default =
+ *     isTransaction (produk transaksi tanpa flag dianggap pakai key).
+ *
+ * Artinya: menambah kategori BARU tidak perlu ubah code sama sekali —
+ * klasifikasi otomatis benar selama id kategorinya bukan 'help'/'report'.
+ *
+ * @param {Object} product - objek produk dari config.products (atau objek
+ *   sintetis dari kategori tanpa produk: { label, isHelp: true, category })
+ * @returns {{isTransaction: boolean, requiresKey: boolean}}
+ */
+function classifyProduct(product) {
+    if (!product) return { isTransaction: false, requiresKey: false };
+    const isTransaction = !(product.isHelp === true || product.category === 'help' || product.category === 'report');
+    const requiresKey = product.requiresKey !== undefined ? product.requiresKey : isTransaction;
+    return { isTransaction, requiresKey };
+}
+
+/**
  * Buat channel tiket baru.
  * Tiket transaksi menampilkan tombol "Set Key" + "Tutup Tiket".
  * Tiket help/report menampilkan tombol "Tutup Tiket" saja.
@@ -274,14 +301,10 @@ async function createTicket(interaction, product) {
 
         // v3.9.11 Phase 1: hapus magic string 'Bantuan/Lapor'.
         // Pakai field `category` di product (Phase 2) atau fallback `isHelp: true` flag.
-        const isTransaction = !(
-            product.isHelp === true ||
-            product.category === 'help' ||
-            product.category === 'report'
-        );
-
-        // Tentukan requiresKey flag (default true buat transaksi, false buat help/report).
-        const requiresKey = product.requiresKey !== undefined ? product.requiresKey : isTransaction;
+        // v3.9.28: logic di-ekstrak ke classifyProduct() (pure, testable) — perilaku
+        // identik. Semua kategori selain help/report (termasuk kategori BARU apa
+        // pun: akun_ml, lisensi_key, jasa, ...) otomatis dianggap transaksi.
+        const { isTransaction, requiresKey } = classifyProduct(product);
 
         // v3.9.16: Kategori channel dipisah berdasarkan TIPE TIKET (transaksi vs bantuan),
         // BUKAN berdasarkan pakai key atau tidak. Jadi:
@@ -763,5 +786,6 @@ module.exports = {
     setTicketMeta,
     patchTicketMeta,
     removeTicketMeta,
-    resolveTicketType
+    resolveTicketType,
+    classifyProduct
 };

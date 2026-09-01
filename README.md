@@ -2,8 +2,26 @@
 
 Bot Discord serbaguna buat komunitas apapun — gaming, content creator, online community, server jualan, dll. Penuh fitur: welcome/goodbye, verifikasi, tiket transaksi (multi-kategori), key-driven VIP role, self-role, temp voice, giveaway, scheduled announcements, embed builder, backup, warn system, stats/leaderboard, poll, **auto-responder, anti-spam & auto-mod, AFK system, leveling system**.
 
-> **Version:** 3.9.27 — 81 slash commands, 210 tests passing, fully configurable dari Discord.
+> **Version:** 3.9.28 — 81 slash commands, 224 tests passing, fully configurable dari Discord.
 > See [docs/ADMIN_GUIDE.md](./docs/ADMIN_GUIDE.md) untuk panduan admin lengkap.
+
+---
+
+## 🆕 v3.9.28 "KATEGORI BARU AMAN OTOMATIS (AKUN ML / LISENSI KEY)"
+
+**Pertanyaan user: "kalau saya tambah kategori baru seperti akun ML atau lisensi key — aman?"** Jawaban: **ya, otomatis aman** — dan sekarang terbukti lewat unit test.
+
+- ✅ **`classifyProduct()` (pure function, di-ekstrak dari createTicket)** — rule: hanya kategori `help`/`report`/`isHelp` yang masuk BANTUAN; **semua id kategori lain apa pun (akun_ml, lisensi_key, jasa, topup, custom...) otomatis TRANSAKSI**. Menambah kategori baru tidak butuh perubahan code sama sekali.
+- ✅ **Test suite baru** `tests/unit/newCategorySafety.test.js` (14 test): skenario akun_ml (non-key → 📦 Kirim Pesanan), lisensi_key (key → 🔑 Set Key), roundtrip meta → resolveTicketType → matriks tombol, pewarisan `requires_key` dari kategori di `/add-product`, deskripsi dropdown.
+- 🟠 **Fix deskripsi dropdown panel untuk kategori campur** — v3.9.27 masih pakai flag `requiresKey` kategori (bohong kalau kategori berisi campuran: 2 akun non-key + 1 top-up key tapi dilabeli "pakai key"). Sekarang dihitung dari produk aktual: semua key → "pakai key", semua non-key → "tanpa key", campur → "N tanpa key / M pakai key".
+- ℹ️ **Gotcha terdokumentasi + ditest**: produk transaksi **tanpa** flag `requires_key` default `true` (dapat tombol Set Key). Untuk produk akun/jasa: set `requires_key:false` di **kategori** (produk mewarisi otomatis) atau per produk.
+
+```
+/add-category id:akun_ml label:"Akun ML" emoji:🎮 requires_key:false
+/add-product label:"Akun ML Mythic" value:ml_mythic price:"Rp 150.000" category:akun_ml   ← mewarisi non-key
+/add-category id:lisensi_key label:"Lisensi Key" emoji:🔑 requires_key:true
+/add-product label:"Win 11 Pro" value:win11 price:"Rp 150.000" category:lisensi_key       ← mewarisi key
+```
 
 ---
 

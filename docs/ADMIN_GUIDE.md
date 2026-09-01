@@ -1,4 +1,4 @@
-# 📖 ADMIN GUIDE — Community Bot v3.9.27
+# 📖 ADMIN GUIDE — Community Bot v3.9.28
 
 Panduan lengkap untuk admin server Discord yang menjalankan bot ini. Cocok untuk admin baru yang baru pertama kali setup, maupun admin yang sudah ada untuk referensi harian.
 
@@ -167,6 +167,10 @@ Sekarang semua tombol tiket **100% dinamis** — bisa CRUD dari Discord tanpa ed
 - `requires_key: false` → default produk di kategori ini TANPA key (dropdown produk, tombol 📦 Kirim Pesanan). Kalau kategori tidak punya produk sama sekali → langsung buat channel bantuan. Contoh: `jasa`, `help`, `report`, `claim_giveaway`, `partnership`.
 
 > v3.9.27: `requires_key` di kategori/produk hanya menentukan **paket tombol** (Set Key vs Kirim Pesanan) — routing channel TRANSAKSI vs BANTUAN ditentukan oleh "kategori punya produk atau tidak", bukan oleh requires_key.
+>
+> **v3.9.28: menambah kategori BARU (akun ML, lisensi key, dll) aman otomatis.** Rule klasifikasi (`classifyProduct()`): hanya kategori `help` / `report` / produk ber-flag `isHelp` yang masuk **BANTUAN** — **semua id kategori lain apa pun otomatis TRANSAKSI**. Tidak ada daftar kategori yang di-hardcode; id kategori bebas (`akun_ml`, `lisensi_key`, `topup_diamond`, ...) asal format `[a-zA-Z0-9_-]{1,30}` dan tidak sama persis dengan `help`/`report`. Dilengkapi 14 unit test khusus (`tests/unit/newCategorySafety.test.js`).
+>
+> ⚠️ **Gotcha penting**: produk transaksi yang **tidak punya** flag `requires_key` (mis. produk lama atau input manual di config) akan dianggap **pakai key** (tombol Set Key). Untuk produk akun/jasa pastikan `requires_key:false` — paling gampang set di **kategori**-nya, semua produk baru di kategori itu mewarisi otomatis.
 
 **Behavior v3.9.19 (FLEKSIBEL — berbasis "ada produk atau tidak") + tombol v3.9.27:**
 
@@ -179,6 +183,22 @@ Sekarang semua tombol tiket **100% dinamis** — bisa CRUD dari Discord tanpa ed
 | `report` (requires_key: false)         | Kosong               | Langsung create ticket (BANTUAN)                                |
 | `claim_giveaway` (requires_key: false) | Kosong               | Langsung create ticket (BANTUAN)                                |
 | `partnership` (requires_key: false)    | Kosong               | Langsung create ticket (BANTUAN)                                |
+
+**Contoh setup kategori baru (v3.9.28 — terverifikasi aman oleh unit test):**
+
+```
+# Jual akun ML — produk tanpa key (tombol 📦 Kirim Pesanan)
+/add-category id:akun_ml label:"Akun ML" emoji:🎮 requires_key:false
+/add-product label:"Akun ML Mythic" value:ml_mythic price:"Rp 150.000" category:akun_ml
+#  ↑ requires_key tidak diisi → mewarisi false dari kategori
+
+# Lisensi key — produk pakai key (tombol 🔑 Set Key)
+/add-category id:lisensi_key label:"Lisensi Key" emoji:🔑 requires_key:true
+/add-product label:"Windows 11 Pro OEM" value:win11_pro price:"Rp 150.000" category:lisensi_key
+
+# Refresh panel supaya kategori baru muncul:
+/refresh-panel id:<panel-id>
+```
 
 **Jadi kamu fleksibel mau pilih cara mana:**
 
@@ -888,6 +908,13 @@ Cooldown-nya **per-user** — user A trigger gak ngarang ke user B.
 ---
 
 ## 11. Apa yang Baru di v3.9.x
+
+### v3.9.28 — Kategori baru aman otomatis (akun ML / lisensi key)
+
+- **Verifikasi pertanyaan admin: "tambah kategori baru seperti akun ML atau lisensi key — aman?"** → **Ya, aman otomatis**. Klasifikasi (`classifyProduct()`) tidak hardcode daftar kategori: hanya `help`/`report`/`isHelp` yang masuk BANTUAN, **semua id kategori lain apa pun otomatis TRANSAKSI**
+- **14 unit test baru** (`tests/unit/newCategorySafety.test.js`): skenario akun_ml non-key (📦 Kirim Pesanan aktif, Set Key ditolak), lisensi_key (🔑 Set Key aktif, Kirim Pesanan ditolak), roundtrip metadata → tombol, pewarisan `requires_key` kategori→produk di `/add-product`, deskripsi dropdown campur
+- **Fix deskripsi dropdown kategori campur** — v3.9.27 masih pakai flag kategori (kategori "Akun ML" berisi 2 akun non-key + 1 top-up key dilabeli "pakai key"). Sekarang dihitung dari produk aktual: "pakai key" / "tanpa key" / "N tanpa key / M pakai key"
+- **Gotcha terdokumentasi**: produk transaksi tanpa flag `requires_key` → default pakai key (Set Key). Set `requires_key:false` di kategori supaya produk mewarisi
 
 ### v3.9.27 — Transaksi non-key (jual akun / jasa) + tombol Kirim Pesanan
 
