@@ -76,6 +76,54 @@ function validateUrl(input) {
 }
 
 /**
+ * v3.9.29: Safety-net — deteksi kategori di panel yang TIDAK punya produk.
+ *
+ * Kenapa penting: kategori tanpa produk → klik tombolnya membuka tiket
+ * BANTUAN langsung (bukan transaksi — bukan bug, fitur "quick action").
+ * Tapi kalau admin baru bikin kategori jualan (mis. `akun_ml`) dan lupa
+ * tambah produk, tiket pembeli diam-diam jadi bantuan tanpa admin sadar.
+ * Helper ini kasih visibilitas di /refresh-panel & /setup-ticket-panel.
+ *
+ * Kategori `help`/`report` di-skip — memang quick-action (selalu kosong,
+ * warning-nya cuma jadi noise).
+ *
+ * @param {Object} panel - panel metadata (categoryIds dipakai, mirror logic
+ *   buildTicketPanel: kosong = semua kategori)
+ * @param {Object} config - config global (ticketCategories + products)
+ * @returns {string[]} baris warning (kosong = tidak ada masalah)
+ */
+function findEmptyCategoryWarnings(panel, config) {
+    const allCategories = config.ticketCategories || [];
+    const categoryIds = Array.isArray(panel.categoryIds) ? panel.categoryIds : [];
+    let categoriesToShow =
+        categoryIds.length === 0 ? allCategories : allCategories.filter(c => categoryIds.includes(c.id));
+    if (categoriesToShow.length === 0) categoriesToShow = allCategories;
+
+    const products = config.products || [];
+    const lines = [];
+    for (const cat of categoriesToShow) {
+        if (!cat || cat.id === 'help' || cat.id === 'report') continue; // quick-action default
+        const hasProducts = products.some(p => (p.category || 'transaction') === cat.id);
+        if (hasProducts) continue;
+        if (cat.requiresKey !== false) {
+            lines.push(
+                `⚠️ **${cat.label || cat.id}** (\`${cat.id}\`) — di-set *pakai key* tapi belum punya produk. ` +
+                    `Klik tombolnya membuka tiket **BANTUAN** (bukan transaksi). ` +
+                    `Tambah produk: \`/add-product category:${cat.id} requires_key:true\``
+            );
+        } else {
+            lines.push(
+                `ℹ️ **${cat.label || cat.id}** (\`${cat.id}\`) — tanpa produk, klik tombolnya membuka tiket **BANTUAN** langsung. ` +
+                    (cat.isDefault === false
+                        ? `Kalau ini kategori jualan, tambah produk dulu: \`/add-product category:${cat.id} requires_key:false\``
+                        : `Normal kalau memang quick-action.`)
+            );
+        }
+    }
+    return lines;
+}
+
+/**
  * Build embed + components untuk panel tiket.
  * Dipakai /setup-ticket-panel (buat baru) & /refresh-panel (re-render existing).
  *
@@ -393,6 +441,18 @@ module.exports = async function (interaction) {
                 content: '❌ URL thumbnail tidak valid. Harus format http(s)://...'
             });
         }
+        // v3.9.29: guard panjang 2048 (limit URL embed Discord) — tanpa ini,
+        // URL panjang baru gagal belakangan saat send (error 50035 kurang jelas).
+        if (imageUrl && imageUrl.length > 2048) {
+            return safeEditReply(interaction, {
+                content: `❌ URL image terlalu panjang (${imageUrl.length} char, maks 2048). Pakai link lebih pendek.`
+            });
+        }
+        if (thumbnailUrl && thumbnailUrl.length > 2048) {
+            return safeEditReply(interaction, {
+                content: `❌ URL thumbnail terlalu panjang (${thumbnailUrl.length} char, maks 2048). Pakai link lebih pendek.`
+            });
+        }
 
         // Tentukan channel target
         const targetChannel = channelOption || interaction.channel;
@@ -457,12 +517,21 @@ module.exports = async function (interaction) {
                     ? `\n\n⚠️ Kategori ID tidak ditemukan (diabaikan): \`${missingCategoryIds.join(', ')}\``
                     : '';
 
+            // v3.9.29: safety-net — kategori tanpa produk = klik tombol buka
+            // tiket BANTUAN. Kasih tahu admin SEKARANG, bukan setelah pembeli
+            // komplain kenapa ordernya masuk kategori bantuan.
+            const emptyWarnings = findEmptyCategoryWarnings(panelMeta, config);
+            const emptyWarn =
+                emptyWarnings.length > 0
+                    ? `\n\n🔮 **Kategori tanpa produk** (klik = tiket BANTUAN langsung):\n${emptyWarnings.map(l => `• ${l}`).join('\n')}`
+                    : '';
+
             return safeEditReply(interaction, {
                 content:
                     `✅ Panel tiket dipasang di ${targetChannel}!\n\n` +
                     `🆔 Panel ID: \`${saved.id}\` (simpan untuk /update-panel, /delete-panel, /refresh-panel)\n` +
                     `🎫 Kategori: ${categoriesToShow.map(c => `\`${c.id}\``).join(', ')} (${categoriesToShow.length})\n` +
-                    `🎨 Layout: ${panelMeta.useDropdown ? 'Dropdown Select Menu' : 'Buttons'}${missing}`
+                    `🎨 Layout: ${panelMeta.useDropdown ? 'Dropdown Select Menu' : 'Buttons'}${missing}${emptyWarn}`
             });
         } catch (sendErr) {
             return safeEditReply(interaction, {
@@ -506,3 +575,5 @@ module.exports = async function (interaction) {
 module.exports.buildTicketPanel = buildTicketPanel;
 module.exports.parseColor = parseColor;
 module.exports.validateUrl = validateUrl;
+// v3.9.29: safety-net kategori kosong (dipakai panels-mgmt.js + unit test).
+module.exports.findEmptyCategoryWarnings = findEmptyCategoryWarnings;

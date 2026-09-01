@@ -2,8 +2,20 @@
 
 Bot Discord serbaguna buat komunitas apapun — gaming, content creator, online community, server jualan, dll. Penuh fitur: welcome/goodbye, verifikasi, tiket transaksi (multi-kategori), key-driven VIP role, self-role, temp voice, giveaway, scheduled announcements, embed builder, backup, warn system, stats/leaderboard, poll, **auto-responder, anti-spam & auto-mod, AFK system, leveling system**.
 
-> **Version:** 3.9.28 — 81 slash commands, 224 tests passing, fully configurable dari Discord.
+> **Version:** 3.9.29 — 81 slash commands, 238 tests passing, fully configurable dari Discord.
 > See [docs/ADMIN_GUIDE.md](./docs/ADMIN_GUIDE.md) untuk panduan admin lengkap.
+
+---
+
+## 🆕 v3.9.29 "EDIT PANEL: THUMBNAIL + SAFETY-NET KATEGORI KOSONG"
+
+**User report: "kemaren saya coba gabisa menaruh link gambar untuk thumbnail".** Investigasi menemukan 2 akar masalah + 1 fitur baru:
+
+- 🔴 **Modal `/update-panel` maxLength image/thumbnail cuma 500 char** — URL Discord CDN yang signed (`ex=/is=/hm=`) bisa 300-450 char, URL custom dengan query panjang gampang tembus 500 → Discord client menolak input sebelum sempat disubmit (persis pengalaman "gabisa naruh link"). **Fixed: 500 → 2048** (limit URL embed Discord) + guard 2048 dengan pesan error jelas + guard serupa di `/setup-ticket-panel`.
+- 🟠 **Akar masalah kedua (paling mungkin yang kamu alami)**: bug key-mapping v3.9.26 (image/thumbnail tersimpan di key salah → perubahan tidak pernah muncul di panel) — sudah diperbaiki di v3.9.26, tapi **wajib restart bot** supaya fix-nya aktif. Flow sekarang diverifikasi end-to-end oleh unit test.
+- 🟠 **Audit log `/update-panel` menampilkan `undefined`** untuk field image/thumbnail/footer (baca `patch[field]` padahal patch ditulis ke `imageUrl`/`thumbnailUrl`/`footerText`). Fixed.
+- ✅ **Fitur baru: safety-net kategori kosong** — `/setup-ticket-panel` & `/refresh-panel` sekarang memberi peringatan kalau ada kategori di panel yang belum punya produk ("klik tombolnya membuka tiket BANTUAN langsung, bukan transaksi — tambah produk dulu via /add-product"). Kategori `help`/`report` tidak diwarn (memang quick-action).
+- ✅ **14 unit test baru** (`tests/unit/panelEdit.test.js`): flow modal end-to-end (CDN URL, URL 536 char yang dulu ditolak, guard 2048, clear, URL invalid, cross-guild guard) + safety-net 5 skenario + regression guard maxLength.
 
 ---
 

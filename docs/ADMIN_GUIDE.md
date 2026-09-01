@@ -693,7 +693,7 @@ Bot membalas pesan otomatis saat member mengetik trigger di awal pesan (case-ins
 ```
 /setup-ticket-panel channel:#tiket title:"Klik untuk order" body:"Harga:\n{price_list}" color:#ff5733
 /list-panels
-/update-panel id:tp_xxx field:image
+/update-panel id:tp_xxx field:thumbnail   ← isi URL gambar di modal (maks 2048 char)
 /refresh-panel id:tp_xxx
 /delete-panel id:tp_xxx
 /set-transcript-channel #transcript
@@ -703,6 +703,8 @@ Bot membalas pesan otomatis saat member mengetik trigger di awal pesan (case-ins
 - Semua field bisa dikustom: title, body (support template `{server}` `{price_list}` `{price_list:<kategori>}` + `\n`), warna, image, thumbnail, footer, tombol/dropdown
 - Panel terdaftar persisten di `data/panels.json` (ikut backup)
 - Transcript tiket otomatis tersimpan ke channel transcript sebelum close
+
+> **v3.9.29 — edit image/thumbnail:** input modal sekarang menerima URL sampai **2048 char** (dulu 500 — link CDN Discord yang panjang/signature ditolak input). Kosongkan input untuk kembali ke default. `/refresh-panel` dan `/setup-ticket-panel` juga kini memberi **peringatan kategori tanpa produk** (klik tombol kategori kosong membuka tiket BANTUAN, bukan transaksi — tambahkan produk dulu kalau kategorinya untuk jualan).
 
 ### Edit Teks Pesan (modal + newline)
 
@@ -908,6 +910,15 @@ Cooldown-nya **per-user** — user A trigger gak ngarang ke user B.
 ---
 
 ## 11. Apa yang Baru di v3.9.x
+
+### v3.9.29 — Edit panel: fix URL image/thumbnail + safety-net kategori kosong
+
+- **Fix user-reported "gabisa menaruh link gambar untuk thumbnail"**: modal `/update-panel` dulunya membatasi input image/thumbnail ke **500 char** — URL CDN Discord yang signed (300-450 char) + query custom gampang tembus 500 → Discord menolak input sebelum submit. Sekarang **2048 char** (limit URL embed Discord)
+- **Reminder restart bot**: bug key-mapping image/thumbnail (perubahan tersimpan tapi tak pernah muncul di panel) sudah diperbaiki sejak v3.9.26 — pastikan bot berjalan dengan kode terbaru supaya fix aktif
+- **Guard panjang 2048** dengan pesan error jelas di `/update-panel` (modal) dan `/setup-ticket-panel` (slash) — sebelumnya URL panjang baru gagal belakangan saat render dengan error 50035 yang kurang jelas
+- **Fitur: safety-net kategori kosong** — `/setup-ticket-panel` & `/refresh-panel` memberi peringatan untuk kategori di panel yang belum punya produk ("klik = tiket BANTUAN langsung") + saran `/add-product` — mencegah admin baruan bikin kategori `akun_ml` lalu lupa isi produk
+- **Fix audit log** `/update-panel` yang menampilkan `undefined` untuk field image/thumbnail/footer
+- **14 unit test baru** (`tests/unit/panelEdit.test.js`) — flow modal end-to-end + regression guard
 
 ### v3.9.28 — Kategori baru aman otomatis (akun ML / lisensi key)
 

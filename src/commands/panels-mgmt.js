@@ -28,7 +28,7 @@ const {
 } = require('./_shared');
 
 const { getPanel, getPanelsByGuild, deletePanel, patchPanel } = require('../data/panelManager');
-const { buildTicketPanel, parseColor, validateUrl } = require('./panels');
+const { buildTicketPanel, parseColor, validateUrl, findEmptyCategoryWarnings } = require('./panels');
 
 // v3.9.26 FIX: mapping field command → key penyimpanan di panels.json.
 // SEBELUMNYA: /update-panel menulis patch `{ image: value }` (key = nama field
@@ -64,14 +64,20 @@ const EDITABLE_FIELDS = {
         max: 20
     },
     image: {
+        // v3.9.29 FIX (user report: "gabisa menaruh link gambar"): max 500 → 2048.
+        // Limit Discord untuk URL embed = 2048 char. URL CDN Discord yang
+        // signed (ex=/is=/hm=) bisa 300-450 char, dan URL custom (imgur/GDrive
+        // + query panjang) gampang tembus 500 → client menolak input modal
+        // ("jawaban terlalu panjang") sebelum sempat disubmit.
         label: 'URL gambar besar (kosongkan = no image)',
         style: TextInputStyle.Short,
-        max: 500
+        max: 2048
     },
     thumbnail: {
+        // v3.9.29: lihat komentar di `image` — 500 terlalu kecil untuk URL nyata.
         label: 'URL thumbnail kecil (kosongkan = no thumb)',
         style: TextInputStyle.Short,
-        max: 500
+        max: 2048
     },
     footer: {
         label: 'Teks footer (kosongkan = pakai nama bot)',
@@ -251,8 +257,17 @@ module.exports = async function (interaction) {
                 guildId: interaction.guild.id
             });
 
+            // v3.9.29: safety-net — kategori di panel ini yang masih kosong
+            // produk. Klik tombol kategori kosong = tiket BANTUAN (bukan
+            // transaksi); admin perlu tau ini SEBELUM pembeli pakai tombolnya.
+            const emptyWarnings = findEmptyCategoryWarnings(panel, config);
+            const emptyWarn =
+                emptyWarnings.length > 0
+                    ? `\n\n🔮 **Kategori tanpa produk** (klik = tiket BANTUAN langsung):\n${emptyWarnings.map(l => `• ${l}`).join('\n')}`
+                    : '';
+
             return safeEditReply(interaction, {
-                content: `✅ Panel \`${panelId}\` di-refresh!\n\n📬 Lokasi: ${channel}\n🎨 Layout: ${panel.useDropdown ? 'Dropdown' : 'Buttons'}\n🎫 Kategori: ${(panel.categoryIds || []).length} aktif`
+                content: `✅ Panel \`${panelId}\` di-refresh!\n\n📬 Lokasi: ${channel}\n🎨 Layout: ${panel.useDropdown ? 'Dropdown' : 'Buttons'}\n🎫 Kategori: ${(panel.categoryIds || []).length} aktif${emptyWarn}`
             });
         } catch (editErr) {
             return safeEditReply(interaction, {
@@ -314,6 +329,11 @@ module.exports = async function (interaction) {
 // === Export modal handler untuk dipanggil dari interactions/panels.js ===
 // Karena interaction router nggak otomatis kenalin prefix modal_panel_edit,
 // kita register handler-nya di interactions/index.js (liat langkah selanjutnya).
+// v3.9.29: EDITABLE_FIELDS + FIELD_TO_STORAGE_KEY juga di-export supaya unit
+// test bisa verifikasi limit maxLength modal (regression guard untuk bug
+// "URL > 500 char ditolak input modal") dan mapping key penyimpanan.
+module.exports.EDITABLE_FIELDS = EDITABLE_FIELDS;
+module.exports.FIELD_TO_STORAGE_KEY = FIELD_TO_STORAGE_KEY;
 module.exports.handlePanelModal = async function handlePanelModal(interaction) {
     // customId: modal_panel_edit:<panelId>:<field>
     // Tapi panelId bisa aja contain ':' (gak kayaknya, tp defensive) — split dari kanan.
@@ -379,6 +399,13 @@ module.exports.handlePanelModal = async function handlePanelModal(interaction) {
                 return safeEditReply(interaction, { content: `❌ ${colorErr.message}` });
             }
         } else if (field === 'image' || field === 'thumbnail') {
+            // v3.9.29: guard panjang 2048 — limit URL embed Discord. Lewat ini,
+            // Discord API yang tolak saat edit message (error 50035 kurang jelas).
+            if (newValue.length > 2048) {
+                return safeEditReply(interaction, {
+                    content: `❌ URL ${field} terlalu panjang (${newValue.length} char, maks 2048 — limit embed Discord). Pakai link lebih pendek.`
+                });
+            }
             const validated = validateUrl(newValue);
             if (!validated) {
                 return safeEditReply(interaction, {
@@ -430,7 +457,16 @@ module.exports.handlePanelModal = async function handlePanelModal(interaction) {
         action: 'UPDATE_PANEL',
         actorId: interaction.user.id,
         actorTag: interaction.user.tag,
-        details: `Update field \`${field}\` panel \`${panelId}\` → ${patch[field] === null ? '(clear → default)' : typeof patch[field] === 'string' && patch[field].length > 80 ? patch[field].slice(0, 80) + '...' : patch[field]}`,
+        // v3.9.29 FIX: baca patch pakai storageKey (dulu patch[field] — selalu
+        // `undefined` untuk image/thumbnail/footer karena patch ditulis ke
+        // imageUrl/thumbnailUrl/footerText).
+        details: `Update field \`${field}\` panel \`${panelId}\` → ${
+            patch[storageKey] === null
+                ? '(clear → default)'
+                : typeof patch[storageKey] === 'string' && patch[storageKey].length > 80
+                  ? patch[storageKey].slice(0, 80) + '...'
+                  : patch[storageKey]
+        }`,
         guildId: interaction.guild.id
     });
 
