@@ -164,7 +164,7 @@ module.exports = async function (interaction) {
         const expireInfo =
             days > 0 ? `akan otomatis dihapus setelah **${days} hari**` : '**permanen** (tidak akan otomatis dihapus)';
         return safeEditReply(interaction, {
-            content: `✅ Auto-role untuk produk **${product.label}** diatur!\n\n🎁 Role: ${role}\n⏰ Expire: ${expireInfo}\n\n💡 Saat admin klik "Transaksi Sukses" di tiket, role akan otomatis diberikan ke pembeli.`
+            content: `✅ Auto-role untuk produk **${product.label}** diatur!\n\n🎁 Role: ${role}\n⏰ Expire: ${expireInfo}\n\n💡 Role otomatis diberikan saat admin klik **🔑 Set Key** / **📦 Kirim Pesanan** / **✅ Pesanan Sukses** di tiket.`
         });
     }
 

@@ -1,4 +1,4 @@
-# 📖 ADMIN GUIDE — Community Bot v3.9.26
+# 📖 ADMIN GUIDE — Community Bot v3.9.27
 
 Panduan lengkap untuk admin server Discord yang menjalankan bot ini. Cocok untuk admin baru yang baru pertama kali setup, maupun admin yang sudah ada untuk referensi harian.
 
@@ -82,8 +82,8 @@ Urutan ini **rekomendasi** untuk server baru. Skip yang sudah pernah di-set.
 
 - `welcome` — channel tempat bot kirim welcome message saat member join
 - `goodbye` — channel tempat bot kirim goodbye message saat member leave/kick/ban
-- `invoice` — channel testimoni transaksi (otomatis terisi setiap Set Key sukses)
-- `audit-log` — channel tempat bot catat SEMUA admin action (49 action types)
+- `invoice` — channel testimoni transaksi (otomatis terisi setiap Set Key / Kirim Pesanan / Pesanan Sukses — sekali per tiket, tidak dobel)
+- `audit-log` — channel tempat bot catat SEMUA admin action (50 action types)
     - Audit log di-retry 1x otomatis bila gagal kirim (rate limit/network blip)
 
 ### Step 3: Pasang Panel Verifikasi
@@ -163,20 +163,22 @@ Sekarang semua tombol tiket **100% dinamis** — bisa CRUD dari Discord tanpa ed
 
 **Tipe kategori:**
 
-- `requires_key: true` → tiket transaksi (munculin dropdown produk, ada tombol Set Key). Contoh: `transaction`.
-- `requires_key: false` → tiket non-transaksi (langsung buat channel, tanpa produk). Contoh: `help`, `report`, `claim_giveaway`, `partnership`, dll.
+- `requires_key: true` → default produk di kategori ini pakai key (dropdown produk, tombol 🔑 Set Key). Contoh: `transaction`.
+- `requires_key: false` → default produk di kategori ini TANPA key (dropdown produk, tombol 📦 Kirim Pesanan). Kalau kategori tidak punya produk sama sekali → langsung buat channel bantuan. Contoh: `jasa`, `help`, `report`, `claim_giveaway`, `partnership`.
 
-**Behavior v3.9.19 (FLEKSIBEL — berbasis "ada produk atau tidak"):**
+> v3.9.27: `requires_key` di kategori/produk hanya menentukan **paket tombol** (Set Key vs Kirim Pesanan) — routing channel TRANSAKSI vs BANTUAN ditentukan oleh "kategori punya produk atau tidak", bukan oleh requires_key.
 
-| Skenario Kategori                      | Produk di kategori   | Behavior                                                          |
-| -------------------------------------- | -------------------- | ----------------------------------------------------------------- |
-| `transaction` (requires_key: true)     | Ada produk key       | Dropdown produk → Set Key                                         |
-| `transaction` (requires_key: true)     | Campur key & non-key | Dropdown produk → Set Key untuk key, Pesanan Sukses untuk non-key |
-| `jasa` (requires_key: false)           | Ada produk jasa      | Dropdown produk → Pesanan Sukses (tanpa Set Key)                  |
-| `help` (requires_key: false)           | Kosong               | Langsung create ticket                                            |
-| `report` (requires_key: false)         | Kosong               | Langsung create ticket                                            |
-| `claim_giveaway` (requires_key: false) | Kosong               | Langsung create ticket                                            |
-| `partnership` (requires_key: false)    | Kosong               | Langsung create ticket                                            |
+**Behavior v3.9.19 (FLEKSIBEL — berbasis "ada produk atau tidak") + tombol v3.9.27:**
+
+| Skenario Kategori                      | Produk di kategori   | Behavior                                                        |
+| -------------------------------------- | -------------------- | --------------------------------------------------------------- |
+| `transaction` (requires_key: true)     | Ada produk key       | Dropdown 🔑 → Set Key                                           |
+| `transaction` (requires_key: true)     | Campur key & non-key | Dropdown 🔑/📦 → Set Key untuk key, Kirim Pesanan untuk non-key |
+| `jual_akun` (requires_key: false)      | Ada produk akun/jasa | Dropdown 📦 → Kirim Pesanan (tanpa Set Key)                     |
+| `help` (requires_key: false)           | Kosong               | Langsung create ticket (BANTUAN)                                |
+| `report` (requires_key: false)         | Kosong               | Langsung create ticket (BANTUAN)                                |
+| `claim_giveaway` (requires_key: false) | Kosong               | Langsung create ticket (BANTUAN)                                |
+| `partnership` (requires_key: false)    | Kosong               | Langsung create ticket (BANTUAN)                                |
 
 **Jadi kamu fleksibel mau pilih cara mana:**
 
@@ -306,7 +308,9 @@ Bot akan:
 
 ### Flow Tiket Transaksi (paling sering dipakai)
 
-1. Member klik **🛒 Beli Key** di panel tiket → pilih produk
+**A. Produk pakai key (mis. VIP 30 Hari):**
+
+1. Member klik **🛒 Beli Key** di panel tiket → pilih produk (🔑)
 2. Bot buat channel tiket private `#ticket-{user-id}`
 3. Member kirim bukti pembayaran
 4. Admin konfirmasi → klik **🔑 Set Key** di tiket
@@ -319,15 +323,35 @@ Bot akan:
    awal tiket dari bot) → pilih **✅ Selesai** → bot save transcript otomatis
    ke channel transcript, lalu hapus channel.
 
+**B. Produk TANPA key (v3.9.27 — mis. jual akun ML, jasa joki):**
+
+1. Tambahkan produk dengan `requires_key:false`:
+   `/add-product label:"Akun ML Mythic" value:akun_ml price:"Rp 150.000" category:transaction requires_key:false`
+   (opsional: `/set-product-role value:akun_ml role:@Customer days:0` untuk auto-role)
+2. Member pilih produk (📦) di dropdown → tiket TRANSAKSI dibuat — dengan tombol **📦 Kirim Pesanan**
+3. Member kirim bukti pembayaran
+4. Admin konfirmasi → klik **📦 Kirim Pesanan** → modal muncul → admin ketik
+   detail pesanan (username/password/note — Enter = baris baru, maks 1500 char)
+5. Bot otomatis: **DM detail pesanan ke pembeli** (channel tiket akan terhapus
+   saat close — DM jadi satu-satunya salinan permanen buat pembeli), auto-role
+   (+ auto-expire kalau `days` diisi), catat pembelian ke stats/leaderboard,
+   kirim invoice, audit log `ORDER_DELIVERED`
+6. Tombol Tutup Tiket berubah jadi **✅ Selesai** → transcript + hapus channel
+
+> Alternatif tanpa lewat Kirim Pesanan: admin langsung klik **🔒 Tutup Tiket →
+> ✅ Pesanan Sukses** — role + stats + invoice tetap otomatis jalan. Cocok
+> kalau pesanan disampaikan lewat chat/hadiah bukan digital.
+
 **Tips:**
 
-- Sebelum klik Set Key, pastikan pembayaran sudah masuk
+- Sebelum klik Set Key / Kirim Pesanan, pastikan pembayaran sudah masuk
 - Key bisa apa saja (string bebas), mis. `ABCDE-12345-FGHIJ-67890`
 - Bot akan DM member dengan key + info expire + list semua key aktif
 - Di Discord mobile, long-press key di DM → muncul menu "Copy"
-- Invoice otomatis terkirim ke channel invoice (testimoni)
+- Detail pesanan dikirim ke DM APA ADANYA (tanpa modifikasi) — jangan khawatir password berubah
+- Invoice otomatis terkirim ke channel invoice (testimoni) — sekali saja per tiket (v3.9.27: tidak lagi dobel untuk transaksi key)
 - Transcript otomatis tersimpan ke channel transcript saat admin Tutup Tiket
-- Metadata tiket (userId, productName, price, isCompleted) disimpan di `tickets.json` — bukan di channel topic (anti spoof/edit)
+- Metadata tiket (userId, productName, price, isTransaction, requiresKey, isCompleted) disimpan di `tickets.json` — bukan di channel topic (anti spoof/edit)
 
 ### v3.9.21: DM format lebih natural + gak ada panel baru di channel
 
@@ -864,6 +888,17 @@ Cooldown-nya **per-user** — user A trigger gak ngarang ke user B.
 ---
 
 ## 11. Apa yang Baru di v3.9.x
+
+### v3.9.27 — Transaksi non-key (jual akun / jasa) + tombol Kirim Pesanan
+
+- **Bug user-reported fixed:** produk tanpa key (jual akun ML, jasa) dianggap tiket BANTUAN — tombol close gaya help, invoice tidak terkirim, stats tidak tercatat, auto-role tidak pernah diberikan. Semua diperbaiki lewat flag `isTransaction` eksplisit di `tickets.json`
+- **Fitur baru: tombol 📦 Kirim Pesanan** di tiket produk non-key — admin isi detail pesanan (multi-baris) di modal → bot DM detail ke pembeli + auto-role + invoice + stats + audit `ORDER_DELIVERED`
+- **"✅ Pesanan Sukses" sekarang benar-benar bekerja** untuk produk non-key (role + stats + invoice otomatis)
+- **Dobel invoice fixed** — transaksi key tadinya kekirim invoice 2x (saat Set Key + saat close)
+- **Modal title >45 char fixed** — produk dengan label panjang membuat tombol Set Key mati diam-diam
+- **Deskripsi dropdown panel** kini berbasis konten: "Transaksi — N produk (pakai/tanpa key)" vs "Bantuan / buka tiket langsung"
+- **Emoji dropdown produk** 🔑 (pakai key) vs 📦 (tanpa key)
+- Klasifikasi tiket lama (yang masih terbuka saat update) tidak berubah — tiket baru selalu benar
 
 ### v3.9.26 — Audit menyeluruh (single-guild) + hardening
 

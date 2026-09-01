@@ -46,6 +46,7 @@ const ACTION_LABELS = {
     EMBED_BUILDER_SEND: '📤 Kirim Embed (Builder)',
     // VIP / Keys
     SET_KEY: '🔑 Set Key (Ticket)',
+    ORDER_DELIVERED: '📦 Kirim Pesanan (Ticket)',
     CLEAR_SCHEDULE: '🧹 Clear Schedule',
     // Config
     RESET_CONFIG: '⚠️ RESET CONFIG TOTAL',

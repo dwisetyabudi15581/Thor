@@ -110,8 +110,8 @@ module.exports = async function (interaction) {
                     '• `/remove-channel welcome` — hapus channel dari config',
                     '',
                     '**🎫 Auto-Split:** Bot pisah tiket jadi 2 kategori otomatis:',
-                    '• **`🎫 TRANSAKSI`** — tiket pakai key (ada tombol Set Key)',
-                    '• **`🎫 BANTUAN`** — tiket help/report/claim_giveaway/dll (requiresKey=false)',
+                    '• **`🎫 TRANSAKSI`** — semua tiket produk: pakai key (🔑 Set Key) TAU non-key (📦 Kirim Pesanan)',
+                    '• **`🎫 BANTUAN`** — tiket kategori tanpa produk (help/report/claim_giveaway)',
                     'Custom nama? Edit `data/config.json`: `ticketCategoryKey`, `ticketCategoryNoKey`'
                 ].join('\n'),
                 inline: false
@@ -135,7 +135,8 @@ module.exports = async function (interaction) {
                     '• `/add-product` `/remove-product` `/list-products`',
                     '• `/update-product value:vip30 label:"VIP 30 Hari" price:"Rp 30.000"` — edit tanpa hapus',
                     '• `/set-product-role` `/remove-product-role` `/list-product-roles`',
-                    '💡 VIP role + auto-expire (days). Bisa campur produk key & non-key (jasa).'
+                    '💡 VIP role + auto-expire (days). Bisa campur produk key & non-key (jasa).',
+                    '💡 Produk non-key (akun, jasa)? `/add-product ... requires_key:false` → tiket dapat tombol **📦 Kirim Pesanan** (detail dikirim via DM ke pembeli + auto-role + invoice + stats).'
                 ].join('\n'),
                 inline: false
             },

@@ -57,6 +57,60 @@ function saveTickets(data) {
 }
 
 /**
+ * v3.9.27: Klasifikasi tipe tiket dari metadata — SATU sumber kebenaran.
+ *
+ * SEBELUMNYA (bug v3.9.16–v3.9.26): handler close & invoice memakai
+ * `meta.requiresKey` sebagai proxy "ini transaksi?". Akibatnya produk NON-KEY
+ * (jual akun ML, jasa, dll — requiresKey=false) dianggap tiket bantuan:
+ *   - tombol close pakai gaya help (tidak ada "Pesanan Sukses")
+ *   - invoice/testimoni tidak pernah dikirim
+ *   - stats pembelian tidak tercatat
+ *
+ * SEKARANG: `isTransaction` (tiket jual-beli?) dan `requiresKey` (produk
+ * pakai key?) adalah dua konsep TERPISAH:
+ *   - Transaksi + requiresKey=true  → tombol 🔑 Set Key (key products)
+ *   - Transaksi + requiresKey=false → tombol 📦 Kirim Pesanan (akun/jasa)
+ *   - Bantuan (help/report/custom tanpa produk) → tanpa tombol khusus
+ *
+ * Prioritas sumber:
+ *   1. meta.isTransaction eksplisit (tiket dibuat v3.9.27+)
+ *   2. meta.requiresKey (tiket legacy v3.9.16–26 — perilaku lama dipertahankan
+ *      supaya tidak ada regresi; tiket lama akan tertutup seiring waktu)
+ *   3. Kategori + magic-string (tiket purba pre-v3.9.11, tanpa requiresKey)
+ *
+ * @param {Object|null} meta - metadata tiket dari tickets.json
+ * @returns {{isTransaction: boolean, requiresKey: boolean, isCompleted: boolean}}
+ */
+function resolveTicketType(meta) {
+    if (!meta) return { isTransaction: false, requiresKey: false, isCompleted: false };
+
+    const isCompleted = meta.isCompleted === true;
+
+    let isTransaction;
+    if (meta.isTransaction !== undefined && meta.isTransaction !== null) {
+        // v3.9.27+: flag eksplisit — sumber kebenaran.
+        isTransaction = meta.isTransaction === true;
+    } else if (meta.requiresKey !== undefined && meta.requiresKey !== null) {
+        // Legacy v3.9.16–26: requiresKey dipakai sebagai proxy (bug lama
+        // dipertahankan untuk tiket yang masih terbuka — no regression).
+        isTransaction = meta.requiresKey === true;
+    } else {
+        // Tiket purba (pre-v3.9.11): fallback kategori + magic-string.
+        isTransaction = !(
+            meta.category === 'help' ||
+            meta.category === 'report' ||
+            meta.productName === 'Bantuan Staff' ||
+            meta.productName === 'Laporkan Member' ||
+            meta.productName === 'Bantuan/Lapor'
+        );
+    }
+
+    const requiresKey = meta.requiresKey !== undefined && meta.requiresKey !== null ? meta.requiresKey : isTransaction;
+
+    return { isTransaction, requiresKey, isCompleted };
+}
+
+/**
  * Simpan metadata tiket baru.
  * @param {string} channelId
  * @param {Object} meta - { userId, productName, price, guildId, createdAt, category?, requiresKey?, deliveryFields? }
@@ -81,7 +135,17 @@ function setTicketMeta(channelId, meta) {
         // status sukses saat admin close tiket yang sudah Set Key.
         isCompleted: meta.isCompleted || false,
         keySetAt: meta.keySetAt || null,
-        keySetBy: meta.keySetBy || null
+        keySetBy: meta.keySetBy || null,
+        // v3.9.27: isTransaction EKSPLISIT — dipisah dari requiresKey.
+        // true  = tiket jual-beli (produk key ATAU non-key: akun, jasa, dll)
+        // false = tiket bantuan (help/report/kategori tanpa produk)
+        isTransaction: meta.isTransaction !== undefined ? meta.isTransaction : null,
+        // v3.9.27: invoice anti-dobel — dicentang saat close supaya transaksi
+        // key (invoice dikirim saat Set Key) tidak dikirim LAGI saat close.
+        isInvoiceSent: meta.isInvoiceSent || false,
+        // v3.9.27: jejak "Kirim Pesanan" (produk non-key) — mirror keySetAt/By.
+        deliveredAt: meta.deliveredAt || null,
+        deliveredBy: meta.deliveredBy || null
     };
     saveTickets(all);
 }
@@ -304,6 +368,8 @@ async function createTicket(interaction, product) {
 
         // v3.9.1: simpan metadata tiket ke tickets.json (sumber kebenaran).
         // v3.9.11 Phase 2: simpan category & requiresKey juga.
+        // v3.9.27: simpan isTransaction EKSPLISIT — close flow & invoice tidak
+        // lagi salah menganggap produk non-key (akun/jasa) sebagai tiket bantuan.
         setTicketMeta(ticketChannel.id, {
             userId: user.id,
             productName: product.label,
@@ -311,7 +377,8 @@ async function createTicket(interaction, product) {
             guildId: guild.id,
             createdAt: Date.now(),
             category: product.category || (isTransaction ? 'transaction' : 'help'),
-            requiresKey
+            requiresKey,
+            isTransaction
         });
 
         // v3.9.16: Pesan embed pakai isTransaction (transaksi vs bantuan).
@@ -330,7 +397,7 @@ async function createTicket(interaction, product) {
                           `Admin <@&${config.roles.admin}> akan memproses pesananmu.\n\n` +
                           (requiresKey
                               ? `💡 Setelah pembayaran dikonfirmasi, admin klik tombol **🔑 Set Key** untuk memberikan key + role.`
-                              : `💡 Setelah pembayaran dikonfirmasi, admin klik tombol **🔒 Tutup Tiket** untuk menyelesaikan transaksi.`)
+                              : `💡 Setelah pembayaran dikonfirmasi, admin klik tombol **📦 Kirim Pesanan** — detail pesanan akan dikirim ke kamu via DM.`)
                         : `Silakan jelaskan kebutuhanmu di channel ini.\n` +
                           `Admin <@&${config.roles.admin}> akan segera membantu.`)
             )
@@ -353,7 +420,12 @@ async function createTicket(interaction, product) {
             })
             .setTimestamp();
 
-        // Tombol: Set Key (HANYA kalau requiresKey=true) + Tutup Tiket
+        // Tombol: Set Key (key) / Kirim Pesanan (non-key) + Tutup Tiket.
+        // v3.9.27: produk transaksi NON-KEY (akun, jasa, dll) dapat tombol
+        // "Kirim Pesanan" — mirror dari Set Key: admin isi detail pesanan di
+        // modal, bot DM ke pembeli + auto-role + stats + invoice. Sebelumnya
+        // produk non-key cuma punya Tutup Tiket, jadi detail pesanan hanya ada
+        // di chat tiket yang TERHAPUS saat close — pembeli kehilangan datanya.
         const components = [];
         if (requiresKey) {
             components.push(
@@ -361,6 +433,14 @@ async function createTicket(interaction, product) {
                     .setCustomId('ticket_set_key')
                     .setLabel('Set Key')
                     .setEmoji('🔑')
+                    .setStyle(ButtonStyle.Success)
+            );
+        } else if (isTransaction) {
+            components.push(
+                new ButtonBuilder()
+                    .setCustomId('ticket_deliver')
+                    .setLabel('Kirim Pesanan')
+                    .setEmoji('📦')
                     .setStyle(ButtonStyle.Success)
             );
         }
@@ -608,7 +688,7 @@ async function closeTicket(channel, closer, isSuccess) {
             }
         }
 
-        // Kirim invoice HANYA untuk transaksi sukses (bukan help/report/custom non-key).
+        // Kirim invoice untuk tiket TRANSAKSI yang sukses (bukan help/report).
         // v3.9.16: fix bug — sebelumnya help/report yang diklik "Selesai" juga kekirim invoice
         // padahal bukan transaksi jualan. Sekarang cek category dulu.
         // v3.9.18: generalize — pakai meta.requiresKey sebagai sumber kebenaran.
@@ -616,17 +696,24 @@ async function closeTicket(channel, closer, isSuccess) {
         //   - meta.requiresKey === true             → kirim invoice kalau sukses
         //   - meta.requiresKey undefined (tiket lama) → fallback ke cek category & magic-string
         //     untuk backward compat dengan tiket yang dibuat sebelum v3.9.16.
-        const ticketCategory = meta?.category || null;
-        const isHelpOrReport =
-            meta?.requiresKey === false ||
-            (meta?.requiresKey === undefined &&
-                (ticketCategory === 'help' ||
-                    ticketCategory === 'report' ||
-                    productName === 'Bantuan Staff' ||
-                    productName === 'Laporkan Member' ||
-                    productName === 'Bantuan/Lapor'));
+        // v3.9.27 FIX (bug user-reported): produk non-key adalah TRANSAKSI SUNGGUHAN
+        // (jual akun ML, jasa, dll). requiresKey===false tidak lagi dianggap
+        // "bantuan" — sekarang pakai resolveTicketType() yang baca flag
+        // isTransaction eksplisit. Invoice/testimoni akhirnya terkirim untuk
+        // produk non-key yang di-close sebagai "Pesanan Sukses".
+        //
+        // v3.9.27 FIX #2 (dobel invoice): transaksi key yang sudah Set Key
+        // dulunya kekirim invoice DUA KALI (saat Set Key + saat close "Selesai").
+        // Sekarang: flag isInvoiceSent dicentang — kalau invoice sudah pernah
+        // dikirim (Set Key / Kirim Pesanan), close tidak mengirim lagi.
+        const ticketType = resolveTicketType(meta);
+        const invoiceAlreadySent =
+            meta?.isInvoiceSent === true ||
+            // Legacy: tiket key (v3.9.20–26) yang isCompleted berarti Set Key sudah
+            // dilakukan — invoice pasti sudah terkirim saat itu (flow lama selalu kirim).
+            (meta?.isInvoiceSent === undefined && meta?.isCompleted === true && ticketType.requiresKey === true);
 
-        if (isSuccess && userId && !isHelpOrReport) {
+        if (isSuccess && userId && ticketType.isTransaction && !invoiceAlreadySent) {
             try {
                 await sendInvoice(channel, userId, productName, price, closer);
             } catch (invoiceErr) {
@@ -675,5 +762,6 @@ module.exports = {
     getTicketMeta,
     setTicketMeta,
     patchTicketMeta,
-    removeTicketMeta
+    removeTicketMeta,
+    resolveTicketType
 };

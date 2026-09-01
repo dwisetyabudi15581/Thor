@@ -177,14 +177,27 @@ function buildTicketPanel(panel, ctx) {
     const components = [];
     if (panel.useDropdown) {
         // Select menu — 1 row, 1 menu, max 25 options.
-        // v3.9.18: description generic — pakai label kategori (bukan hardcode "Bantuan / report")
-        // supaya kategori custom seperti claim_giveaway juga jelas deskripsinya.
-        const options = categoriesToShow.map(cat => ({
-            label: (cat.label || cat.id).slice(0, 100),
-            value: cat.id,
-            description: (cat.requiresKey ? 'Transaksi (pakai key)' : 'Bantuan / non-transaksi').slice(0, 100),
-            emoji: cat.emoji || '🎫'
-        }));
+        // v3.9.27 FIX (bug user-reported): deskripsi option tidak lagi memakai
+        // requiresKey sebagai proxy "transaksi vs bantuan" — kategori non-key
+        // (jual akun, jasa) tadinya dilabeli "Bantuan / non-transaksi" padahal
+        // itu kategori jual-beli. Sekarang deskripsi berbasis KONTEN kategori:
+        //   - punya produk → "Transaksi — N produk (pakai/tanpa key)"
+        //   - tanpa produk → "Bantuan / buka tiket langsung" (help/report/custom)
+        const options = categoriesToShow.map(cat => {
+            const prods = productsInCategories.filter(p => (p.category || 'transaction') === cat.id);
+            let desc;
+            if (prods.length > 0) {
+                desc = `Transaksi — ${prods.length} produk (${cat.requiresKey ? 'pakai key' : 'tanpa key'})`;
+            } else {
+                desc = 'Bantuan / buka tiket langsung';
+            }
+            return {
+                label: (cat.label || cat.id).slice(0, 100),
+                value: cat.id,
+                description: desc.slice(0, 100),
+                emoji: cat.emoji || '🎫'
+            };
+        });
         if (options.length === 0) {
             // Tidak ada kategori → fallback ke single disabled button biar
             // panel tetap punya 1 komponen (Discord gak allow 0 komponen

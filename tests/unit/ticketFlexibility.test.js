@@ -795,7 +795,7 @@ test('panels.buildTicketPanel: kategori requiresKey=false (claim_giveaway) tetap
     assert.strictEqual(claimBtn.data.label, 'Claim Giveaway');
 });
 
-test('panels.buildTicketPanel: dropdown description generic untuk kategori non-transaksi', () => {
+test('panels.buildTicketPanel: dropdown description berbasis konten kategori (v3.9.27)', () => {
     const { buildTicketPanel } = require('../../src/commands/panels');
     const panel = {
         title: 'X',
@@ -810,23 +810,42 @@ test('panels.buildTicketPanel: dropdown description generic untuk kategori non-t
         config: {
             ticketCategories: [
                 { id: 'transaction', label: 'Beli', emoji: '🔑', style: 'Primary', requiresKey: true },
+                // v3.9.27: kategori non-key yang PUNYA produk (jual akun/jasa) —
+                // tadinya salah dilabeli "Bantuan / non-transaksi".
+                { id: 'jual_akun', label: 'Jual Akun', emoji: '📦', style: 'Success', requiresKey: false },
                 { id: 'claim_giveaway', label: 'Claim Giveaway', emoji: '🎁', style: 'Success', requiresKey: false }
             ],
-            products: [],
+            products: [
+                {
+                    label: 'VIP 30 Hari',
+                    value: 'vip30',
+                    price: 'Rp 30.000',
+                    category: 'transaction',
+                    requiresKey: true
+                },
+                {
+                    label: 'Akun ML Mythic',
+                    value: 'akun_ml',
+                    price: 'Rp 150.000',
+                    category: 'jual_akun',
+                    requiresKey: false
+                }
+            ],
             messages: { ticketTitle: 'T', ticketBody: 'B', ticketPriceHeader: 'P' }
         }
     };
     const { components } = buildTicketPanel(panel, ctx);
     const menu = components[0].components[0];
     const opts = menu.options;
-    assert.strictEqual(opts.length, 2);
+    assert.strictEqual(opts.length, 3);
     // discord.js v14: option data disimpan di .data.description (bukan .description langsung)
-    const transaksiDesc = opts[0].data?.description || opts[0].description;
-    const nonTransaksiDesc = opts[1].data?.description || opts[1].description;
-    // Transaksi → "Transaksi (pakai key)"
-    assert.strictEqual(transaksiDesc, 'Transaksi (pakai key)');
-    // Non-transaksi → "Bantuan / non-transaksi" (bukan "Bantuan / report")
-    assert.strictEqual(nonTransaksiDesc, 'Bantuan / non-transaksi');
+    const getDesc = o => o.data?.description || o.description;
+    // Kategori key DENGAN produk → jumlah produk + status key
+    assert.strictEqual(getDesc(opts[0]), 'Transaksi — 1 produk (pakai key)');
+    // Kategori non-key DENGAN produk → TRANSAKSI (bukan "Bantuan" — bug fix v3.9.27)
+    assert.strictEqual(getDesc(opts[1]), 'Transaksi — 1 produk (tanpa key)');
+    // Kategori TANPA produk → tiket langsung
+    assert.strictEqual(getDesc(opts[2]), 'Bantuan / buka tiket langsung');
 });
 
 // === v3.9.19 tests: flexibility fix + new commands ===

@@ -2,8 +2,37 @@
 
 Bot Discord serbaguna buat komunitas apapun — gaming, content creator, online community, server jualan, dll. Penuh fitur: welcome/goodbye, verifikasi, tiket transaksi (multi-kategori), key-driven VIP role, self-role, temp voice, giveaway, scheduled announcements, embed builder, backup, warn system, stats/leaderboard, poll, **auto-responder, anti-spam & auto-mod, AFK system, leveling system**.
 
-> **Version:** 3.9.26 — 81 slash commands, 190+ tests passing, fully configurable dari Discord.
+> **Version:** 3.9.27 — 81 slash commands, 210 tests passing, fully configurable dari Discord.
 > See [docs/ADMIN_GUIDE.md](./docs/ADMIN_GUIDE.md) untuk panduan admin lengkap.
+
+---
+
+## 🆕 v3.9.27 "TRANSAKSI NON-KEY (JUAL AKUN / JASA)"
+
+**Bug user-reported: produk tanpa key (jual akun ML, jasa, dll) dianggap tiket BANTUAN, bukan TRANSAKSI.** Akar masalah: sistem lama mengacaukan `requiresKey` (produk pakai key?) dengan `isTransaction` (ini tiket jual-beli?). Semua diperbaiki:
+
+**Bug fix:**
+
+- 🔴 **Tombol close produk non-key pakai gaya help** — "✅ Pesanan Sukses / ❌ Tidak Jadi Beli" tidak pernah muncul; admin cuma lihat opsi help. Sekarang klasifikasi pakai flag `isTransaction` eksplisit (`resolveTicketType()` — satu sumber kebenaran, 5 skenario tombol close).
+- 🔴 **Invoice/testimoni tidak pernah dikirim untuk produk non-key** — `requiresKey=false` dianggap "help/report" di closeTicket. Fixed.
+- 🔴 **Stats/leaderboard tidak mencatat penjualan non-key** — recordPurchase cuma jalan di flow Set Key. Fixed.
+- 🔴 **Auto-role produk non-key tidak pernah diberikan** — padahal `/set-product-role` menjanjikannya. Fixed (lewat Kirim Pesanan ATAU Pesanan Sukses).
+- 🔴 **Routing `modal_deliver_order:` hilang** — prefix modal tidak punya fallback generik di router → tanpa entry eksplisit, submit modal jadi dead interaction (unit test router).
+- 🟠 **Dobel invoice untuk transaksi key** — invoice dikirim saat Set Key DAN lagi saat close "Selesai". Fixed dengan flag `isInvoiceSent` di meta tiket.
+- 🟠 **Modal title > 45 char membuat showModal throw** — "Set Key — <label produk>" bisa 89 char (label maks 80) → tombol Set Key mati diam-diam. Fixed (slice 45).
+- 🟠 **Deskripsi dropdown panel menyesatkan** — kategori non-key berproduk (jual akun) dilabeli "Bantuan / non-transaksi". Sekarang berbasis konten: "Transaksi — N produk (pakai/tanpa key)" vs "Bantuan / buka tiket langsung".
+
+**Fitur baru: tombol 📦 Kirim Pesanan (mirror Set Key untuk produk non-key):**
+
+```
+/add-product label:"Akun ML Mythic" value:akun_ml price:"Rp 150.000" category:transaction requires_key:false
+/set-product-role value:akun_ml role:@Customer days:0
+```
+
+Tiket produk non-key sekarang dapat tombol **📦 Kirim Pesanan**: admin isi detail pesanan (akun/password — multi-baris) di modal → bot **DM detail ke pembeli** (chat tiket terhapus saat close — dulu pembeli kehilangan datanya) + auto-role + auto-expire (days) + invoice + stats + audit log `ORDER_DELIVERED` + tombol close berubah jadi "✅ Selesai". Kalau admin skip Kirim Pesanan dan langsung klik "✅ Pesanan Sukses": role + stats + invoice tetap jalan otomatis.
+
+- Emoji dropdown produk sekarang bedakan: 🔑 pakai key vs 📦 tanpa key.
+- `resolveTicketType()` backward-compatible: tiket lama (tanpa flag) tetap pakai klasifikasi lama — tidak ada regresi; tiket baru selalu benar.
 
 ---
 

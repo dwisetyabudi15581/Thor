@@ -7,7 +7,8 @@
  * Prefix mapping (semua prefix di sini SEKARANG punya handler aktif —
  * fallback ke legacy `handlers/interactionHandler.js` DIHAPUS):
  *   - btn_verify                              → verify.js      (exact match)
- *   - ticket_cat:, ticket_, select_product, modal_set_key: → ticket.js
+ *   - ticket_cat:, ticket_, select_product, modal_set_key:,
+ *     modal_deliver_order:                    → ticket.js
  *   - sr_btn:, sr_sel:                        → selfrole.js
  *   - emb_edit:, emb_preview:, emb_send:,
  *     emb_cancel:, emb_modal_                 → embed.js
@@ -51,6 +52,10 @@ const PREFIX_TO_DOMAIN = [
     // v3.9.14: dropdown select menu dari panel (customId: ticket_cat_select)
     { prefix: 'ticket_cat_select', domain: 'ticket', exact: true },
     { prefix: 'modal_set_key:', domain: 'ticket' },
+    // v3.9.27: modal Kirim Pesanan (produk non-key — mirror modal_set_key).
+    // WAJIB explicit: prefix modal gak punya fallback generik — tanpa entry ini
+    // submit modal tidak pernah sampai ke handler tiket (dead interaction).
+    { prefix: 'modal_deliver_order:', domain: 'ticket' },
     { prefix: 'modal_edit_message:', domain: 'config' },
     // v3.9.14: panel edit modal (modal_panel_edit:<panelId>:<field>)
     { prefix: 'modal_panel_edit:', domain: 'panel-modal' },
