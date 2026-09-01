@@ -1,256 +1,80 @@
-# 🤖 Community Bot — All-in-One Discord Bot
+# 🤖 Thor — All-in-One Discord Community Bot
 
-Bot Discord serbaguna buat komunitas apapun — gaming, content creator, online community, server jualan, dll. Penuh fitur: welcome/goodbye, verifikasi, tiket transaksi (multi-kategori), key-driven VIP role, self-role, temp voice, giveaway, scheduled announcements, embed builder, backup, warn system, stats/leaderboard, poll, **auto-responder, anti-spam & auto-mod, AFK system, leveling system**.
+Bot Discord serbaguna untuk komunitas apa pun — server jualan, gaming, content creator, hingga komunitas umum. Semua konfigurasi dapat diatur langsung dari Discord melalui slash command, tanpa mengedit file.
 
-> **Version:** 3.9.29 — 81 slash commands, 238 tests passing, fully configurable dari Discord.
-> See [docs/ADMIN_GUIDE.md](./docs/ADMIN_GUIDE.md) untuk panduan admin lengkap.
-
----
-
-## 🆕 v3.9.29 "EDIT PANEL: THUMBNAIL + SAFETY-NET KATEGORI KOSONG"
-
-**User report: "kemaren saya coba gabisa menaruh link gambar untuk thumbnail".** Investigasi menemukan 2 akar masalah + 1 fitur baru:
-
-- 🔴 **Modal `/update-panel` maxLength image/thumbnail cuma 500 char** — URL Discord CDN yang signed (`ex=/is=/hm=`) bisa 300-450 char, URL custom dengan query panjang gampang tembus 500 → Discord client menolak input sebelum sempat disubmit (persis pengalaman "gabisa naruh link"). **Fixed: 500 → 2048** (limit URL embed Discord) + guard 2048 dengan pesan error jelas + guard serupa di `/setup-ticket-panel`.
-- 🟠 **Akar masalah kedua (paling mungkin yang kamu alami)**: bug key-mapping v3.9.26 (image/thumbnail tersimpan di key salah → perubahan tidak pernah muncul di panel) — sudah diperbaiki di v3.9.26, tapi **wajib restart bot** supaya fix-nya aktif. Flow sekarang diverifikasi end-to-end oleh unit test.
-- 🟠 **Audit log `/update-panel` menampilkan `undefined`** untuk field image/thumbnail/footer (baca `patch[field]` padahal patch ditulis ke `imageUrl`/`thumbnailUrl`/`footerText`). Fixed.
-- ✅ **Fitur baru: safety-net kategori kosong** — `/setup-ticket-panel` & `/refresh-panel` sekarang memberi peringatan kalau ada kategori di panel yang belum punya produk ("klik tombolnya membuka tiket BANTUAN langsung, bukan transaksi — tambah produk dulu via /add-product"). Kategori `help`/`report` tidak diwarn (memang quick-action).
-- ✅ **14 unit test baru** (`tests/unit/panelEdit.test.js`): flow modal end-to-end (CDN URL, URL 536 char yang dulu ditolak, guard 2048, clear, URL invalid, cross-guild guard) + safety-net 5 skenario + regression guard maxLength.
-
----
-
-## 🆕 v3.9.28 "KATEGORI BARU AMAN OTOMATIS (AKUN ML / LISENSI KEY)"
-
-**Pertanyaan user: "kalau saya tambah kategori baru seperti akun ML atau lisensi key — aman?"** Jawaban: **ya, otomatis aman** — dan sekarang terbukti lewat unit test.
-
-- ✅ **`classifyProduct()` (pure function, di-ekstrak dari createTicket)** — rule: hanya kategori `help`/`report`/`isHelp` yang masuk BANTUAN; **semua id kategori lain apa pun (akun_ml, lisensi_key, jasa, topup, custom...) otomatis TRANSAKSI**. Menambah kategori baru tidak butuh perubahan code sama sekali.
-- ✅ **Test suite baru** `tests/unit/newCategorySafety.test.js` (14 test): skenario akun_ml (non-key → 📦 Kirim Pesanan), lisensi_key (key → 🔑 Set Key), roundtrip meta → resolveTicketType → matriks tombol, pewarisan `requires_key` dari kategori di `/add-product`, deskripsi dropdown.
-- 🟠 **Fix deskripsi dropdown panel untuk kategori campur** — v3.9.27 masih pakai flag `requiresKey` kategori (bohong kalau kategori berisi campuran: 2 akun non-key + 1 top-up key tapi dilabeli "pakai key"). Sekarang dihitung dari produk aktual: semua key → "pakai key", semua non-key → "tanpa key", campur → "N tanpa key / M pakai key".
-- ℹ️ **Gotcha terdokumentasi + ditest**: produk transaksi **tanpa** flag `requires_key` default `true` (dapat tombol Set Key). Untuk produk akun/jasa: set `requires_key:false` di **kategori** (produk mewarisi otomatis) atau per produk.
-
-```
-/add-category id:akun_ml label:"Akun ML" emoji:🎮 requires_key:false
-/add-product label:"Akun ML Mythic" value:ml_mythic price:"Rp 150.000" category:akun_ml   ← mewarisi non-key
-/add-category id:lisensi_key label:"Lisensi Key" emoji:🔑 requires_key:true
-/add-product label:"Win 11 Pro" value:win11 price:"Rp 150.000" category:lisensi_key       ← mewarisi key
-```
-
----
-
-## 🆕 v3.9.27 "TRANSAKSI NON-KEY (JUAL AKUN / JASA)"
-
-**Bug user-reported: produk tanpa key (jual akun ML, jasa, dll) dianggap tiket BANTUAN, bukan TRANSAKSI.** Akar masalah: sistem lama mengacaukan `requiresKey` (produk pakai key?) dengan `isTransaction` (ini tiket jual-beli?). Semua diperbaiki:
-
-**Bug fix:**
-
-- 🔴 **Tombol close produk non-key pakai gaya help** — "✅ Pesanan Sukses / ❌ Tidak Jadi Beli" tidak pernah muncul; admin cuma lihat opsi help. Sekarang klasifikasi pakai flag `isTransaction` eksplisit (`resolveTicketType()` — satu sumber kebenaran, 5 skenario tombol close).
-- 🔴 **Invoice/testimoni tidak pernah dikirim untuk produk non-key** — `requiresKey=false` dianggap "help/report" di closeTicket. Fixed.
-- 🔴 **Stats/leaderboard tidak mencatat penjualan non-key** — recordPurchase cuma jalan di flow Set Key. Fixed.
-- 🔴 **Auto-role produk non-key tidak pernah diberikan** — padahal `/set-product-role` menjanjikannya. Fixed (lewat Kirim Pesanan ATAU Pesanan Sukses).
-- 🔴 **Routing `modal_deliver_order:` hilang** — prefix modal tidak punya fallback generik di router → tanpa entry eksplisit, submit modal jadi dead interaction (unit test router).
-- 🟠 **Dobel invoice untuk transaksi key** — invoice dikirim saat Set Key DAN lagi saat close "Selesai". Fixed dengan flag `isInvoiceSent` di meta tiket.
-- 🟠 **Modal title > 45 char membuat showModal throw** — "Set Key — <label produk>" bisa 89 char (label maks 80) → tombol Set Key mati diam-diam. Fixed (slice 45).
-- 🟠 **Deskripsi dropdown panel menyesatkan** — kategori non-key berproduk (jual akun) dilabeli "Bantuan / non-transaksi". Sekarang berbasis konten: "Transaksi — N produk (pakai/tanpa key)" vs "Bantuan / buka tiket langsung".
-
-**Fitur baru: tombol 📦 Kirim Pesanan (mirror Set Key untuk produk non-key):**
-
-```
-/add-product label:"Akun ML Mythic" value:akun_ml price:"Rp 150.000" category:transaction requires_key:false
-/set-product-role value:akun_ml role:@Customer days:0
-```
-
-Tiket produk non-key sekarang dapat tombol **📦 Kirim Pesanan**: admin isi detail pesanan (akun/password — multi-baris) di modal → bot **DM detail ke pembeli** (chat tiket terhapus saat close — dulu pembeli kehilangan datanya) + auto-role + auto-expire (days) + invoice + stats + audit log `ORDER_DELIVERED` + tombol close berubah jadi "✅ Selesai". Kalau admin skip Kirim Pesanan dan langsung klik "✅ Pesanan Sukses": role + stats + invoice tetap jalan otomatis.
-
-- Emoji dropdown produk sekarang bedakan: 🔑 pakai key vs 📦 tanpa key.
-- `resolveTicketType()` backward-compatible: tiket lama (tanpa flag) tetap pakai klasifikasi lama — tidak ada regresi; tiket baru selalu benar.
-
----
-
-## 🆕 v3.9.26 "AUDIT MENYELURUH (SINGLE-GUILD)"
-
-Audit ulang seluruh codebase dengan konteks **bot dipakai untuk 1 guild saja** — 6 temuan baru diperbaiki + hardening + GC:
-
-**Bug fix (semua terverifikasi + unit test):**
-
-- 🔴 **`/update-panel` image/thumbnail/footer tidak pernah jalan** — patch tersimpan di key yang salah (`image`) padahal builder baca `imageUrl` → 3 dari 6 field iklankan adalah no-op diam-diam. Fixed (key mapping) + pre-fill modal sekarang benar.
-- 🔴 **`/giveaway list` & `/poll list` mati permanen di ~30 entry** — giveaway/poll lama tidak pernah dihapus → description embed > 4096 → throw. Sekarang: 15 terbaru + ringkasan + **GC harian** (entry >30 hari dipangkas otomatis).
-- 🔴 **Poll dengan question panjang = zombie + admin stuck "Bot is thinking..."** — entry persist dulu baru render throw + error reply ditelan post-defer. Fixed: validasi di command (maks 250) + render-first + safeEditReply.
-- 🔴 **`claim_giveaway` mustahil dihapus permanen** — migration di getConfig() (jalan per pesan!) re-add kategori setelah `/remove-category`. Fixed dengan flag `claimGiveawayDismissed`.
-- 🟠 **Product label/price panjang bunuh flow tiket** — dropdown throw `addOptions` (limit 100). Fixed: cap di registry + handler + slice defensif di 3 dropdown.
-- 🟠 **Emoji bebas tersimpan bisa meracuni panel** — string bukan-emoji bikin `/setup-verify` & semua panel tiket mati. Fixed: validasi emoji di set-verify-button, add-category, update-category.
-
-**Hardening & performa:**
-
-- 🟢 **Karantina file korup** — 16 file data di-rename `.corrupt-<ts>` sebelum fallback default (sebelumnya: isi korup TERTIMPA diam-diam oleh save berikutnya — keys/config bisa hilang tanpa bekas).
-- 🟢 **Hot-path cache** — automod/afk/responders/levels kini read-through cache (dulu 5-7 readFileSync sync per pesan). AFK mention di-batch (dulu 1+N baca).
-- 🟢 **GUILD_ID guard di semua event** — pesan/command/member/voice dari guild lain diabaikan (asuransi bot single-guild).
-- 🟢 **Migrasi v1→v2 config tidak lagi drop field modern** (ticketCategories/leveling/verifyButton preserve).
-- 🟡 messageCreate per-hook try/catch (hook AFK error tidak lagi bunuh leveling); `getSubcommand(false)` + hint di /giveaway & /poll; prize/question/key max_length; reroll guild-check; backup cancel tombol di-handle; logAudit tahan detail panjang; DM set-key & transcript tahan data panjang; Set Key lookup produk pakai value (tahan rename); admin re-check di modal update-panel; leveling clamp nilai.
-
-**Docs sync:** `docs/ADMIN_GUIDE.md` + `docs/README.md` di-update ke v3.9.26 — 81 command, semua fitur v3.9.13-v3.9.26 terdokumentasi, struktur file `src/` yang sebenarnya (sebelumnya masih struktur lama pre-refactor + 47 command).
-
----
-
-## 🆕 v3.9.25 "NEWLINE EVERYWHERE"
-
-**Fitur `\n` sekarang support di SEMUA input teks multi-baris (termasuk yang terlewat di v3.9.24):**
-
-```
-/set-message teks:"Halo\nSelamat datang\n\nSemoga betah"  → welcome/goodbye/verify/ticket body
-/afk reason:"Tidur\nJangan ganggu\n\nSampai pagi"        → reason AFK multi-baris
-/warn reason:"Pelanggaran A\nPelanggaran B"             → DM warning multi-baris
-/setup-selfrole description:"Baris 1\nBaris 2"           → deskripsi panel multi-baris
-/selfrole-add description:"...\n..."                      → deskripsi role (select menu)
-```
-
-- ⚠️ **Catatan `/set-message`:** konversi hanya untuk tipe **Body** (welcomeBody, ticketBody, dll). Tipe **Title** sengaja TIDAL dikonversi — embed title Discord menolak newline (kalau dipaksa, panel verifikasi/welcome gagal kirim). Tulis `\n` di Title = tampil literal sebagai teks `\n`.
-- Input **modal** (popup form, mis. /edit-message, /embed-builder, poll options) tidak butuh `\n` — di modal, Enter memang menghasilkan baris baru.
-- Hint `(support \n)` sekarang tampil di deskripsi opsi command di Discord (registry).
-
----
-
-## 🆕 v3.9.24 "NEWLINE + HARDENING"
-
-**Fitur baris baru (\n) untuk semua input teks multi-baris:**
-
-Input slash command di Discord **tidak bisa tekan Enter** (Enter = kirim form) — sekarang tulis `\n` untuk baris baru, berlaku di:
-
-```
-/send-message message:"Baris 1\nBaris 2"           → plain text multi-baris
-/announce description:"Poin 1\nPoin 2\n\nPoin 3"   → embed multi-baris
-/announce-schedule description:"...\n..."           → idem, untuk announce terjadwal
-/setup-ticket-panel body:"Harga:\n• VIP 30d: 25k"  → body panel multi-baris
-/add-responder reply:"Halo!\nCara beli: ..."       → auto-reply multi-baris
-/set-message teks:"...\n..."                        → v3.9.25 (tipe Body saja)
-/afk reason, /warn reason, /setup-selfrole & /selfrole-add description → v3.9.25
-```
-
-**Perbaikan bug (full codebase review):**
-
-- 🔴 **`/update-category` & `/update-product` tidak pernah jalan** — terdaftar di registry + diiklankan di /help, tapi tidak di-map di router (selalu error "belum didukung"). Fixed + guard test anti kejadian ulang.
-- 🔴 **Backup bolong** — `automod.json` (word rules!), `levels.json`, `responders.json`, `afk.json`, `panels.json` TIDAK pernah di-backup. Fixed + guard test.
-- 🔴 **Crash exit code 0** — PM2/systemd/Docker tidak restart bot setelah crash. Sekarang exit(1) + shutdown guard anti double-flush.
-- 🔴 **Test menulis/hapus data produksi** — `npm test` di server live menghapus `panels.json` & meng-evict backup asli. Test sekarang sandbox (snapshot/restore).
-- 🟠 **Ready.js**: satu try/catch raksasa bisa mematikan scheduler, backup, dan auto-flush diam-diam kalau langkah awal gagal → sekarang per-langkah.
-- 🟠 **userLock** bisa dihapus oleh holder basi (race saat operasi lambat) → owner-token.
-- 🟠 **Tombol close ticket & modal set key** tanpa re-check admin → fixed (defense-in-depth).
-- 🟠 **AFK reason bisa mass-ping** (`@everyone` di reason bocor ke chat) → `parse: []`.
-- 🟠 **member kehilangan required role tidak bisa keluar giveaway** → cek role hanya saat join.
-- 🟠 **/giveaway end** tidak ber-lock (double-invoke = double-announce) → withUserLock.
-- 🟡 Phantom devDeps (nodemon/@eslint/js/globals), engines node, urutan wipe command global, filter webhook di messageCreate, defer modal poll, dll.
+> **v3.9.29** · 81 slash command · 238 unit test · discord.js v14 · Node.js 18+ · single-guild
+>
+> 📖 **[Panduan Admin Lengkap](./docs/ADMIN_GUIDE.md)** — setup, operasional harian, troubleshooting
+> 📜 **[Changelog](./CHANGELOG.md)** — riwayat semua versi
 
 ---
 
 ## ✨ Fitur Utama
 
-### 🎫 Ticket Panel (Multi-Category)
+### 🎫 Tiket & Transaksi
 
-- Panel tiket dengan tombol dinamis per kategori (bukan hardcoded)
-- Support kategori produk: key, jasa, layanan, dll — bebas di-CRUD dari Discord
-- Multi-panel: pasang panel berbeda dengan subset kategori berbeda di channel berbeda
-- Auto-transcript: simpan chat history tiket sebelum close
-- Tombol "Set Key" hanya muncul untuk produk yang `requiresKey: true`
+- **Panel tiket multi-kategori & multi-panel** — kategori dan produk dapat ditambah, diubah, dan dihapus sepenuhnya dari Discord (CRUD tanpa edit kode).
+- **Kategori custom otomatis aman** — id kategori apa pun (`akun_ml`, `lisensi_key`, `jasa`, `topup`, ...) otomatis terklasifikasi sebagai TRANSAKSI; hanya `help`/`report` yang menjadi BANTUAN.
+- **Dua alur transaksi**: produk ber-key (**🔑 Set Key**) dan produk non-key seperti jual akun/jasa (**📦 Kirim Pesanan** — detail pesanan dikirim via DM ke pembeli).
+- **Invoice otomatis** ke channel testimoni (sekali per tiket) + **transcript otomatis** tersimpan sebelum channel tiket dihapus.
 
-### 💬 Auto-Responder (v3.9.13)
+### 🔑 Produk & VIP (Key-Driven)
 
-- Set trigger keyword (`!sosmed`, `!jadwal`, dll) → bot auto-reply
-- Support plain text atau embed
-- Cooldown anti-spam per trigger
+- Produk dengan kategori, harga, dan flag `requires_key` (diwariskan dari kategori ke produk).
+- Role VIP berbasis key dengan model **MAX EXTEND** — role mengikuti key dengan sisa waktu terbanyak; auto-expire terjadwal.
+- Set Key sukses → simpan key, beri role, DM member, invoice, catat stats — semua otomatis.
+- Key selalu **dimasking** di audit log (tidak pernah bocor nilai).
 
-### 🛡️ Anti-Spam & Auto-Mod (v3.9.13 + v3.9.23 WORD FLEX)
+### 🛡️ Anti-Spam & Auto-Mod
 
-- Spam detection (N messages in window → action)
-- Link blocking (with channel/role whitelist — bisa tambah **dan hapus**)
-- Word filter dengan **matching whole-word**: "asu" tidak match "asus" (anti false-positive)
-- **Edit kata fleksibel**: `/add-word` nambah tanpa replace, `/remove-word` hapus spesifik, `/list-words` lihat semua
-- **Action per kata**: kata ringan cukup delete, kata berat langsung mute/kick
-- **Exempt words**: kata aman yang tidak di-flag (mis. block "asu" tapi allow "asus")
-- Mass-mention block
-- Action: delete only, warn, mute, atau kick
+- Spam detection (N pesan dalam window → action) + mass-mention block.
+- Link blocking dengan whitelist channel/role.
+- **Word filter fleksibel**: tambah kata satu per satu (`/add-word`), action per kata, exempt word, matching **whole-word** ("asu" tidak match "asus").
 
-### 💤 AFK System (v3.9.13)
+### 💬 Auto-Responder & AFK
 
-- User set AFK dengan reason
-- Bot auto-reply saat ada yang mention user AFK
-- Auto-clear saat user kirim pesan lagi
-- `/afk-list` untuk admin lihat semua yang AFK
+- Trigger keyword (`!sosmed`, `!jadwal`, ...) → auto-reply plain text atau embed, dengan cooldown per-user.
+- AFK system: auto-reply saat di-mention, auto-clear saat kembali, `/afk-list` untuk admin.
 
-### 📊 Leveling System (v3.9.13)
+### 📊 Leveling & Stats
 
-- XP per message (dengan cooldown anti-spam)
-- Level up announcement + auto-assign role reward
-- `/rank` untuk lihat level sendiri
-- `/leaderboard-level` top 10 member
+- XP per pesan (cooldown anti-spam) + role reward per level + `/rank` + `/leaderboard-level`.
+- Stats & leaderboard server: messages, purchases, totalSpent, giveawaysWon.
 
-### 🔐 Verifikasi Panel
+### 🎭 Lainnya
 
-- Button customizable (label, emoji, style)
-- Auto-give role Verified, auto-remove role Unverified
-
-### 🎭 Self-Role Panel
-
-- Member ambil/lepas role sendiri
-- Per-role button style (Primary/Secondary/Success/Danger)
-- Conditional role: butuh prerequisite role dulu (tier system)
-- Mode exclusive (1 role saja) atau multi
-
-### 🎤 Temp Voice
-
-- Member join trigger channel → otomatis bikin voice pribadi
-- Panel kontrol: rename, kick, limit, lock, transfer, delete
-- Auto-transfer ownership saat owner leave
-- Auto-delete saat channel kosong
-
-### 📦 Produk & Key Manager
-
-- Produk dengan kategori & `requiresKey` flag (bisa campur key & non-key)
-- Key-driven VIP role (MAX EXTEND model)
-- Auto-expire role sesuai durasi key
-- Guild-scoped (cross-guild safe)
-- Set Key sukses → DM member + role + schedule (channel gak auto-close, biar admin & member bisa Q&A dulu)
-- Transcript otomatis tersimpan saat admin Tutup Tiket
-
-### 🎉 Giveaway, Poll, Warn, Stats
-
-- Giveaway dengan required role, multiple winners, reroll
-- Poll dengan live bar chart, toggle vote
-- Warn system dengan auto-action (3=mute, 5=mute 1d, 7=kick)
-- Stats leaderboard (messages, purchases, totalSpent, giveawaysWon)
-
-### 📢 Announce & Embed Builder
-
-- `/announce` quick embed
-- `/send-message` plain text
-- `/embed-builder` interactive builder dengan live preview
-
-### 💾 Backup System
-
-- Auto-backup tiap 24 jam + saat start
-- Manual backup via `/backup-now`
-- Restore dengan safety backup otomatis
-- Maks 7 backup tersimpan
+- **Verifikasi** — tombol customizable (label, emoji, style), auto-swap role Unverified → Verified.
+- **Self-Role** — panel button/select, mode exclusive/multi, prerequisite role bertingkat.
+- **Temp Voice** — channel voice pribadi otomatis + panel kontrol (rename, kick, limit, lock, transfer).
+- **Giveaway** — required role, multiple winners, reroll, per-user lock anti double-join.
+- **Poll** — live bar chart, single/multi choice, toggle vote.
+- **Announce** — quick embed, scheduled (one-shot & recurring daily/weekly/monthly), embed builder interaktif dengan live preview.
+- **Warn system** — auto-action: 3 warning → mute 1 jam, 5 → mute 1 hari, 7 → kick.
+- **Backup** — otomatis tiap 24 jam + saat start, maks 7 backup, restore dengan 2-step confirmation + safety backup.
+- **Audit log** — semua admin action tercatat ke channel khusus (50 action types, retry otomatis).
 
 ---
 
-## 📁 Struktur Folder
+## 📁 Struktur Proyek
 
 ```
-Community Bot/
-├── index.js                      # Entry point (slim)
-├── .github/workflows/ci.yml      # GitHub Actions: lint + test
+Thor/
+├── index.js                      # Entry point
+├── .github/workflows/ci.yml      # GitHub Actions: lint + test (Node 18/20/22)
 ├── src/
 │   ├── bot/events/               # Discord event handlers
-│   ├── commands/                 # Slash command handlers (per-domain, 20+ files)
+│   ├── commands/                 # Slash command handlers (per-domain)
 │   ├── interactions/             # Button/select/modal handlers (per-domain)
-│   ├── data/                     # JSON persistence layer (15+ managers)
-│   ├── services/                 # Business logic
+│   ├── data/                     # JSON persistence layer (16 managers)
+│   ├── services/                 # Business logic (scheduler, dll)
 │   ├── ui/                       # Embed/panel builders
-│   └── infra/                    # safeWrite, safeReply, userLock, permissions, dll
+│   └── infra/                    # safeWrite, safeReply, userLock, permissions, auditLog
 ├── data/                         # Runtime JSON files (gitignored)
-├── docs/                         # README + ADMIN_GUIDE
-├── tests/unit/                   # 160+ passing tests
+├── docs/                         # ADMIN_GUIDE + index dokumen
+├── tests/unit/                   # 238 unit test (node:test)
+├── CHANGELOG.md                  # Riwayat versi
 ├── .env.example
-├── .eslintrc.json
+├── eslint.config.js
 └── .prettierrc.json
 ```
 
@@ -260,13 +84,14 @@ Community Bot/
 
 ### Prasyarat
 
-- Node.js v18+ (recommended v20+)
-- Discord bot token ([cara dapetin](https://discord.com/developers/applications))
-- Server Discord tempat bot mau di-deploy
-- **3 Privileged Intents** udah di-enable di Discord Developer Portal (https://discord.com/developers/applications → pilih bot → tab "Bot" → scroll ke "Privileged Gateway Intents"):
-    - ✅ Server Members Intent — buat welcome/goodbye, auto-role
-    - ✅ **Message Content Intent** — WAJIB biar auto-responder, anti-spam kata/link, dan AFK mention reply jalan. Kalau gak di-enable, fitur-fitur ini diam-diam gak berfungsi!
-    - ✅ Presence Intent — (opsional, belum dipakai)
+- Node.js v18+ (disarankan v20+)
+- Discord bot token ([cara mendapatkan](https://discord.com/developers/applications))
+- **3 Privileged Intents** diaktifkan di Discord Developer Portal (tab **Bot** → _Privileged Gateway Intents_):
+    - ✅ **Server Members Intent** — untuk welcome/goodbye, auto-role
+    - ✅ **Message Content Intent** — **WAJIB** untuk auto-responder, anti-spam kata/link, dan AFK mention reply. Tanpa intent ini, `message.content` selalu kosong dan fitur tersebut tidak berfungsi.
+    - ✅ Presence Intent — opsional
+- Bot diundang ke server target dengan permission: `Manage Roles`, `Manage Channels`, `Send Messages`, `Embed Links`, `View Audit Log`, `Moderate Members`, `Move Members`
+- Role bot berada **di atas** semua role yang dikelola
 
 ### Instalasi
 
@@ -278,109 +103,57 @@ cd Thor
 # 2. Install dependencies
 npm install
 
-# 3. Copy .env.example ke .env dan isi
+# 3. Siapkan environment
 cp .env.example .env
-# Edit .env:
-#   DISCORD_TOKEN=bot_token_kamu
-#   GUILD_ID=id_server_discord_kamu
+# Isi .env:
+#   DISCORD_TOKEN=token_bot_anda
+#   GUILD_ID=id_server_discord_anda
 
 # 4. Jalankan bot
 npm start
-
-# Untuk development:
-npm run dev
 ```
+
+Registrasi slash command berlangsung instan ke guild yang ditentukan `GUILD_ID`. Untuk development dengan auto-restart: `npm run dev`.
+
+### Konfigurasi Awal (setelah bot online)
+
+1. `/set-role admin @role` — role admin bot
+2. `/set-role verified @role` — role member terverifikasi
+3. `/set-role unverified @role` — role default member baru
+4. `/set-channel welcome #channel` — channel welcome
+5. `/set-channel goodbye #channel` — channel goodbye
+6. `/set-channel invoice #channel` — channel invoice/testimoni
+7. `/set-channel audit-log #channel` — channel audit log
+8. `/setup-verify` — pasang panel verifikasi
+9. `/setup-ticket` — pasang panel tiket
+10. `/config-show` — verifikasi semua setting
+
+Panduan lengkap termasuk contoh produk, kategori custom, dan operasional harian: **[docs/ADMIN_GUIDE.md](./docs/ADMIN_GUIDE.md)**.
 
 ---
 
-## 🧪 Testing
-
-```bash
-# Run semua tests
-npm test
-
-# Lint check
-npm run lint
-
-# Format check
-npm run format:check
-```
-
-Tests pakai built-in `node:test` (Node.js v18+), tidak perlu install dependency tambahan.
-
----
-
-## 📜 Scripts
+## 🧪 Development
 
 | Script           | Deskripsi                              |
 | ---------------- | -------------------------------------- |
 | `npm start`      | Jalankan bot                           |
 | `npm run dev`    | Jalankan dengan nodemon (auto-restart) |
-| `npm test`       | Run semua tests                        |
+| `npm test`       | Jalankan semua unit test (238 test)    |
 | `npm run lint`   | ESLint check                           |
-| `npm run format` | Prettier format all files              |
+| `npm run format` | Prettier format semua file             |
 
----
-
-## 🔧 Konfigurasi Awal (Setelah Bot Online)
-
-1. `/set-role admin @role` — set role admin bot
-2. `/set-role verified @role` — set role member terverifikasi
-3. `/set-role unverified @role` — set role default member baru
-4. `/set-channel welcome #channel` — channel welcome message
-5. `/set-channel goodbye #channel` — channel goodbye message
-6. `/set-channel invoice #channel` — channel invoice/testimoni
-7. `/set-channel audit-log #channel` — channel audit log (catat admin action)
-8. `/setup-verify` — pasang panel verifikasi
-9. `/setup-ticket` — pasang panel tiket
-
-### Untuk fitur baru (v3.9.13):
-
-**Auto-Responder:**
-
-```
-/add-responder trigger:"!sosmed" reply:"Instagram: @server\nTikTok: @server"
-```
-
-**Anti-Spam (v3.9.13):**
-
-```
-/set-automod spam_threshold:5 spam_action:mute_10m block_links:true
-/automod-toggle enabled:true
-```
-
-**Word Filter Fleksibel (v3.9.23):**
-
-```
-/add-word words:"begitu,bgini" action:Mute_10_menit   → tambah kata + action khusus
-/add-word words:"asus" tipe:Exempt_(kata_diizinkan)  → whitelist anti false-positive
-/remove-word word:bgini                              → hapus 1 kata
-/list-words                                          → lihat semua kata + action-nya
-/remove-link-whitelist role:@Member                 → hapus dari whitelist link
-```
-
-**AFK:**
-
-```
-/afk reason:"Makan dulu"
-```
-
-**Leveling:**
-
-```
-/setup-leveling enabled:true xp_per_message:15
-/add-level-role level:10 role:@Active
-```
+Test memakai `node:test` bawaan Node.js v18+ — tidak perlu dependensi tambahan. Semua test berjalan dalam sandbox (snapshot/restore) sehingga aman dijalankan di server live. CI (GitHub Actions) menjalankan lint + test pada setiap push untuk Node 18/20/22.
 
 ---
 
 ## 🛡️ Keamanan
 
-- **Token Discord & GitHub**: Jangan commit ke git. Pakai `.env`.
-- **Atomic write**: Semua file JSON ditulis via `safeWriteJSON` (tmp+rename) — anti corrupt.
-- **TOCTOU guards**: `userLock` cegah double-process saat user double-click.
-- **CI/CD**: GitHub Actions auto-run tests di setiap push.
-- **Auto-backup**: Tiap 24 jam + saat bot start.
+- **Token Discord** hanya di `.env` (di-gitignore) — jangan pernah di-commit.
+- **Atomic write** — semua file JSON ditulis via `safeWriteJSON` (tmp+rename), anti corrupt saat crash/power loss.
+- **Karantina file korup** — file data gagal parse di-rename `.corrupt-<ts>`, tidak pernah tertimpa diam-diam.
+- **TOCTOU guard** — `userLock` mencegah double-process saat user double-click.
+- **Audit log** — key selalu dimasking; semua admin action tercatat.
+- **Guild-scoped data** — key, warn, stats, dan config di-scope per guild (single-guild bot, dengan guard `GUILD_ID` di semua event).
 
 ---
 
@@ -388,41 +161,31 @@ Tests pakai built-in `node:test` (Node.js v18+), tidak perlu install dependency 
 
 ### Bot tidak online
 
-- Cek `DISCORD_TOKEN` di `.env`
-- Cek bot sudah di-invite ke server dengan ID `GUILD_ID`
+Cek `DISCORD_TOKEN` di `.env` dan pastikan bot sudah di-invite ke server dengan ID `GUILD_ID`.
 
 ### Slash command tidak muncul
 
-- Pastikan `GUILD_ID` benar (bot harus member guild itu)
-- Restart bot (registrasi instan untuk guild)
+Pastikan `GUILD_ID` benar (server ID, bukan user ID) dan bot adalah member guild itu. Restart bot — registrasi ulang instan.
 
 ### Permission error
 
-- Role bot harus **di atas** role yang dikelola
-- Bot butuh: `Manage Roles`, `Manage Channels`, `Send Messages`, `Embed Links`, `View Audit Log`, `Moderate Members`
+Role bot harus **di atas** role yang dikelola, dan bot memerl permission yang tercantum di bagian Prasyarat.
 
-### Auto-responder / Anti-spam / AFK reply gak berfungsi
+### Auto-responder / anti-spam / AFK tidak berfungsi
 
-**Penyebab paling sering: "Message Content Intent" belum di-enable.**
-
-Bot butuh akses ke `message.content` buat fitur-fitur ini. Tanpa intent itu, Discord kirim content sebagai string kosong → trigger gak match → fitur gak jalan.
-
-**Cara fix:**
+Penyebab paling sering: **Message Content Intent** belum diaktifkan.
 
 1. Buka https://discord.com/developers/applications → pilih bot
-2. Tab "Bot" → scroll ke "Privileged Gateway Intents"
-3. Toggle ON: **MESSAGE CONTENT INTENT** (dan SERVER MEMBERS INTENT kalo belum)
-4. Save Changes → Restart bot
+2. Tab **Bot** → _Privileged Gateway Intents_
+3. Aktifkan **MESSAGE CONTENT INTENT** (dan SERVER MEMBERS INTENT jika belum)
+4. Save Changes → restart bot
 
-Cek console bot — kalo ada warning `⚠️ [HINT] Pesan dari ... isinya kosong`, berarti intent emang belum on.
+Jika console bot menampilkan warning `⚠️ [HINT] Pesan dari ... isinya kosong`, intent memang belum aktif.
 
-### Tests fail
-
-- Pastikan Node.js v18+
-- Run `npm install` dulu
+Troubleshooting lengkap (tiket, role, stats, backup, dll): **[docs/ADMIN_GUIDE.md → Section 9](./docs/ADMIN_GUIDE.md)**.
 
 ---
 
-## 📝 License
+## 📝 Lisensi
 
-MIT — bebas dipakai, dimodifikasi, didistribusikan.
+MIT — bebas dipakai, dimodifikasi, dan didistribusikan. Lihat [LICENSE](./LICENSE).

@@ -1,0 +1,261 @@
+# Changelog
+
+Semua perubahan penting pada project ini didokumentasikan di file ini.
+Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
+
+Legend: 🔴 critical · 🟠 high · 🟡 medium · 🟢 improvement
+
+## [3.9.29] — 2026-09-01
+
+### Fixed
+
+- 🔴 **`/update-panel` — URL gambar/thumbnail ditolak input**: batas panjang input modal `image`/`thumbnail` hanya 500 karakter, sementara URL CDN Discord yang signed umumnya 300–450 karakter — Discord menolak input sebelum sempat disubmit. Batas dinaikkan menjadi **2048 karakter** (limit URL embed Discord), ditambah guard 2048 dengan pesan error jelas di `/update-panel` (modal) dan `/setup-ticket-panel` (slash command).
+- 🟠 **Audit log `/update-panel` menampilkan `undefined`** untuk field image/thumbnail/footer — pembacaan memakai `patch[field]` padahal data tersimpan di key `imageUrl`/`thumbnailUrl`/`footerText`.
+- Catatan: bug key-mapping image/thumbnail (perubahan tersimpan tapi tidak pernah muncul di panel) sudah diperbaiki sejak v3.9.26 — pastikan bot berjalan dengan kode terbaru (restart bot).
+
+### Added
+
+- ✅ **Safety-net kategori kosong** — `/setup-ticket-panel` & `/refresh-panel` kini memberi peringatan jika ada kategori di panel yang belum punya produk ("klik tombol kategori kosong membuka tiket BANTUAN, bukan transaksi — tambahkan produk via `/add-product`"). Kategori `help`/`report` tidak diperingatkan (memang quick-action).
+- 14 unit test baru (`tests/unit/panelEdit.test.js`): flow modal end-to-end (URL CDN tersimpan & dirender, guard 2048, clear, URL invalid, cross-guild guard), safety-net 5 skenario, regression guard panjang input.
+
+## [3.9.28] — 2026-09-01
+
+### Added
+
+- ✅ **`classifyProduct()`** — pure function hasil ekstraksi dari `createTicket`. Rule klasifikasi: hanya kategori `help`/`report`/produk ber-flag `isHelp` yang masuk **BANTUAN**; **semua id kategori lain apa pun (`akun_ml`, `lisensi_key`, `jasa`, `topup`, custom...) otomatis TRANSAKSI**. Menambah kategori baru tidak memerlukan perubahan kode sama sekali.
+- 14 unit test baru (`tests/unit/newCategorySafety.test.js`): skenario akun_ml non-key (📦 Kirim Pesanan), lisensi_key (🔑 Set Key), roundtrip meta → resolveTicketType → matriks tombol, pewarisan `requires_key` kategori→produk di `/add-product`, deskripsi dropdown.
+
+### Fixed
+
+- 🟠 **Deskripsi dropdown panel untuk kategori campur** — sebelumnya memakai flag `requiresKey` kategori (menyesatkan jika kategori berisi campuran produk key & non-key). Sekarang dihitung dari produk aktual: semua key → "pakai key", semua non-key → "tanpa key", campur → "N tanpa key / M pakai key".
+
+### Documented
+
+- Gotcha: produk transaksi **tanpa** flag `requires_key` dianggap pakai key (tombol Set Key). Untuk produk akun/jasa: set `requires_key:false` di **kategori** — produk baru mewarisi otomatis.
+
+## [3.9.27] — 2026-09-01
+
+### Fixed
+
+- 🔴 **Produk non-key (jual akun/jasa) dianggap tiket BANTUAN** — sistem lama mengacaukan `requiresKey` (produk pakai key?) dengan `isTransaction` (tiket jual-beli?). Diperbaiki dengan flag `isTransaction` eksplisit via `resolveTicketType()` (satu sumber kebenaran, 5 skenario tombol close).
+- 🔴 **Tombol close produk non-key memakai gaya help** — "✅ Pesanan Sukses / ❌ Tidak Jadi Beli" tidak pernah muncul.
+- 🔴 **Invoice/testimoni tidak pernah dikirim untuk produk non-key** — `requiresKey=false` salah dianggap "help/report" di `closeTicket`.
+- 🔴 **Stats/leaderboard tidak mencatat penjualan non-key** — `recordPurchase` hanya jalan di flow Set Key.
+- 🔴 **Auto-role produk non-key tidak pernah diberikan** padahal `/set-product-role` menjanjikannya (sekarang lewat Kirim Pesanan ATAU Pesanan Sukses).
+- 🔴 **Routing `modal_deliver_order:` hilang** — prefix modal tanpa fallback generik di router → submit modal menjadi dead interaction.
+- 🟠 **Invoice dobel untuk transaksi key** — dikirim saat Set Key DAN saat close "Selesai". Diperbaiki dengan flag `isInvoiceSent` di meta tiket.
+- 🟠 **Modal title > 45 karakter membuat `showModal` throw** — "Set Key — <label produk>" bisa 89 karakter → tombol Set Key mati diam-diam. Fixed (slice 45).
+- 🟠 **Deskripsi dropdown panel menyesatkan** — kategori non-key berproduk dilabeli "Bantuan / non-transaksi". Sekarang berbasis konten aktual.
+
+### Added
+
+- ✅ **Tombol 📦 Kirim Pesanan** untuk produk non-key (mirror Set Key): admin isi detail pesanan (multi-baris) di modal → bot **DM detail ke pembeli** (chat tiket terhapus saat close — DM menjadi satu-satunya salinan permanen) + auto-role + auto-expire + invoice + stats + audit log `ORDER_DELIVERED`.
+- Emoji dropdown produk kini membedakan 🔑 (pakai key) vs 📦 (tanpa key).
+- `resolveTicketType()` backward-compatible: tiket lama (tanpa flag) tetap memakai klasifikasi lama — tanpa regresi; tiket baru selalu benar.
+
+## [3.9.26] — 2026-08-31
+
+Audit ulang seluruh codebase dengan konteks **bot dipakai untuk 1 guild saja** — 6 temuan baru diperbaiki + hardening + garbage collector.
+
+### Fixed
+
+- 🔴 **`/update-panel` image/thumbnail/footer tidak pernah berfungsi** — patch tersimpan di key yang salah (`image`) padahal builder membaca `imageUrl` → 3 dari 6 field yang diiklankan adalah no-op diam-diam. Fixed (key mapping) + pre-fill modal.
+- 🔴 **`/giveaway list` & `/poll list` mati permanen di ~30 entry** — description embed > 4096 → throw. Sekarang: 15 terbaru + ringkasan + GC harian (entry > 30 hari dipangkas otomatis).
+- 🔴 **Poll dengan question panjang = zombie + admin stuck "Bot is thinking..."** — entry persist sebelum render throw. Fixed: validasi di command (maks 250) + render-first + safeEditReply.
+- 🔴 **`claim_giveaway` tidak bisa dihapus permanen** — migration di `getConfig()` (jalan per pesan) menambahkan kategori kembali setelah `/remove-category`. Fixed dengan flag `claimGiveawayDismissed`.
+- 🟠 **Label/price produk panjang mematikan flow tiket** — dropdown throw `addOptions` (limit 100). Fixed: cap di registry + handler + slice defensif di 3 dropdown.
+- 🟠 **Emoji bebas tersimpan bisa meracuni panel** — string bukan-emoji membuat `/setup-verify` & semua panel tiket mati. Fixed: validasi emoji di set-verify-button, add-category, update-category.
+
+### Changed (Hardening & Performa)
+
+- 🟢 **Karantina file korup** — 16 file data di-rename `.corrupt-<ts>` sebelum fallback default (sebelumnya: isi korup tertimpa diam-diam oleh save berikutnya).
+- 🟢 **Hot-path cache** — automod/afk/responders/levels kini read-through cache (sebelumnya 5–7 `readFileSync` sinkron per pesan). AFK mention di-batch.
+- 🟢 **Guard `GUILD_ID` di semua event** — pesan/command/member/voice dari guild lain diabaikan.
+- 🟢 **Migrasi v1→v2 config tidak lagi drop field modern** (ticketCategories/leveling/verifyButton preserve).
+- 🟡 messageCreate per-hook try/catch; `getSubcommand(false)` + hint; prize/question/key max_length; reroll guild-check; backup cancel tombol di-handle; logAudit tahan detail panjang; DM set-key & transcript tahan data panjang; Set Key lookup produk pakai `value` (tahan rename); admin re-check di modal update-panel; leveling clamp nilai.
+
+### Docs
+
+- `docs/ADMIN_GUIDE.md` + `docs/README.md` disinkronkan — struktur folder `src/` yang sebenarnya (sebelumnya masih struktur lama pre-refactor + 47 command).
+
+## [3.9.25] — 2026-08-31
+
+### Added
+
+- Support `\n` (baris baru) ditambahkan ke field yang terlewat di v3.9.24: `/set-message` (tipe Body), `/afk reason`, `/warn reason`, `/setup-selfrole` & `/selfrole-add` description. Hint `(support \n)` tampil di deskripsi opsi command.
+- Catatan: tipe **Title** sengaja tidak dikonversi — embed title Discord menolak newline. Input **modal** tidak memerlukan `\n` (Enter menghasilkan baris baru asli).
+
+## [3.9.24] — 2026-08-31
+
+### Added
+
+- **Fitur `\n` (baris baru) untuk semua input teks multi-baris** — input slash command di Discord tidak bisa tekan Enter (Enter = kirim form): `/send-message`, `/announce`, `/announce-schedule`, `/setup-ticket-panel body`, `/add-responder reply`.
+
+### Fixed
+
+- 🔴 **`/update-category` & `/update-product` tidak pernah berfungsi** — terdaftar di registry + diiklankan di /help, tapi tidak di-map di router. Fixed + guard test.
+- 🔴 **Backup bolong** — `automod.json`, `levels.json`, `responders.json`, `afk.json`, `panels.json` tidak pernah di-backup. Fixed + guard test.
+- 🔴 **Crash exit code 0** — PM2/systemd/Docker tidak restart bot setelah crash. Sekarang `exit(1)` + shutdown guard anti double-flush.
+- 🔴 **Test menulis/hapus data produksi** — `npm test` di server live menghapus `panels.json` & meng-evict backup asli. Test sekarang sandbox (snapshot/restore).
+- 🟠 ready.js: satu try/catch raksasa → per-langkah; userLock bisa dihapus holder basi → owner-token; tombol close ticket & modal set key tanpa re-check admin → fixed (defense-in-depth); AFK reason bisa mass-ping → `parse: []`; member kehilangan required role tidak bisa keluar giveaway → cek role hanya saat join; `/giveaway end` tidak ber-lock → withUserLock; phantom devDeps; engines node; filter webhook di messageCreate; defer modal poll.
+
+## [3.9.23] — 2026-08-31
+
+### Added — Auto-mod WORD FLEX
+
+- **Word filter fleksibel**: `wordRules` per kata `{word, action, addedBy, addedAt}` + `exemptWords` + `wordMatchMode` (`whole_word` default).
+- Matching **whole-word** dengan regex escape — "asu" tidak match "asus" (anti false-positive).
+- **Action per kata** — kata ringan cukup delete, kata berat langsung mute/kick.
+- 4 command baru: `/add-word` (append, tanpa replace), `/remove-word`, `/list-words`, `/remove-link-whitelist` — total 81 slash command.
+- Migrasi otomatis `blockWords` legacy → `wordRules` (idempotent, lazy persist).
+
+## [3.9.22] — 2026-08-16
+
+### Changed
+
+- **DM set-key memakai emoji** (📦🌐🔑🎭⏰📋💡) dan **nama role** (bukan mention — mention role tidak ke-resolve di DM).
+- Notif di channel tiket lebih singkat & ditujukan ke user ("key sudah dikirim via DM"), dengan fallback manual jika DM gagal.
+- DM `/set-key` konsisten dengan ticket Set Key, dibingkai sebagai hadiah ("kamu mendapat hadiah") — konteks gift untuk member.
+
+## [3.9.21] — 2026-08-16
+
+### Changed
+
+- DM ke member memakai inline code (`` `key` ``) bukan codeblock — long-press di Discord mobile langsung memunculkan menu Copy. Bahasa lebih natural.
+- Di channel tiket, bot hanya mengirim pesan singkat untuk user (bukan panel baru untuk admin).
+
+## [3.9.20] — 2026-08-16
+
+### Changed
+
+- **Set Key sukses → channel tiket tetap terbuka** (sebelumnya otomatis dihapus → transcript tidak tersimpan, member tidak sempat bertanya). Bot mengirim pesan singkat "key sudah dikirim ke DM".
+- Admin & member bisa Q&A dulu; saat Tutup Tiket dengan `meta.isCompleted=true`, hanya muncul tombol "✅ Selesai" (tanpa "Tidak Jadi Beli").
+- Transcript otomatis tersimpan ke channel transcript saat close + invoice dikirim jika belum.
+
+## [3.9.19] — 2026-08-16
+
+### Added — MAX FLEXIBILITY
+
+- **Routing tiket berbasis "kategori punya produk atau tidak"** — kategori berproduk → tiket TRANSAKSI + dropdown produk; kategori kosong → tiket BANTUAN langsung (quick action).
+- `/update-category` & `/update-product` — edit tanpa hapus+tambah ulang (semua field opsional, hanya yang diisi yang berubah).
+
+## [3.9.18] — 2026-08-16
+
+### Changed
+
+- Label tombol default tiket diubah ke **Help** & **Report** (sebelumnya "Bantuan Staff" & "Laporkan Member") + kategori contoh **Claim Giveaway** ditambahkan (bisa dihapus permanen sejak v3.9.26).
+- Fix bug generalisasi `requiresKey` di kategori.
+- Migrasi otomatis label lama saat bot start (hanya jika belum di-customize admin).
+
+## [3.9.17] — 2026-08-06
+
+### Fixed
+
+- Fix 38+ temuan audit (CRITICAL + HIGH + MEDIUM + LOW).
+- Hotfix: `DiscordAPIError 50035` — option description command > 100 karakter.
+- Hotfix: `/help` embed melebihi limit 6000 karakter.
+
+## [3.9.15] — 2026-08-02
+
+### Fixed
+
+- Ronde 2 audit — 16 bug lintas commands/interactions/data/events/services/ui.
+- 🔴 CRITICAL: auto-responder tidak berfungsi karena **Message Content Intent** tidak diaktifkan — ditambahkan hint di console + dokumentasi.
+
+## [3.9.14] — 2026-08-06
+
+### Added
+
+- **Multi-panel tiket persisten** — panel berbeda dengan subset kategori berbeda di channel berbeda, tersimpan di `data/panels.json` (ikut backup). Fix 10 runtime bugs.
+
+## [3.9.13] — 2026-08-01
+
+### Added
+
+- 4 fitur komunitas baru: **Auto-Responder**, **Anti-Spam & Auto-Mod**, **AFK System**, **Leveling System** (XP, role reward, leaderboard) + rebrand ke generic Community Bot.
+
+## [3.9.12] — 2026-08-01
+
+### Added
+
+- Ticket body fleksibel via modal editor + template variables (`{server}`, `{price_list}`) + update `/help`.
+
+## [3.9.11] — 2026-08-01
+
+### Added
+
+- Flexible ticket panel: kategori custom, multi-panel, transcript, conditional roles (Phase 1+2+3).
+
+## [3.9.10] — 2026-08-01
+
+### Changed
+
+- Refactor penuh per-domain (commands/interactions/data/services/ui/infra), tanpa kode legacy + CI/CD (GitHub Actions) — 71 test saat itu.
+
+## [3.9.9] — 2026-08-01
+
+### Changed
+
+- Refactor ke struktur folder profesional + penambahan test.
+
+## [3.9.8] — 2026-08-01
+
+### Fixed
+
+- 30+ bug lintas CRITICAL/HIGH/MEDIUM (ronde 1 + ronde 2: constants sync, audit retry logic, genId entropy).
+
+## [3.9.7] — 2026-08-01
+
+### Fixed
+
+- 🔴 Crash tombol **Send** di embed builder (`ExpectedConstraintError` label > 45 karakter).
+- 🟠 `InteractionNotReplied` saat modal submit handler fallback.
+
+## [3.9.6] — 2026-08-01
+
+### Added
+
+- Opsi **💬 Message (plain text)** di embed builder — teks pengantar di luar embed (`@everyone`, mention, `\n`, maks 2000 char) + pre-fill modal Send.
+
+## [3.9.5] — 2026-08-01
+
+### Added
+
+- Command `/send-message` — kirim plain text ke channel (support `\n` & mention valid).
+- `/embed-list` menampilkan summary message.
+
+## [3.9.4] — 2026-07-31
+
+### Fixed
+
+- 🔴 CRITICAL: `stats.json` cross-guild data leak — sekarang composite key `${guildId}:${userId}`.
+- 🔴 CRITICAL: `safeEditReply` helper dengan `followUp` fallback untuk 10008/10062/40060.
+- 🟠 ticket close + set key memakai `getTicketMeta` (anti spoof via channel topic); temp voice orphan cleanup; warn auto-action hanya mark jika API sukses; auto-transfer voice ownership filter bot; `restoreBackup` invalidate permissions cache; `/config-show` guild-scoped.
+
+## [3.9.3] — 2026-07-31
+
+### Fixed
+
+- 🔴 CRITICAL: `removeAllKeysByUser` cross-guild wipe — sekarang scoped per guild.
+- Validasi title (256) & description (4096) di `/announce` & `/announce-schedule`.
+
+## [3.9.2] — 2026-07-31
+
+### Fixed
+
+- Per-user lock untuk giveaway join/leave & poll vote (anti double-click TOCTOU).
+- TTL cache 30s untuk admin role check; retry 1x audit log; validasi panjang embed builder; `.env.example` dengan catatan keamanan.
+
+## [3.9.1] — 2026-07-31
+
+### Fixed — Security & Race Condition Hardening
+
+- 🔴 **Mask key di audit log** (sebelumnya bocor 8 karakter pertama key).
+- 2-step confirmation `/restore-backup`; poll modal customId pakai session store (anti 100-char limit); metadata tiket pindah ke `tickets.json` (sebelumnya di channel topic — bisa di-spoof); validasi mention ketat; hapus hardcoded `@everyone` ping di giveaway; `Math.max(...spread)` diganti loop (anti RangeError); restore lock + path traversal guard; `statsManager.reload()` setelah restore; range validation `parseTime` (maks 365 hari relatif / 5 tahun absolut).
+
+## [3.9.0] — 2026-07-31
+
+### Fixed — Critical Bug Fixes & Data Integrity
+
+- 🔴 **Atomic write** (`safeWriteJSON`, tmp+rename) untuk semua JSON store — anti corrupt saat crash/power loss.
+- `/clear-schedule` scoped per guild; 2-step confirmation `/reset-config`; exclusive mode self-role select; prototype pollution guard di `configManager.setField`; `warnManager` keyed `(guildId, userId)` + auto-migration; `processExpiredRole` tidak hapus schedule saat transient error; ghost loop fix recurring announcements; skip bots + single audit log fetch di memberHandler.
