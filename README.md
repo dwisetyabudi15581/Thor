@@ -2,7 +2,7 @@
 
 Bot Discord serbaguna untuk komunitas apa pun — server jualan, gaming, content creator, hingga komunitas umum. Semua konfigurasi dapat diatur langsung dari Discord melalui slash command, tanpa mengedit file.
 
-> **v3.9.29** · 81 slash command · 238 unit test · discord.js v14 · Node.js 18+ · single-guild
+> **v3.9.30** · 80 slash command · 248 unit test · discord.js v14 · Node.js 18+ · single-guild
 >
 > 📖 **[Panduan Admin Lengkap](./docs/ADMIN_GUIDE.md)** — setup, operasional harian, troubleshooting
 > 📜 **[Changelog](./CHANGELOG.md)** — riwayat semua versi
@@ -124,9 +124,10 @@ Registrasi slash command berlangsung instan ke guild yang ditentukan `GUILD_ID`.
 5. `/set-channel goodbye #channel` — channel goodbye
 6. `/set-channel invoice #channel` — channel invoice/testimoni
 7. `/set-channel audit-log #channel` — channel audit log
-8. `/setup-verify` — pasang panel verifikasi
-9. `/setup-ticket` — pasang panel tiket
-10. `/config-show` — verifikasi semua setting
+8. `/set-channel transcript #channel` — channel arsip transcript tiket (opsional)
+9. `/setup-verify` — pasang panel verifikasi
+10. `/setup-ticket` — pasang panel tiket
+11. `/config-show` — verifikasi semua setting
 
 Panduan lengkap termasuk contoh produk, kategori custom, dan operasional harian: **[docs/ADMIN_GUIDE.md](./docs/ADMIN_GUIDE.md)**.
 
@@ -138,7 +139,7 @@ Panduan lengkap termasuk contoh produk, kategori custom, dan operasional harian:
 | ---------------- | -------------------------------------- |
 | `npm start`      | Jalankan bot                           |
 | `npm run dev`    | Jalankan dengan nodemon (auto-restart) |
-| `npm test`       | Jalankan semua unit test (238 test)    |
+| `npm test`       | Jalankan semua unit test (248 test)    |
 | `npm run lint`   | ESLint check                           |
 | `npm run format` | Prettier format semua file             |
 

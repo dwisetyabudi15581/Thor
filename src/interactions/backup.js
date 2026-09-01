@@ -127,6 +127,7 @@ async function handleResetConfigConfirm(interaction) {
                 '• `/set-channel welcome #channel`\n' +
                 '• `/set-channel goodbye #channel`\n' +
                 '• `/set-channel invoice #channel`\n' +
+                '• `/set-channel transcript #channel`\n' +
                 '• `/add-product label value price duration`',
             components: []
         });

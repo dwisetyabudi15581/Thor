@@ -529,7 +529,8 @@ async function sendInvoice(channel, userId, productName, price, closer) {
  * v3.9.11 Phase 3: Save transcript tiket ke channel transcript.
  *
  * Fetch semua messages di channel tiket, format jadi text, kirim ke channel
- * transcript yang sudah di-set via /set-transcript-channel.
+ * transcript yang sudah di-set via /set-channel tipe:transcript (v3.9.30,
+ * dulu command terpisah /set-transcript-channel).
  *
  * Limit Discord: 1 message = 2000 char. Kalau transcript > 2000 char,
  * bagi jadi multiple messages.

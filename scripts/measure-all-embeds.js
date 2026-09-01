@@ -17,7 +17,12 @@ function makeMockInteraction(commandName) {
             name: 'Test Server',
             id: '123',
             memberCount: 100,
-            members: { fetch: async () => ({ roles: { cache: { has: () => false }, add: async () => {}, remove: async () => {} }, user: { tag: 'Test', send: async () => {} } }) },
+            members: {
+                fetch: async () => ({
+                    roles: { cache: { has: () => false }, add: async () => {}, remove: async () => {} },
+                    user: { tag: 'Test', send: async () => {} }
+                })
+            },
             roles: { cache: { get: () => ({ name: 'TestRole' }) } },
             channels: { cache: { get: () => null } }
         },
@@ -42,7 +47,9 @@ function makeMockInteraction(commandName) {
         },
         deferred: false,
         replied: false,
-        deferReply: async () => { this.deferred = true; },
+        deferReply: async () => {
+            this.deferred = true;
+        },
         editReply: async opts => {
             measureEmbed(opts, commandName);
             return {};
@@ -88,15 +95,23 @@ async function test() {
 
     for (const cmd of commands) {
         try {
-            const handler = require(`../src/commands/${
-                cmd === 'config-show' || cmd === 'list-messages' || cmd === 'list-products' ? 'config' :
-                cmd === 'list-categories' ? 'categories' :
-                cmd === 'list-keys' ? 'keys' :
-                cmd === 'list-panels' ? 'panels-mgmt' :
-                cmd === 'stats' || cmd === 'leaderboard' ? 'stats' :
-                cmd === 'list-level-roles' ? 'leveling' :
-                'help'
-            }`);
+            const handler = require(
+                `../src/commands/${
+                    cmd === 'config-show' || cmd === 'list-messages' || cmd === 'list-products'
+                        ? 'config'
+                        : cmd === 'list-categories'
+                          ? 'categories'
+                          : cmd === 'list-keys'
+                            ? 'keys'
+                            : cmd === 'list-panels'
+                              ? 'panels-mgmt'
+                              : cmd === 'stats' || cmd === 'leaderboard'
+                                ? 'stats'
+                                : cmd === 'list-level-roles'
+                                  ? 'leveling'
+                                  : 'help'
+                }`
+            );
             const interaction = makeMockInteraction(cmd);
             await handler(interaction);
         } catch (err) {

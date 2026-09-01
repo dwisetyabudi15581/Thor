@@ -93,7 +93,9 @@ function mockClient() {
         };
         await handler(i1);
         if (sentContent !== 'Baris 1\nBaris 2\n\nBaris 4') {
-            throw new Error('FAIL: send-message tidak mengubah \\n jadi newline. Dapat: ' + JSON.stringify(sentContent));
+            throw new Error(
+                'FAIL: send-message tidak mengubah \\n jadi newline. Dapat: ' + JSON.stringify(sentContent)
+            );
         }
         console.log('✅ 1. /send-message: \\n → newline asli (4 baris, termasuk baris kosong)');
 
@@ -144,7 +146,8 @@ function mockClient() {
             user: { id: 'u1', tag: 'SmokeUser' },
             client: mockClient(),
             options: {
-                getString: name => (name === 'tipe' ? 'welcomeBody' : name === 'teks' ? 'Halo\\nSelamat datang\\n\\nSemoga betah' : null)
+                getString: name =>
+                    name === 'tipe' ? 'welcomeBody' : name === 'teks' ? 'Halo\\nSelamat datang\\n\\nSemoga betah' : null
             },
             deferReply: async () => {},
             editReply: async () => ({})
@@ -178,7 +181,8 @@ function mockClient() {
         const storedTitle = cfgAfterTitle?.messages?.welcomeTitle;
         if (storedTitle !== 'Judul\\nGenap') {
             throw new Error(
-                'FAIL: set-message Title HARUS tetap literal (embed title tidak boleh newline). Dapat: ' + JSON.stringify(storedTitle)
+                'FAIL: set-message Title HARUS tetap literal (embed title tidak boleh newline). Dapat: ' +
+                    JSON.stringify(storedTitle)
             );
         }
         console.log('✅ 4. /set-message (Title): \\n TETAP literal — embed title aman dari newline');
@@ -270,10 +274,10 @@ function mockClient() {
                     name === 'title'
                         ? 'Panel Uji'
                         : name === 'description'
-                            ? 'Baris A\\nBaris B\\n\\nPilih role di bawah'
-                            : name === 'type'
-                                ? 'button'
-                                : null,
+                          ? 'Baris A\\nBaris B\\n\\nPilih role di bawah'
+                          : name === 'type'
+                            ? 'button'
+                            : null,
                 getBoolean: () => false
             },
             deferReply: async () => {},

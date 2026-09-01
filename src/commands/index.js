@@ -186,10 +186,11 @@ const COMMAND_TO_DOMAIN = {
     'update-category': 'categories',
     'update-product': 'products',
 
-    // v3.9.11 Phase 1 & 3: panels (verify button, multi-panel ticket, transcript)
+    // v3.9.11 Phase 1 & 3: panels (verify button, multi-panel ticket)
+    // v3.9.30: /set-transcript-channel dihapus — digabung ke /set-channel
+    // tipe:transcript (domain config) supaya admin cuma hafal satu command channel.
     'set-verify-button': 'panels',
     'setup-ticket-panel': 'panels',
-    'set-transcript-channel': 'panels',
 
     // v3.9.14: panel management (list/delete/update/refresh)
     'list-panels': 'panels-mgmt',

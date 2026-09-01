@@ -105,9 +105,9 @@ module.exports = async function (interaction) {
             {
                 name: '📢 Atur Channel & Auto-Split Tiket',
                 value: [
-                    '• `/set-channel welcome #ch` — set (welcome/goodbye/invoice/audit-log)',
-                    '• `/set-transcript-channel #ch` — auto-save transcript tiket sebelum close',
+                    '• `/set-channel welcome #ch` — set (welcome/goodbye/invoice/audit-log/**transcript**)',
                     '• `/remove-channel welcome` — hapus channel dari config',
+                    '• `/set-channel transcript #ch` — auto-save transcript tiket sebelum close',
                     '',
                     '**🎫 Auto-Split:** Bot pisah tiket jadi 2 kategori otomatis:',
                     '• **`🎫 TRANSAKSI`** — semua tiket produk: pakai key (🔑 Set Key) TAU non-key (📦 Kirim Pesanan)',

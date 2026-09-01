@@ -50,9 +50,11 @@ function getCommands() {
         },
 
         // === SET CHANNEL ===
+        // v3.9.30: /set-transcript-channel digabung ke sini (tipe: transcript)
+        // supaya admin cuma hafal SATU command channel.
         {
             name: 'set-channel',
-            description: 'Atur channel (invoice / welcome / goodbye / audit-log)',
+            description: 'Atur channel (invoice / welcome / goodbye / audit-log / transcript)',
             defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
             options: [
                 {
@@ -64,7 +66,8 @@ function getCommands() {
                         { name: 'Invoice', value: 'invoice' },
                         { name: 'Welcome', value: 'welcome' },
                         { name: 'Goodbye', value: 'goodbye' },
-                        { name: 'Audit Log (catat admin action)', value: 'audit-log' }
+                        { name: 'Audit Log (catat admin action)', value: 'audit-log' },
+                        { name: 'Transcript Tiket (auto-save saat close)', value: 'transcript' }
                     ]
                 },
                 { type: 7, name: 'channel', description: 'Channel text yang dipakai', required: true }
@@ -355,14 +358,6 @@ function getCommands() {
             ]
         },
 
-        // v3.9.11 Phase 3: ticket transcript
-        {
-            name: 'set-transcript-channel',
-            description: 'Set channel untuk auto-save transcript tiket sebelum close',
-            defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
-            options: [{ type: 7, name: 'channel', description: 'Channel text untuk transcript', required: true }]
-        },
-
         // v3.9.12: /edit-message — modal editor untuk message config (multi-line, lebih flexible)
         {
             name: 'edit-message',
@@ -530,7 +525,7 @@ function getCommands() {
         // === REMOVE CHANNEL (hapus channel dari config) ===
         {
             name: 'remove-channel',
-            description: 'Hapus channel dari config (invoice / welcome / goodbye / audit-log)',
+            description: 'Hapus channel dari config (invoice / welcome / goodbye / audit-log / transcript)',
             defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
             options: [
                 {
@@ -542,7 +537,8 @@ function getCommands() {
                         { name: 'Invoice', value: 'invoice' },
                         { name: 'Welcome', value: 'welcome' },
                         { name: 'Goodbye', value: 'goodbye' },
-                        { name: 'Audit Log', value: 'audit-log' }
+                        { name: 'Audit Log', value: 'audit-log' },
+                        { name: 'Transcript Tiket', value: 'transcript' }
                     ]
                 }
             ]

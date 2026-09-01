@@ -6,6 +6,7 @@
  *
  * Dipisah dari handlers/commandHandler.js (v3.9.9 refactor).
  * Behavior: kelola config bot (roles, channels, messages) + setup panel verifikasi/tiket.
+ * v3.9.30: /set-transcript-channel (panels) digabung ke /set-channel tipe:transcript.
  */
 
 const {
@@ -30,7 +31,8 @@ const {
 } = require('./_shared');
 
 // v3.9.12: ModalBuilder untuk /edit-message
-const { ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
+// v3.9.30: ChannelType untuk validasi /set-channel (semua tipe butuh text channel)
+const { ModalBuilder, TextInputBuilder, TextInputStyle, ChannelType } = require('discord.js');
 
 // v3.9.25: konversi \n literal → newline asli (fitur multi-line PC)
 const { normalizeNewlines } = require('../infra/text');
@@ -251,10 +253,19 @@ module.exports = async function (interaction) {
     }
 
     // === SET CHANNEL ===
+    // v3.9.30: mantan /set-transcript-channel digabung ke sini — satu command
+    // untuk semua channel (invoice/welcome/goodbye/audit-log/transcript).
     if (interaction.commandName === 'set-channel') {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         const tipe = interaction.options.getString('tipe');
         const channel = interaction.options.getChannel('channel');
+
+        // Validasi tipe channel: semua tujuan di sini butuh text channel
+        // (bot mengirim embed/teks — voice/category/announcement-forum tidak cocok).
+        if (!channel || channel.type !== ChannelType.GuildText) {
+            return safeEditReply(interaction, { content: '❌ Channel harus berupa text channel.' });
+        }
+
         setField(`channels.${tipe}`, channel.id);
         await logAudit(interaction.client, {
             action: 'SET_CHANNEL',
@@ -263,8 +274,14 @@ module.exports = async function (interaction) {
             details: `Channel **${tipe}** diatur ke #${channel.name} (\`${channel.id}\`)`,
             guildId: interaction.guild.id
         });
+
+        // v3.9.30 (dipindah dari mantan /set-transcript-channel): tip khusus transcript.
+        const transcriptTip =
+            tipe === 'transcript'
+                ? '\n\n💡 Setiap tiket yang di-close akan auto-save chat history ke channel ini sebagai bukti transaksi.'
+                : '';
         return safeEditReply(interaction, {
-            content: `✅ Channel **${tipe}** diatur ke ${channel} (\`${channel.id}\`)`
+            content: `✅ Channel **${tipe}** diatur ke ${channel} (\`${channel.id}\`)${transcriptTip}`
         });
     }
 
@@ -418,7 +435,9 @@ module.exports = async function (interaction) {
                     value: [
                         `• Welcome: ${fmt(config.channels.welcome, '#')}`,
                         `• Goodbye: ${fmt(config.channels.goodbye, '#')}`,
-                        `• Invoice: ${fmt(config.channels.invoice, '#')}`
+                        `• Invoice: ${fmt(config.channels.invoice, '#')}`,
+                        `• Audit Log: ${fmt(config.channels['audit-log'], '#')}`,
+                        `• Transcript Tiket: ${fmt(config.channels.transcript, '#')}`
                     ].join('\n'),
                     inline: false
                 },

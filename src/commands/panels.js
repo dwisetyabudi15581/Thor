@@ -1,9 +1,10 @@
 /**
  * Domain: panels
- * Slash commands: /set-verify-button, /setup-ticket-panel, /set-transcript-channel
+ * Slash commands: /set-verify-button, /setup-ticket-panel
  *
  * v3.9.11 Phase 1: verify button customization
- * v3.9.11 Phase 3: multi-panel ticket + transcript channel
+ * v3.9.11 Phase 3: multi-panel ticket + transcript channel (command-nya sejak
+ *          v3.9.30 digabung ke /set-channel tipe:transcript — domain config)
  * v3.9.14: persistent panel storage (panels.json) + full customization per panel
  *          (title, body, color, image, thumbnail, footer, layout, channel target).
  *          New shared builder: buildTicketPanel(panel, ctx) supaya
@@ -538,36 +539,6 @@ module.exports = async function (interaction) {
                 content: `❌ Gagal kirim panel tiket ke ${targetChannel}: ${sendErr.message}\n\nPastikan bot punya permission **Send Messages** dan **Embed Links** di channel tersebut.`
             });
         }
-    }
-
-    // === SET TRANSCRIPT CHANNEL ===
-    if (interaction.commandName === 'set-transcript-channel') {
-        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-
-        const channel = interaction.options.getChannel('channel');
-
-        // Validate channel type
-        if (!channel || channel.type !== ChannelType.GuildText) {
-            return safeEditReply(interaction, { content: '❌ Channel harus berupa text channel.' });
-        }
-
-        // v3.9.11 Phase 3: simpan ke config.channels.transcript
-        config.channels.transcript = channel.id;
-        saveConfig(config);
-
-        await logAudit(interaction.client, {
-            action: 'SET_CHANNEL',
-            actorId: interaction.user.id,
-            actorTag: interaction.user.tag,
-            details: `Channel transcript diatur ke ${channel} (\`${channel.id}\`)`,
-            guildId: interaction.guild.id
-        });
-
-        return safeEditReply(interaction, {
-            content:
-                `✅ Channel transcript diatur ke ${channel}.\n\n` +
-                `💡 Setiap tiket yang di-close akan auto-save chat history ke channel ini sebagai bukti transaksi.`
-        });
     }
 };
 

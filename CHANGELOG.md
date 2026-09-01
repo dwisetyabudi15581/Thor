@@ -5,6 +5,19 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 Legend: 🔴 critical · 🟠 high · 🟡 medium · 🟢 improvement
 
+## [3.9.30] — 2026-09-01
+
+### Changed
+
+- 🟢 **`/set-transcript-channel` digabung ke `/set-channel tipe:transcript`** — permintaan admin: dua command channel yang mirip bikin bingung. Kini **satu command `/set-channel`** mengatur semua channel: `invoice`, `welcome`, `goodbye`, `audit-log`, `transcript`. Command terpisah dihapus dari registry (total **81 → 80 slash command**); `ready.js` me-register ulang otomatis saat restart, jadi command lama hilang dari Discord tanpa langkah manual. Data tidak berubah (tetap `config.channels.transcript`).
+- `/remove-channel` kini juga punya choice `transcript` — pola set/hapus konsisten untuk semua tipe channel.
+- `/config-show` menampilkan Audit Log + Transcript Tiket di field Channels (sebelumnya hanya welcome/goodbye/invoice).
+- `/set-channel` kini menolak channel non-text (voice/category) untuk **semua** tipe — guard yang dulu hanya ada di handler transcript.
+
+### Added
+
+- 10 unit test baru (`tests/unit/setChannelMerge.test.js`): registry (command lama hilang, total tepat 80, choice baru), router (command lama → "belum didukung"), handler (set transcript + tip khusus, tolak voice channel, regression tipe lain, remove transcript, roundtrip key yang dibaca `saveTranscript`).
+
 ## [3.9.29] — 2026-09-01
 
 ### Fixed

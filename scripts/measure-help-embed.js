@@ -48,7 +48,9 @@ function makeMockInteraction() {
                     console.log(`    Description: ${data.description?.length || 0}`);
                     if (data.fields) {
                         data.fields.forEach((f, i) => {
-                            console.log(`    Field[${i}] "${f.name}": name=${f.name.length}, value=${(f.value || '').length}`);
+                            console.log(
+                                `    Field[${i}] "${f.name}": name=${f.name.length}, value=${(f.value || '').length}`
+                            );
                         });
                     }
                 }
@@ -75,7 +77,9 @@ function makeMockInteraction() {
                     console.log(`    Description: ${data.description?.length || 0}`);
                     if (data.fields) {
                         data.fields.forEach((f, i) => {
-                            console.log(`    Field[${i}] "${f.name}": name=${f.name.length}, value=${(f.value || '').length}`);
+                            console.log(
+                                `    Field[${i}] "${f.name}": name=${f.name.length}, value=${(f.value || '').length}`
+                            );
                         });
                     }
                 }

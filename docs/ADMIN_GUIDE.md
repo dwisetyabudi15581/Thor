@@ -47,7 +47,7 @@ npm start
 
 - Console menampilkan: `✅ Bot online sebagai NamaBot`
 - Console menampilkan: `✅ Slash Commands terdaftar ke guild: Nama Server (instan!)`
-- Di Discord, ketik `/` — semua **81 slash command** harus muncul
+- Di Discord, ketik `/` — semua **80 slash command** harus muncul
 - Jika command tidak muncul, pastikan `GUILD_ID` di `.env` benar
 
 ---
@@ -78,6 +78,7 @@ Urutan berikut adalah **rekomendasi** untuk server baru. Lewati langkah yang sud
 /set-channel goodbye #goodbye
 /set-channel invoice #testimoni
 /set-channel audit-log #audit-log
+/set-channel transcript #transcript
 ```
 
 **Penjelasan:**
@@ -86,6 +87,9 @@ Urutan berikut adalah **rekomendasi** untuk server baru. Lewati langkah yang sud
 - `goodbye` — channel tempat bot mengirim goodbye message saat member leave/kick/ban
 - `invoice` — channel testimoni transaksi (otomatis terisi setiap Set Key / Kirim Pesanan / Pesanan Sukses — **sekali per tiket**, tidak dobel)
 - `audit-log` — channel tempat bot mencatat SEMUA admin action (50 action types; dikirim ulang 1x otomatis bila gagal karena rate limit/network)
+- `transcript` — channel arsip transcript tiket (chat history tersimpan otomatis setiap tiket di-close)
+
+> 💡 Sejak v3.9.30 semua channel diatur lewat **satu command** `/set-channel` — termasuk transcript (dulu command terpisah `/set-transcript-channel`). Hapus dengan `/remove-channel <tipe>`.
 
 ### Step 3: Pasang Panel Verifikasi
 
@@ -657,7 +661,7 @@ Bot membalas pesan otomatis saat member mengetik trigger di awal pesan (case-ins
 /update-panel id:tp_xxx field:thumbnail
 /refresh-panel id:tp_xxx
 /delete-panel id:tp_xxx
-/set-transcript-channel #transcript
+/set-channel transcript #transcript
 ```
 
 - Beberapa panel berbeda di channel berbeda, masing-masing dapat memfilter kategori (`categories:transaction,help`)
@@ -873,13 +877,13 @@ Cooldown bersifat **per-user** — user A memicu tidak memengaruhi user B.
 
 ## 11. Riwayat Versi
 
-Riwayat lengkap semua versi (v3.9.0 – v3.9.29) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
+Riwayat lengkap semua versi (v3.9.0 – v3.9.30) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
 
 Ringkasan 3 versi terbaru:
 
+- **v3.9.30** (2026-09-01) — `/set-transcript-channel` digabung ke `/set-channel tipe:transcript` — satu command untuk semua channel (total 80 command); `/remove-channel` & `/config-show` ikut mendukung transcript.
 - **v3.9.29** (2026-09-01) — fix URL image/thumbnail modal 500 → 2048 karakter + safety-net kategori kosong di `/setup-ticket-panel` & `/refresh-panel` + fix audit log `/update-panel`.
 - **v3.9.28** (2026-09-01) — kategori baru aman otomatis (`classifyProduct()`): semua id kategori selain `help`/`report` otomatis TRANSAKSI; fix deskripsi dropdown kategori campur.
-- **v3.9.27** (2026-09-01) — transaksi non-key lengkap: tombol 📦 Kirim Pesanan + DM detail pesanan ke pembeli + invoice + stats + auto-role untuk produk non-key.
 
 ---
 
@@ -895,6 +899,6 @@ Jika ada masalah yang tidak ada di Troubleshooting:
 
 ---
 
-**Versi dokumen:** v3.9.29
+**Versi dokumen:** v3.9.30
 **Last updated:** 1 September 2026
-**Bot version:** 3.9.29 · 81 slash command · 238 unit test
+**Bot version:** 3.9.30 · 80 slash command · 248 unit test
