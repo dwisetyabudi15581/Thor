@@ -5,6 +5,25 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 Legend: 🔴 critical · 🟠 high · 🟡 medium · 🟢 improvement
 
+## [3.9.31] — 2026-09-01
+
+### Fixed
+
+- 🔴 **Orphan meta saat close tiket** — `removeTicketMeta` tetap dijalankan walau `channel.delete()` gagal karena alasan non-10003 (Missing Permissions / network). Channel masih hidup tapi meta hilang → close berikutnya jatuh ke fallback topic-parsing yang kehilangan flag `isCompleted`/`isInvoiceSent`/`isTransaction` → **invoice terkirim dobel** + skenario tombol close salah. Sekarang meta hanya dihapus kalau channel benar-benar sudah tidak ada; kalau delete gagal, admin cukup klik close lagi setelah permission dibereskan (self-healing).
+- 🟠 **TypeError di `ticket_close` / `ticket_set_key` saat channel null** — `interaction.channel.id` tanpa guard (inconsistent dengan modal yang sudah punya guard P1-8). Kalau channel terhapus tepat sebelum admin klik tombol (partial/uncached), error ditelan handler global sebagai error generik. Sekarang ada guard + pesan ephemeral yang jelas.
+- 🟠 **`/clear-schedule` heuristic role-removal terlalu broad** — kandidat role dikumpulkan dari SEMUA entry `scheduledRoles.json` (termasuk milik user lain) → role manual member yang kebetulan sama dengan role VIP terjadwal user lain ikut terlepas. Sekarang: snapshot roleId milik user target saja (schedule + key, diambil SEBELUM penghapusan).
+- 🟡 **Layering violation di `/clear-schedule`** — blok lama membaca `data/scheduledRoles.json` langsung via `fs.readFileSync` + path hardcode, melewati API `roleScheduler` (gagal diam-diam kalau path/schema berubah). Sekarang via API `findAllSchedulesByUser` + snapshot key via `findAllByUser`; komentar stream-of-consciousness 45 baris diringkas.
+- 🟡 **`getTopUsers` urutan spread menimpa fallback userId** — `{ userId: ..., ...stats }` bisa menghasilkan `userId: undefined` untuk entry dengan properti eksplisit undefined; urutan dibalik jadi `{ ...stats, userId: ..., value: ... }`.
+
+### Changed
+
+- 🟢 `getActiveKeysByUserAndRole` kini menerima optional `guildId` (param ke-4) — konsistensi pola dengan `findAllByUser`; key legacy tanpa guildId tetap dihitung (backward compat). Dipanggil dengan guild dari flow Set Key (command & modal).
+- 🟢 Dead code `createContext()` dihapus dari `src/commands/_shared.js` (tidak pernah dipanggil handler mana pun).
+
+### Added
+
+- 10 unit test baru (`tests/unit/hardeningV31.test.js`): orphan-meta guard (delete gagal non-10003 / 10003 / sukses / self-healing), guard channel null via router interaksi, kontrak snapshot schedule (roleId milik user target saja), filter guildId + backward compat legacy, fallback userId leaderboard, eksport `_shared` tetap utuh. Total **258 unit test**.
+
 ## [3.9.30] — 2026-09-01
 
 ### Changed

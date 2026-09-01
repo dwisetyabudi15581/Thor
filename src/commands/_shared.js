@@ -120,22 +120,6 @@ const { DISCORD_LIMITS, EMBED_LIMITS } = require('../infra/constants');
 // v3.9.9 refactor: withLock dipakai /giveaway reroll supaya double-click tidak double-announce.
 const { withLock: withUserLock } = require('../infra/userLock');
 
-/**
- * Inisialisasi context untuk command handler.
- * Dipanggil di awal setiap domain handler.
- */
-function createContext(interaction) {
-    return {
-        interaction,
-        client: interaction.client,
-        guild: interaction.guild,
-        member: interaction.member,
-        user: interaction.user,
-        config: getConfig(),
-        embeds: new Embeds(interaction.client)
-    };
-}
-
 module.exports = {
     // discord.js classes
     EmbedBuilder,
@@ -232,7 +216,5 @@ module.exports = {
     safeEditReply,
     DISCORD_LIMITS,
     EMBED_LIMITS,
-    withUserLock,
-    // helper
-    createContext
+    withUserLock
 };

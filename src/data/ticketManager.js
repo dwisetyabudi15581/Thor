@@ -747,8 +747,11 @@ async function closeTicket(channel, closer, isSuccess) {
 
         // Hapus channel
         // FIX v3.7.1: handle 10003 (Unknown Channel) sebagai sukses.
+        // v3.9.31 FIX: track apakah channel BENAR-BENAR sudah tidak ada.
+        let channelGone = false;
         try {
             await channel.delete();
+            channelGone = true;
         } catch (deleteErr) {
             // DiscordAPIError code 10003 = Unknown Channel — sudah dihapus.
             // Anggap sukses karena tujuan close sudah tercapai.
@@ -756,19 +759,37 @@ async function closeTicket(channel, closer, isSuccess) {
                 console.log(
                     `ℹ️ Channel ${channelId} sudah tidak ada (kemungkinan dihapus admin lain atau close sebelumnya). Anggap sukses.`
                 );
+                channelGone = true;
             } else {
                 // Error lain (permission, network) — log tapi jangan crash
                 console.warn(`⚠️ Gagal hapus channel ${channelId}:`, deleteErr.message);
+                // Channel MASIH ADA — JANGAN hapus metadata (lihat guard di bawah).
             }
         }
 
         // v3.9.1: hapus metadata tiket dari tickets.json (cleanup).
         // Dilakukan setelah channel berhasil/anggap-sukses dihapus supaya
         // tidak ada zombie metadata untuk channel yang masih ada.
-        try {
-            removeTicketMeta(channelId);
-        } catch (cleanupErr) {
-            console.warn(`⚠️ Gagal hapus ticket meta ${channelId}:`, cleanupErr.message);
+        //
+        // v3.9.31 FIX (orphan meta): sebelumnya removeTicketMeta JALAN TERUS
+        // walau channel.delete() gagal karena alasan non-10003 (Missing
+        // Permissions, network). Akibatnya channel masih hidup tapi meta sudah
+        // hilang → close berikutnya jatuh ke fallback topic-parsing yang
+        // KEHILANGAN flag isCompleted/isInvoiceSent/isTransaction → invoice
+        // terkirim dobel + skenario tombol close salah. Sekarang: meta hanya
+        // dihapus kalau channel benar-benar sudah tidak ada. Trade-off: meta
+        // bisa "zombie" sementara kalau delete gagal — itu aman & self-healing
+        // (admin tinggal klik close lagi setelah masalah permission beres).
+        if (channelGone) {
+            try {
+                removeTicketMeta(channelId);
+            } catch (cleanupErr) {
+                console.warn(`⚠️ Gagal hapus ticket meta ${channelId}:`, cleanupErr.message);
+            }
+        } else {
+            console.warn(
+                `⚠️ Metadata tiket ${channelId} TIDAK dihapus (channel masih ada — delete gagal). Klik close lagi setelah masalahnya dibereskan.`
+            );
         }
     } catch (err) {
         // Error saat parse topic atau operasi lain — log tapi jangan crash

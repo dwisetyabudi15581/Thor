@@ -308,6 +308,17 @@ module.exports = async function (interaction) {
             });
         }
 
+        // v3.9.31 FIX (pola P1-8): guard channel masih ada. Sebelumnya
+        // `interaction.channel.id` di bawah tanpa `?.` — kalau channel terhapus
+        // tepat sebelum admin klik tombol (partial/uncached), throw TypeError
+        // yang ditelan handler global sebagai error generik tanpa pesan jelas.
+        if (!interaction.channel) {
+            return interaction.reply({
+                content: '❌ Channel tiket sudah tidak ada (mungkin sudah ditutup admin lain).',
+                flags: MessageFlags.Ephemeral
+            });
+        }
+
         // v3.9.4 FIX: pakai getTicketMeta (sumber utama tickets.json) bukan parse topic langsung.
         const meta = getTicketMeta(interaction.channel.id, interaction.channel?.topic || '');
         // v3.9.27 FIX (bug user-reported): produk non-key (jual akun ML, jasa,
@@ -560,6 +571,17 @@ module.exports = async function (interaction) {
             });
         }
 
+        // v3.9.31 FIX (pola P1-8): guard channel masih ada — konsisten dengan
+        // guard yang sudah ada di modal Set Key (line ~654). `interaction.channel.id`
+        // di bawah tanpa `?.` bisa throw TypeError kalau channel terhapus tepat
+        // sebelum admin klik (partial/uncached).
+        if (!interaction.channel) {
+            return interaction.reply({
+                content: '❌ Channel tiket sudah tidak ada (mungkin sudah ditutup admin lain).',
+                flags: MessageFlags.Ephemeral
+            });
+        }
+
         // v3.9.4 FIX: pakai getTicketMeta (sumber utama tickets.json) bukan parse topic langsung.
         const meta = getTicketMeta(interaction.channel.id, interaction.channel?.topic || '');
         const productName = meta?.productName || null;
@@ -775,7 +797,8 @@ module.exports = async function (interaction) {
             }
 
             // Cek semua key aktif buat info tambahan
-            const activeKeys = getActiveKeysByUserAndRole(member.id, role.id);
+            // v3.9.31: pass guildId (opsional) supaya guild-scoped konsisten pola lain.
+            const activeKeys = getActiveKeysByUserAndRole(member.id, role.id, Date.now(), guild.id);
             // v3.9.26 FIX: bound daftar key di DM. Key bisa 200 char; 4+ key panjang
             // bikin DM > 2000 char → member.send throw → dmSent=false padahal
             // key/role/schedule sudah sukses. Sekarang maks 5 key teratas + ringkasan.

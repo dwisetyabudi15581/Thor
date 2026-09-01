@@ -113,12 +113,22 @@ function findAllByUser(userId, guildId) {
  *
  * @param {string} userId
  * @param {string} roleId
- * @param {number} now - timestamp ms (default Date.now())
+ * @param {number} [now=Date.now()] - timestamp ms
+ * @param {string|null} [guildId=null] - v3.9.31: optional guild filter (konsistensi
+ *        pola dengan findAllByUser). Key legacy tanpa guildId tetap dihitung
+ *        (backward compat). roleId sebenarnya unik per guild (snowflake), jadi
+ *        ini murni konsistensi, bukan fix kebocoran nyata.
  * @returns {Array} daftar key aktif
  */
-function getActiveKeysByUserAndRole(userId, roleId, now = Date.now()) {
+function getActiveKeysByUserAndRole(userId, roleId, now = Date.now(), guildId = null) {
     const list = loadKeys();
-    return list.filter(k => k.userId === userId && k.roleId === roleId && (k.expireAt === null || k.expireAt > now));
+    return list.filter(
+        k =>
+            k.userId === userId &&
+            k.roleId === roleId &&
+            (k.expireAt === null || k.expireAt > now) &&
+            (!guildId || !k.guildId || k.guildId === guildId)
+    );
 }
 
 /**

@@ -306,7 +306,11 @@ function getTopUsers(guildId, metric, limit = 10) {
     const prefix = `${guildId}:`;
     return Object.entries(all)
         .filter(([k]) => k.startsWith(prefix))
-        .map(([k, stats]) => ({ userId: stats.userId || k.split(':')[1], ...stats, value: stats[metric] || 0 }))
+        // v3.9.31 FIX: ...stats DULU, override SETELAHNYA. Pola lama taruh userId
+        // sebelum spread — properti eksplisit undefined di stats bisa menimpa
+        // fallback k.split(':')[1] dengan undefined, dan key legacy tanpa ':'
+        // menghasilkan userId undefined.
+        .map(([k, stats]) => ({ ...stats, userId: stats.userId || k.split(':')[1], value: stats[metric] || 0 }))
         .filter(e => e.value > 0)
         .sort((a, b) => b.value - a.value)
         .slice(0, limit);
