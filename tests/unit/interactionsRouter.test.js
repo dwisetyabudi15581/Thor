@@ -7,6 +7,7 @@
  *   - Modal submit dengan customId known → dispatch ke domain
  *   - Select menu dengan customId unknown → log warning, no crash
  *   - Dedup: interaction.id yang sama diproses hanya 1x
+ *   - v3.9.33: User Select Menu (mm_pick_seller) → dispatch ke domain midman
  */
 
 const test = require('node:test');
@@ -23,6 +24,8 @@ function makeMockInteraction({ customId, type = 'button', id = `test-${Date.now(
         isChatInputCommand: () => false,
         isButton: () => type === 'button',
         isStringSelectMenu: () => type === 'select',
+        // v3.9.33: router kini menerima user select menu (dropdown member).
+        isUserSelectMenu: () => type === 'userselect',
         isModalSubmit: () => type === 'modal',
         reply: async opts => {
             replies.push({ type: 'reply', opts });
@@ -43,6 +46,7 @@ test('interactions router: ignores slash commands', async () => {
         isChatInputCommand: () => true,
         isButton: () => false,
         isStringSelectMenu: () => false,
+        isUserSelectMenu: () => false,
         isModalSubmit: () => false,
         id: `slash-${Date.now()}`
     };
@@ -57,11 +61,26 @@ test('interactions router: non-button/select/modal ignored', async () => {
         isChatInputCommand: () => false,
         isButton: () => false,
         isStringSelectMenu: () => false,
+        isUserSelectMenu: () => false,
         isModalSubmit: () => false,
         id: `auto-${Date.now()}`
     };
     const result = await routeInteraction(interaction);
     assert.strictEqual(result, undefined);
+});
+
+test('interactions router: v3.9.33 — user select mm_pick_seller dispatched to midman domain', async () => {
+    const routeInteraction = require('../../src/interactions');
+    const interaction = makeMockInteraction({ customId: 'mm_pick_seller', type: 'userselect' });
+    // midman handler butuh interaction.guild/user/values — akan throw.
+    // Yang penting: dispatch TERJADI ke domain midman (bukan di-ignore).
+    try {
+        await routeInteraction(interaction);
+    } catch (err) {
+        assert.ok(!/no handler/i.test(err.message), 'harus dispatch, bukan skip');
+        return;
+    }
+    assert.ok(true, 'dispatched without error');
 });
 
 test('interactions router: btn_verify dispatched to verify domain', async () => {

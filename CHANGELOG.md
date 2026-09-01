@@ -5,6 +5,22 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 Legend: 🔴 critical · 🟠 high · 🟡 medium · 🟢 improvement
 
+## [3.9.33] — 2026-09-02
+
+### Changed — 🤝 Rekber: pilih penjual via dropdown + fee ditambah di atas harga
+
+Dua revisi desain atas fitur rekber v3.9.32, keduanya dari feedback penggunaan nyata:
+
+- 🟢 **Pilih penjual lewat dropdown member (User Select Menu)** — sebelumnya pembeli harus mengetik mention/user ID penjual di modal (`parseSellerInput`), yang menyulitkan user dengan nama susah / yang tidak tahu cara copy ID. Sekarang buat deal jadi **2 langkah**: (1) modal item + harga, (2) **dropdown daftar member Discord** dengan kolom pencarian, avatar, dan nama — cukup ketik nama, tanpa mention, tanpa copy ID. Data langkah 1 disimpan sementara (in-memory, TTL 15 menit = umur ephemeral, auto-prune). Router kini juga menerima interaksi `isUserSelectMenu()` (`mm_pick_seller`). Validasi lengkap tetap dijalankan saat penjual dipilih (re-check deal/tiket aktif, anti-self, anti-bot, member harus ada).
+- 🟢 **Fee model ADDITIVE — ditambah di atas harga, bukan dipotong dari dana penjual.** Contoh: harga 100.000 + fee 5% (5.000) → pembeli transfer **105.000**, penjual menerima **100.000 PENUH**, midman menyimpan 5.000. Implementasi: `calcTotals(price, fee)` (pure, di-unit-test) jadi sumber tunggal hitungan; cap `Math.min(fee, price)` di `calcFee` dihapus (tidak relevan untuk fee additive); `/set-midman-fee` tetap membatasi persen maks 90% sebagai sanity guard.
+- 🟢 **Deal Board & messaging disesuaikan**: field baru `💳 Total Dibayar Pembeli` (harga + fee) dan `🏷️ Diterima Penjual` menampilkan harga penuh "tanpa potongan"; deskripsi state `WAITING_PAYMENT`/`WAITING_RELEASE` kini menampilkan nominal persis (total transfer / jumlah pencairan penuh + fee midman); pengumuman `fundin` menyebut nominal yang masuk; pengumuman `release` menyebut pencairan penuh + fee; mode & nilai fee di-snapshot ke record deal (`feeMode`, `feeValue`) supaya board deal berjalan tidak berubah saat config diubah admin.
+- 🟢 **Invoice & stats mencatat pengeluaran nyata pembeli** (harga + fee), transcript merekam rincian `total (harga + fee)`.
+- 🟢 `parseSellerInput` dihapus dari `midmanManager` (dead code — digantikan dropdown). `/midman-deals` kini menampilkan total (harga + fee) per deal.
+
+### Fixed
+
+- 🟡 Mock interaction di 4 file test (`interactionsRouter`, `ticketNonKey`, `panelEdit`, `hardeningV31`) ditambah method `isUserSelectMenu` — tanpa ini router baru melempar `TypeError: interaction.isUserSelectMenu is not a function` saat test lama jalan.
+
 ## [3.9.32] — 2026-09-02
 
 ### Added — 🤝 FITUR BARU: Midman / Rekber (Deal Escrow 3-Pihak)

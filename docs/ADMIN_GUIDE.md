@@ -472,6 +472,7 @@ Layanan jasa tengah untuk transaksi antar-member: **pembeli + penjual + midman**
 ```
 /set-role midman @Midman          ← role khusus tim rekber (siapa pun yang pegang role ini bisa handle deal)
 /set-midman-fee mode:Persen value:5   ← fee 5% dari harga deal (atau mode:flat value:5000 untuk nominal tetap)
+                                       fee DITAMBAH di atas harga: deal 100rb + fee 5rb → pembeli bayar 105rb, penjual terima 100rb PENUH
 /set-channel tipe:invoice #testi     ← invoice deal sukses otomatis ke sini (sudah pernah? skip)
 /set-channel tipe:transcript #log    ← transcript deal otomatis ke sini (sudah pernah? skip)
 /setup-ticket                          ← pasang ulang panel — tombol 🤝 Rekber muncul otomatis
@@ -479,11 +480,11 @@ Layanan jasa tengah untuk transaksi antar-member: **pembeli + penjual + midman**
 
 **Alur deal (versi cerita):**
 
-1. **Pembeli** klik 🤝 Rekber di panel → isi modal (item, harga, mention penjual) → bot buat channel di kategori `🤝 REKBER` + Deal Board.
+1. **Pembeli** klik 🤝 Rekber di panel → isi modal (item + harga) → **pilih penjual dari dropdown daftar member** (tinggal ketik namanya di kolom pencarian — tidak perlu copy ID/mention) → bot buat channel di kategori `🤝 REKBER` + Deal Board.
 2. **Penjual** klik **🤝 Setuju Deal** → item & harga **TERKUNCI**. Mau ubah = batal & buat ulang.
-3. **Pembeli** transfer ke midman, kirim bukti di channel. **Midman** cek rekening → klik **✅ Dana Masuk**.
+3. **Pembeli** transfer **Total Pembayaran** (harga + fee — nominalnya tertera di board) ke midman, kirim bukti di channel. **Midman** cek rekening → klik **✅ Dana Masuk**.
 4. **Penjual** kirim barang. **Pembeli** cek → klik **✅ Barang Diterima**.
-5. **Midman** transfer ke penjual (potong fee — jumlahnya sudah tertera di board) → klik **💸 Cairkan ke Penjual** → invoice + transcript + stats otomatis, channel close.
+5. **Midman** transfer **PENUH** ke penjual sesuai jumlah di board (fee tetap milik midman — tidak dipotong dari dana penjual) → klik **💸 Cairkan ke Penjual** → invoice + transcript + stats otomatis, channel close.
 
 **Kalau ada masalah:** siapa saja peserta klik **⚠️ Ada Masalah** → deal **DIBEKUKAN** (semua tombol mati, admin di-ping). Admin resolve: **⚖️ Resolve: Cairkan** (deal sukses) atau **↩️ Resolve: Refund** (dana kembali ke pembeli — midman wajib refund manual).
 
@@ -493,7 +494,7 @@ Layanan jasa tengah untuk transaksi antar-member: **pembeli + penjual + midman**
 
 - Cairkan sebelum barang diterima → ditolak. Buyer klik "Dana Masuk" → ditolak (bukan midman).
 - Semua aksi saat dispute → mati. Hanya admin yang resolve.
-- Fee dari config, bukan ketikan — midman tidak bisa patok fee sembarangan.
+- Fee dari config, bukan ketikan — midman tidak bisa patok fee sembarangan. Fee ditambah di atas harga (additive): penjual SELALU menerima harga penuh; pembeli membayar harga + fee.
 - Semua klik tercatat: siapa, kapan, event apa (history deal + audit log + ringkasan sebelum close).
 - 1 deal aktif per orang; user dengan deal aktif tidak bisa buka tiket biasa (anti-bypass).
 
@@ -915,10 +916,11 @@ Cooldown bersifat **per-user** — user A memicu tidak memengaruhi user B.
 
 ## 11. Riwayat Versi
 
-Riwayat lengkap semua versi (v3.9.0 – v3.9.32) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
+Riwayat lengkap semua versi (v3.9.0 – v3.9.33) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
 
 Ringkasan 3 versi terbaru:
 
+- **v3.9.33** (2026-09-02) — 🤝 rekber revisi: penjual dipilih via **dropdown member** (searchable — tanpa copy ID/mention; buat deal jadi 2 langkah), **fee additive** (ditambah di atas harga — penjual selalu terima harga penuh, contoh 100rb + 5% = pembeli bayar 105rb), Deal Board tampil `Total Dibayar Pembeli` + `Diterima Penjual` (penuh), invoice/stats pencatat pengeluaran nyata pembeli (harga+fee), fee snapshot ke deal (config berubah tidak mengubah deal berjalan), `parseSellerInput` dihapus (total 82 command, 291 unit test).
 - **v3.9.32** (2026-09-02) — 🤝 fitur baru **Midman/Rekber**: deal escrow 3-pihak dengan Deal Board + state machine (gerbang ganda dana/barang), dispute & resolve admin, fee otomatis dari config, invoice/transcript/audit terintegrasi, `/set-midman-fee` + `/midman-deals`, kategori panel otomatis (total 82 command, 289 unit test).
 - **v3.9.31** (2026-09-01) — hardening hasil code review: orphan meta saat close, null-safety channel, snapshot clear-schedule, +10 unit test.
 - **v3.9.30** (2026-09-01) — `/set-transcript-channel` digabung ke `/set-channel tipe:transcript` — satu command untuk semua channel (total 80 command); `/remove-channel` & `/config-show` ikut mendukung transcript.

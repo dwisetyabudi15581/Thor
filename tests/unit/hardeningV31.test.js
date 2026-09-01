@@ -162,6 +162,8 @@ function makeNullChannelInteraction(customId) {
         isChatInputCommand: () => false,
         isButton: () => true,
         isStringSelectMenu: () => false,
+        // v3.9.33: router kini juga menerima user select menu.
+        isUserSelectMenu: () => false,
         isModalSubmit: () => false,
         // Admin supaya lolos checkIsAdmin → guard channel yang diuji.
         member: {

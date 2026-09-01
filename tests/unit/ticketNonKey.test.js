@@ -226,6 +226,8 @@ function makeMockInteraction({ customId, type = 'button', id = `t-${Date.now()}-
         isChatInputCommand: () => false,
         isButton: () => type === 'button',
         isStringSelectMenu: () => type === 'select',
+        // v3.9.33: router kini juga menerima user select menu.
+        isUserSelectMenu: () => type === 'userselect',
         isModalSubmit: () => type === 'modal',
         reply: async opts => {
             replies.push(opts);

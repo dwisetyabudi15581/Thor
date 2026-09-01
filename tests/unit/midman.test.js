@@ -1,13 +1,13 @@
 /**
- * Unit tests v3.9.32 — fitur Midman/Rekber (deal escrow 3-pihak).
+ * Unit tests v3.9.32/v3.9.33 — fitur Midman/Rekber (deal escrow 3-pihak).
  *
  * Yang diuji (lapisan pure — pola classifyProduct: logic inti di-ekstrak ke
  * midmanManager supaya bisa diuji tanpa mock Discord):
  *   1. State machine: urutan langkah tidak bisa dilompati (canTransition/
  *      nextState) — inti keamanan escrow "gerbang ganda".
  *   2. actorAllowed: hanya pihak yang berhak yang bisa melakukan event.
- *   3. calcFee: persen / flat / 0 / cap / mode invalid.
- *   4. parseSellerInput: mention / raw ID / garbage.
+ *   3. calcFee: persen / flat / 0 / mode invalid (v3.9.33: additive, tanpa cap).
+ *   4. calcTotals: fee ditambah di atas harga — penjual menerima harga PENUH.
  *   5. parsePriceNumber: "100000" / "100.000" / "100k" / "1m" / invalid.
  *   6. formatRupiah.
  *   7. Persistensi deals.json: setDeal/getDeal/removeDeal/hasActiveDealFor.
@@ -15,6 +15,9 @@
  *      (sekali saja — flag midmanCategoryDismissed mencegah re-add).
  *   9. findActiveTicketFor (ticketManager): meta ada → aktif; zombie meta
  *      (channel hilang) → di-cleanup & return null.
+ *
+ * v3.9.33: parseSellerInput DIHAPUS dari midmanManager — penjual kini dipilih
+ * lewat User Select Menu (dropdown member searchable), bukan input teks.
  */
 
 const test = require('node:test');
@@ -204,9 +207,12 @@ test('calcFee: fee 0 = gratis, nilai negatif/invalid = 0', () => {
     assert.strictEqual(mm.calcFee('abc', 'percent', 5), 0);
 });
 
-test('calcFee: fee di-cap maksimal sebesar harga deal', () => {
-    assert.strictEqual(mm.calcFee(100000, 'percent', 150), 100000);
-    assert.strictEqual(mm.calcFee(10000, 'flat', 999999), 10000);
+test('calcFee: v3.9.33 — fee ADDITIVE, tidak di-cap sebesar harga deal', () => {
+    // Fee flat boleh melebihi harga (admin yang setting — /set-midman-fee
+    // membatasi persen maks 90% di sisi command; percent tidak mungkin > harga).
+    assert.strictEqual(mm.calcFee(100000, 'percent', 90), 90000);
+    assert.strictEqual(mm.calcFee(10000, 'flat', 999999), 999999);
+    assert.strictEqual(mm.calcFee(100000, 'percent', 150), 150000);
 });
 
 test('calcFee: mode tak dikenal → fee 0 (deal tetap jalan)', () => {
@@ -214,23 +220,30 @@ test('calcFee: mode tak dikenal → fee 0 (deal tetap jalan)', () => {
     assert.strictEqual(mm.calcFee(100000, undefined, 50), 0);
 });
 
-// ====================================================
-// === 4-5. PARSER INPUT MODAL ===
-// ====================================================
-
-test('parseSellerInput: mention / raw ID / teks campuran', () => {
-    assert.strictEqual(mm.parseSellerInput('<@123456789012345678>'), '123456789012345678');
-    assert.strictEqual(mm.parseSellerInput('<@!123456789012345678>'), '123456789012345678');
-    assert.strictEqual(mm.parseSellerInput('123456789012345678'), '123456789012345678');
-    assert.strictEqual(mm.parseSellerInput('jual akun sama user 123456789012345678 ya'), '123456789012345678');
+test('calcTotals: v3.9.33 — fee ditambah di atas harga (contoh user: 100rb + 5% = 105rb)', () => {
+    // Contoh persis dari kebijakan user: harga 100.000, fee 5% (5.000)
+    // → pembeli transfer 105.000, penjual menerima 100.000 PENUH.
+    const fee = mm.calcFee(100000, 'percent', 5);
+    const totals = mm.calcTotals(100000, fee);
+    assert.deepStrictEqual(totals, { buyerPays: 105000, sellerGets: 100000, midmanKeeps: 5000 });
 });
 
-test('parseSellerInput: input tidak valid → null', () => {
-    assert.strictEqual(mm.parseSellerInput('budi'), null);
-    assert.strictEqual(mm.parseSellerInput(''), null);
-    assert.strictEqual(mm.parseSellerInput(null), null);
-    assert.strictEqual(mm.parseSellerInput('12345'), null); // terlalu pendek untuk snowflake
+test('calcTotals: fee 0 → pembeli bayar persis harga; seller dapat harga penuh', () => {
+    assert.deepStrictEqual(mm.calcTotals(100000, 0), { buyerPays: 100000, sellerGets: 100000, midmanKeeps: 0 });
 });
+
+test('calcTotals: input invalid/negatif → tidak melempar NaN, fee negatif di-clamp 0', () => {
+    assert.deepStrictEqual(mm.calcTotals('abc', 'x'), { buyerPays: 0, sellerGets: 0, midmanKeeps: 0 });
+    assert.deepStrictEqual(mm.calcTotals(null, null), { buyerPays: 0, sellerGets: 0, midmanKeeps: 0 });
+    // Fee negatif (deal korup/manual edit) tidak boleh "mengurangi" total.
+    assert.deepStrictEqual(mm.calcTotals(50000, -3000), { buyerPays: 50000, sellerGets: 50000, midmanKeeps: 0 });
+});
+
+// ====================================================
+// === 4-5. PARSER INPUT MODAL (harga) ===
+// ====================================================
+// v3.9.33: parseSellerInput dihapus — penjual dipilih lewat dropdown member
+// (User Select Menu), bukan input teks mention/ID.
 
 test('parsePriceNumber: format umum rupiah', () => {
     assert.strictEqual(mm.parsePriceNumber('100000'), 100000);

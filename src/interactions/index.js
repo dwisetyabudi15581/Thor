@@ -10,7 +10,8 @@
  *   - ticket_cat:, ticket_, select_product, modal_set_key:,
  *     modal_deliver_order:                    → ticket.js
  *   - ticket_cat:midman (SEBELUM ticket_cat:),
- *     modal_mm_, mm_                          → midman.js     (v3.9.32 rekber)
+ *     modal_mm_, mm_ (termasuk user select mm_pick_seller)
+ *                                             → midman.js     (v3.9.32 rekber)
  *   - sr_btn:, sr_sel:                        → selfrole.js
  *   - emb_edit:, emb_preview:, emb_send:,
  *     emb_cancel:, emb_modal_                 → embed.js
@@ -149,7 +150,16 @@ function pickDomain(customId) {
  */
 async function routeInteraction(interaction) {
     if (interaction.isChatInputCommand()) return; // slash command → command router
-    if (!interaction.isButton() && !interaction.isStringSelectMenu() && !interaction.isModalSubmit()) return;
+    // v3.9.33: tambah isUserSelectMenu — dropdown member (mm_pick_seller)
+    // harus sampai ke domain midman (sebelumnya cuma button/string-select/modal).
+    if (
+        !interaction.isButton() &&
+        !interaction.isStringSelectMenu() &&
+        !interaction.isUserSelectMenu() &&
+        !interaction.isModalSubmit()
+    ) {
+        return;
+    }
 
     // P1-6 FIX: cek duplikat interaction ID dulu (defense-in-depth).
     // Discord kadang fire event yang sama 2x kalau ada retry.

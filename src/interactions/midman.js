@@ -3,8 +3,13 @@
  * v3.9.32.
  *
  * CustomId yang ditangani:
- *   - ticket_cat:midman  (button)  → buka modal buat deal (dari panel tiket)
- *   - modal_mm_create    (modal)   → validasi input + buat channel deal + Deal Board
+ *   - ticket_cat:midman  (button)       → buka modal buat deal (dari panel tiket)
+ *   - modal_mm_create    (modal)        → validasi item+harga → simpan sementara
+ *                                        → tampilkan dropdown pilih penjual
+ *   - mm_pick_seller     (user select)  → pilih penjual dari daftar member
+ *                                        (ada kolom pencarian — TIDAK perlu
+ *                                        copy ID / mention manual)
+ *                                        → buat channel deal + Deal Board
  *   - mm_join            (button)  → penjual setuju deal (terms terkunci)
  *   - mm_cancel          (button)  → batalkan deal (hanya sebelum dana masuk)
  *   - mm_fundin          (button)  → midman konfirmasi dana masuk
@@ -36,7 +41,10 @@ const {
     TextInputStyle,
     EmbedBuilder,
     ChannelType,
-    PermissionFlagsBits
+    PermissionFlagsBits,
+    // v3.9.33: dropdown pilih penjual (native member picker Discord —
+    // searchable, ada avatar; solusi untuk "nama susah / gak bisa copy ID").
+    UserSelectMenuBuilder
 } = require('discord.js');
 const { getConfig, safeEditReply, logAudit, checkIsAdmin } = require('../commands/_shared');
 const mm = require('../data/midmanManager');
@@ -66,15 +74,17 @@ const STATE_DESCRIPTIONS = {
         '**🏷️ Penjual** — klik **🤝 Setuju Deal** untuk mengunci kesepakatan.\n' +
         'Setelah disetujui, item & harga **TERKUNCI** — mau ubah = batal & buat deal baru.\n' +
         'Membatalkan sekarang aman (dana belum berpindah).',
-    WAITING_PAYMENT:
-        '**🛒 Pembeli** — transfer ke midman, lalu kirim bukti transfer di channel ini.\n' +
+    WAITING_PAYMENT: deal =>
+        '**🛒 Pembeli** — transfer **Total Pembayaran** ke midman, lalu kirim bukti transfer di channel ini.\n' +
+        `💳 Total: **${mm.formatRupiah(deal.priceNum + deal.fee)}** (harga ${mm.formatRupiah(deal.priceNum)} + fee ${mm.formatRupiah(deal.fee)}).\n` +
         '**🛡️ Midman** — verifikasi dana benar-benar masuk, baru klik **✅ Dana Masuk**.\n' +
         'Setelah ini penjual baru boleh kirim barang.',
     WAITING_DELIVERY:
         '**🏷️ Penjual** — kirim barang sekarang (chat di channel ini sebagai bukti).\n' +
         '**🛒 Pembeli** — cek barang, kalau sudah sesuai klik **✅ Barang Diterima**.',
-    WAITING_RELEASE:
-        '**🛡️ Midman** — transfer ke penjual (potong fee), lalu klik **💸 Cairkan ke Penjual**.\n' +
+    WAITING_RELEASE: deal =>
+        '**🛡️ Midman** — transfer **PENUH** ke penjual (JANGAN dipotong), lalu klik **💸 Cairkan ke Penjual**.\n' +
+        `🏷️ Penjual menerima: **${mm.formatRupiah(deal.priceNum)}** • 🧾 Fee midman (sisa di tanganmu): **${mm.formatRupiah(deal.fee)}**.\n` +
         'Invoice & transcript otomatis tersimpan saat deal ditutup.',
     DISPUTE:
         '**🚨 Deal DIBEKUKAN** — tidak ada dana/barang yang boleh berpindah.\n' +
@@ -86,15 +96,27 @@ const STATE_DESCRIPTIONS = {
 };
 
 function boardEmbed(deal, config) {
+    // v3.9.33: deskripsi state bisa berupa string ATAU fungsi (untuk nominal
+    // dinamis — total transfer & pencairan tampil persis di description).
+    const rawDesc = STATE_DESCRIPTIONS[deal.state];
+    const desc = typeof rawDesc === 'function' ? rawDesc(deal) : rawDesc || '';
+    // v3.9.33: fee ADDITIVE — pembeli bayar harga + fee, penjual menerima
+    // harga PENUH (tidak dipotong fee). calcTotals = sumber tunggal hitungan.
+    const totals = mm.calcTotals(deal.priceNum, deal.fee);
+    const feeLabel =
+        deal.feeMode === 'percent'
+            ? `${mm.formatRupiah(deal.fee)} (${deal.feeValue}%)`
+            : mm.formatRupiah(deal.fee);
     return new EmbedBuilder()
         .setTitle('🤝 DEAL BOARD — REKBER')
-        .setDescription(STATE_DESCRIPTIONS[deal.state] || '')
+        .setDescription(desc)
         .setColor(mm.STATES[deal.state]?.color || 0x2ecc71)
         .addFields(
             { name: '📦 Item', value: String(deal.item).slice(0, 1000), inline: false },
             { name: '💰 Harga Deal', value: mm.formatRupiah(deal.priceNum), inline: true },
-            { name: '🧾 Fee Midman', value: mm.formatRupiah(deal.fee), inline: true },
-            { name: '💸 Diterima Penjual', value: mm.formatRupiah(deal.priceNum - deal.fee), inline: true },
+            { name: '🧾 Fee Midman', value: feeLabel, inline: true },
+            { name: '💳 Total Dibayar Pembeli', value: `**${mm.formatRupiah(totals.buyerPays)}** (harga + fee)`, inline: true },
+            { name: '🏷️ Diterima Penjual', value: `${mm.formatRupiah(totals.sellerGets)} — penuh, tanpa potongan`, inline: true },
             { name: '🛒 Pembeli', value: `<@${deal.buyerId}>`, inline: true },
             { name: '🏷️ Penjual', value: `<@${deal.sellerId}>`, inline: true },
             { name: '🛡️ Midman', value: config.roles.midman ? `<@&${config.roles.midman}>` : '_belum di-set_', inline: true },
@@ -247,7 +269,7 @@ async function openCreateModal(interaction) {
 
     const modal = new ModalBuilder()
         .setCustomId('modal_mm_create')
-        .setTitle('Buat Deal Rekber')
+        .setTitle('Buat Deal Rekber — Item & Harga')
         .addComponents(
             new ActionRowBuilder().addComponents(
                 new TextInputBuilder()
@@ -266,23 +288,54 @@ async function openCreateModal(interaction) {
                     .setRequired(true)
                     .setMaxLength(20)
                     .setPlaceholder('100000')
-            ),
-            new ActionRowBuilder().addComponents(
-                new TextInputBuilder()
-                    .setCustomId('mm_field_seller')
-                    .setLabel('Penjual (mention / user ID)')
-                    .setStyle(TextInputStyle.Short)
-                    .setRequired(true)
-                    .setMaxLength(30)
-                    .setPlaceholder('<@user> atau 123456789012345678')
             )
+            // v3.9.33: field "penjual" DIHAPUS dari modal — penjual dipilih
+            // lewat dropdown member (mm_pick_seller) setelah modal di-submit,
+            // biar user gak perlu mention/copy user ID.
         );
     return interaction.showModal(modal);
 }
 
+// ====================================================
+// === BUAT DEAL — 2 LANGKAH (v3.9.33) ===
+// ===  Langkah 1 (modal)   : item + harga           ===
+// ===  Langkah 2 (dropdown): pilih penjual          ===
+// ====================================================
+// Dropdown (User Select Menu) = daftar member bawaan Discord yang punya kolom
+// pencarian + avatar + nama — user cukup KETIK nama/username, TIDAK perlu
+// tahu cara mention atau copy user ID. Nama/username tersusah pun ketemu
+// lewat search box. Data langkah 1 disimpan sementara (in-memory) sampai
+// penjual dipilih.
+
+// TTL 15 menit — sejajar dengan umur pesan ephemeral & token interaction.
+const PENDING_TTL_MS = 15 * 60 * 1000;
+// key: `${guildId}:${userId}` → { item, priceNum, ts }
+const pendingDeals = new Map();
+
+function setPendingDeal(guildId, userId, data) {
+    // Prune entry kadaluarsa supaya Map tidak tumbuh tanpa batas.
+    const now = Date.now();
+    for (const [key, val] of pendingDeals) {
+        if (now - val.ts > PENDING_TTL_MS) pendingDeals.delete(key);
+    }
+    pendingDeals.set(`${guildId}:${userId}`, { item: data.item, priceNum: data.priceNum, ts: now });
+}
+
+function getPendingDeal(guildId, userId) {
+    const key = `${guildId}:${userId}`;
+    const pending = pendingDeals.get(key);
+    if (!pending) return null;
+    if (Date.now() - pending.ts > PENDING_TTL_MS) {
+        pendingDeals.delete(key);
+        return null;
+    }
+    return pending;
+}
+
 /**
- * Submit modal buat deal: validasi semua input → cek deal/tiket aktif →
- * buat channel 3-pihak → kirim Deal Board → simpan deals.json.
+ * Langkah 1 — submit modal (item + harga): validasi input, cek deal/tiket
+ * aktif secara fail-fast, simpan sementara, lalu tampilkan dropdown pilih
+ * penjual (ephemeral). Channel deal BELUM dibuat di langkah ini.
  */
 async function handleCreateDeal(interaction) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
@@ -301,7 +354,6 @@ async function handleCreateDeal(interaction) {
     // Validasi input modal
     const item = (interaction.fields.getTextInputValue('mm_field_item') || '').trim();
     const priceRaw = (interaction.fields.getTextInputValue('mm_field_price') || '').trim();
-    const sellerRaw = (interaction.fields.getTextInputValue('mm_field_seller') || '').trim();
 
     if (item.length < 3) {
         return safeEditReply(interaction, { content: '❌ Nama item minimal 3 karakter.' });
@@ -310,16 +362,70 @@ async function handleCreateDeal(interaction) {
     if (priceNum <= 0) {
         return safeEditReply(interaction, { content: '❌ Harga tidak valid. Contoh: `100000`, `100.000`, atau `100k`.' });
     }
-    const sellerId = mm.parseSellerInput(sellerRaw);
+
+    // Fail-fast SEBELUM minta user pilih penjual — jangan suruh orang capek
+    // memilih dulu baru ditolak. (Re-check lengkap tetap dilakukan di langkah 2.)
+    if (mm.hasActiveDealFor(guild.id, buyer.id)) {
+        return safeEditReply(interaction, {
+            content: '❌ Kamu masih punya deal rekber **aktif**. Selesaikan dulu sebelum buat deal baru.'
+        });
+    }
+    const activeTicket = await findActiveTicketFor(guild, buyer.id);
+    if (activeTicket) {
+        return safeEditReply(interaction, {
+            content: `❌ Kamu sudah punya tiket aktif di ${activeTicket}. Tutup dulu sebelum buat deal rekber.`
+        });
+    }
+
+    setPendingDeal(guild.id, buyer.id, { item, priceNum });
+
+    const sellerSelect = new UserSelectMenuBuilder()
+        .setCustomId('mm_pick_seller')
+        .setPlaceholder('🔍 Ketik nama penjual di sini…')
+        .setMinValues(1)
+        .setMaxValues(1);
+
+    return safeEditReply(interaction, {
+        content:
+            `🧾 Item: **${item}**\n💰 Harga: **${mm.formatRupiah(priceNum)}**\n\n` +
+            '👉 **Pilih penjual** lewat daftar member di bawah — cukup **ketik namanya di kolom pencarian** (tidak perlu mention atau copy user ID).\n' +
+            '⏳ Berlaku 15 menit — kalau pesan ini hilang, klik tombol 🤝 Rekber lagi.',
+        components: [new ActionRowBuilder().addComponents(sellerSelect)]
+    });
+}
+
+/**
+ * Langkah 2 — penjual dipilih dari dropdown member: validasi penjual,
+ * re-check deal/tiket aktif (keadaan bisa berubah sejak modal langkah 1),
+ * buat channel 3-pihak → kirim Deal Board → simpan deals.json.
+ */
+async function handlePickSeller(interaction) {
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    const config = getConfig();
+    const guild = interaction.guild;
+    const buyer = interaction.user;
+
+    const pending = getPendingDeal(guild.id, buyer.id);
+    if (!pending) {
+        return safeEditReply(interaction, {
+            content: '❌ Sesi pembuatan deal kedaluwarsa / tidak ditemukan. Klik tombol 🤝 Rekber di panel lagi.'
+        });
+    }
+
+    const sellerId = interaction.values && interaction.values[0];
     if (!sellerId) {
-        return safeEditReply(interaction, { content: '❌ Penjual tidak valid. Mention user atau tempel user ID-nya.' });
+        return safeEditReply(interaction, { content: '❌ Penjual tidak terpilih. Coba pilih lagi dari daftar.' });
     }
     if (sellerId === buyer.id) {
         return safeEditReply(interaction, { content: '❌ Kamu tidak bisa jadi penjual di deal-mu sendiri.' });
     }
 
-    // Resolve penjual harus benar-benar ada di server
-    let sellerMember = guild.members.cache.get(sellerId);
+    const item = pending.item;
+    const priceNum = pending.priceNum;
+
+    // Resolve penjual harus benar-benar ada di server (prioritas data
+    // resolved dari select menu, fallback ke cache → fetch — pola lama).
+    let sellerMember = interaction.members?.get(sellerId) || guild.members.cache.get(sellerId);
     if (!sellerMember) sellerMember = await guild.members.fetch(sellerId).catch(() => null);
     if (!sellerMember) {
         return safeEditReply(interaction, { content: '❌ Penjual tidak ditemukan di server ini.' });
@@ -328,7 +434,8 @@ async function handleCreateDeal(interaction) {
         return safeEditReply(interaction, { content: '❌ Penjual tidak boleh bot.' });
     }
 
-    // Anti-jebol: buyer & seller tidak boleh terlibat deal lain yang masih aktif
+    // Anti-jebol (re-check — keadaan bisa berubah sejak modal langkah 1):
+    // buyer & seller tidak boleh terlibat deal lain yang masih aktif.
     if (mm.hasActiveDealFor(guild.id, buyer.id)) {
         return safeEditReply(interaction, {
             content: '❌ Kamu masih punya deal rekber **aktif**. Selesaikan dulu sebelum buat deal baru.'
@@ -366,6 +473,9 @@ async function handleCreateDeal(interaction) {
     }
 
     // Fee dihitung dari config — TIDAK dari ketikan manual (anti manipulasi).
+    // v3.9.33: fee DITAMBAH di atas harga (pembeli bayar harga+fee, penjual
+    // menerima harga PENUH). Mode+nilai di-snapshot ke deal supaya Deal Board
+    // & riwayat deal TIDAK berubah walau admin ubah config di tengah jalan.
     const feeMode = config.midman?.feeMode || 'percent';
     const feeValue = config.midman?.feeValue !== undefined ? config.midman.feeValue : 5;
     const fee = mm.calcFee(priceNum, feeMode, feeValue);
@@ -379,6 +489,10 @@ async function handleCreateDeal(interaction) {
         priceNum,
         priceText: mm.formatRupiah(priceNum),
         fee,
+        // v3.9.33: snapshot fee saat deal dibuat (tampilan board & konsistensi
+        // riwayat — config berubah tidak mengubah deal berjalan).
+        feeMode,
+        feeValue,
         state: 'WAITING_SELLER',
         boardMessageId: null,
         createdBy: buyer.id,
@@ -475,11 +589,16 @@ async function handleCreateDeal(interaction) {
         action: 'MIDMAN_CREATE',
         actorId: buyer.id,
         actorTag: buyer.tag,
-        details: `Deal rekber dibuat — Item: **${item}** • Harga: ${mm.formatRupiah(priceNum)} • Fee: ${mm.formatRupiah(fee)} • Penjual: <@${sellerId}>`,
+        details: `Deal rekber dibuat — Item: **${item}** • Harga: ${mm.formatRupiah(priceNum)} • Fee: ${mm.formatRupiah(fee)} • Total dibayar pembeli: ${mm.formatRupiah(priceNum + fee)} • Penjual: <@${sellerId}>`,
         guildId: guild.id
     });
 
-    return safeEditReply(interaction, { content: `✅ Deal rekber dibuat: ${dealChannel}` });
+    // Deal resmi dibuat → data sementara langkah 1 tidak diperlukan lagi.
+    pendingDeals.delete(`${guild.id}:${buyer.id}`);
+
+    return safeEditReply(interaction, {
+        content: `✅ Deal rekber dibuat dengan penjual <@${sellerId}>: ${dealChannel}\n🏷️ Penjual tinggal klik **🤝 Setuju Deal** di Deal Board.`
+    });
 }
 
 // ====================================================
@@ -517,7 +636,10 @@ async function finalizeDeal(channel, deal, closer, endState, config) {
                 {
                     userId: deal.buyerId,
                     productName: `🤝 Rekber: ${deal.item}`,
-                    price: mm.formatRupiah(deal.priceNum),
+                    // v3.9.33: rincian fee additive ikut terekam di transcript.
+                    price: `${mm.formatRupiah(deal.priceNum + deal.fee)} (harga ${mm.formatRupiah(
+                        deal.priceNum
+                    )} + fee ${mm.formatRupiah(deal.fee)})`,
                     category: 'midman'
                 },
                 closer,
@@ -529,15 +651,21 @@ async function finalizeDeal(channel, deal, closer, endState, config) {
     }
 
     // 3. Invoice + stats — hanya deal COMPLETED (uang cair ke penjual).
-    //    Pembeli dicatat sebagai pembeli di invoice & stats belanja.
+    //    v3.9.33: yang dicatat = pengeluaran NYATA pembeli (harga + fee).
     if (endState === 'COMPLETED') {
         try {
-            await sendInvoice(channel, deal.buyerId, `🤝 Rekber: ${deal.item}`, mm.formatRupiah(deal.priceNum), closer);
+            await sendInvoice(
+                channel,
+                deal.buyerId,
+                `🤝 Rekber: ${deal.item}`,
+                mm.formatRupiah(deal.priceNum + deal.fee),
+                closer
+            );
         } catch (invoiceErr) {
             console.warn(`⚠️ Gagal kirim invoice deal ${deal.channelId}:`, invoiceErr.message);
         }
         try {
-            recordPurchase(deal.guildId, deal.buyerId, deal.priceNum);
+            recordPurchase(deal.guildId, deal.buyerId, deal.priceNum + deal.fee);
         } catch (statsErr) {
             console.warn('⚠️ Gagal record purchase stats:', statsErr.message);
         }
@@ -628,7 +756,12 @@ async function handleEvent(interaction, event) {
         try {
             if (event === 'fundin') {
                 await channel.send(
-                    `💰 Dana dikonfirmasi masuk oleh **${interaction.user.tag}**.\n🏷️ <@${deal.sellerId}>, silakan kirim barang. Chat di channel ini menjadi bukti pengiriman.`
+                    `💰 Dana **${mm.formatRupiah(deal.priceNum + deal.fee)}** (harga + fee) dikonfirmasi masuk oleh **${interaction.user.tag}**.\n🏷️ <@${deal.sellerId}>, silakan kirim barang. Chat di channel ini menjadi bukti pengiriman.`
+                );
+            }
+            if (event === 'release') {
+                await channel.send(
+                    `💸 **${interaction.user.tag}** mencairkan **${mm.formatRupiah(deal.priceNum)}** ke <@${deal.sellerId}> (penuh, tanpa potongan).\n🧾 Fee midman **${mm.formatRupiah(deal.fee)}** tetap milik midman.`
                 );
             }
             if (event === 'received') {
@@ -685,9 +818,15 @@ module.exports = async function midmanDomain(interaction) {
         return openCreateModal(interaction);
     }
 
-    // Submit modal buat deal.
+    // Submit modal buat deal (langkah 1: item + harga).
     if (interaction.isModalSubmit() && interaction.customId === 'modal_mm_create') {
         return handleCreateDeal(interaction);
+    }
+
+    // Pilih penjual dari dropdown member (langkah 2: user select menu —
+    // searchable, tanpa perlu copy ID).
+    if (interaction.isUserSelectMenu() && interaction.customId === 'mm_pick_seller') {
+        return handlePickSeller(interaction);
     }
 
     // Semua tombol transisi state.

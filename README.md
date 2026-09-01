@@ -2,7 +2,7 @@
 
 Bot Discord serbaguna untuk komunitas apa pun — server jualan, gaming, content creator, hingga komunitas umum. Semua konfigurasi dapat diatur langsung dari Discord melalui slash command, tanpa mengedit file.
 
-> **v3.9.32** · 82 slash command · 289 unit test · discord.js v14 · Node.js 18+ · single-guild
+> **v3.9.33** · 82 slash command · 291 unit test · discord.js v14 · Node.js 18+ · single-guild
 >
 > 📖 **[Panduan Admin Lengkap](./docs/ADMIN_GUIDE.md)** — setup, operasional harian, troubleshooting
 > 📜 **[Changelog](./CHANGELOG.md)** — riwayat semua versi
@@ -17,7 +17,7 @@ Bot Discord serbaguna untuk komunitas apa pun — server jualan, gaming, content
 - **Kategori custom otomatis aman** — id kategori apa pun (`akun_ml`, `lisensi_key`, `jasa`, `topup`, ...) otomatis terklasifikasi sebagai TRANSAKSI; hanya `help`/`report` yang menjadi BANTUAN.
 - **Dua alur transaksi**: produk ber-key (**🔑 Set Key**) dan produk non-key seperti jual akun/jasa (**📦 Kirim Pesanan** — detail pesanan dikirim via DM ke pembeli).
 - **Invoice otomatis** ke channel testimoni (sekali per tiket) + **transcript otomatis** tersimpan sebelum channel tiket dihapus.
-- **🤝 Midman / Rekber (deal escrow 3-pihak)** — pembeli, penjual, dan midman dalam satu channel deal dengan **Deal Board** (embed sumber kebenaran) + **state machine**: dana masuk (konfirmasi midman) → barang diterima (konfirmasi pembeli) → cairkan (midman). Dispute → freeze, hanya admin yang resolve. Fee otomatis dari config, history klik tercatat, invoice/transcript/audit terintegrasi.
+- **🤝 Midman / Rekber (deal escrow 3-pihak)** — pembeli, penjual, dan midman dalam satu channel deal dengan **Deal Board** (embed sumber kebenaran) + **state machine**: dana masuk (konfirmasi midman) → barang diterima (konfirmasi pembeli) → cairkan (midman). Dispute → freeze, hanya admin yang resolve. **Fee ditambah di atas harga** (penjual selalu terima harga penuh; pembeli bayar harga + fee), penjual dipilih lewat **dropdown member** (searchable — tanpa perlu copy ID), history klik tercatat, invoice/transcript/audit terintegrasi.
 
 ### 🔑 Produk & VIP (Key-Driven)
 

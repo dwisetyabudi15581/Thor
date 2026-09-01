@@ -62,6 +62,8 @@ function makeModalSubmit({ customId, value }) {
         isChatInputCommand: () => false,
         isButton: () => false,
         isStringSelectMenu: () => false,
+        // v3.9.33: router kini juga menerima user select menu.
+        isUserSelectMenu: () => false,
         customId,
         replied: false,
         deferred: false,

@@ -13,6 +13,8 @@
  *     "priceNum":   100000,     // harga deal dalam rupiah (number)
  *     "priceText":  "Rp100.000",
  *     "fee":        5000,       // fee midman (dihitung saat deal dibuat)
+ *     "feeMode":    "percent",  // v3.9.33: snapshot mode fee saat deal dibuat
+ *     "feeValue":   5,          // v3.9.33: snapshot nilai fee saat deal dibuat
  *     "state":      "WAITING_PAYMENT",
  *     "boardMessageId": "123...", // ID pesan Deal Board (embed sumber kebenaran)
  *     "createdBy":  "123...",
@@ -36,9 +38,14 @@
  *   - Semua aksi saat DISPUTE                                  (state dibekukan).
  *
  * Fungsi pure (canTransition, nextState, actorAllowed, calcFee,
- * parseSellerInput, parsePriceNumber, formatRupiah) mengikuti pola
+ * calcTotals, parsePriceNumber, formatRupiah) mengikuti pola
  * classifyProduct() v3.9.28: di-ekstrak supaya bisa di-unit-test tanpa mock
  * Discord.
+ *
+ * v3.9.33 revisi fee: fee DITAMBAHKAN DI ATAS harga (additive), TIDAK dipotong
+ * dari dana penjual. Contoh: harga 100.000 + fee 5% (5.000) → pembeli
+ * transfer 105.000, penjual menerima 100.000 PENUH, midman menyimpan 5.000.
+ * Penjual tidak pernah "kehilangan" sebagian harga deal karena fee.
  */
 
 const fs = require('fs');
@@ -206,36 +213,49 @@ function actorAllowed(event, roles) {
 /**
  * Hitung fee midman. PURE — tidak baca config (caller yang passes).
  *
+ * v3.9.33: fee ADDITIVE — ditambah di atas harga, bukan dipotong dari dana
+ * penjual. Karena tidak lagi "memotong" dana siapa pun, fee tidak di-cap
+ * sebesar harga deal (fee flat boleh melebihi harga; /set-midman-fee sudah
+ * membatasi persen maks 90% sebagai sanity guard di sisi command).
+ *
  * @param {number} priceNum - harga deal (rupiah)
  * @param {string} feeMode - 'percent' | 'flat'
  * @param {number} feeValue - persen (mis. 5 = 5%) atau nominal flat
- * @returns {number} fee — SELALI di-cap maksimal sebesar harga deal.
+ * @returns {number} fee nominal rupiah
  */
 function calcFee(priceNum, feeMode, feeValue) {
     const price = Number(priceNum) || 0;
     if (price <= 0) return 0;
     const val = Number(feeValue) || 0;
     if (val <= 0) return 0;
-    let fee = 0;
     if (feeMode === 'percent') {
-        fee = Math.round((price * val) / 100);
-    } else if (feeMode === 'flat') {
-        fee = Math.round(val);
-    } else {
-        return 0; // mode tak dikenal → fee 0 (deal tetap jalan, gratis)
+        return Math.round((price * val) / 100);
     }
-    return Math.min(fee, price);
+    if (feeMode === 'flat') {
+        return Math.round(val);
+    }
+    return 0; // mode tak dikenal → fee 0 (deal tetap jalan, gratis)
 }
 
 /**
- * Ambil user ID dari input modal penjual.
- * Terima: `<@123...>`, `<@!123...>`, raw ID `123...`, atau teks campuran
- * (asal mengandung snowflake 15-20 digit). Return null kalau tidak ada.
+ * Rincian nominal deal (v3.9.33 — fee additive, sumber tunggal perhitungan):
+ *   buyerPays   = price + fee → yang ditransfer pembeli ke midman
+ *   sellerGets  = price       → yang diterima penjual (harga PENUH, tanpa potongan)
+ *   midmanKeeps = fee         → sisa dana di tangan midman setelah cairkan
+ *
+ * Contoh: calcTotals(100000, 5000) →
+ *   { buyerPays: 105000, sellerGets: 100000, midmanKeeps: 5000 }
  */
-function parseSellerInput(input) {
-    if (!input || typeof input !== 'string') return null;
-    const m = input.match(/(\d{15,20})/);
-    return m ? m[1] : null;
+function calcTotals(priceNum, fee) {
+    // Clamp negatif → 0 (defensive: calcFee tidak pernah return negatif, tapi
+    // data lama/manual edit deals.json tidak boleh bikin total jadi minus).
+    const price = Math.max(0, Number(priceNum) || 0);
+    const feeNum = Math.max(0, Number(fee) || 0);
+    return {
+        buyerPays: price + feeNum,
+        sellerGets: price,
+        midmanKeeps: feeNum
+    };
 }
 
 /**
@@ -314,7 +334,7 @@ module.exports = {
     recordTransition,
     // helpers (pure)
     calcFee,
-    parseSellerInput,
+    calcTotals,
     parsePriceNumber,
     formatRupiah,
     // constants
