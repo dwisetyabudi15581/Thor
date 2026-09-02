@@ -2,7 +2,7 @@
 
 Bot Discord serbaguna untuk komunitas apa pun — server jualan, gaming, content creator, hingga komunitas umum. Semua konfigurasi dapat diatur langsung dari Discord melalui slash command, tanpa mengedit file.
 
-> **v3.9.34** · 82 slash command · 305 unit test · discord.js v14 · Node.js 18+ · single-guild
+> **v3.9.35** · 82 slash command · 312 unit test · discord.js v14 · Node.js 18+ · single-guild
 >
 > 📖 **[Panduan Admin Lengkap](./docs/ADMIN_GUIDE.md)** — setup, operasional harian, troubleshooting
 > 📜 **[Changelog](./CHANGELOG.md)** — riwayat semua versi
@@ -72,7 +72,7 @@ Thor/
 │   └── infra/                    # safeWrite, safeReply, userLock, permissions, auditLog
 ├── data/                         # Runtime JSON files (gitignored)
 ├── docs/                         # ADMIN_GUIDE + index dokumen
-├── tests/unit/                   # 289 unit test (node:test)
+├── tests/unit/                   # 312 unit test (node:test)
 ├── CHANGELOG.md                  # Riwayat versi
 ├── .env.example
 ├── eslint.config.js
@@ -140,7 +140,7 @@ Panduan lengkap termasuk contoh produk, kategori custom, dan operasional harian:
 | ---------------- | -------------------------------------- |
 | `npm start`      | Jalankan bot                           |
 | `npm run dev`    | Jalankan dengan nodemon (auto-restart) |
-| `npm test`       | Jalankan semua unit test (289 test)    |
+| `npm test`       | Jalankan semua unit test (312 test)    |
 | `npm run lint`   | ESLint check                           |
 | `npm run format` | Prettier format semua file             |
 

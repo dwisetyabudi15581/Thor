@@ -9,9 +9,12 @@
  *   - select_product              (select)  → buat tiket produk
  *   - ticket_help / ticket_report(button)  → buat tiket help/report
  *   - ticket_close                (button)  → tampilkan tombol konfirmasi
- *   - ticket_close_abort / _abort2(button) → batal tutup
+ *   - ticket_close_abort / _abort2(button) → batal tutup (jangan tutup channel)
  *   - ticket_close_success        (button)  → tutup tiket help/report (sukses)
  *   - ticket_close_cancel_trans   (button)  → tutup tiket transaksi tanpa key
+ *   - ticket_close_cancel         (button)  → v3.9.35: tutup tiket help/report/
+ *                                             claim/giveaway TANPA selesai
+ *                                             (label: "❌ Tutup Tanpa Selesai")
  *   - ticket_set_key              (button)  → buka modal set key
  *   - modal_set_key:<value>       (modal)   → full flow set key
  *   - ticket_deliver              (button)  → v3.9.27: buka modal kirim pesanan
@@ -364,10 +367,18 @@ module.exports = async function (interaction) {
         //     • ❌ Tidak Jadi Beli (close tanpa invoice)
         //     • ⏏️ Batal Tutup
         //
-        // - Help / Report (isTransaction=false):
-        //     • ✅ Selesai (close sukses)
-        //     • 🚪 Tutup Tanpa Selesai (close batal)
-        //     • ⏏️ Batal Tutup
+        // - Help / Report / Claim / Giveaway (isTransaction=false):
+        //     • ✅ Selesai (close sukses — transcript ditandai selesai)
+        //     • ❌ Tutup Tanpa Selesai (close TANPA sukses — transcript
+        //       ditandai tidak selesai; channel tetap dihapus)
+        //     • ⏏️ Batal Tutup (jangan tutup channel)
+        //
+        // v3.9.35 FIX (bug user-reported): tombol "❌ Tutup Tanpa Selesai"
+        // dulunya salah pakai customId `ticket_close_abort` — sama dengan
+        // "⏏️ Batal Tutup". Akibatnya KEDUA tombol hanya membatalkan
+        // penutupan; tiket help/report/claim/giveaway tidak bisa ditutup
+        // tanpa selesai. Sekarang tombol itu memakai customId
+        // `ticket_close_cancel` yang benar-benar menutup tiket.
         const confirmRow = new ActionRowBuilder();
         if (isTransaction && requiresKey && isCompleted) {
             // v3.9.20: Set Key sudah dilakukan → transaksi sudah sukses.
@@ -425,18 +436,23 @@ module.exports = async function (interaction) {
                     .setStyle(ButtonStyle.Secondary)
             );
         } else {
-            // Help / Report
+            // Help / Report / Claim / Giveaway (non-transaksi).
+            // v3.9.35 FIX: "Tutup Tanpa Selesai" pakai customId
+            // `ticket_close_cancel` (dulunya salah `ticket_close_abort`
+            // → kedua tombol sama-sama cuma batal). "Batal Tutup" kini
+            // konsisten pakai `ticket_close_abort` seperti cabang lain
+            // (`_abort2` tetap di-handle untuk ephemeral lama).
             confirmRow.addComponents(
                 new ButtonBuilder()
                     .setCustomId('ticket_close_success')
                     .setLabel('✅ Selesai')
                     .setStyle(ButtonStyle.Success),
                 new ButtonBuilder()
-                    .setCustomId('ticket_close_abort')
+                    .setCustomId('ticket_close_cancel')
                     .setLabel('❌ Tutup Tanpa Selesai')
                     .setStyle(ButtonStyle.Danger),
                 new ButtonBuilder()
-                    .setCustomId('ticket_close_abort2')
+                    .setCustomId('ticket_close_abort')
                     .setLabel('⏏️ Batal Tutup')
                     .setStyle(ButtonStyle.Secondary)
             );
@@ -459,7 +475,12 @@ module.exports = async function (interaction) {
                 '• **✅ Pesanan Sukses** — transaksi berhasil, kirim invoice/testimoni\n' +
                 '• **❌ Tidak Jadi Beli** — batal, tanpa invoice';
         } else {
-            msg = '⚠️ Selesaikan tiket ini?';
+            // v3.9.35: pesan konfirmasi help/report — terangkas per tombol
+            // (pola yang sama dengan cabang transaksi non-key di atas).
+            msg =
+                '⚠️ Tutup tiket ini?\n' +
+                '• **✅ Selesai** — selesai, transcript ditandai sukses\n' +
+                '• **❌ Tutup Tanpa Selesai** — tutup tiket sekarang, transcript ditandai tidak selesai';
         }
         return interaction.reply({ content: msg, components: [confirmRow], flags: MessageFlags.Ephemeral });
     }
@@ -542,8 +563,17 @@ module.exports = async function (interaction) {
         return;
     }
 
-    if (interaction.isButton() && interaction.customId === 'ticket_close_cancel_trans') {
-        // Tutup tiket transaksi tanpa kasih key (batal beli).
+    if (
+        interaction.isButton() &&
+        (interaction.customId === 'ticket_close_cancel_trans' || interaction.customId === 'ticket_close_cancel')
+    ) {
+        // Tutup tiket TANPA sukses — dua pintu, satu perilaku:
+        //   - ticket_close_cancel_trans ("❌ Tidak Jadi Beli")  → tiket TRANSAKSI
+        //     yang dibatalkan (tanpa invoice).
+        //   - ticket_close_cancel ("❌ Tutup Tanpa Selesai")    → v3.9.35: tiket
+        //     help/report/claim/giveaway yang ditutup tanpa diselesaikan.
+        //     Dulunya tombol ini salah wiring ke `ticket_close_abort` (bug
+        //     user-reported: "tutup tanpa selesai" cuma membatalkan penutupan).
         // v3.9.24 FIX: re-check admin + validasi tiket (sama seperti ticket_close_success).
         if (!checkIsAdmin(interaction.member)) {
             return interaction.reply({

@@ -5,6 +5,21 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 Legend: 🔴 critical · 🟠 high · 🟡 medium · 🟢 improvement
 
+## [3.9.35] — 2026-09-02
+
+### Fixed — 🎫 Tiket: tombol "Tutup Tanpa Selesai" tidak berfungsi (kedua tombol sama-sama membatalkan penutupan)
+
+Bug user-reported pada tiket non-transaksi (**bantuan / help / report / claim / giveaway**): saat admin klik 🔒 Tutup Tiket, konfirmasi ephemeral menampilkan 3 tombol — ✅ Selesai, ❌ Tutup Tanpa Selesai, ⏏️ Batal Tutup. Namun tombol **❌ Tutup Tanpa Selesai** salah wiring ke customId `ticket_close_abort` — **customId yang sama dengan ⏏️ Batal Tutup**. Akibatnya kedua tombol berperilaku identik (hanya membatalkan penutupan): tiket non-transaksi **tidak bisa ditutup tanpa diselesaikan** — satu-satunya jalan adalah ✅ Selesai (transcript tercatat sukses, padahal tidak) atau hapus channel manual dari UI Discord (tanpa transcript/meta cleanup).
+
+- 🟠 **Tombol "❌ Tutup Tanpa Selesai" kini benar-benar menutup tiket** — memakai customId baru `ticket_close_cancel` yang di-handle bersama `ticket_close_cancel_trans` (satu perilaku: `closeTicket(channel, user, isSuccess=false)` — transcript tersimpan & ditandai **tidak selesai**, channel dihapus, metadata tickets.json dibersihkan, tanpa invoice). Dulu: keduanya cuma menampilkan "❌ Penutupan tiket dibatalkan."
+- 🟢 **"⏏️ Batal Tutup" konsisten di semua skenario** — kini memakai `ticket_close_abort` juga di cabang help/report (dulunya `ticket_close_abort2`). CustomId `_abort2` **tetap di-handle** untuk ephemeral lama yang masih terbuka saat bot update (tidak ada dead button).
+- 🟢 **Pesan konfirmasi help/report dirinci per tombol** (pola yang sama dengan cabang transaksi non-key): "✅ Selesai — selesai, transcript ditandai sukses / ❌ Tutup Tanpa Selesai — tutup tiket sekarang, transcript ditandai tidak selesai".
+- 🟢 Defense-in-depth tetap berlaku untuk tombol baru: re-check admin (non-admin ditolak) + validasi channel adalah tiket terdaftar (forged customId tidak bisa menghapus channel sembarangan).
+
+### Tests
+
+- 🟢 +7 unit test (total **312**, dari 305): `tests/unit/ticketCloseButtons.test.js` — komposisi row konfirmasi tiket help & claim_giveaway (customId benar, unik, label benar), klik `ticket_close_cancel` di tiket help/report → channel terhapus + meta bersih, klik `ticket_close_abort` → tiket tetap hidup, non-admin ditolak, kompatibilitas customId `ticket_close_abort2` lama.
+
 ## [3.9.34] — 2026-09-02
 
 ### Changed — 🤝 Rekber: buat deal oleh siapa saja (formulir eksplisit) + persetujuan ganda + kelola member di dalam channel deal
