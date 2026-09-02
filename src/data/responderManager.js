@@ -46,7 +46,7 @@ function load() {
         const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
         _cache = { data, at: Date.now() };
         return data;
-    } catch (err) {
+    } catch (_err) {
         // v3.9.26: karantina file korup SEBELUM fallback (lihat safeWrite.js).
         quarantineCorruptFile(filePath);
         _cache = { data: {}, at: Date.now() };

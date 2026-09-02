@@ -20,7 +20,6 @@ const {
     TextInputBuilder,
     TextInputStyle,
     ActionRowBuilder,
-    ChannelType,
     getConfig,
     logAudit,
     safeEditReply,

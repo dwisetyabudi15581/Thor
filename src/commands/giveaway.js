@@ -123,7 +123,7 @@ module.exports = async function (interaction) {
         // atau edit pesan giveaway setelah dibuat.
         const msg = await channel
             .send({ embeds: [embed], components: [row], content: '🎉 **GIVEAWAY BARU!**' })
-            .catch(err => null);
+            .catch(() => null);
         if (!msg) {
             // P0-5 FIX: rollback giveaway entry yang sudah tersimpan kalau gagal kirim message.
             // Sebelumnya entry tetap ada dengan messageId=null → zombie giveaway.
@@ -268,7 +268,7 @@ module.exports = async function (interaction) {
         }
         if (!gw.ended)
             return safeEditReply(interaction, {
-                content: '❌ Giveaway belum berakhir. End dulu pakai \`/giveaway end\`.'
+                content: '❌ Giveaway belum berakhir. End dulu pakai `/giveaway end`.'
             });
 
         // v3.9.8 FIX: wrap reroll+announce di userLock. Sebelumnya, kalau admin

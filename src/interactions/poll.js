@@ -130,7 +130,7 @@ async function updatePollVoteMessage(interaction, poll) {
 
         const total = getPollTotalVotes(poll);
         const lines = poll.options
-            .map((opt, i) => {
+            .map(opt => {
                 const pct = total > 0 ? Math.round((opt.votes.length / total) * 100) : 0;
                 const bar = '█'.repeat(Math.floor(pct / 10)).padEnd(10, '░');
                 return `${opt.emoji} **${opt.label}** — ${opt.votes.length} votes (${pct}%)\n\`${bar}\``;
@@ -228,10 +228,8 @@ async function handlePollModalCreate(interaction) {
         // Build embed + buttons
         const pollId = `poll_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
         const createdAt = Date.now();
-        const total = 0;
         const lines = options
             .map(opt => {
-                const pct = 0;
                 const bar = '░'.repeat(10);
                 return `${opt.emoji} **${opt.label}** — 0 votes (0%)\n\`${bar}\``;
             })
@@ -287,7 +285,7 @@ async function handlePollModalCreate(interaction) {
 
         const msg = await channel
             .send({ embeds: [embed], components: rows, content: `📊 **POLL BARU** oleh ${interaction.user}` })
-            .catch(err => null);
+            .catch(() => null);
         if (!msg) {
             // P0-5 FIX: rollback poll entry yang sudah tersimpan kalau gagal kirim message.
             try {

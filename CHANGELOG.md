@@ -5,6 +5,20 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 Legend: 🔴 critical · 🟠 high · 🟡 medium · 🟢 improvement
 
+## [3.9.36] — 2026-09-02
+
+### Changed — 🧹 Code cleanup: audit menyeluruh (37 lint warning → 0), dead code dihapus, typo pesan diperbaiki
+
+Audit final menyeluruh seluruh kodebase (permintaan "cek keseluruhan lagi"): semua 37 warning ESLint dibersihkan jadi **0 error 0 warning**, code sampah (dead code, variabel/import tak terpakai, require redundan) dihapus, dan satu pesan warning yang terpotong diperbaiki. Tidak ada perubahan perilaku — 312 unit test tetap hijau tanpa perubahan test.
+
+- 🟢 **Dead code dihapus** — fungsi yang tidak pernah dipanggil/di-export: `formatTimeLeft` duplikat di `giveawayManager.js` DAN di `scheduledAnnouncements.js` (keduanya tanpa pemanggil — sisa refactor v3.9.26), `findOwnerVoiceChannel` di `tempvoice.js` (komentarnya meng-claim "dipertahankan untuk backward compat / digunakan di beberapa handler" — ternyata tidak dipakai di mana pun), `save()` legacy di `statsManager.js` (tidak di-export, tak pernah dipanggil).
+- 🟢 **Variabel/junk assignment dihapus** — `timeLeft` (announce), `newConfig` (automod-toggle), `found` + `newName` (tempvoice rename path), `prefix` (afkManager listGuildAFK), `total = 0` + `pct = 0` (poll create — template sudah hardcode "0 votes (0%)"), parameter `i`/`k` tak terpakai di map/filter.
+- 🟢 **Import tak terpakai dibersihkan** — `ChannelType` (panels-mgmt, poll), `createPoll` (commands/poll), `ModalBuilder`/`TextInputBuilder`/`TextInputStyle`/`saveConfig`/`DEFAULTS`/`safeEditReply` (interactions/config), `getConfig`/`saveConfig` (responder), `path` (safeWrite).
+- 🟢 **Require redundan disatukan** — `require('./_shared')` dobel di `leveling.js` di-merge; lazy `require('discord.js')` 2× di dalam fungsi `schedulerTasks.js` di-hoist ke top-level (discord.js selalu sudah ter-load saat bot start); alias `PFB` di `voiceStateUpdate.js` dihapus (menggunakan import `PermissionFlagsBits` yang sudah ada di atas); lazy `require('../data/statsManager')` 3× di `ticket.js` di-hoist ke import utama (`_shared` sudah memuat statsManager secara transitif — lazy require murni redundan).
+- 🟡 **Typo pesan diperbaiki** — warning `completeNonKeyOrder` di `ticket.js`: `"produk X tidak ditemukan di config — auto-role & tidak diproses"` terpotong & janggal → `"auto-role tidak diproses"` (akurat: stats tetap tercatat, hanya auto-role yang dilewati).
+- 🟢 `catch (err)` dengan `err` tak terpakai → `catch (_err)` di 8 lokasi (afk/automod/level/responderManager, levelManager, keys ×2, auditLog, permissions) — konsisten konvensi `^_` yang sudah dipakai codebase.
+- 🟢 Escape tak perlu dihapus: `\`` di dalam single-quoted string (giveaway reroll hint).
+
 ## [3.9.35] — 2026-09-02
 
 ### Fixed — 🎫 Tiket: tombol "Tutup Tanpa Selesai" tidak berfungsi (kedua tombol sama-sama membatalkan penutupan)

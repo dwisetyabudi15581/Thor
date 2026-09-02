@@ -114,15 +114,6 @@ async function findAllOwnerVoiceChannels(interaction) {
 }
 
 /**
- * Helper lama: cari voice channel pertama yang di-owner oleh interaction.user.
- * Dipertahankan untuk backward compat (digunakan di beberapa handler).
- */
-async function findOwnerVoiceChannel(interaction) {
-    const all = await findAllOwnerVoiceChannels(interaction);
-    return all[0] || null;
-}
-
-/**
  * v3.8.3: Helper untuk guard button control panel — AUTO-DETECT owner.
  *
  * Logic:
@@ -812,17 +803,9 @@ async function handleTempVoiceChannelSelect(interaction) {
             return safeEditReply(interaction, { content: '❌ Channel tidak ditemukan.' });
         }
 
-        const found = {
-            guild: interaction.guild,
-            channel: voiceChannel,
-            channelInfo,
-            channelId
-        };
-
         // Eksekusi action yang diminta
         switch (action) {
             case 'rename': {
-                const newName = `Channel ${channelInfo.name}`.slice(0, 95); // placeholder, modal tidak bisa dari sini
                 // Untuk rename, kita perlu modal. Tapi karena sudah defer, tidak bisa showModal.
                 // Solusi: minta user klik tombol Rename lagi sekarang (sudah auto-detect ke channel ini)
                 // karena user sekarang sedang di salah satu channel mereka.

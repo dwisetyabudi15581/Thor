@@ -37,7 +37,7 @@ function load() {
         const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
         _cache = { data, at: Date.now() };
         return data;
-    } catch (err) {
+    } catch (_err) {
         // v3.9.26: karantina file korup SEBELUM fallback — tanpa ini, save()
         // berikutnya menimpa isi file korup dengan state kosong (data hilang permanen).
         quarantineCorruptFile(filePath);
@@ -137,7 +137,6 @@ function formatDuration(since, now = Date.now()) {
  */
 function listGuildAFK(guildId) {
     const all = load();
-    const prefix = `${guildId}:`;
     return Object.values(all)
         .filter(data => data && data.guildId === guildId)
         .sort((a, b) => b.since - a.since);

@@ -91,7 +91,7 @@ module.exports = async function (interaction) {
             if (!member.roles.cache.has(role.id)) {
                 await member.roles.add(role);
             }
-        } catch (err) {
+        } catch (_err) {
             return safeEditReply(interaction, {
                 content:
                     `❌ Gagal add role ${role}. Pastikan role bot ada di ATAS role tersebut.\n\n` +
@@ -343,7 +343,7 @@ module.exports = async function (interaction) {
                             await member.roles.remove(rid);
                             const r = guild.roles.cache.get(rid);
                             rolesRemoved.push(r ? r.name : rid);
-                        } catch (err) {
+                        } catch (_err) {
                             // v3.9.8 FIX: track failure. Sebelumnya catch swallow error
                             // silent → admin told "Clear selesai" padahal role tetap nempel
                             // selamanya (schedule sudah dihapus, gak akan auto-expire).

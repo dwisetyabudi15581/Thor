@@ -205,13 +205,6 @@ function reload() {
     load();
 }
 
-// === Legacy save() untuk backward compat (langsung write cache) ===
-function save() {
-    if (cache === null) return; // tidak ada yang di-load, tidak ada yang di-save
-    dirty = true;
-    flush();
-}
-
 /**
  * v3.9.4: Get stats user scoped ke guild.
  * @param {string} guildId

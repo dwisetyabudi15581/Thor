@@ -215,19 +215,6 @@ function pickWinners(participantIds, count) {
     return shuffled.slice(0, Math.min(count, shuffled.length));
 }
 
-function formatTimeLeft(ms) {
-    if (ms <= 0) return 'berakhir';
-    const days = Math.floor(ms / 86400000);
-    const hours = Math.floor((ms % 86400000) / 3600000);
-    const mins = Math.floor((ms % 3600000) / 60000);
-    const secs = Math.floor((ms % 60000) / 1000);
-    // Singkatan: h=hari, j=jam, m=menit, dtk=detik. Konsisten sama scheduledAnnouncements.
-    if (days > 0) return `${days}h ${hours}j ${mins}m`;
-    if (hours > 0) return `${hours}j ${mins}m ${secs}dtk`;
-    if (mins > 0) return `${mins}m ${secs}dtk`;
-    return `${secs}dtk`;
-}
-
 /**
  * v3.9.26 (GC): hapus giveaway yang sudah ended lebih dari `olderThanMs` lalu.
  * Giveaway ended TIDAK PERNAH dihapus sebelumnya → giveaways.json tumbuh tanpa

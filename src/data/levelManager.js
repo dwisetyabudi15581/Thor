@@ -60,7 +60,7 @@ function load() {
         const data = JSON.parse(fs.readFileSync(filePath, 'utf8'));
         _cache = { data, at: Date.now() };
         return data;
-    } catch (err) {
+    } catch (_err) {
         // v3.9.26: karantina file korup SEBELUM fallback (lihat safeWrite.js).
         quarantineCorruptFile(filePath);
         _cache = { data: {}, at: Date.now() };
@@ -187,7 +187,7 @@ function getTopUsers(guildId, limit = 10) {
     const prefix = `${guildId}:`;
     return Object.entries(all)
         .filter(([k]) => k.startsWith(prefix))
-        .map(([k, data]) => ({ userId: data.userId, level: data.level, totalXp: data.totalXp || 0, xp: data.xp || 0 }))
+        .map(([, data]) => ({ userId: data.userId, level: data.level, totalXp: data.totalXp || 0, xp: data.xp || 0 }))
         .sort((a, b) => b.totalXp - a.totalXp)
         .slice(0, limit);
 }

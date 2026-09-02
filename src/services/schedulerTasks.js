@@ -18,6 +18,10 @@
 // (hanya dipakai ready.js); salah satu sumber lint warning.
 const { removeEntry, updateExpireAt } = require('../data/roleScheduler');
 const { hasPermanentKey, getMaxExpireAtByUserAndRole } = require('../data/keyManager');
+// v3.9.35 cleanup: import discord.js di-hoist ke top-level — sebelumnya 2x lazy
+// require di dalam processGiveawayEnd & processScheduledAnnouncement (redundan:
+// discord.js selalu sudah ter-load saat bot start).
+const { EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
 const {
     end: endGiveaway,
     pickWinners: pickGiveawayWinners,
@@ -197,7 +201,6 @@ async function processGiveawayEnd(client, gw, options = {}) {
     }
     processingGiveaways.add(gw.id);
     try {
-        const { EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
         const guild = await client.guilds.fetch(gw.guildId).catch(() => null);
         // Kalau guild gak ketemu (bot di-kick / guild di-delete), mark giveaway sebagai ended
         // biar gak di-pick ulang tiap tick. Sebelumnya ini bikin infinite retry loop 60-an.
@@ -354,7 +357,6 @@ async function processScheduledAnnouncement(client, ann) {
     }
     processingAnns.add(ann.id);
     try {
-        const { EmbedBuilder } = require('discord.js');
         const guild = await client.guilds.fetch(ann.guildId).catch(() => null);
         if (!guild) {
             // Guild hilang (bot di-kick) → hapus entry supaya tidak ghost loop.

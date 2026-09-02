@@ -117,7 +117,7 @@ async function logAudit(client, data) {
         const { getConfig } = require('../data/configManager');
         const config = getConfig();
         auditChannelId = config.channels['audit-log'];
-    } catch (err) {
+    } catch (_err) {
         // config rusak — skip
         return false;
     }

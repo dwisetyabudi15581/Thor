@@ -6,8 +6,7 @@
  * v3.9.13: Leveling system — XP per message + level + auto-role on level up.
  */
 
-const { EmbedBuilder, MessageFlags } = require('./_shared');
-const { getConfig, saveConfig, logAudit, safeEditReply } = require('./_shared');
+const { EmbedBuilder, MessageFlags, getConfig, saveConfig, logAudit, safeEditReply } = require('./_shared');
 
 const levelManager = require('../data/levelManager');
 

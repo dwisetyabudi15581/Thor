@@ -118,23 +118,21 @@ async function handleAutoTransferOwnership(client, guildId, channelId, channelIn
         const newOwner = sorted[0];
         if (!newOwner) return;
 
-        const { PermissionFlagsBits: PFB } = require('discord.js');
-
         // v3.9.8: GRANT owner baru DULU, baru REVOKE owner lama.
         try {
             await voiceChannel.permissionOverwrites.edit(newOwner.id, {
-                [PFB.ViewChannel]: true,
-                [PFB.Connect]: true,
-                [PFB.ManageChannels]: true,
-                [PFB.MoveMembers]: true,
-                [PFB.MuteMembers]: true,
-                [PFB.DeafenMembers]: true
+                [PermissionFlagsBits.ViewChannel]: true,
+                [PermissionFlagsBits.Connect]: true,
+                [PermissionFlagsBits.ManageChannels]: true,
+                [PermissionFlagsBits.MoveMembers]: true,
+                [PermissionFlagsBits.MuteMembers]: true,
+                [PermissionFlagsBits.DeafenMembers]: true
             });
             await voiceChannel.permissionOverwrites.edit(oldOwnerId, {
-                [PFB.ManageChannels]: false,
-                [PFB.MoveMembers]: false,
-                [PFB.MuteMembers]: false,
-                [PFB.DeafenMembers]: false
+                [PermissionFlagsBits.ManageChannels]: false,
+                [PermissionFlagsBits.MoveMembers]: false,
+                [PermissionFlagsBits.MuteMembers]: false,
+                [PermissionFlagsBits.DeafenMembers]: false
             });
         } catch (err) {
             console.warn(`⚠️ Gagal update permission saat auto-transfer: ${err.message}`);

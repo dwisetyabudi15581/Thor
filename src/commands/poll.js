@@ -22,7 +22,6 @@ const {
     TextInputBuilder,
     TextInputStyle,
     ChannelType,
-    createPoll,
     getPoll,
     getPollsByGuild,
     closePoll,
@@ -181,7 +180,7 @@ async function updatePollMessage(interaction, poll) {
 
         const total = getPollTotalVotes(poll);
         const lines = poll.options
-            .map((opt, i) => {
+            .map(opt => {
                 const pct = total > 0 ? Math.round((opt.votes.length / total) * 100) : 0;
                 const bar = '█'.repeat(Math.floor(pct / 10)).padEnd(10, '░');
                 return `${opt.emoji} **${opt.label}** — ${opt.votes.length} votes (${pct}%)\n\`${bar}\``;

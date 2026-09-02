@@ -48,6 +48,7 @@ const {
     resolveTicketType
 } = require('../data/ticketManager');
 const { addKey, getActiveKeysByUserAndRole, formatRemaining } = require('../data/keyManager');
+const { recordPurchase, parsePrice } = require('../data/statsManager');
 const { scheduleRoleRemoval } = require('../data/roleScheduler');
 // v3.9.32: redirect kategori midman/rekber (dropdown) ke domain midman.
 const midmanDomain = require('./midman');
@@ -890,7 +891,6 @@ module.exports = async function (interaction) {
 
         // === 5.5. Track purchase untuk stats/leaderboard ===
         try {
-            const { recordPurchase, parsePrice } = require('../data/statsManager');
             // v3.9.4: scoped per guild
             recordPurchase(interaction.guild.id, userId, parsePrice(price));
         } catch (_) {}
@@ -1160,7 +1160,6 @@ module.exports = async function (interaction) {
         // Sebelum v3.9.27: cuma tercatat via Set Key — penjualan produk non-key
         // (akun ML, jasa) TIDAK PERNAH masuk stats/leaderboard.
         try {
-            const { recordPurchase, parsePrice } = require('../data/statsManager');
             recordPurchase(guild.id, userId, parsePrice(price));
         } catch (_) {}
 
@@ -1272,12 +1271,11 @@ async function completeNonKeyOrder(interaction, meta) {
     } else if (product && !product.roleId) {
         // Produk tanpa auto-role — bukan kendala, memang tidak di-set.
     } else {
-        warnings.push(`produk "${meta?.productName}" tidak ditemukan di config — auto-role & tidak diproses`);
+        warnings.push(`produk "${meta?.productName}" tidak ditemukan di config — auto-role tidak diproses`);
     }
 
     // 2. Catat pembelian ke stats/leaderboard (dulu cuma via Set Key).
     try {
-        const { recordPurchase, parsePrice } = require('../data/statsManager');
         recordPurchase(interaction.guild.id, userId, parsePrice(meta?.price));
     } catch (_) {}
 

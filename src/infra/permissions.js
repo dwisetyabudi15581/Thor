@@ -34,7 +34,7 @@ function getAdminRoleId() {
     try {
         const config = getConfig();
         cachedAdminRoleId = config.roles?.admin || null;
-    } catch (err) {
+    } catch (_err) {
         // Defensive: kalau getConfig throw (mis. config rusak), anggap tidak ada admin role
         cachedAdminRoleId = null;
     }

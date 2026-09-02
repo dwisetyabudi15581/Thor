@@ -10,14 +10,11 @@
  *       verifyTitle, verifyBody, ticketTitle, ticketBody, ticketPriceHeader
  */
 
-const { MessageFlags, ModalBuilder, TextInputBuilder, TextInputStyle } = require('discord.js');
+const { MessageFlags } = require('discord.js');
 const {
     getConfig,
-    saveConfig,
     setField,
-    DEFAULTS,
     logAudit,
-    safeEditReply,
     EMBED_LIMITS
 } = require('../commands/_shared');
 

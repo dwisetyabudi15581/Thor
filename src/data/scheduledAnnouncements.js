@@ -242,16 +242,6 @@ function parseTime(input) {
     return null;
 }
 
-function formatTimeLeft(ms) {
-    if (ms <= 0) return 'sekarang';
-    const days = Math.floor(ms / 86400000);
-    const hours = Math.floor((ms % 86400000) / 3600000);
-    const mins = Math.floor((ms % 3600000) / 60000);
-    if (days > 0) return `${days}h ${hours}j`;
-    if (hours > 0) return `${hours}j ${mins}m`;
-    return `${mins}m`;
-}
-
 /**
  * v3.9.26 (GC): hapus entry announcement yang sudah terkirim lebih dari
  * `olderThanMs` lalu. Entry sent dipertahankan selamanya sebelumnya + setiap

@@ -234,7 +234,7 @@ module.exports = async function (interaction) {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const enabled = interaction.options.getBoolean('enabled');
-        const newConfig = automod.enableAutoMod(interaction.guild.id, enabled);
+        automod.enableAutoMod(interaction.guild.id, enabled);
 
         await logAudit(interaction.client, {
             action: 'TOGGLE_AUTOMOD',

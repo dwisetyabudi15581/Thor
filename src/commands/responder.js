@@ -7,7 +7,7 @@
  */
 
 // v3.9.24: merge 2 require _shared yang duplikat jadi 1.
-const { EmbedBuilder, MessageFlags, getConfig, saveConfig, logAudit, safeEditReply } = require('./_shared');
+const { EmbedBuilder, MessageFlags, logAudit, safeEditReply } = require('./_shared');
 
 const responderManager = require('../data/responderManager');
 // v3.9.24: normalisasi \n literal → newline asli (input command di PC tidak bisa Enter).

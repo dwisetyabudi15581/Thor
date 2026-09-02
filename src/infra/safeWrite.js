@@ -29,7 +29,6 @@
  */
 
 const fs = require('fs');
-const path = require('path');
 
 /**
  * Atomically write a JSON file.

@@ -295,7 +295,6 @@ module.exports = async function (interaction) {
         }
         const lines = pending
             .map(e => {
-                const timeLeft = e.sendAt - Date.now();
                 return `• 📝 **${e.data.title}**\n  🆔 \`${e.id}\`\n  📍 <#${e.channelId}> | ⏰ <t:${Math.floor(e.sendAt / 1000)}:F> (<t:${Math.floor(e.sendAt / 1000)}:R>)\n  ${e.recurring ? `🔄 Recurring: ${e.recurring}\n  ` : ''}👤 Oleh: ${e.data.authorTag}`;
             })
             .join('\n\n');

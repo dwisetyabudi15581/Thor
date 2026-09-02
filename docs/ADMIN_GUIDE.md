@@ -1,4 +1,4 @@
-# 📖 Admin Guide — Thor Bot v3.9.35
+# 📖 Admin Guide — Thor Bot v3.9.36
 
 Panduan lengkap untuk admin server Discord yang menjalankan bot ini — cocok untuk admin baru yang pertama kali setup, maupun admin yang sudah berjalan sebagai referensi harian.
 
@@ -924,10 +924,11 @@ Cooldown bersifat **per-user** — user A memicu tidak memengaruhi user B.
 
 ## 11. Riwayat Versi
 
-Riwayat lengkap semua versi (v3.9.0 – v3.9.35) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
+Riwayat lengkap semua versi (v3.9.0 – v3.9.36) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
 
 Ringkasan 3 versi terbaru:
 
+- **v3.9.36** (2026-09-02) — 🧹 code cleanup hasil audit menyeluruh: seluruh 37 lint warning dibersihkan jadi **0 error 0 warning**, dead code dihapus (formatTimeLeft duplikat, findOwnerVoiceChannel, save() legacy), variabel/import/require redundan dirapikan, typo pesan warning diperbaiki — tanpa perubahan perilaku, 312 unit test tetap hijau (total 82 command, 312 unit test).
 - **v3.9.35** (2026-09-02) — 🐛 fix tombol konfirmasi close tiket non-transaksi (bantuan/help/report/claim/giveaway): tombol **❌ Tutup Tanpa Selesai** dulunya salah wiring ke customId yang sama dengan **⏏️ Batal Tutup** — akibatnya kedua tombol sama-sama hanya membatalkan penutupan dan tiket tidak bisa ditutup tanpa selesai. Sekarang tombol itu benar-benar menutup tiket (transcript ditandai tidak selesai, channel dihapus, meta dibersihkan); "Batal Tutup" konsisten memakai customId yang sama di semua skenario; tombol konfirmasi ephemeral lama tetap kompatibel (total 82 command, 312 unit test).
 - **v3.9.34** (2026-09-02) — 🤝 rekber redesign alur: deal bisa dibuka **siapa saja** (pembeli/penjual/pihak yang menolong) lewat **formulir 3 langkah** (item+harga → pilih pembeli → pilih penjual, semua via dropdown searchable), **persetujuan ganda** (state WAITING_AGREE — pembeli & penjual dua-duanya klik Setuju Deal sebelum terms terkunci; deal lama dimigrasi otomatis), tombol **👥 Tambah Member / ➖ Keluarkan Member** di Deal Board (midman/admin; observer hanya bisa lihat & chat; pembeli/penjual tidak bisa dikeluarkan; maks 10), Deal Board field baru 👀 Member Tambahan, add/remove tercatat di history + audit (total 82 command, 305 unit test).
 - **v3.9.33** (2026-09-02) — 🤝 rekber revisi: penjual dipilih via **dropdown member** (searchable — tanpa copy ID/mention; buat deal jadi 2 langkah), **fee additive** (ditambah di atas harga — penjual selalu terima harga penuh, contoh 100rb + 5% = pembeli bayar 105rb), Deal Board tampil `Total Dibayar Pembeli` + `Diterima Penjual` (penuh), invoice/stats pencatat pengeluaran nyata pembeli (harga+fee), fee snapshot ke deal (config berubah tidak mengubah deal berjalan), `parseSellerInput` dihapus (total 82 command, 291 unit test).
@@ -950,6 +951,6 @@ Jika ada masalah yang tidak ada di Troubleshooting:
 
 ---
 
-**Versi dokumen:** v3.9.35
+**Versi dokumen:** v3.9.36
 **Last updated:** 2 September 2026
-**Bot version:** 3.9.35 · 82 slash command · 312 unit test
+**Bot version:** 3.9.36 · 82 slash command · 312 unit test
