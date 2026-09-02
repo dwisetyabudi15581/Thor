@@ -1,4 +1,4 @@
-# 📖 Admin Guide — Thor Bot v3.9.36
+# 📖 Admin Guide — Thor Bot v3.9.37
 
 Panduan lengkap untuk admin server Discord yang menjalankan bot ini — cocok untuk admin baru yang pertama kali setup, maupun admin yang sudah berjalan sebagai referensi harian.
 
@@ -139,7 +139,7 @@ Untuk setiap produk, tentukan role yang akan didapat pembeli + durasi expire:
 /setup-ticket
 ```
 
-Bot mengirim embed + 4 tombol default (Beli Key / Transaksi, Help, Report, Claim Giveaway) ke channel tempat command dijalankan. Member menekan tombol → bot membuat channel tiket private.
+Bot mengirim embed + 5 tombol default (Beli Key / Transaksi, Help, Report, Claim Giveaway, 🤝 Rekber / Middleman) ke channel tempat command dijalankan. Tombol 🤝 Rekber membuka formulir deal escrow (bukan tiket — lihat bagian Midman/Rekber). Member menekan tombol → bot membuat channel tiket private.
 
 **Rekomendasi:** pasang di `#information` atau channel khusus `#order-here`, lalu pin pesannya.
 
@@ -184,7 +184,7 @@ Semua tombol tiket **100% dinamis** — dapat ditambah, diubah, dan dihapus dari
 | `lisensi_key` (requires_key: true)     | Ada produk           | Dropdown 🔑 → Set Key                                           |
 | `help` / `report` / `partnership` dll. | Kosong               | Langsung buat tiket (BANTUAN)                                   |
 
-> **Safety-net (v3.9.29):** `/setup-ticket-panel` & `/refresh-panel` memberi **peringatan** jika ada kategori di panel yang belum punya produk — klik tombol kategori kosong membuka tiket BANTUAN, bukan transaksi. Tambahkan minimal 1 produk via `/add-product` jika kategori memang untuk jualan. Kategori `help`/`report` tidak diperingatkan (memang quick-action).
+> **Safety-net (v3.9.29):** `/setup-ticket-panel` & `/refresh-panel` memberi **peringatan** jika ada kategori di panel yang belum punya produk — klik tombol kategori kosong membuka tiket BANTUAN, bukan transaksi. Tambahkan minimal 1 produk via `/add-product` jika kategori memang untuk jualan. Kategori `help`/`report` tidak diperingatkan (memang quick-action); kategori `midman` juga tidak (v3.9.37 — tombolnya membuka deal rekber, bukan tiket, jadi "tanpa produk" bukan masalah).
 
 **Contoh setup kategori baru (terverifikasi aman oleh unit test):**
 
@@ -924,10 +924,11 @@ Cooldown bersifat **per-user** — user A memicu tidak memengaruhi user B.
 
 ## 11. Riwayat Versi
 
-Riwayat lengkap semua versi (v3.9.0 – v3.9.36) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
+Riwayat lengkap semua versi (v3.9.0 – v3.9.37) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
 
 Ringkasan 3 versi terbaru:
 
+- **v3.9.37** (2026-09-02) — 🐛 fix **/help** (Auto-Split kini 3 kategori TRANSAKSI/BANTUAN/REKBER — bug user-reported "masih 2"), section Midman/Rekber ditambah, versi embed kini dinamis dari package.json (anti stale); 🩹 audit menyeluruh v2: **restore-backup tidak lagi memutus deal rekber** (deals.json bolong dari FILES_TO_BACKUP), **deal zombie di-reconcile otomatis** (channel dihapus manual → pembeli/penjual dibebaskan dari lock, startup + harian), router `ticket_cat:midman` kini exact-match (kategori `midman_*` custom tidak mati), penjual deal kini juga dicek tiket aktifnya, deskripsi dropdown & warning panel rekber tidak menyesatkan lagi, label audit MIDMAN_*, +12 unit test (total 82 command, 324 unit test).
 - **v3.9.36** (2026-09-02) — 🧹 code cleanup hasil audit menyeluruh: seluruh 37 lint warning dibersihkan jadi **0 error 0 warning**, dead code dihapus (formatTimeLeft duplikat, findOwnerVoiceChannel, save() legacy), variabel/import/require redundan dirapikan, typo pesan warning diperbaiki — tanpa perubahan perilaku, 312 unit test tetap hijau (total 82 command, 312 unit test).
 - **v3.9.35** (2026-09-02) — 🐛 fix tombol konfirmasi close tiket non-transaksi (bantuan/help/report/claim/giveaway): tombol **❌ Tutup Tanpa Selesai** dulunya salah wiring ke customId yang sama dengan **⏏️ Batal Tutup** — akibatnya kedua tombol sama-sama hanya membatalkan penutupan dan tiket tidak bisa ditutup tanpa selesai. Sekarang tombol itu benar-benar menutup tiket (transcript ditandai tidak selesai, channel dihapus, meta dibersihkan); "Batal Tutup" konsisten memakai customId yang sama di semua skenario; tombol konfirmasi ephemeral lama tetap kompatibel (total 82 command, 312 unit test).
 - **v3.9.34** (2026-09-02) — 🤝 rekber redesign alur: deal bisa dibuka **siapa saja** (pembeli/penjual/pihak yang menolong) lewat **formulir 3 langkah** (item+harga → pilih pembeli → pilih penjual, semua via dropdown searchable), **persetujuan ganda** (state WAITING_AGREE — pembeli & penjual dua-duanya klik Setuju Deal sebelum terms terkunci; deal lama dimigrasi otomatis), tombol **👥 Tambah Member / ➖ Keluarkan Member** di Deal Board (midman/admin; observer hanya bisa lihat & chat; pembeli/penjual tidak bisa dikeluarkan; maks 10), Deal Board field baru 👀 Member Tambahan, add/remove tercatat di history + audit (total 82 command, 305 unit test).
@@ -951,6 +952,6 @@ Jika ada masalah yang tidak ada di Troubleshooting:
 
 ---
 
-**Versi dokumen:** v3.9.36
+**Versi dokumen:** v3.9.37
 **Last updated:** 2 September 2026
-**Bot version:** 3.9.36 · 82 slash command · 312 unit test
+**Bot version:** 3.9.37 · 82 slash command · 324 unit test

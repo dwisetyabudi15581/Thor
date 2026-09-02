@@ -652,8 +652,11 @@ async function saveTranscript(ticketChannel, meta, closer, isSuccess) {
                 chunks.push(l.slice(0, CHUNK_SIZE));
                 l = l.slice(CHUNK_SIZE);
             }
+            // v3.9.37 FIX: `current` bisa kosong saat baris hard-split tepat
+            // sepanjang CHUNK_SIZE → chunk kosong terkirim sebagai code block
+            // blank. Push hanya kalau ada isinya.
             if ((current + '\n' + l).length > CHUNK_SIZE) {
-                chunks.push(current);
+                if (current) chunks.push(current);
                 current = l;
             } else {
                 current = current ? current + '\n' + l : l;

@@ -4,16 +4,23 @@
  *
  * v3.9.12: Update komprehensif — refleksikan semua command baru dari Phase 1+2+3
  * + modal editor untuk message config + ticket body template variables.
+ * v3.9.37: Auto-Split di-update ke 3 kategori (tambah 🤝 REKBER), tambah section
+ * Midman/Rekber, dan versi embed kini dinamis dari package.json (anti stale).
  */
 
 const { EmbedBuilder, MessageFlags } = require('./_shared');
+
+// v3.9.37: versi diambil dinamis dari package.json (single source of truth)
+// supaya /help gak pernah stale lagi (sebelumnya hardcode "v3.9.26" padahal
+// bot sudah jauh lebih baru).
+const { version: BOT_VERSION } = require('../../package.json');
 
 module.exports = async function (interaction) {
     const helpEmbed = new EmbedBuilder()
         .setTitle('🤖 COMMUNITY BOT — HELP')
         .setDescription(
             `Halo ${interaction.user}! Anda terverifikasi sebagai **Admin/Staff**.\n` +
-                `Berikut daftar lengkap command yang tersedia (v3.9.26).`
+                `Berikut daftar lengkap command yang tersedia (v${BOT_VERSION}).`
         )
         .setColor(0x5865f2)
         .addFields(
@@ -96,7 +103,7 @@ module.exports = async function (interaction) {
             {
                 name: '🎭 Atur Role',
                 value: [
-                    '• `/set-role verified @role` — set role (verified/unverified/admin)',
+                    '• `/set-role verified @role` — set role (verified/unverified/admin/**midman**)',
                     '• `/remove-role verified` — hapus role dari config'
                 ].join('\n'),
                 inline: false
@@ -109,10 +116,11 @@ module.exports = async function (interaction) {
                     '• `/remove-channel welcome` — hapus channel dari config',
                     '• `/set-channel transcript #ch` — auto-save transcript tiket sebelum close',
                     '',
-                    '**🎫 Auto-Split:** Bot pisah tiket jadi 2 kategori otomatis:',
-                    '• **`🎫 TRANSAKSI`** — semua tiket produk: pakai key (🔑 Set Key) TAU non-key (📦 Kirim Pesanan)',
+                    '**🎫 Auto-Split:** Bot pisah tiket jadi 3 kategori otomatis:',
+                    '• **`🎫 TRANSAKSI`** — semua tiket produk: pakai key (🔑 Set Key) ATAU non-key (📦 Kirim Pesanan)',
                     '• **`🎫 BANTUAN`** — tiket kategori tanpa produk (help/report/claim_giveaway)',
-                    'Custom nama? Edit `data/config.json`: `ticketCategoryKey`, `ticketCategoryNoKey`'
+                    '• **`🤝 REKBER`** — channel deal escrow middleman (dibuat saat deal rekber dibuka)',
+                    'Custom nama? Edit `data/config.json`: `ticketCategoryKey`, `ticketCategoryNoKey`, `midman.category`'
                 ].join('\n'),
                 inline: false
             },
@@ -147,6 +155,17 @@ module.exports = async function (interaction) {
                     '• `/set-key user:@user value:vip30 key:ABCDE-12345`',
                     '• `/list-keys user:@user`',
                     '• `/clear-schedule user:@user clear_keys:true`'
+                ].join('\n'),
+                inline: false
+            },
+
+            {
+                name: '🤝 Midman / Rekber (Escrow)',
+                value: [
+                    '• `/set-role midman @role` — WAJIB di-set dulu sebelum deal bisa dibuka',
+                    '• `/set-midman-fee mode:Persen value:5` — fee otomatis per deal (persen / flat, 0 = gratis)',
+                    '• `/midman-deals` — lihat semua deal rekber aktif di server',
+                    '💡 Deal 3-pihak (pembeli ⇄ penjual + midman pegang dana). Siapa pun bisa buka lewat tombol **🤝 Rekber** di panel — 3 langkah: item & harga → pilih pembeli → pilih penjual, lalu kedua pihak klik **Setuju Deal**.'
                 ].join('\n'),
                 inline: false
             },
@@ -211,7 +230,7 @@ module.exports = async function (interaction) {
             }
         )
         .setFooter({
-            text: `${interaction.client.user.username} v3.9.26 — All-in-One Community Bot`,
+            text: `${interaction.client.user.username} v${BOT_VERSION} — All-in-One Community Bot`,
             iconURL: interaction.client.user.displayAvatarURL({ dynamic: true })
         })
         .setTimestamp();

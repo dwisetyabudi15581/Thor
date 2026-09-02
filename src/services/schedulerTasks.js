@@ -34,6 +34,11 @@ const {
 } = require('../data/scheduledAnnouncements');
 const { pruneClosedOlderThan: pruneOldPolls } = require('../data/pollManager');
 const { recordGiveawayWin: trackGiveawayWin } = require('../data/statsManager');
+// v3.9.37: reconcile deal rekber zombie (lihat reconcileZombieDeals di bawah).
+const {
+    getActiveDealsByGuild: getActiveDeals,
+    removeDeal: removeDealMeta
+} = require('../data/midmanManager');
 
 // v3.9.8 FIX: in-memory guard supaya giveaway/announcement yang sama tidak
 // diproses 2x paralel oleh scheduler tick. Sebelumnya, kalau satu
@@ -446,6 +451,80 @@ function pruneStaleData() {
 }
 
 /**
+ * v3.9.37: reconcile deal rekber zombie — deal non-terminal yang channel-nya
+ * sudah tidak ada (dihapus manual dari UI Discord oleh admin / channel hilang).
+ *
+ * Tanpa reconcile, user yang terlibat deal zombie TERKUNCI SELAMANYA:
+ *   - tidak bisa buka tiket reguler (hasActiveDealFor → tolak di createTicket),
+ *   - tidak bisa dipilih jadi pembeli/penjual deal baru (validasi pick flow),
+ *   - /midman-deals menampilkan link channel mati.
+ * Tiket punya self-healing serupa (findActiveTicketFor) — mulai v3.9.37 deal
+ * juga. Cleanup pakai removeDeal (pola finalizeDeal): riwayat deal terminal
+ * memang tidak disimpan jangka panjang.
+ *
+ * Dipanggil: (a) sekali saat startup (ready.js), (b) harian oleh scheduler
+ * tick via wrapper reconcileZombieDealsDaily (guard hari — mirror pruneStaleData).
+ *
+ * @param {Client} client - Discord client (guilds cache)
+ * @returns {Promise<number>} jumlah zombie deal yang dibersihkan
+ */
+async function reconcileZombieDeals(client) {
+    let removed = 0;
+    for (const [gid, guild] of client.guilds.cache) {
+        let deals;
+        try {
+            deals = getActiveDeals(gid);
+        } catch (err) {
+            console.warn(`⚠️ Reconcile deal: gagal load deals guild ${gid}:`, err.message);
+            continue;
+        }
+        for (const deal of deals) {
+            if (!deal.channelId) continue;
+            try {
+                // Cache dulu, fetch API kalau cache miss (pola findActiveTicketFor).
+                let ch = guild.channels.cache.get(deal.channelId);
+                if (!ch) {
+                    try {
+                        ch = await guild.channels.fetch(deal.channelId);
+                    } catch (fetchErr) {
+                        // 10003 = Unknown Channel → channel benar-benar dihapus.
+                        // Error lain (5xx / network / rate-limit) = TRANSIENT —
+                        // jangan hapus deal aktif cuma karena blip sesaat;
+                        // biarkan entry, retry tick berikutnya.
+                        if (fetchErr?.code !== 10003) continue;
+                        ch = null;
+                    }
+                }
+                if (!ch) {
+                    removeDealMeta(deal.channelId);
+                    removed++;
+                    console.log(
+                        `🧹 Reconcile deal: channel ${deal.channelId} (guild ${gid}) sudah tidak ada — meta deal dihapus, pembeli/penjual dibebaskan dari lock.`
+                    );
+                }
+            } catch (_) {
+                // Defensive — error tak terduga per-deal tidak boleh abort loop.
+            }
+        }
+    }
+    return removed;
+}
+
+let lastDealReconcileDay = 0;
+
+/**
+ * Wrapper harian untuk scheduler tick — reconcileZombieDeals max 1x/hari
+ * (guard hari, mirror pruneStaleData; startup ready.js memanggil versi
+ * non-guard langsung supaya fresh-check setelah restart).
+ */
+async function reconcileZombieDealsDaily(client) {
+    const today = Math.floor(Date.now() / 86400000);
+    if (today === lastDealReconcileDay) return;
+    lastDealReconcileDay = today;
+    await reconcileZombieDeals(client);
+}
+
+/**
  * Attach semua function ke client supaya commandHandler bisa akses.
  * Dipanggil sekali saat bot ready.
  */
@@ -460,5 +539,7 @@ module.exports = {
     announceRerollWinner,
     processScheduledAnnouncement,
     pruneStaleData,
+    reconcileZombieDeals,
+    reconcileZombieDealsDaily,
     attachToClient
 };

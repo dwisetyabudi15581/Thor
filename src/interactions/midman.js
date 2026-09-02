@@ -624,6 +624,17 @@ async function handlePickSeller(interaction) {
             content: `❌ <@${buyerId}> ternyata sudah punya tiket aktif di ${activeTicket}. Tutup dulu sebelum buat deal rekber.`
         });
     }
+    // v3.9.37: penjual juga tidak boleh punya tiket reguler aktif — dulu cuma
+    // pembeli yang dicek, jadi user dengan tiket terbuka bisa jadi penjual
+    // (asimetris dengan kebijakan 1-channel-per-user yang berlaku di 3 arah
+    // lain: buat tiket, jadi pembeli deal, jadi penjual deal).
+    const sellerTicket = await findActiveTicketFor(guild, sellerId);
+    if (sellerTicket) {
+        return safeEditReply(interaction, {
+            content: `❌ <@${sellerId}> masih punya tiket aktif di ${sellerTicket}. Pilih penjual lain:`,
+            components: sellerSelectRow()
+        });
+    }
 
     // Kategori channel deal (pola v3.9.16 ticketManager: find → create → error jelas)
     const categoryName = config.midman?.category || '🤝 REKBER';
@@ -1011,8 +1022,11 @@ async function handleEvent(interaction, event) {
                 await channel.send(`✅ <@${deal.buyerId}> mengonfirmasi barang **diterima & sesuai**.`);
             }
             if (event === 'dispute') {
+                // v3.9.37: guard role admin kosong (mirror guard boardEmbed utk
+                // role midman) — tanpa ini, mention jadi literal "<@&undefined>".
+                const adminPing = config.roles?.admin ? `<@&${config.roles.admin}>` : '**Admin**';
                 await channel.send(
-                    `🚨 <@&${config.roles.admin}> — **DISPUTE** dibuka oleh **${interaction.user.tag}**.\n` +
+                    `🚨 ${adminPing} — **DISPUTE** dibuka oleh **${interaction.user.tag}**.\n` +
                         'Semua proses deal **dibekukan** sampai admin resolve (cairkan / refund). Jangan kirim barang/dana lagi.'
                 );
             }
@@ -1259,6 +1273,9 @@ async function handleRemovePick(interaction) {
         await channel.permissionOverwrites.delete(userId);
     } catch (_) {}
 
+    // v3.9.37: guard history korup (mirror guard event handler & add-member —
+    // deals.json hasil edit manual bisa tanpa array history).
+    deal.history = Array.isArray(deal.history) ? deal.history : [];
     deal.history.push({
         ts: Date.now(),
         event: `👋 Member dikeluarkan: <@${userId}>`,

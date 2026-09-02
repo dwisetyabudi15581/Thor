@@ -95,7 +95,22 @@ const ACTION_LABELS = {
     // Panel management (v3.9.14+)
     DELETE_PANEL: '🗑️ Hapus Panel Tiket',
     REFRESH_PANEL: '🔄 Refresh Panel Tiket',
-    UPDATE_PANEL: '✏️ Update Field Panel'
+    UPDATE_PANEL: '✏️ Update Field Panel',
+    // Midman / Rekber (v3.9.32; label ditambah v3.9.37 — sebelumnya fallback
+    // ke raw action string, konsisten dengan cleanup label v3.9.4/v3.9.17)
+    SET_MIDMAN_FEE: '💰 Set Fee Rekber',
+    MIDMAN_CREATE: '🤝 Buat Deal Rekber',
+    MIDMAN_AGREE: '✅ Setuju Deal (parsial)',
+    MIDMAN_JOIN: '✅ Setuju Deal (terkunci)',
+    MIDMAN_CANCEL: '🚫 Batal Deal Rekber',
+    MIDMAN_FUNDIN: '💰 Dana Masuk (Rekber)',
+    MIDMAN_RECEIVED: '📦 Barang Diterima (Rekber)',
+    MIDMAN_RELEASE: '💸 Cairkan Dana (Rekber)',
+    MIDMAN_DISPUTE: '🚨 Dispute Rekber',
+    MIDMAN_RESOLVE_RELEASE: '⚖️ Resolve Dispute — Cairkan',
+    MIDMAN_RESOLVE_REFUND: '⚖️ Resolve Dispute — Refund',
+    MIDMAN_MEMBER_ADD: '➕ Tambah Member Deal',
+    MIDMAN_MEMBER_REMOVE: '➖ Keluarkan Member Deal'
 };
 
 const RETRY_DELAY_MS = 500;

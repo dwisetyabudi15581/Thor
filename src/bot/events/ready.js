@@ -8,6 +8,7 @@
  *   4. Cleanup expired keys + process expired role schedules (offline catch-up).
  *   5. Start auto-backup + auto-flush stats cache.
  *   6. Reconcile temp voice registry (cleanup zombie + detect orphan).
+ *   6b. Reconcile deal rekber zombie (cleanup meta deal tanpa channel).
  *   7. Init statsManager dengan default guild untuk migrasi legacy entries.
  *   8. Start main scheduler loop (60s interval).
  */
@@ -18,7 +19,9 @@ const {
     processExpiredRole,
     processGiveawayEnd,
     processScheduledAnnouncement,
-    pruneStaleData
+    pruneStaleData,
+    reconcileZombieDeals,
+    reconcileZombieDealsDaily
 } = require('../../services/schedulerTasks');
 const { getExpired, getAllActive } = require('../../data/roleScheduler');
 const { removeExpiredKeys } = require('../../data/keyManager');
@@ -146,6 +149,17 @@ async function onReady(client) {
         console.warn('⚠️ Gagal reconcile temp voice:', err.message);
     }
 
+    // === 6b. Reconcile deal rekber zombie (v3.9.37) ===
+    // Deal non-terminal yang channel-nya dihapus manual → meta dibersihkan,
+    // supaya pembeli/penjual gak terkunci selamanya (mirror self-healing
+    // tiket di findActiveTicketFor). Tick scheduler juga jalanin harian.
+    try {
+        const zombies = await reconcileZombieDeals(client);
+        if (zombies > 0) console.log(`🧹 Startup: ${zombies} zombie deal rekber dibersihkan.`);
+    } catch (err) {
+        console.warn('⚠️ Gagal reconcile deal rekber:', err.message);
+    }
+
     // === 7. Init statsManager dengan default guild untuk migrasi legacy ===
     const defaultStatsGuildId = GUILD_ID || (client.guilds.cache.size > 0 ? client.guilds.cache.first().id : null);
     if (defaultStatsGuildId) {
@@ -210,6 +224,14 @@ async function onReady(client) {
                     pruneStaleData();
                 } catch (err) {
                     console.error('Scheduler: pruneStaleData error:', err.message);
+                }
+
+                // v3.9.37: reconcile harian deal rekber zombie (channel dihapus
+                // manual selagi bot jalan — startup check gak meliputi kasus ini).
+                try {
+                    await reconcileZombieDealsDaily(client);
+                } catch (err) {
+                    console.error('Scheduler: reconcileZombieDeals error:', err.message);
                 }
             } catch (err) {
                 console.error('Scheduler tick error:', err);

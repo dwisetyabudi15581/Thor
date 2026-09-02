@@ -65,7 +65,10 @@ const PREFIX_TO_DOMAIN = [
     // v3.9.32: midman/rekber. WAJIB SEBELUM prefix `ticket_cat:` generik —
     // `ticket_cat:midman` (tombol kategori rekber di panel) harus di-route ke
     // domain midman, bukan ticket (kalau kena ticket_, customId tidak dikenal).
-    { prefix: 'ticket_cat:midman', domain: 'midman' },
+    // v3.9.37: EXACT-match — tanpa ini, kategori custom yang kebetulan diawali
+    // "midman" (mis. `midman_jual`, id valid per CATEGORY_ID_REGEX) kena
+    // prefix-match dan mati di fallback midman (tidak pernah di-reply).
+    { prefix: 'ticket_cat:midman', domain: 'midman', exact: true },
     { prefix: 'modal_mm_', domain: 'midman' },
     { prefix: 'mm_', domain: 'midman' },
     { prefix: 'modal_edit_message:', domain: 'config' },

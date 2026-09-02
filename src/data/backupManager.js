@@ -53,7 +53,12 @@ const FILES_TO_BACKUP = [
     'levels.json',
     'responders.json',
     'afk.json',
-    'panels.json'
+    'panels.json',
+    // v3.9.37 FIX: deals.json (rekber v3.9.32+) bolong — restore-backup
+    // sebelumnya memutus SEMUA deal escrow aktif (pembeli/penjual terkunci
+    // selamanya karena meta hilang). Ketemu oleh guard test "file live harus
+    // di-backup" begitu deals.json ada di data/.
+    'deals.json'
 ];
 
 // v3.9.10: helper untuk resolve path file data (ke data/ folder).

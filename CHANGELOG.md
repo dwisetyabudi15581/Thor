@@ -5,6 +5,27 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 Legend: 🔴 critical · 🟠 high · 🟡 medium · 🟢 improvement
 
+## [3.9.37] — 2026-09-02
+
+### Fixed — 🐛 /help kedaluwarsa + audit menyeluruh v2: 5 bug/issue pasca-fitur rekber (user-reported: "auto split masih 2")
+
+Permintaan user: kesalahan di `/help` (fitur middleman sudah ada tapi Auto-Split masih tertulis **2 kategori**) + baca keseluruhan kode & sync semuanya. Fix `/help` sekaligus audit kedua yang menemukan 5 issue nyata — dua di antaranya berdampak serius ke alur rekber.
+
+- 🟠 **/help Auto-Split 2 → 3 kategori** (bug user-reported): sekarang menyebut **🎫 TRANSAKSI / 🎫 BANTUAN / 🤝 REKBER** + key custom `midman.category`; ditambah section **🤝 Midman / Rekber (Escrow)** (`/set-role midman`, `/set-midman-fee`, `/midman-deals` + ringkasan alur 3 langkah); daftar role kini menyebut `midman`; typo "TAU" → "ATAU".
+- 🟢 **Versi embed /help kini dinamis** dari `package.json` (footer + description) — sebelumnya hardcode `v3.9.26` padahal bot sudah jauh lebih baru; tidak akan stale lagi.
+- 🔴 **`deals.json` bolong dari FILES_TO_BACKUP** — `/backup-now` & `/restore-backup` TIDAK mem-backup data deal rekber (fitur v3.9.32). Konsekuensi: restore = semua deal escrow aktif **terputus** (meta hilang; pembeli/penjual terkunci selamanya). Ditemukan guard test "file live wajib di-backup" begitu deals.json ada di `data/`. Kini di-backup penuh.
+- 🟠 **Deal zombie terkunci selamanya → self-healing** (paritas dengan tiket): deal non-terminal yang channel-nya dihapus manual dari UI Discord selama ini bikin pembeli/penjual **tidak bisa buka tiket reguler / dipilih di deal baru** selamanya, dan `/midman-deals` menampilkan link mati. Kini di-reconcile otomatis: saat **startup** (ready.js 6b) + **harian** oleh scheduler tick (guard per-hari). Transient error (5xx/network) TIDAK menghapus deal — hanya channel yang benar-benar hilang (null / error 10003) yang dibersihkan.
+- 🟠 **Router `ticket_cat:midman` kini exact-match** — kategori custom yang id-nya diawali `midman` (mis. `midman_jual`, valid per CATEGORY_ID_REGEX) sebelumnya kena prefix-match → jatuh ke fallback domain midman → tombol **mati tanpa reply** ("interaction failed"). Kembali di-route benar ke domain ticket.
+- 🟡 **Penjual deal kini juga dicek tiket aktifnya** — dulunya hanya pembeli yang dicek (asimetri kebijakan 1-channel-aktif-per-user): user dengan tiket terbuka bisa jadi penjual deal.
+- 🟢 **Teks panel tidak lagi menyesatkan**: deskripsi dropdown kategori rekber "Bantuan / buka tiket langsung" → "Deal escrow rekber — 3 pihak"; warning `findEmptyCategoryWarnings` tidak lagi menyarankan "tambah produk ke kategori midman" (produk di kategori midman memang tidak pernah tampil — klik selalu buka deal); pesan `/list-categories` config kosong "Default 4 kategori" → **5** (termasuk midman); pesan console migration config kini menyebut midman; ADMIN_GUIDE "4 tombol default" → 5.
+- 🟢 **Label audit log MIDMAN_xxx + SET_MIDMAN_FEE** — sebelumnya tampil sebagai raw action string di channel audit log (inkonsisten dengan konvensi label v3.9.4/v3.9.17).
+- 🟢 **Hardening kecil**: guard `<@&undefined>` di pengumuman dispute saat role admin belum di-set (jadi fallback **Admin**); guard `deal.history` bukan-array di remove-member (mirror guard handler lain); transcript chunk kosong (code block blank saat sisa hard-split tepat 1900 char) tidak dikirim.
+
+### Tests
+
+- 🟢 +12 unit test (total **324**, dari 312): `tests/unit/hardeningV37.test.js` — router exact-match (kategori `midman_jual` → ticket domain, tombol `ticket_cat:midman` → midman domain), warning/deskripsi panel rekber, label audit, isi /help (3 kategori + section midman + versi dinamis), reconcile zombie deal (null/10003/transient/terminal + wrapper harian), formulir deal 3-langkah (penjual ber-tiket ditolak + happy-path regression), transcript tanpa chunk kosong, pin `deals.json` di FILES_TO_BACKUP.
+- 🟢 Test lama yang mengunci literal `v3.9.26` di /help di-update: sekarang menyamakan dengan `package.json` (future-proof).
+
 ## [3.9.36] — 2026-09-02
 
 ### Changed — 🧹 Code cleanup: audit menyeluruh (37 lint warning → 0), dead code dihapus, typo pesan diperbaiki

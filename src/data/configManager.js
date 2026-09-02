@@ -273,7 +273,12 @@ function getConfig() {
     if (_migrationChanged) {
         try {
             saveConfig(config);
-            console.log('📦 v3.9.18 migration: ticket categories updated (Help/Report rename + claim_giveaway added).');
+            // v3.9.37: pesan di-update — blok ini sekarang juga menambah
+            // kategori midman (v3.9.32), bukan cuma rename Help/Report +
+            // claim_giveaway (v3.9.18) seperti pesan lama.
+            console.log(
+                '📦 Migration ticket categories: Help/Report rename + claim_giveaway + midman (rekber) ditambahkan.'
+            );
         } catch (migErr) {
             console.warn('⚠️ Gagal save migration ticket categories:', migErr.message);
         }

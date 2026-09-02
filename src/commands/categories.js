@@ -104,7 +104,7 @@ module.exports = async function (interaction) {
         if (categories.length === 0) {
             return safeEditReply(interaction, {
                 content:
-                    '📭 Belum ada kategori. Default 4 kategori (transaction, help, report, claim_giveaway) akan dipakai kalau config kosong.'
+                    '📭 Belum ada kategori. Default 5 kategori (transaction, help, report, claim_giveaway, midman) akan dipakai kalau config kosong.'
             });
         }
 

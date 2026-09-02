@@ -602,7 +602,11 @@ test('help.js: help embed mentions new v3.9.14+ commands', async () => {
     assert.match(allText, /update-panel/);
     assert.match(allText, /refresh-panel/);
     assert.match(allText, /use_dropdown/);
-    assert.match(allText, /v3\.9\.26/);
+    // v3.9.37: versi di help kini dinamis dari package.json (anti-stale) —
+    // assert-nya menyamakan dengan package.json, bukan literal hardcode.
+    const { version: pkgVersion } = require('../../package.json');
+    assert.match(allText, new RegExp(`v${pkgVersion.replace(/\./g, '\\.')}`));
+    assert.doesNotMatch(allText, /v3\.9\.26/); // literal lama tidak boleh muncul lagi
 });
 
 // === Router test ===

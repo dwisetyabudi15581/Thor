@@ -87,6 +87,10 @@ function validateUrl(input) {
  *
  * Kategori `help`/`report` di-skip — memang quick-action (selalu kosong,
  * warning-nya cuma jadi noise).
+ * v3.9.37: kategori `midman` juga di-skip — klik tombolnya membuka modal
+ * deal rekber (bukan tiket), jadi "belum punya produk" bukan masalah sama
+ * sekali (produk di kategori midman bahkan tidak akan pernah tampil — klik
+ * tetap di-route ke alur deal).
  *
  * @param {Object} panel - panel metadata (categoryIds dipakai, mirror logic
  *   buildTicketPanel: kosong = semua kategori)
@@ -103,7 +107,7 @@ function findEmptyCategoryWarnings(panel, config) {
     const products = config.products || [];
     const lines = [];
     for (const cat of categoriesToShow) {
-        if (!cat || cat.id === 'help' || cat.id === 'report') continue; // quick-action default
+        if (!cat || cat.id === 'help' || cat.id === 'report' || cat.id === 'midman') continue; // quick-action default / deal rekber
         const hasProducts = products.some(p => (p.category || 'transaction') === cat.id);
         if (hasProducts) continue;
         if (cat.requiresKey !== false) {
@@ -236,10 +240,15 @@ function buildTicketPanel(panel, ctx) {
         // kategori boleh campur (mis. "Akun ML" berisi 2 akun non-key + 1
         // top-up pakai key). Flag kategori hanya fallback kalau gak ada produk
         // key/non-key yang bisa disimpulkan.
+        // v3.9.37 FIX: kategori midman selalu "deal rekber" — deskripsi lama
+        // "Bantuan / buka tiket langsung" menyesatkan end user (klik tombolnya
+        // membuka formulir deal escrow, bukan tiket bantuan).
         const options = categoriesToShow.map(cat => {
             const prods = productsInCategories.filter(p => (p.category || 'transaction') === cat.id);
             let desc;
-            if (prods.length > 0) {
+            if (cat.id === 'midman') {
+                desc = 'Deal escrow rekber — 3 pihak';
+            } else if (prods.length > 0) {
                 const nonKeyCount = prods.filter(p => p.requiresKey === false).length;
                 let keyInfo;
                 if (nonKeyCount === 0) {
