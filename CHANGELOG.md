@@ -5,17 +5,6 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 Legend: 🔴 critical · 🟠 high · 🟡 medium · 🟢 improvement
 
-## [3.9.38] — 2026-09-03
-
-### Added — 🧭 tool migrasi ke English Edition (script & panduan ada di repo Thor-EN)
-
-Permintaan user: *"kalau misal langsung timpa apakah bisa"* (migrasi deployment Indonesia → English). Bisa — kedua versi paritas data penuh (customId, state machine, format JSON identik; hanya bahasa antarmuka beda) sejak v3.9.30. Tooling-nya ditaruh di repo Thor-EN (tempat dia dijalankan):
-
-- 🟢 **`scripts/migrate-to-english.js`** (di repo Thor-EN) — import 17 file data dari deployment ID lama (`--from <dir>`), backup seluruh `data/` ke `data-backup-migration-<ts>/`, migrasi `config.json` (field yang masih default Indonesia di-reset ke default English; **semua kustomisasi admin utuh**: role/channel ID, harga, fee midman, kategori custom, produk), dan rename 3 kategori channel Discord via REST API (`🎫 TRANSAKSI → 🎫 TRANSACTIONS`, `🎫 BANTUAN → 🎫 SUPPORT`, `🤝 REKBER → 🤝 ESCROW`) supaya tidak muncul kategori dobel.
-- 🟢 **MIGRATION.md** (di repo Thor-EN, Bahasa Indonesia) — panduan 2 alur (deployment baru / timpa in-place), daftar yang tetap berbahasa Indonesia (konten milik admin), checklist pasca-migrasi, prosedur rollback.
-- 🟢 README versi Indonesia: section baru "Migrasi ke English Edition" (pointer ke tool & panduan).
-- 🟢 Tanpa perubahan perilaku bot — 324 unit test tetap hijau tanpa modifikasi; paritas jumlah test ID ↔ EN tetap 324 (script migrasi diverifikasi via `--self-test` + dry-run/eksekusi penuh pada dataset fixture, bukan lewat suite unit).
-
 ## [3.9.37] — 2026-09-02
 
 ### Fixed — 🐛 /help kedaluwarsa + audit menyeluruh v2: 5 bug/issue pasca-fitur rekber (user-reported: "auto split masih 2")
