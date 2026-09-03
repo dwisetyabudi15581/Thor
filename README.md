@@ -2,7 +2,7 @@
 
 Bot Discord serbaguna untuk komunitas apa pun — server jualan, gaming, content creator, hingga komunitas umum. Semua konfigurasi dapat diatur langsung dari Discord melalui slash command, tanpa mengedit file.
 
-> **v3.9.37** · 82 slash command · 324 unit test · discord.js v14 · Node.js 18+ · single-guild
+> **v3.9.38** · 82 slash command · 324 unit test · discord.js v14 · Node.js 18+ · single-guild
 >
 > 📖 **[Panduan Admin Lengkap](./docs/ADMIN_GUIDE.md)** — setup, operasional harian, troubleshooting
 > 📜 **[Changelog](./CHANGELOG.md)** — riwayat semua versi
@@ -147,6 +147,10 @@ Panduan lengkap termasuk contoh produk, kategori custom, dan operasional harian:
 Test memakai `node:test` bawaan Node.js v18+ — tidak perlu dependensi tambahan. Semua test berjalan dalam sandbox (snapshot/restore) sehingga aman dijalankan di server live. CI (GitHub Actions) menjalankan lint + test pada setiap push untuk Node 18/20/22.
 
 ---
+
+## 🧭 Migrasi ke English Edition
+
+Ingin pindah ke versi Inggris ([Thor-EN](https://github.com/dwisetyabudi15581/Thor-EN))? Kedua versi paritas penuh (customId, format data, fitur — hanya bahasa antarmuka yang beda), jadi tiket aktif, deal escrow, level, dan semua settingan bisa dibawa. Tool migrasi sekali-jalan tersedia di repo Thor-EN: `node scripts/migrate-to-english.js --from <folder data lama>` — import data, terjemah config (kustomisasi admin utuh), backup otomatis, dan rename kategori channel di Discord. Panduan lengkap: [MIGRATION.md](https://github.com/dwisetyabudi15581/Thor-EN/blob/main/MIGRATION.md) (Bahasa Indonesia).
 
 ## 🛡️ Keamanan
 
