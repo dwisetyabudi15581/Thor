@@ -241,8 +241,16 @@ test('help v3.9.37: Auto-Split 3 kategori (TRANSAKSI/BANTUAN/REKBER) + section M
     };
     const helpHandler = require('../../src/commands/help');
     await helpHandler(mockInteraction);
+
+    // v3.9.39: /help kini navigator interaktif (home + dropdown + tombol) —
+    // daftar command lengkap pindah ke katalog helpCatalog. Konten regression
+    // dicek dari katalog, struktur navigasi dicek dari reply.
     const embed = replies[0].embeds[0];
-    const allText = embed.data.fields.map(f => f.value).join('\n') + '\n' + embed.data.description;
+    assert.ok(replies[0].components?.length >= 1, 'v3.9.39: reply harus punya komponen navigasi (dropdown)');
+    assert.strictEqual(replies[0].components[0].components[0].toJSON().custom_id, 'help_cat');
+
+    const { HELP_CATEGORIES } = require('../../src/ui/helpCatalog');
+    const allText = HELP_CATEGORIES.map(c => c.lines.join('\n')).join('\n') + '\n' + embed.data.description;
 
     // Auto-Split kini 3 kategori — bug user-reported ("masih 2").
     assert.match(allText, /3 kategori/);

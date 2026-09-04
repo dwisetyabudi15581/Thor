@@ -7,6 +7,8 @@
  * Prefix mapping (semua prefix di sini SEKARANG punya handler aktif —
  * fallback ke legacy `handlers/interactionHandler.js` DIHAPUS):
  *   - btn_verify                              → verify.js      (exact match)
+ *   - help_cat, help_search, help_search_modal,
+ *     help_home, help_all (prefix help_)      → help.js        (v3.9.39 /help navigasi)
  *   - ticket_cat:, ticket_, select_product, modal_set_key:,
  *     modal_deliver_order:                    → ticket.js
  *   - ticket_cat:midman (SEBELUM ticket_cat:),
@@ -34,6 +36,9 @@ const { check, mark } = require('./_dedup');
 // Domain handlers — masing-masing export `async function(interaction)`.
 const verifyDomain = require('./verify');
 const ticketDomain = require('./ticket');
+// v3.9.39: domain help — navigasi /help interaktif (dropdown kategori +
+// tombol cari/semua/home + modal pencarian).
+const helpDomain = require('./help');
 // v3.9.32: domain midman/rekber (deal escrow 3-pihak).
 const midmanDomain = require('./midman');
 const selfroleDomain = require('./selfrole');
@@ -55,6 +60,10 @@ const { handlePanelModal: panelModalHandler } = require('../commands/panels-mgmt
 // `btn_verify` di-handle exact-match (lihat helper `pickDomain`).
 const PREFIX_TO_DOMAIN = [
     { prefix: 'btn_verify', domain: 'verify', exact: true },
+    // v3.9.39: navigasi /help (select help_cat, tombol help_search/help_home/
+    // help_all, modal help_search_modal). customId stabil tanpa suffix —
+    // prefix `help_` menangkap semuanya, tidak collide dengan prefix lain.
+    { prefix: 'help_', domain: 'help' },
     { prefix: 'select_product', domain: 'ticket', exact: true },
     // v3.9.14: dropdown select menu dari panel (customId: ticket_cat_select)
     { prefix: 'ticket_cat_select', domain: 'ticket', exact: true },
@@ -99,6 +108,7 @@ const PREFIX_TO_DOMAIN = [
 const DOMAIN_HANDLERS = {
     verify: verifyDomain,
     ticket: ticketDomain,
+    help: helpDomain,
     midman: midmanDomain,
     selfrole: selfroleDomain,
     embed: embedDomain,

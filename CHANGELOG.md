@@ -5,6 +5,25 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 Legend: 🔴 critical · 🟠 high · 🟡 medium · 🟢 improvement
 
+## [3.9.39] — 2026-09-04
+
+### Changed — 🚀 /help redesign: navigator interaktif — cari command tanpa scroll (user-reported: "satu embed utuh, nyari harus scroll")
+
+`/help` dulu mengirim SATU embed raksasa (±5.400 char, 18+ kategori di 1 halaman) → admin harus scroll jauh untuk mencari command. Sekarang `/help` menjadi **navigator interaktif** dalam satu pesan ephemeral yang bisa diklik-klik:
+
+- 🟢 **🏠 Home (default)** — index 19 kategori dipadatkan (3 per baris) + instruksi pencarian. Embed hanya ±860 char — muat 1 layar.
+- 🟢 **📂 Dropdown kategori (String Select Menu)** — pilih 1 dari 19 kategori (emoji + nama + deskripsi singkat) → detail command kategori itu saja ditampilkan (embed kecil). Dropdown tetap terpasang di semua view untuk lompat kategori tanpa balik ke home.
+- 🟢 **🔍 Cari Command (tombol + modal)** — ketik kata kunci bebas (`key`, `rekber`, `vip`...) → hasil instan, dikelompokkan per kategori, match substring case-insensitive; kalau kata kunci mengenai NAMA kategori, seluruh isi kategori ditampilkan. Hasil di-cap 20 blok (dengan note "+hasil lainnya") supaya embed tetap kecil & scannable.
+- 🟢 **`/help search:<kata kunci>` (opsi slash baru)** — pencarian langsung tanpa buka menu (autocomplete Discord membantu klien yang sudah hapal).
+- 🟢 **📖 Semua Command (tombol)** — tampilan daftar lengkap lama tetap tersedia untuk yang prefer scroll; auto-split 2 embed jika > 5.800 char (total gabungan tetap ≤ 6.000 dalam 1 pesan).
+- 🟢 Semua navigasi pakai `interaction.update()` → **satu pesan yang sama di-edit**, tidak spam pesan baru tiap ganti kategori; customId stabil (tanpa suffix id) → pesan `/help` lama yang masih terbuka tetap bisa diklik setelah bot restart.
+- 🟢 **Arsitektur**: seluruh isi help kini single-source-of-truth di `src/ui/helpCatalog.js` (katalog 19 kategori + builder embed + engine pencarian + builder komponen) — dipakai bersama oleh slash command (`src/commands/help.js`) dan handler interaksi baru (`src/interactions/help.js`, prefix router `help_`). Tambah kategori baru = tambah 1 entry di katalog, dropdown/home/search/all otomatis ikut.
+- 🟢 **Defensive**: value dropdown tidak dikenal (pesan lama pasca-update katalog) → fallback ke home dengan aman, bukan "interaction failed"; query kosong/modal kosong di-handle dengan pesan panduan.
+
+### Tests
+
+- 🟢 +26 unit test (total **412**, dari 386): `tests/unit/helpNav.test.js` — integritas katalog (id unik, ≤25 opsi select, label/desc ≤100 char, semua view ≤ 4096/6000 char), search engine (case-insensitive, whole-category match, blok bullet membawa baris opsi lanjutan, empty/no-result, cap hasil), slash command (home/search/whitespace), handler interaksi (dropdown known/unknown, showModal required, modal submit, tombol home/all, customId asing), routing prefix `help_`, regression konten lama (Auto-Split 3 kategori, midman, use_dropdown, update-category/product) — 3 test lama yang mengunci struktur embed raksasa di-update ke struktur navigator. Full suite 412/412 hijau, ESLint 0 warning.
+
 ## [3.9.38] — 2026-09-04
 
 ### Fixed — 🛡️ Audit menyeluruh v3: 34 bug/issue diperbaiki lintas seluruh domain (rekber, tiket, data layer, automod, router)

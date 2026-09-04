@@ -12,8 +12,17 @@ function getCommands() {
         // === HELP ===
         {
             name: 'help',
-            description: 'Lihat semua command & cara pakai bot',
-            defaultMemberPermissions: PermissionFlagsBits.ManageGuild
+            description: 'Pusat bantuan: pilih kategori atau cari command lewat kata kunci',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
+            options: [
+                // v3.9.39: cari langsung tanpa buka menu (alternatif modal 🔍).
+                {
+                    type: 3,
+                    name: 'search',
+                    description: 'Kata kunci command yang dicari (mis. key, rekber, panel)',
+                    required: false
+                }
+            ]
         },
 
         // === PANEL SETUP ===
