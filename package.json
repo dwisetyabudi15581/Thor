@@ -1,6 +1,6 @@
 {
     "name": "community-bot",
-    "version": "3.9.40",
+    "version": "3.9.41",
     "description": "All-in-One Discord Community Bot — ticket panel (multi-category), auto-responder, anti-spam, AFK, leveling, key-driven VIP role, self-role, temp voice, giveaway, scheduled announcements, embed builder, backup, warn, stats, poll, midman/rekber (deal escrow 3-pihak, buat deal oleh siapa saja via formulir 3 langkah, persetujuan ganda, kelola member di channel deal, fee additive) — fully configurable from Discord",
     "main": "index.js",
     "scripts": {

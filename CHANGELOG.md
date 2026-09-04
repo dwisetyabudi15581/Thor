@@ -5,6 +5,23 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 Legend: 🔴 critical · 🟠 high · 🟡 medium · 🟢 improvement
 
+## [3.9.41] — 2026-09-05
+
+### Fixed — 🔍 Debug ulang atas laporan error produksi ("Interaction Error: ExpectedConstraintError — s.string().lengthLessThanOrEqual()")
+
+Pemicu: user melaporkan spam error di log bot produksi setiap kali modal **kirim embed** dibuka. Akar masalah: `TextInputBuilder.setLabel` punya limit Discord **45 karakter** — label versi Inggris `'Message outside the embed (optional, supports @)'` (48 char) dan `'Message outside the embed (leave empty to remove)'` (49 char) **melebihi limit** → builder throw sebelum modal sempat tampil. Versi Indonesia kebetulan masih ≤ 45 (`Pesan di luar embed (opsional, support @)` = 40) — itulah kenapa bug ini hanya muncul di repo EN: fix batasan v3.9.27 sebelumnya hanya meng-cover alur tiket, dan file embed EN lolos dari audit karena dicek dari twin ID-nya.
+
+- 🟠 **Modal "Kirim Embed ke Channel" mati total di repo EN** — label 48 char → `ExpectedConstraintError` SETIAP kali tombol kirim diklik → flow kirim embed tidak pernah bisa dipakai. Fix: label dipendekkan jadi `'Message outside the embed (optional)'` (36 char); hint @-mention tetap utuh di placeholder (limit 100).
+- 🟠 **Modal "Set Message (Plain Text)" mati total di repo EN** — label 49 char → throw yang sama. Fix: label 36 char; hint "leave empty to remove" dipindah ke placeholder.
+
+### Audit — 🛡️ sweep menyeluruh seluruh batasan komponen Discord (bukan cuma yang error)
+
+Scan otomatis seluruh source kedua repo terhadap SEMUA limit builder: TextInput label ≤ 45 / placeholder ≤ 100 / `setMaxLength` ≤ 4000, Modal title ≤ 45, Button label ≤ 80, Select option label & description ≤ 100 (klasifikasi call-site via constructor terdekat). Hasil: **0 pelanggaran literal tersisa** di kedua repo; semua titik dynamic (template literal) terverifikasi sudah ter-guard fix v3.9.26/27 (`.slice(0,45)` modal tiket, `.slice(0,100)` placeholder select) atau ter-bounded oleh validasi input (label produk ≤ 80, question poll ≤ 250, field panel ≤ 9 char, tipe config ≤ 17 char).
+
+### Tests
+
+- 🟢 +4 unit test (total **433**, dari 429): `tests/unit/componentLimits.test.js` — (1) scan statis nol pelanggaran literal di seluruh src/ (**jaring pengaman permanen** — PR yang menambah label kepanjangan langsung merah dengan pesan file:baris), (2) kontrak runtime semua label/title modal di `embed.js` vs builder discord.js ASLI (bukan mock), (3) dokumentasi batasan (46 char throw / 45 lolos), (4) regression spesifik modal kirim embed. Full suite 433/433 hijau, ESLint 0 warning.
+
 ## [3.9.40] — 2026-09-04
 
 ### Fixed — 🛡️ Audit menyeluruh pasca-v3.9.39 ("cek keseluruhan kode + sinkron docs"): 6 bug nyata + hardening + docs sync
