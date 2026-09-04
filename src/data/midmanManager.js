@@ -318,8 +318,13 @@ function calcTotals(priceNum, fee) {
  * Parse harga dari input modal. Terima: "100000", "100.000", "100,000",
  * "100k", "1m", "Rp100.000". Return 0 kalau invalid.
  *
- * Catatan: separator . dan , diperlakukan sebagai pemisah ribuan (harga deal
- * rekber di Indonesia praktis selalu integer rupiah).
+ * v3.9.38 FIX: desimal tidak lagi "lolos" jadi digit ekstra (bug 10x harga).
+ *   - Dengan suffix k/m: sisa input TIDAK BOLEH mengandung `.`/`,` ("1.5m"
+ *     dulu di-parse jadi 15.000.000 — desimal dibaca sebagai digit tambahan).
+ *   - Tanpa suffix: `.`/`,` hanya sah sebagai pemisah RIBUAN — format
+ *     `^\d{1,3}([.,]\d{3})*$` dengan JENIS separator konsisten ("1.000.000"
+ *     dan "1,000,000" valid; "2.5", "1.000,000", "100000." invalid → 0).
+ *     Harga deal rekber memang selalu integer rupiah.
  */
 function parsePriceNumber(input) {
     if (typeof input === 'number') return input > 0 ? Math.floor(input) : 0;
@@ -330,12 +335,21 @@ function parsePriceNumber(input) {
         .replace(/rp\.?/g, '')
         .replace(/\s/g, '');
     let multiplier = 1;
+    const hasSuffix = s.endsWith('k') || s.endsWith('m');
     if (s.endsWith('k')) {
         multiplier = 1000;
         s = s.slice(0, -1);
     } else if (s.endsWith('m')) {
         multiplier = 1000000;
         s = s.slice(0, -1);
+    }
+    // v3.9.38 FIX: validasi pemisah SEBELUM strip — lihat JSDoc di atas.
+    if (/[.,]/.test(s)) {
+        if (hasSuffix) return 0; // "1.5m" / "0.5k" → invalid (bukan 15jt/5rb)
+        // Tanpa suffix: hanya pemisah ribuan konsisten yang boleh.
+        const isDotGroups = /^\d{1,3}(\.\d{3})+$/.test(s);
+        const isCommaGroups = /^\d{1,3}(,\d{3})+$/.test(s);
+        if (!isDotGroups && !isCommaGroups) return 0; // "2.5" / "1.000,000" → 0
     }
     s = s.replace(/[.,]/g, '');
     if (!/^\d+$/.test(s)) return 0;

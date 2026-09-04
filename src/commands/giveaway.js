@@ -12,6 +12,9 @@
  * v3.9.8: validate duration, validate channel type (GuildText), wrap reroll di userLock.
  */
 
+// v3.9.38 FIX: cek scheduler in-flight — dipakai /giveaway end sebelum lock manual.
+const { isGiveawayProcessing } = require('../services/schedulerTasks');
+
 const {
     EmbedBuilder,
     ButtonBuilder,
@@ -201,6 +204,18 @@ module.exports = async function (interaction) {
         if (gw.ended) return safeEditReply(interaction, { content: `❌ Giveaway sudah berakhir.` });
         if (gw.guildId !== interaction.guild.id)
             return safeEditReply(interaction, { content: '❌ Giveaway ini bukan dari guild ini.' });
+
+        // v3.9.38 FIX: kalau scheduler LAGI memproses natural-end giveaway ini,
+        // tolak dulu — jangan pick winners manual di tengah announce scheduler
+        // (winnerIds bisa tertimpa + announce/DM dobel). Lock manual
+        // (withUserLock 'gw_end') dan lock scheduler (Set processingGiveaways)
+        // tadinya disjoint, interleaving ini gak ke-cover sama sekali.
+        if (isGiveawayProcessing(id)) {
+            return safeEditReply(interaction, {
+                content:
+                    '⏳ Giveaway ini sedang diproses otomatis oleh scheduler (natural end). Coba lagi beberapa detik lagi.'
+            });
+        }
 
         // v3.9.24 FIX: wrap di lock (scope per giveaway ID — pola sama dengan reroll).
         // Sebelumnya /giveaway end TIDAK di-lock: double-invoke (spam enter /

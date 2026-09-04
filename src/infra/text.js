@@ -76,4 +76,31 @@ function normalizeNewlines(input) {
     return input.replace(LITERAL_NEWLINE_RE, '\n');
 }
 
-module.exports = { normalizeNewlines, isValidEmoji };
+/**
+ * v3.9.38 FIX: truncation code-point-aware — slice() biasa bisa motong
+ * surrogate pair emoji jadi karakter rusak (Discord bisa reject 50035).
+ *
+ * Contoh: teks penuh emoji "👍" (2 code unit per emoji) di-slice(0, 500) bisa
+ * berakhir di tengah pasangan surrogate → char terakhir jadi lone surrogate
+ * (0xD800-0xDFFF) → embed/pesan ditolak API atau tampil sebagai karakter kotak.
+ *
+ * Helper ini memotong per CODE POINT (iterasi for..of string), tapi batas
+ * maxLen tetap dihitung per CODE UNIT (limit Discord 256/1024/4096 dihitung
+ * code unit). Total panjang hasil SELALU <= maxLen + 1 (ellipsis 1 code unit).
+ *
+ * @param {string} str - teks yang mau dipotong
+ * @param {number} maxLen - panjang maksimum konten dalam code unit
+ * @returns {string} teks terpotong (+ '…' kalau benar-benar terpotong)
+ */
+function truncateUtf8Safe(str, maxLen) {
+    if (typeof str !== 'string' || str.length <= maxLen) return str ?? '';
+    let out = '';
+    // for..of iterasi per code point — pasangan surrogate tidak pernah terpisah.
+    for (const ch of str) {
+        if (out.length + ch.length > maxLen) break;
+        out += ch;
+    }
+    return out + '…';
+}
+
+module.exports = { normalizeNewlines, isValidEmoji, truncateUtf8Safe };

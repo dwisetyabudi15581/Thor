@@ -37,26 +37,55 @@ setInterval(() => {
 /**
  * Cek apakah interaction ID sudah diproses dalam window TTL.
  *
+ * v3.9.38 FIX: split jadi `check` + `mark` (mark sekarang dipanggil router
+ * SETELAH handler sukses — sebelumnya checkAndMark menandai SEBELUM handler
+ * jalan, jadi kalau handler crash/error, replay gateway dari Discord untuk
+ * interaction yang sama di-swallow → action user hilang diam-diam).
+ *
+ * @param {string} interactionId - interaction.id dari Discord
+ * @returns {boolean} true kalau SUDAH diproses dalam TTL (pemanggil harus skip).
+ */
+function check(interactionId) {
+    if (!interactionId) return false;
+    const now = Date.now();
+    const prevTs = processedInteractions.get(interactionId);
+    return !!(prevTs && now - prevTs < PROCESSED_TTL_MS);
+}
+
+/**
+ * Tandai interaction ID sebagai sudah diproses (sekarang, timestamp fresh).
+ * Idempotent — mark 2x untuk id sama hanya refresh timestamp.
+ * @param {string} interactionId - interaction.id dari Discord
+ */
+function mark(interactionId) {
+    if (!interactionId) return;
+    processedInteractions.set(interactionId, Date.now());
+}
+
+/**
+ * Cek + tandai sekaligus (kombinasi check() lalu mark()).
+ * Backward compat — dipertahankan untuk pemanggil luar router.
+ *
  * @param {string} interactionId - interaction.id dari Discord
  * @returns {boolean} true kalau SUDAH diproses (pemanggil harus skip),
- *                    false kalau BELUM (pemanggil boleh lanjut & sekarang ditandai).
+ *                    false kalau BELUM (dan sekarang ditandai).
  *
  * v3.9.8: kalau entry ada tapi udah lebih dari TTL, anggap belum diproses
  * (return false) dan overwrite timestamp-nya dengan `now`.
  */
 function checkAndMark(interactionId) {
-    if (!interactionId) return false;
-    const now = Date.now();
-    const prevTs = processedInteractions.get(interactionId);
-    if (prevTs && now - prevTs < PROCESSED_TTL_MS) {
+    if (check(interactionId)) {
         return true; // sudah diproses — skip
     }
-    processedInteractions.set(interactionId, now);
+    mark(interactionId);
     return false;
 }
 
 module.exports = {
     checkAndMark,
+    // v3.9.38: granular — check tanpa mark, mark tanpa check
+    check,
+    mark,
     processedInteractions, // exposed untuk testing/debug
     PROCESSED_TTL_MS
 };

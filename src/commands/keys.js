@@ -40,7 +40,13 @@ module.exports = async function (interaction) {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         const user = interaction.options.getUser('user');
         const value = interaction.options.getString('value');
-        const keyValue = interaction.options.getString('key');
+        // v3.9.38 FIX (FIX 5b): trim input + tolak key kosong/whitespace SEBELUM
+        // side effect apa pun (addKey/role/DM/invoice). Discord hanya validasi
+        // required/minLength di sisi client string — "   " (spasi saja) lolos.
+        const keyValue = (interaction.options.getString('key') || '').trim();
+        if (!keyValue) {
+            return safeEditReply(interaction, { content: '❌ Key tidak boleh kosong.' });
+        }
 
         const product = config.products.find(p => p.value === value);
         if (!product) {

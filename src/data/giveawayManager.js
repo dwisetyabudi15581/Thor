@@ -134,6 +134,10 @@ function end(id, winnerIds = []) {
         return gw;
     }
     gw.ended = true;
+    // v3.9.38 FIX: catat endedAt saat mark ended — prune GC membaca
+    // `g.endedAt || g.endsAt`; tanpa ini giveaway yang di-end DINI oleh admin
+    // dipertahankan sampai endsAt+30h (terlalu lama, karena endsAt masih jauh).
+    gw.endedAt = Date.now();
     gw.winnerIds = winnerIds;
     save(list);
     return gw;

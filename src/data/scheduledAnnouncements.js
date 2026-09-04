@@ -29,6 +29,16 @@ const fs = require('fs');
 const path = require('path');
 const { safeWriteJSON, quarantineCorruptFile } = require('../infra/safeWrite');
 
+// v3.9.38 FIX: absolute time diparse dengan offset eksplisit (default WITA +8,
+// sesuai teks bantuan /announce-schedule) — bukan timezone host. VPS UTC
+// sebelumnya bikin semua announcement absolute telat 8 jam. Configurable via
+// env TZ_OFFSET_HOURS (valid -12..14, di luar range → fallback 8).
+const DEFAULT_TZ_OFFSET_HOURS = 8;
+function getTzOffsetHours() {
+    const n = parseInt(process.env.TZ_OFFSET_HOURS ?? String(DEFAULT_TZ_OFFSET_HOURS), 10);
+    return Number.isFinite(n) && n >= -12 && n <= 14 ? n : DEFAULT_TZ_OFFSET_HOURS;
+}
+
 const filePath = path.join(__dirname, '..', '..', 'data', 'scheduledAnnouncements.json');
 
 function load() {
@@ -168,7 +178,8 @@ function computeNextRecurring(fromTs, type) {
 /**
  * Parse natural language time string ke timestamp.
  * Format yang didukung:
- *   - ISO: "2026-01-15 20:00" → di-asumsikan timezone lokal
+ *   - ISO: "2026-01-15 20:00" → di-asumsikan zona waktu bot (default WITA/UTC+8,
+ *     v3.9.38 — sebelumnya timezone host, bikin offset 8 jam di VPS UTC)
  *   - Relative: "30m", "2h", "1d" → now + duration
  *
  * v3.9.1 FIX: tambah range validation supaya admin tidak schedule announce
@@ -216,23 +227,28 @@ function parseTime(input) {
         const hourNum = parseInt(h, 10);
         const minNum = parseInt(mi, 10);
         const secNum = s ? parseInt(s, 10) : 0;
-        const dt = new Date(yearNum, monthNum - 1, dayNum, hourNum, minNum, secNum);
-        if (isNaN(dt.getTime())) return null;
-
+        // v3.9.38 FIX: bangun dari komponen input sebagai UTC murni dulu —
+        // dipakai untuk validasi rollover (dan bebas dari timezone host).
         // v3.9.8 FIX: Date constructor auto-rolls invalid components (mis. month 13
         // → January next year, day 40 → 9th of next month). Sebelumnya, "2026-13-40 99:99"
         // silently menjadi valid date di tahun 2027. Sekarang: verify components match.
+        const wall = new Date(Date.UTC(yearNum, monthNum - 1, dayNum, hourNum, minNum, secNum));
+        if (isNaN(wall.getTime())) return null;
         if (
-            dt.getFullYear() !== yearNum ||
-            dt.getMonth() !== monthNum - 1 ||
-            dt.getDate() !== dayNum ||
-            dt.getHours() !== hourNum ||
-            dt.getMinutes() !== minNum
+            wall.getUTCFullYear() !== yearNum ||
+            wall.getUTCMonth() !== monthNum - 1 ||
+            wall.getUTCDate() !== dayNum ||
+            wall.getUTCHours() !== hourNum ||
+            wall.getUTCMinutes() !== minNum
         ) {
             return null;
         }
 
-        const ts = dt.getTime();
+        // v3.9.38 FIX: konversi wall-clock (zona bot, default WITA +8) → timestamp
+        // UTC absolut dengan offset eksplisit. Sebelumnya pakai `new Date(y, mo, d,
+        // ...)` (timezone host) → di VPS UTC semua absolute announcement telat
+        // 8 jam dari yang dijanjikan teks bantuan.
+        const ts = wall.getTime() - getTzOffsetHours() * 3600 * 1000;
         // v3.9.1: reject kalau di masa lalu ATAU lebih dari 5 tahun ke depan.
         if (ts < now) return null;
         if (ts > now + MAX_ABSOLUTE_FUTURE_MS) return null;
@@ -272,5 +288,7 @@ module.exports = {
     computeNextRecurring,
     parseTime,
     // v3.9.26
-    pruneSentOlderThan
+    pruneSentOlderThan,
+    // v3.9.38: offset zona waktu absolut (default WITA +8) — untuk test & help text
+    getTzOffsetHours
 };

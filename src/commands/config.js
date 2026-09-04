@@ -35,7 +35,8 @@ const {
 const { ModalBuilder, TextInputBuilder, TextInputStyle, ChannelType } = require('discord.js');
 
 // v3.9.25: konversi \n literal → newline asli (fitur multi-line PC)
-const { normalizeNewlines } = require('../infra/text');
+// v3.9.38: truncateUtf8Safe — potong teks per code point (emoji aman)
+const { normalizeNewlines, truncateUtf8Safe } = require('../infra/text');
 
 module.exports = async function (interaction) {
     const embeds = new Embeds(interaction.client);
@@ -166,6 +167,25 @@ module.exports = async function (interaction) {
             priceListByCategory
         });
 
+        // v3.9.38 FIX: validasi panjang SETELAH ekspansi template {price_list} —
+        // sebelumnya hanya raw teks yang di-validasi (/set-message), jadi body
+        // 500 char + 40 produk (±120 char/produk) lolos validasi tapi
+        // setDescription(renderedBody) throw RangeError >4096 saat panel dipasang
+        // (panel tiket mati total sampai body diperpendek). Pre-validate, bukan
+        // try/catch, biar error message jelas ke admin.
+        if ((config.messages.ticketTitle || '').length > EMBED_LIMITS.TITLE) {
+            return safeEditReply(interaction, {
+                content: `❌ Ticket Title terlalu panjang (${config.messages.ticketTitle.length} char, maks ${EMBED_LIMITS.TITLE}). Perpendek lewat \`/set-message ticketTitle\`.`
+            });
+        }
+        if (renderedBody.length > EMBED_LIMITS.DESCRIPTION) {
+            return safeEditReply(interaction, {
+                content:
+                    `❌ Ticket body terlalu panjang SETELAH {price_list} diekspansi: **${renderedBody.length}/${EMBED_LIMITS.DESCRIPTION}** char.\n\n` +
+                    `💡 Perpendek ticket body (\`/set-message ticketBody\`), kurangi jumlah produk, atau pakai \`{price_list:<kategori>}\` untuk hanya tampilkan kategori tertentu.`
+            });
+        }
+
         const embed = new EmbedBuilder()
             .setTitle(config.messages.ticketTitle)
             .setDescription(renderedBody)
@@ -241,6 +261,32 @@ module.exports = async function (interaction) {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         const tipe = interaction.options.getString('tipe');
         const role = interaction.options.getRole('role');
+
+        // v3.9.38 FIX: validasi role bisa di-assign bot — sebelumnya role managed/
+        // @everyone/posisinya di atas bot lolos validasi → tersimpan ke config,
+        // lalu auto-role gagal diam-diam tiap member join/verify (tidak ada
+        // error sampai admin cek manual).
+        if (role.id === interaction.guild.id) {
+            return safeEditReply(interaction, {
+                content: '❌ @everyone tidak bisa dipakai. Pilih role biasa.'
+            });
+        }
+        if (role.managed) {
+            return safeEditReply(interaction, {
+                content: '❌ Role ini dikelola integrasi/bot lain (managed) — tidak bisa di-assign bot.'
+            });
+        }
+        // Null-guard: guild.members.me bisa null di partial state — fallback 0
+        // (maks ketat, admin diminta pindahkan role bot dulu).
+        const botHighestPos = interaction.guild.members.me?.roles?.highest?.position ?? 0;
+        if ((role.position ?? 0) >= botHighestPos) {
+            return safeEditReply(interaction, {
+                content:
+                    '❌ Role ini posisinya DI ATAS role bot tertinggi — bot tidak bisa meng-assign. ' +
+                    'Pindahkan role bot ke atas di Server Settings → Roles, atau pilih role lain.'
+            });
+        }
+
         setField(`roles.${tipe}`, role.id);
         await logAudit(interaction.client, {
             action: 'SET_ROLE',
@@ -351,6 +397,32 @@ module.exports = async function (interaction) {
 
         const fmt = (id, type) => (id ? `<${type}:${id}> (\`${id}\`)` : '❌ belum di-set');
 
+        // v3.9.38 FIX: defense-in-depth — SEMUA field value di-cap 1024 char
+        // (limit Discord). Kalau joined value kepanjangan, potong (per code
+        // point, emoji aman) + note; budget dikurangi note + ellipsis supaya
+        // total (konten + '…' + note) tetap <= 1024 code unit.
+        const DIPOTONG_NOTE = '\n… (dipotong — batas 1024 char field Discord)';
+        const capFieldValue = value => {
+            if (typeof value !== 'string' || value.length <= EMBED_LIMITS.FIELD_VALUE) return value;
+            return truncateUtf8Safe(value, EMBED_LIMITS.FIELD_VALUE - DIPOTONG_NOTE.length - 1) + DIPOTONG_NOTE;
+        };
+
+        // v3.9.38 FIX: daftar ber-cap — maks `maxShown` entry pertama + suffix
+        // "+N lainnya". Kalau gabungan entry + suffix (+ prefix header) masih
+        // kepanjangan untuk field (1024 char), kurangi jumlah entry satu per
+        // satu supaya suffix tetap utuh di akhir (bukan kepotong di tengah teks).
+        const buildCappedList = (items, maxShown, renderEntry, moreSuffix, emptyText, prefix = '') => {
+            if (items.length === 0) return `${prefix}${emptyText}`;
+            for (let n = Math.min(maxShown, items.length); n >= 1; n--) {
+                const hidden = items.length - n;
+                const value =
+                    prefix + items.slice(0, n).map(renderEntry).join('\n') + (hidden > 0 ? moreSuffix(hidden) : '');
+                if (value.length <= EMBED_LIMITS.FIELD_VALUE) return value;
+            }
+            // Entry tunggal super panjang (praktis mustahil) → potong per code point.
+            return capFieldValue(prefix + items.slice(0, 1).map(renderEntry).join('\n'));
+        };
+
         // --- Stats: VIP Keys ---
         // v3.9.4: scoped per guild — sebelumnya getKeyStats() return global count.
         const keyStats = getKeyStatsByGuild(interaction.guild.id);
@@ -384,17 +456,20 @@ module.exports = async function (interaction) {
         ];
 
         // --- Stats: Self-Role Panels (guild ini) ---
+        // v3.9.38 FIX: cap panel yang ditampilkan (15) + suffix — sebelumnya
+        // panelSummary unbounded → field value > 1024 char di ~17 panel →
+        // addFields throw RangeError (command /config-show mati total sampai
+        // panel dihapus).
         const panels = getPanelsByGuild(interaction.guild.id);
-        const panelLines =
-            panels.length > 0
-                ? panels
-                      .map(
-                          p =>
-                              `  • **${p.title}** — ${p.type === 'button' ? '🔘 Button' : '📋 Select'} | ${p.exclusive ? '🔒 Eksklusif' : '✅ Multi'} | ${p.roles.length} role`
-                      )
-                      .join('\n')
-                : '_(belum ada panel — pakai `/setup-selfrole`)_';
-        const panelSummary = `${panels.length} panel terdaftar di guild ini:\n${panelLines}`;
+        const panelSummary = buildCappedList(
+            panels,
+            15,
+            p =>
+                `  • **${p.title}** — ${p.type === 'button' ? '🔘 Button' : '📋 Select'} | ${p.exclusive ? '🔒 Eksklusif' : '✅ Multi'} | ${p.roles.length} role`,
+            hidden => `\n… +${hidden} panel lainnya`,
+            '_(belum ada panel — pakai `/setup-selfrole`)_',
+            `${panels.length} panel terdaftar di guild ini:\n`
+        );
 
         // --- Stats: Embed Builder Sessions (milik user ini) ---
         const mySessions = getSessionsByUser(interaction.user.id);
@@ -404,16 +479,21 @@ module.exports = async function (interaction) {
                 : '_(tidak ada session aktif — pakai `/embed-builder` untuk mulai)_';
 
         // --- Products detail (dengan role + days mapping) ---
-        const productLines =
-            config.products.length > 0
-                ? config.products
-                      .map(p => {
-                          const roleStr = p.roleId ? `<@&${p.roleId}>` : '❌ belum di-map';
-                          const daysStr = p.days === 0 || !p.days ? '♾️ permanen' : `${p.days} hari`;
-                          return `• **${p.label}** (\`${p.value}\`) — ${p.price}\n  → Role: ${roleStr} | Durasi: ${daysStr}`;
-                      })
-                      .join('\n')
-                : '_(belum ada produk — pakai `/add-product`)_';
+        // v3.9.38 FIX: cap produk yang ditampilkan (10) + suffix — sebelumnya
+        // productLines unbounded → field value > 1024 char di ~12 produk →
+        // addFields throw RangeError (command /config-show selalu error
+        // sampai produk dikurangi).
+        const productLines = buildCappedList(
+            config.products,
+            10,
+            p => {
+                const roleStr = p.roleId ? `<@&${p.roleId}>` : '❌ belum di-map';
+                const daysStr = p.days === 0 || !p.days ? '♾️ permanen' : `${p.days} hari`;
+                return `• **${p.label}** (\`${p.value}\`) — ${p.price}\n  → Role: ${roleStr} | Durasi: ${daysStr}`;
+            },
+            hidden => `\n\n… +${hidden} produk lainnya — pakai /list-products`,
+            '_(belum ada produk — pakai `/add-product`)_'
+        );
 
         const embed = embeds
             .info(
@@ -423,43 +503,53 @@ module.exports = async function (interaction) {
             .addFields(
                 {
                     name: '🎭 Roles',
-                    value: [
-                        `• Verified: ${fmt(config.roles.verified, '@&')}`,
-                        `• Unverified: ${fmt(config.roles.unverified, '@&')}`,
-                        `• Admin: ${fmt(config.roles.admin, '@&')}`,
-                        `• Midman (Rekber): ${fmt(config.roles.midman, '@&')}`
-                    ].join('\n'),
+                    value: capFieldValue(
+                        [
+                            `• Verified: ${fmt(config.roles.verified, '@&')}`,
+                            `• Unverified: ${fmt(config.roles.unverified, '@&')}`,
+                            `• Admin: ${fmt(config.roles.admin, '@&')}`,
+                            `• Midman (Rekber): ${fmt(config.roles.midman, '@&')}`
+                        ].join('\n')
+                    ),
                     inline: false
                 },
                 {
                     name: '🤝 Rekber (v3.9.32)',
-                    value: [
-                        `• Fee: ${
-                            config.midman?.feeMode === 'flat'
-                                ? `${config.midman?.feeValue ?? 0} flat per deal`
-                                : `${config.midman?.feeValue ?? 5}% dari harga deal`
-                        }`,
-                        `• Kategori channel: ${config.midman?.category || '🤝 REKBER'}`,
-                        '• Lihat deal aktif: `/midman-deals`'
-                    ].join('\n'),
+                    value: capFieldValue(
+                        [
+                            `• Fee: ${
+                                config.midman?.feeMode === 'flat'
+                                    ? `${config.midman?.feeValue ?? 0} flat per deal`
+                                    : `${config.midman?.feeValue ?? 5}% dari harga deal`
+                            }`,
+                            `• Kategori channel: ${config.midman?.category || '🤝 REKBER'}`,
+                            '• Lihat deal aktif: `/midman-deals`'
+                        ].join('\n')
+                    ),
                     inline: false
                 },
                 {
                     name: '📢 Channels',
-                    value: [
-                        `• Welcome: ${fmt(config.channels.welcome, '#')}`,
-                        `• Goodbye: ${fmt(config.channels.goodbye, '#')}`,
-                        `• Invoice: ${fmt(config.channels.invoice, '#')}`,
-                        `• Audit Log: ${fmt(config.channels['audit-log'], '#')}`,
-                        `• Transcript Tiket: ${fmt(config.channels.transcript, '#')}`
-                    ].join('\n'),
+                    value: capFieldValue(
+                        [
+                            `• Welcome: ${fmt(config.channels.welcome, '#')}`,
+                            `• Goodbye: ${fmt(config.channels.goodbye, '#')}`,
+                            `• Invoice: ${fmt(config.channels.invoice, '#')}`,
+                            `• Audit Log: ${fmt(config.channels['audit-log'], '#')}`,
+                            `• Transcript Tiket: ${fmt(config.channels.transcript, '#')}`
+                        ].join('\n')
+                    ),
                     inline: false
                 },
-                { name: `📦 Produk (${config.products.length})`, value: productLines, inline: false },
-                { name: '🔑 VIP Keys (Key-Driven Model)', value: keyLines.join('\n'), inline: false },
-                { name: '⏰ Scheduled Role Removals', value: schedLines.join('\n'), inline: false },
-                { name: `🎭 Self-Role Panels (${panels.length})`, value: panelSummary, inline: false },
-                { name: '🛠️ Embed Builder Sessions', value: sessionLine, inline: false }
+                { name: `📦 Produk (${config.products.length})`, value: capFieldValue(productLines), inline: false },
+                {
+                    name: '🔑 VIP Keys (Key-Driven Model)',
+                    value: capFieldValue(keyLines.join('\n')),
+                    inline: false
+                },
+                { name: '⏰ Scheduled Role Removals', value: capFieldValue(schedLines.join('\n')), inline: false },
+                { name: `🎭 Self-Role Panels (${panels.length})`, value: capFieldValue(panelSummary), inline: false },
+                { name: '🛠️ Embed Builder Sessions', value: capFieldValue(sessionLine), inline: false }
             );
         return safeEditReply(interaction, { embeds: [embed] });
     }
@@ -536,8 +626,10 @@ module.exports = async function (interaction) {
         };
         for (const [key, label] of Object.entries(labels)) {
             const val = config.messages[key] || '(kosong)';
-            // Potong teks panjang supaya muat di field Discord (1024 char)
-            const truncated = val.length > 500 ? val.slice(0, 500) + '...' : val;
+            // Potong teks panjang supaya muat di field Discord (1024 char).
+            // v3.9.38 FIX: potong per code point — slice() biasa bisa motong
+            // surrogate pair emoji jadi lone surrogate (embed ditolak Discord).
+            const truncated = truncateUtf8Safe(val, 500);
             fields.push({ name: label, value: '```\n' + truncated + '\n```', inline: false });
         }
         const embed = embeds

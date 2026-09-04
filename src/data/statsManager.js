@@ -350,7 +350,9 @@ function getServerStats(guildId) {
  * Sekarang: deteksi format berdasarkan keberadaan dot & comma bersamaan.
  */
 function parsePrice(priceStr) {
-    if (typeof priceStr === 'number') return priceStr;
+    // v3.9.38 FIX: input number negatif juga di-clamp — harga tidak boleh
+    // minus (totalSpent/revenue bisa jadi negatif lewat harga produk).
+    if (typeof priceStr === 'number') return isNaN(priceStr) ? 0 : Math.max(0, priceStr);
     if (!priceStr) return 0;
     let s = String(priceStr).toLowerCase().replace(/rp\.?/g, '').replace(/\s/g, '');
     let multiplier = 1;
@@ -428,7 +430,9 @@ function parsePrice(priceStr) {
     }
 
     const n = parseFloat(s);
-    return isNaN(n) ? 0 : Math.round(n * multiplier);
+    // v3.9.38 FIX: hasil negatif di-clamp ke 0 — string harga "-5000" /
+    // "Rp -25k" tidak boleh bikin totalSpent/revenue jadi minus.
+    return isNaN(n) ? 0 : Math.max(0, Math.round(n * multiplier));
 }
 
 module.exports = {

@@ -22,13 +22,14 @@
  *   - reset_config_, restore_backup_          → backup.js
  *
  * Router meng-apply di sini (BUKAN di domain handler):
- *   1. Dedup interaction ID (checkAndMark) — pertahanan terhadap Discord retry.
+ *   1. Dedup interaction ID (check sebelum / mark SETELAH handler sukses — v3.9.38)
+ *      — pertahanan terhadap Discord retry.
  *   2. Guard `replied/deferred` — interaction yang sudah reply/defer tidak diproses ulang.
  *   3. Filter tipe interaction (button/select/modal only).
  *   4. Routing by customId prefix.
  */
 
-const { checkAndMark } = require('./_dedup');
+const { check, mark } = require('./_dedup');
 
 // Domain handlers — masing-masing export `async function(interaction)`.
 const verifyDomain = require('./verify');
@@ -170,7 +171,11 @@ async function routeInteraction(interaction) {
     // P1-6 FIX: cek duplikat interaction ID dulu (defense-in-depth).
     // Discord kadang fire event yang sama 2x kalau ada retry.
     // v3.9.8: kalau entry ada tapi udah lebih dari TTL, anggap belum diproses.
-    if (checkAndMark(interaction.id)) {
+    // v3.9.38 FIX: hanya CHECK di sini — MARK dipindah ke SETELAH handler sukses.
+    // Sebelumnya checkAndMark menandai SEBELUM handler jalan → kalau handler
+    // crash, replay gateway dari Discord untuk interaction yang sama di-swallow
+    // (sudah "terproses" padahal tidak) → action user hilang diam-diam.
+    if (check(interaction.id)) {
         return;
     }
 
@@ -183,7 +188,14 @@ async function routeInteraction(interaction) {
     // Cek domain berdasarkan customId prefix
     const handler = pickDomain(interaction.customId || '');
     if (handler) {
-        return handler(interaction);
+        // v3.9.38 FIX: mark interaction hanya SETELAH handler sukses — baris
+        // `mark()` di bawah ini tidak jalan kalau handler throw (await melempar
+        // error ke caller, entry TIDAK ditandai) → replay gateway (Discord retry
+        // interaction yang sama) bisa memproses ulang. Tanpa try/catch rethrow
+        // karena semantiknya identik (eslint no-useless-catch).
+        const result = await handler(interaction);
+        mark(interaction.id);
+        return result;
     }
 
     // v3.9.9 refactor: fallback ke legacy handler DIHAPUS. Semua customId yang

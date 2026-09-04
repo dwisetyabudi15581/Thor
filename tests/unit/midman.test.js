@@ -589,12 +589,25 @@ test('findActiveTicketFor: meta ada → aktif; zombie meta → cleanup & null', 
     delete require.cache[require.resolve('../../src/data/ticketManager')];
     const { findActiveTicketFor } = require('../../src/data/ticketManager');
 
-    // Guild fake: ch-live ter-cache; ch-zombie tidak ter-cache & fetch → null.
+    // Guild fake: ch-live ter-cache; ch-zombie tidak ter-cache & fetch → throw.
+    // v3.9.38: mock fetch ikut kontrak discord.js ASLI — channel yang sudah
+    // dihapus membuat guild.channels.fetch THROW error code 10003 (Unknown
+    // Channel), bukan resolve null. ticketManager (fix paralel domain tiket)
+    // kini hanya menghapus meta zombie pada 10003; mock lama (resolve null)
+    // tidak lagi memicu cleanup. Mock diperbarui agar realistis.
+    const unknownChannelErr = () => {
+        const e = new Error('Unknown Channel');
+        e.code = 10003;
+        return e;
+    };
     const fakeGuild = {
         id: 'g1',
         channels: {
             cache: new Map([['ch-live', { id: 'ch-live', name: 'ticket-1' }]]),
-            fetch: async id => (id === 'ch-uncached' ? { id: 'ch-uncached' } : null)
+            fetch: async id => {
+                if (id === 'ch-uncached') return { id: 'ch-uncached' };
+                throw unknownChannelErr();
+            }
         }
     };
 

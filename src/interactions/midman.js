@@ -636,6 +636,14 @@ async function handlePickSeller(interaction) {
         });
     }
 
+    // v3.9.38 FIX (anti double-submit/TOCTOU): sesi pending dihapus SEKARANG —
+    // sebelum await pembuatan channel/board. Submit kedua (user double-click
+    // dropdown penjual saat create masih jalan) tidak akan menemukan sesi →
+    // ditolak sebagai kedaluwarsa, jadi deal duplikat untuk pasangan
+    // buyer/seller yang sama tidak bisa terbentuk. Semua data sesi sudah
+    // tersalin ke variabel lokal (item/priceNum/buyerId/sellerId) di atas.
+    pendingDeals.delete(`${guild.id}:${creator.id}`);
+
     // Kategori channel deal (pola v3.9.16 ticketManager: find → create → error jelas)
     const categoryName = config.midman?.category || '🤝 REKBER';
     let category = guild.channels.cache.find(
@@ -708,6 +716,13 @@ async function handlePickSeller(interaction) {
     ];
     if (creator.id !== buyerId && creator.id !== sellerId) {
         overwrites.push({ id: creator.id, allow: participantAllow });
+        // v3.9.38 FIX: creator pihak ketiga juga dicatat sebagai observer
+        // pertama deal — dulu dia dapat akses channel tapi TIDAK masuk
+        // deal.observers, jadi tidak bisa dikeluarkan lewat tombol ➖ (admin
+        // harus revoke permission manual). Ditambahkan saat deal dibuat,
+        // jadi cuma memakan 1 dari 10 slot observer (canAddObserver tetap
+        // jalan normal untuk member lain).
+        deal.observers.push(creator.id);
     }
     overwrites.push(
         {
@@ -774,6 +789,18 @@ async function handlePickSeller(interaction) {
     }
 
     deal.boardMessageId = board.id;
+
+    // v3.9.38 FIX (re-check atomik sebelum commit): cek "deal aktif" dijalankan
+    // LAGI tepat sebelum meta disimpan — selama await create channel & kirim
+    // board di atas, deal lain untuk pembeli/penjual yang sama bisa saja
+    // ter-commit (TOCTOU). Kalau terlanjur, channel yang baru dibuat dibersihkan
+    // (best-effort) dan deal ini tidak disimpan.
+    if (mm.hasActiveDealFor(guild.id, buyerId) || mm.hasActiveDealFor(guild.id, sellerId)) {
+        await dealChannel.delete().catch(() => {});
+        return safeEditReply(interaction, {
+            content: '❌ Maaf, pembeli/penjual deal ini ternyata sudah terlibat deal aktif lain yang baru saja dibuat. Deal ini dibatalkan — silakan ulangi kalau masih diperlukan.'
+        });
+    }
     mm.setDeal(dealChannel.id, deal);
 
     await logAudit(interaction.client, {
@@ -785,8 +812,8 @@ async function handlePickSeller(interaction) {
         guildId: guild.id
     });
 
-    // Deal resmi dibuat → data sementara formulir tidak diperlukan lagi.
-    pendingDeals.delete(`${guild.id}:${creator.id}`);
+    // Catatan: sesi pending sudah dihapus sebelum await pembuatan channel
+    // (v3.9.38 FIX anti double-submit) — tidak ada lagi cleanup di sini.
 
     return safeEditReply(interaction, {
         content:
@@ -903,16 +930,22 @@ async function handleEvent(interaction, event) {
             .catch(() => {});
     }
 
+    // v3.9.38 FIX: deferReply DI AWAL — dulu konfirmasi ephemeral di-reply
+    // SETELAH 3-4 await API (pengumuman channel, refresh Deal Board, audit
+    // log) → bisa melewati window ack 3 detik Discord → "interaction failed"
+    // walau transisi sudah tersimpan. Semua reply setelah ini lewat
+    // safeEditReply (meng-edit deferred reply). Defer sengaja ditaruh SEBELUM
+    // getDeal+cek lock supaya rangkaian baca→validasi→kunci tetap sinkron
+    // (atomik di event loop — menyisipkan await di tengahnya akan membuka
+    // race transisi ganda).
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral }).catch(() => {});
+
     const deal = mm.getDeal(channel.id);
     if (!deal) {
-        return interaction
-            .reply({ content: '❌ Channel ini bukan channel deal rekber.', flags: MessageFlags.Ephemeral })
-            .catch(() => {});
+        return safeEditReply(interaction, { content: '❌ Channel ini bukan channel deal rekber.' });
     }
     if (mm.transitionLocks.has(channel.id)) {
-        return interaction
-            .reply({ content: '⏳ Deal sedang diproses, tunggu sebentar...', flags: MessageFlags.Ephemeral })
-            .catch(() => {});
+        return safeEditReply(interaction, { content: '⏳ Deal sedang diproses, tunggu sebentar...' });
     }
 
     // Guard 1: urutan langkah — state harus mengizinkan event ini.
@@ -920,20 +953,15 @@ async function handleEvent(interaction, event) {
     // belum ter-update setelah state berubah.)
     const next = mm.nextState(deal.state, event);
     if (!next) {
-        return interaction
-            .reply({
-                content: `❌ Aksi ini tidak bisa dilakukan sekarang.\n📍 Status deal: **${mm.STATES[deal.state]?.label || deal.state}**.`,
-                flags: MessageFlags.Ephemeral
-            })
-            .catch(() => {});
+        return safeEditReply(interaction, {
+            content: `❌ Aksi ini tidak bisa dilakukan sekarang.\n📍 Status deal: **${mm.STATES[deal.state]?.label || deal.state}**.`
+        });
     }
 
     // Guard 2: peran — hanya pihak yang berhak.
     const actor = resolveActor(deal, interaction, config);
     if (!mm.actorAllowed(event, actor)) {
-        return interaction
-            .reply({ content: ACTOR_HINT[event] || '❌ Kamu tidak berhak melakukan aksi ini.', flags: MessageFlags.Ephemeral })
-            .catch(() => {});
+        return safeEditReply(interaction, { content: ACTOR_HINT[event] || '❌ Kamu tidak berhak melakukan aksi ini.' });
     }
 
     mm.transitionLocks.add(channel.id);
@@ -948,12 +976,9 @@ async function handleEvent(interaction, event) {
                 // Guard 2 sudah memastikan aktor = buyer/seller, jadi satu-satunya
                 // penyebab gagal: pihak itu SUDAH setuju (double-click / tombol
                 // stale di client yang belum ter-update).
-                return interaction
-                    .reply({
-                        content: '✅ Kamu sudah menyetujui deal ini — menunggu pihak lainnya.',
-                        flags: MessageFlags.Ephemeral
-                    })
-                    .catch(() => {});
+                return safeEditReply(interaction, {
+                    content: '✅ Kamu sudah menyetujui deal ini — menunggu pihak lainnya.'
+                });
             }
             if (!res.both) {
                 // Persetujuan parsial — catat, update board, ping pihak yang
@@ -981,12 +1006,9 @@ async function handleEvent(interaction, event) {
                     details: `Deal <#${deal.channelId}> — ${res.role === 'buyer' ? 'pembeli' : 'penjual'} setuju (menunggu pihak lain)`,
                     guildId: deal.guildId
                 }).catch(() => {});
-                return interaction
-                    .reply({
-                        content: '✅ Persetujuanmu tercatat — menunggu pihak lainnya menyetujui deal.',
-                        flags: MessageFlags.Ephemeral
-                    })
-                    .catch(() => {});
+                return safeEditReply(interaction, {
+                    content: '✅ Persetujuanmu tercatat — menunggu pihak lainnya menyetujui deal.'
+                });
             }
             // Kedua pihak setuju → lanjut ke recordTransition('join') di bawah
             // (terms terkunci, state → WAITING_PAYMENT).
@@ -994,9 +1016,7 @@ async function handleEvent(interaction, event) {
 
         // Terapkan transisi + catat history.
         if (!mm.recordTransition(deal, event, interaction.user)) {
-            return interaction
-                .reply({ content: '❌ Transisi gagal (state berubah barusan). Coba lagi.', flags: MessageFlags.Ephemeral })
-                .catch(() => {});
+            return safeEditReply(interaction, { content: '❌ Transisi gagal (state berubah barusan). Coba lagi.' });
         }
         mm.setDeal(channel.id, deal);
 
@@ -1037,10 +1057,9 @@ async function handleEvent(interaction, event) {
         // Update Deal Board (embed sumber kebenaran).
         await refreshBoard(channel, deal, config);
 
-        // Konfirmasi ke pelaku (ephemeral).
-        await interaction
-            .reply({ content: CONFIRM_MSG[event] || '✅ Berhasil.', flags: MessageFlags.Ephemeral })
-            .catch(() => {});
+        // Konfirmasi ke pelaku (ephemeral) — lewat safeEditReply (v3.9.38 FIX:
+        // deferred reply di-edit, bukan reply baru setelah beberapa await).
+        await safeEditReply(interaction, { content: CONFIRM_MSG[event] || '✅ Berhasil.' });
 
         // Audit log — semua klik tercatat.
         await logAudit(interaction.client, {
@@ -1057,9 +1076,7 @@ async function handleEvent(interaction, event) {
         }
     } catch (err) {
         console.error(`[midman] Error event ${event}:`, err);
-        await interaction
-            .reply({ content: '❌ Terjadi error saat memproses aksi. Coba lagi.', flags: MessageFlags.Ephemeral })
-            .catch(() => {});
+        await safeEditReply(interaction, { content: '❌ Terjadi error saat memproses aksi. Coba lagi.' }).catch(() => {});
     } finally {
         mm.transitionLocks.delete(channel.id);
     }
@@ -1123,75 +1140,108 @@ async function handlePickMember(interaction) {
         return safeEditReply(interaction, { content: blocked });
     }
 
+    // v3.9.38 FIX: observer add/remove dulu menulis deals.json TANPA lock
+    // (getDeal → await permissionOverwrites → setDeal). handleEvent yang
+    // sedang memproses transisi di channel yang sama akan tertimpa snapshot
+    // basi (state mundur / history hilang / dispute unfreeze). Sekarang flow
+    // ini pakai transitionLocks yang SAMA dengan handleEvent.
+    if (mm.transitionLocks.has(channel.id)) {
+        return safeEditReply(interaction, { content: '⏳ Deal sedang diproses, coba lagi sebentar.' });
+    }
+
     const userId = interaction.values && interaction.values[0];
     if (!userId) {
         return safeEditReply(interaction, { content: '❌ Member tidak terpilih. Coba pilih lagi.', components: memberSelectRow() });
     }
 
-    let member = interaction.members?.get(userId) || guild.members.cache.get(userId);
-    if (!member) member = await guild.members.fetch(userId).catch(() => null);
-    if (!member) {
-        return safeEditReply(interaction, {
-            content: '❌ User tidak ditemukan di server ini. Pilih lagi:',
-            components: memberSelectRow()
-        });
-    }
-    if (member.user?.bot) {
-        return safeEditReply(interaction, {
-            content: '❌ Bot tidak bisa ditambah sebagai member tambahan. Pilih lagi:',
-            components: memberSelectRow()
-        });
-    }
-
-    const check = mm.canAddObserver(deal, userId);
-    if (!check.ok) {
-        const hint =
-            check.reason === 'principal'
-                ? '❌ Dia sudah peserta deal (pembeli/penjual) — tidak perlu ditambah.'
-                : check.reason === 'duplicate'
-                  ? '❌ Dia sudah jadi member tambahan di deal ini.'
-                  : `❌ Maksimal **${mm.MAX_OBSERVERS}** member tambahan per deal.`;
-        return safeEditReply(interaction, { content: hint, components: memberSelectRow() });
-    }
-
-    // Grant akses channel (lihat + chat + attach + baca history).
+    mm.transitionLocks.add(channel.id);
     try {
-        await channel.permissionOverwrites.edit(userId, {
-            ViewChannel: true,
-            SendMessages: true,
-            ReadMessageHistory: true,
-            AttachFiles: true
+        let member = interaction.members?.get(userId) || guild.members.cache.get(userId);
+        if (!member) member = await guild.members.fetch(userId).catch(() => null);
+        if (!member) {
+            return safeEditReply(interaction, {
+                content: '❌ User tidak ditemukan di server ini. Pilih lagi:',
+                components: memberSelectRow()
+            });
+        }
+        if (member.user?.bot) {
+            return safeEditReply(interaction, {
+                content: '❌ Bot tidak bisa ditambah sebagai member tambahan. Pilih lagi:',
+                components: memberSelectRow()
+            });
+        }
+
+        const check = mm.canAddObserver(deal, userId);
+        if (!check.ok) {
+            const hint =
+                check.reason === 'principal'
+                    ? '❌ Dia sudah peserta deal (pembeli/penjual) — tidak perlu ditambah.'
+                    : check.reason === 'duplicate'
+                      ? '❌ Dia sudah jadi member tambahan di deal ini.'
+                      : `❌ Maksimal **${mm.MAX_OBSERVERS}** member tambahan per deal.`;
+            return safeEditReply(interaction, { content: hint, components: memberSelectRow() });
+        }
+
+        // Grant akses channel (lihat + chat + attach + baca history).
+        try {
+            await channel.permissionOverwrites.edit(userId, {
+                ViewChannel: true,
+                SendMessages: true,
+                ReadMessageHistory: true,
+                AttachFiles: true
+            });
+        } catch (permErr) {
+            console.warn(`⚠️ Gagal grant akses member tambahan ${userId}:`, permErr.message);
+            return safeEditReply(interaction, { content: '❌ Gagal menambah member. Cek izin bot (Manage Channels).' });
+        }
+
+        // v3.9.38 FIX: BACA ULANG deal fresh dari disk SETELAH await permission
+        // — transisi state (fundin/dispute/dll) bisa tersimpan selama await itu.
+        // Mutasi + setDeal dilakukan pada objek FRESH, bukan snapshot awal,
+        // supaya transisi tervalidasi tidak di-revert oleh stale write.
+        const fresh = mm.getDeal(channel.id);
+        if (!fresh || mm.TERMINAL_STATES.has(fresh.state)) {
+            return safeEditReply(interaction, { content: '❌ Deal sudah selesai — member tidak bisa diubah.' });
+        }
+        const freshCheck = mm.canAddObserver(fresh, userId);
+        if (!freshCheck.ok) {
+            const hint =
+                freshCheck.reason === 'principal'
+                    ? '❌ Dia sudah peserta deal (pembeli/penjual) — tidak perlu ditambah.'
+                    : freshCheck.reason === 'duplicate'
+                      ? '❌ Dia sudah jadi member tambahan di deal ini.'
+                      : `❌ Maksimal **${mm.MAX_OBSERVERS}** member tambahan per deal.`;
+            return safeEditReply(interaction, { content: hint, components: memberSelectRow() });
+        }
+
+        mm.addObserver(fresh, userId);
+        fresh.history = Array.isArray(fresh.history) ? fresh.history : [];
+        fresh.history.push({
+            ts: Date.now(),
+            event: `👥 Member ditambahkan: <@${userId}>`,
+            fromState: fresh.state,
+            toState: fresh.state,
+            actorId: interaction.user.id,
+            actorTag: interaction.user.tag
         });
-    } catch (permErr) {
-        console.warn(`⚠️ Gagal grant akses member tambahan ${userId}:`, permErr.message);
-        return safeEditReply(interaction, { content: '❌ Gagal menambah member. Cek izin bot (Manage Channels).' });
+        mm.setDeal(channel.id, fresh);
+
+        await refreshBoard(channel, fresh, config);
+        await channel
+            .send(`👥 <@${userId}> ditambahkan ke channel deal oleh **${interaction.user.tag}** sebagai **member tambahan** — hanya bisa melihat & chat.`)
+            .catch(() => {});
+        await logAudit(interaction.client, {
+            action: 'MIDMAN_MEMBER_ADD',
+            actorId: interaction.user.id,
+            actorTag: interaction.user.tag,
+            details: `Deal <#${fresh.channelId}> — member tambahan ditambahkan: <@${userId}>`,
+            guildId: fresh.guildId
+        }).catch(() => {});
+
+        return safeEditReply(interaction, { content: `✅ <@${userId}> ditambahkan ke channel deal sebagai member tambahan.` });
+    } finally {
+        mm.transitionLocks.delete(channel.id);
     }
-
-    mm.addObserver(deal, userId);
-    deal.history = Array.isArray(deal.history) ? deal.history : [];
-    deal.history.push({
-        ts: Date.now(),
-        event: `👥 Member ditambahkan: <@${userId}>`,
-        fromState: deal.state,
-        toState: deal.state,
-        actorId: interaction.user.id,
-        actorTag: interaction.user.tag
-    });
-    mm.setDeal(channel.id, deal);
-
-    await refreshBoard(channel, deal, config);
-    await channel
-        .send(`👥 <@${userId}> ditambahkan ke channel deal oleh **${interaction.user.tag}** sebagai **member tambahan** — hanya bisa melihat & chat.`)
-        .catch(() => {});
-    await logAudit(interaction.client, {
-        action: 'MIDMAN_MEMBER_ADD',
-        actorId: interaction.user.id,
-        actorTag: interaction.user.tag,
-        details: `Deal <#${deal.channelId}> — member tambahan ditambahkan: <@${userId}>`,
-        guildId: deal.guildId
-    }).catch(() => {});
-
-    return safeEditReply(interaction, { content: `✅ <@${userId}> ditambahkan ke channel deal sebagai member tambahan.` });
 }
 
 /**
@@ -1251,6 +1301,13 @@ async function handleRemovePick(interaction) {
         return safeEditReply(interaction, { content: blocked });
     }
 
+    // v3.9.38 FIX: lock per-deal yang sama dengan handleEvent (mirror
+    // handlePickMember) — tanpa ini, stale write observer bisa menimpa
+    // transisi state yang tersimpan selama await permissionOverwrites.
+    if (mm.transitionLocks.has(channel.id)) {
+        return safeEditReply(interaction, { content: '⏳ Deal sedang diproses, coba lagi sebentar.' });
+    }
+
     const userId = interaction.values && interaction.values[0];
     if (!userId) {
         return safeEditReply(interaction, { content: '❌ Member tidak terpilih. Coba lagi.' });
@@ -1263,42 +1320,63 @@ async function handleRemovePick(interaction) {
             content: '❌ Pembeli/penjual tidak bisa dikeluarkan — urusan mereka lewat batal deal / dispute.'
         });
     }
-    if (!mm.removeObserver(deal, userId)) {
+    if (!(Array.isArray(deal.observers) ? deal.observers : []).includes(userId)) {
         return safeEditReply(interaction, { content: '❌ User itu bukan member tambahan di deal ini.' });
     }
 
-    // Hapus overwrite aksesnya (kalau overwrite tidak ada → error diabaikan,
-    // meta tetap bersih).
+    mm.transitionLocks.add(channel.id);
     try {
-        await channel.permissionOverwrites.delete(userId);
-    } catch (_) {}
+        // Hapus overwrite aksesnya (kalau overwrite tidak ada → error diabaikan,
+        // meta tetap bersih).
+        try {
+            await channel.permissionOverwrites.delete(userId);
+        } catch (_) {}
 
-    // v3.9.37: guard history korup (mirror guard event handler & add-member —
-    // deals.json hasil edit manual bisa tanpa array history).
-    deal.history = Array.isArray(deal.history) ? deal.history : [];
-    deal.history.push({
-        ts: Date.now(),
-        event: `👋 Member dikeluarkan: <@${userId}>`,
-        fromState: deal.state,
-        toState: deal.state,
-        actorId: interaction.user.id,
-        actorTag: interaction.user.tag
-    });
-    mm.setDeal(channel.id, deal);
+        // v3.9.38 FIX: BACA ULANG deal fresh dari disk SETELAH await permission —
+        // mutasi + setDeal pada objek FRESH supaya transisi state yang tersimpan
+        // selama await tidak di-revert oleh stale write (mirror handlePickMember).
+        const fresh = mm.getDeal(channel.id);
+        if (!fresh || mm.TERMINAL_STATES.has(fresh.state)) {
+            return safeEditReply(interaction, { content: '❌ Deal sudah selesai — member tidak bisa diubah.' });
+        }
+        if (userId === fresh.buyerId || userId === fresh.sellerId) {
+            return safeEditReply(interaction, {
+                content: '❌ Pembeli/penjual tidak bisa dikeluarkan — urusan mereka lewat batal deal / dispute.'
+            });
+        }
+        if (!mm.removeObserver(fresh, userId)) {
+            return safeEditReply(interaction, { content: '❌ User itu bukan member tambahan di deal ini.' });
+        }
 
-    await refreshBoard(channel, deal, config);
-    await channel
-        .send(`👋 <@${userId}> dikeluarkan dari channel deal oleh **${interaction.user.tag}**.`)
-        .catch(() => {});
-    await logAudit(interaction.client, {
-        action: 'MIDMAN_MEMBER_REMOVE',
-        actorId: interaction.user.id,
-        actorTag: interaction.user.tag,
-        details: `Deal <#${deal.channelId}> — member tambahan dikeluarkan: <@${userId}>`,
-        guildId: deal.guildId
-    }).catch(() => {});
+        // v3.9.37: guard history korup (mirror guard event handler & add-member —
+        // deals.json hasil edit manual bisa tanpa array history).
+        fresh.history = Array.isArray(fresh.history) ? fresh.history : [];
+        fresh.history.push({
+            ts: Date.now(),
+            event: `👋 Member dikeluarkan: <@${userId}>`,
+            fromState: fresh.state,
+            toState: fresh.state,
+            actorId: interaction.user.id,
+            actorTag: interaction.user.tag
+        });
+        mm.setDeal(channel.id, fresh);
 
-    return safeEditReply(interaction, { content: `✅ <@${userId}> dikeluarkan dari channel deal.` });
+        await refreshBoard(channel, fresh, config);
+        await channel
+            .send(`👋 <@${userId}> dikeluarkan dari channel deal oleh **${interaction.user.tag}**.`)
+            .catch(() => {});
+        await logAudit(interaction.client, {
+            action: 'MIDMAN_MEMBER_REMOVE',
+            actorId: interaction.user.id,
+            actorTag: interaction.user.tag,
+            details: `Deal <#${fresh.channelId}> — member tambahan dikeluarkan: <@${userId}>`,
+            guildId: fresh.guildId
+        }).catch(() => {});
+
+        return safeEditReply(interaction, { content: `✅ <@${userId}> dikeluarkan dari channel deal.` });
+    } finally {
+        mm.transitionLocks.delete(channel.id);
+    }
 }
 
 // ====================================================

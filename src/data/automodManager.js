@@ -226,13 +226,20 @@ function cleanupSpamTracker() {
 // Run cleanup tiap 1 menit
 setInterval(cleanupSpamTracker, 60 * 1000).unref?.();
 
+// v3.9.38 FIX: match domain polos (discord.gg/xxx, t.me/x, example.com) —
+// format invite/scam paling umum sebelumnya lolos karena tanpa scheme/www.
+const LINK_RE = /(https?:\/\/|www\.|(?:[a-z0-9-]+\.)+(?:com|net|org|gg|io|me|id|co|xyz|info|link|tv|to|shop|store|app|dev|online|site|space|live|life|biz|pro|wiki|edu|gov|ai|in|us|uk|de|fr|ru|jp|cn|kr|au|nz|ca|br|mx|es|it|nl|se|no|fi|dk|pl|pt|ch|at|cz|hu|ro|gr|tr|il|sa|ae|eg|za|ng|ke|th|vn|ph|my|sg|hk|tw)\b)/i;
+
 /**
  * Cek apakah message mengandung link.
- * Pattern: http://, https://, www., atau domain TLD umum.
+ * Pattern: http://, https://, www., atau domain polos ber-TLD umum
+ * (discord.gg/xxx, t.me/x, example.com — tanpa scheme/www).
+ * Daftar TLD di-kurasi supaya chat Indonesia biasa ("3.5rb", "gitu deh",
+ * "b aja") tidak false-positive — harus berpola `label.TLD` + word boundary.
  */
 function containsLink(content) {
     if (!content) return false;
-    return /https?:\/\/|www\./i.test(content);
+    return LINK_RE.test(content);
 }
 
 /**
@@ -271,8 +278,9 @@ function escapeRegExp(str) {
  *     baca/batas string). "asu" TIDAK match di "asus" — anti false-positive.
  *   - 'substring': match di mana saja (behavior lama v3.9.22).
  *
- * Boundary pakai [^a-z0-9_] eksplisit (bukan \b) supaya konsisten untuk
- * karakter non-ASCII (mis. kata Jepang/Korea yang tidak punya \b boundary).
+ * Boundary unicode-aware (v3.9.38): `[^\p{L}\p{N}_]` + flag `u`. Sebelumnya
+ * kelas `[a-z0-9_]` menganggap huruf non-Latin (Cyrillic/CJK) sebagai boundary
+ * — jadi whole_word TETAP match substring (mis. "кот" match di "коты").
  */
 function matchWord(content, word, mode) {
     if (!content || !word) return false;
@@ -280,8 +288,37 @@ function matchWord(content, word, mode) {
     const w = String(word).trim().toLowerCase();
     if (!w) return false;
     if (mode === 'substring') return lower.includes(w);
-    const re = new RegExp(`(^|[^a-z0-9_])${escapeRegExp(w)}([^a-z0-9_]|$)`);
+    // v3.9.38 FIX: boundary unicode-aware — sebelumnya huruf non-Latin dianggap
+    // boundary, jadi whole_word tetap match substring (mis. "кот" match "коты").
+    const re = new RegExp(`(^|[^\\p{L}\\p{N}_])${escapeRegExp(w)}([^\\p{L}\\p{N}_]|$)`, 'u');
     return re.test(lower);
+}
+
+/**
+ * v3.9.38 FIX: mask (ganti spasi sama-panjang) semua kemunculan exempt word
+ * di content SEBELUM deteksi kata terlarang. Regex dibangun dengan semantik
+ * boundary yang sama dengan matchWord (whole_word: lookaround unicode-aware
+ * non-consuming supaya occurrence bersebelahan ikut ke-mask; substring: plain
+ * contains). Run spasi sama-panjang menjaga posisi kata lain tidak bergeser.
+ *
+ * @param {string} content - teks pesan (case apa pun)
+ * @param {string[]} exemptWords - daftar kata exempt (sudah lowercase)
+ * @param {'whole_word'|'substring'} mode - mode match (sama dengan wordMatchMode)
+ * @returns {string} content dengan exempt word sudah dinetralkan
+ */
+function maskExemptWords(content, exemptWords, mode) {
+    if (!content || !exemptWords || exemptWords.length === 0) return content;
+    let masked = String(content);
+    for (const ex of exemptWords) {
+        if (!ex) continue;
+        const w = String(ex).trim().toLowerCase();
+        if (!w) continue;
+        const re = mode === 'substring'
+            ? new RegExp(escapeRegExp(w), 'gi')
+            : new RegExp(`(?<![\\p{L}\\p{N}_])${escapeRegExp(w)}(?![\\p{L}\\p{N}_])`, 'giu');
+        masked = masked.replace(re, m => ' '.repeat(m.length));
+    }
+    return masked;
 }
 
 /**
@@ -291,10 +328,12 @@ function matchWord(content, word, mode) {
  *   - word  = kata yang match
  *   - action = action per-kata (bisa null → caller fallback ke config.wordAction)
  *
- * Exempt logic: kalau content mengandung exempt word, DAN kata blocklist yang
- * match adalah substring dari exempt word itu → violation dianggap false-positive
- * dan di-skip. Contoh: block "asu" + exempt "asus" → pesan "asus bagus" tidak
- * di-flag (mode substring), tapi "asu banget" tetap di-flag.
+ * Exempt logic (v3.9.38 FIX): exempt word di-MASK dulu dari content (maskExemptWords),
+ * baru blocked word dideteksi di sisa teks. Sebelumnya pakai short-circuit
+ * "content mengandung exempt word yang meliputi kata blocklist → skip SEMUA
+ * violasi" — jadi pesan "asus asu banget" (block "asu" + exempt "asus") lolos
+ * total padahal "asu" berdiri sendiri. Sekarang hanya bagian exempt yang
+ * netral: "asus baru" tidak di-flag, "asus asu banget" tetap di-flag.
  */
 function findViolatedWord(content, config) {
     if (!content || !config) return null;
@@ -306,14 +345,13 @@ function findViolatedWord(content, config) {
         ? config.exemptWords.map(w => String(w).trim().toLowerCase()).filter(Boolean)
         : [];
 
+    // v3.9.38 FIX: mask exempt word dulu — kemunculan exempt di mana pun tidak
+    // lagi menutupi violasi kata terlarang yang berdiri sendiri di bagian lain.
+    const masked = maskExemptWords(content, exempt, mode);
+
     for (const rule of rules) {
         if (!rule || !rule.word) continue;
-        if (!matchWord(content, rule.word, mode)) continue;
-        // Cek exempt: kata blocklist yang menempel di exempt word → skip.
-        if (exempt.length > 0) {
-            const covered = exempt.some(ex => ex.includes(rule.word.toLowerCase()) && matchWord(content, ex, mode));
-            if (covered) continue;
-        }
+        if (!matchWord(masked, rule.word, mode)) continue;
         return { word: rule.word, action: rule.action || null };
     }
     return null;
@@ -450,14 +488,51 @@ function countMentions(message) {
 }
 
 /**
- * Cek apakah user dibebaskan dari auto-mod (punya role whitelist atau admin).
+ * Cek apakah user dibebaskan dari SEMUA cek auto-mod (spam, kata terlarang,
+ * mass-mention, termasuk link).
+ *
+ * v3.9.38 FIX: sebelumnya fungsi ini juga mengembalikan true untuk role di
+ * `config.linkAllowedRoles` — efeknya hookAutoMod me-return duluan dan member
+ * itu bypass SEMUA cek. Padahal field itu (di-set via /add-link-whitelist)
+ * cuma dimaksudkan untuk exempt LINK. Sekarang fungsi ini CUMA admin
+ * (Administrator/ManageGuild); role link whitelist dicek terpisah lewat
+ * isLinkAllowed(). Field `whitelistRoles`/`whitelistedRoles` (whitelist role
+ * global) belum ada di schema config — dibaca defensively kalau nanti
+ * ditambahkan, tapi TIDAK pernah di-link ke linkAllowedRoles.
  */
 function isUserWhitelisted(member, config) {
-    if (!member || !config) return false;
-    // Admin (ManageGuild) selalu whitelist
+    if (!member) return false;
+    // Admin (Administrator/ManageGuild) selalu whitelist dari semua cek
     const { PermissionFlagsBits } = require('discord.js');
+    if (member.permissions?.has(PermissionFlagsBits.Administrator)) return true;
     if (member.permissions?.has(PermissionFlagsBits.ManageGuild)) return true;
-    // Role whitelist
+    // Whitelist role GLOBAL (bukan link) — belum ada field-nya di schema config.
+    const globalWhitelist = config?.whitelistRoles || config?.whitelistedRoles;
+    if (Array.isArray(globalWhitelist) && globalWhitelist.length > 0) {
+        for (const rid of globalWhitelist) {
+            if (member.roles?.cache?.has(rid)) return true;
+        }
+    }
+    return false;
+}
+
+/**
+ * v3.9.38 FIX: cek apakah member boleh post LINK — role di
+ * `config.linkAllowedRoles` (di-set via /add-link-whitelist role:...).
+ * PENTING: ini TIDAK meng-exempt spam/kata terlarang/mass-mention — member
+ * dengan role ini tetap kena semua cek lain. Butuh bypass total? Beri
+ * permission Administrator/ManageGuild (lihat isUserWhitelisted).
+ * Channel whitelist (`linkAllowedChannels`) TIDAK dicek di sini — butuh
+ * channel ID bukan member, jadi tetap dicek inline oleh pemanggil (hookAutoMod).
+ */
+function isLinkAllowed(member, config) {
+    if (!member || !config) return false;
+    // Admin selalu boleh link — konsisten dengan guard global (admin di-return
+    // duluan oleh hookAutoMod, jadi cek ini murni belt-and-suspenders).
+    const { PermissionFlagsBits } = require('discord.js');
+    if (member.permissions?.has(PermissionFlagsBits.Administrator)) return true;
+    if (member.permissions?.has(PermissionFlagsBits.ManageGuild)) return true;
+    // Role whitelist link
     if (config.linkAllowedRoles && config.linkAllowedRoles.length > 0) {
         for (const rid of config.linkAllowedRoles) {
             if (member.roles?.cache?.has(rid)) return true;
@@ -477,10 +552,13 @@ module.exports = {
     containsBlockedWord,
     countMentions,
     isUserWhitelisted,
+    // v3.9.38 FIX: exempt khusus cek link (split dari isUserWhitelisted)
+    isLinkAllowed,
     // v3.9.23: word flex
     WORD_ACTIONS,
     matchWord,
     findViolatedWord,
+    maskExemptWords,
     addWords,
     removeWord,
     addExemptWords,

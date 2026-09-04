@@ -5,6 +5,38 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 Legend: 🔴 critical · 🟠 high · 🟡 medium · 🟢 improvement
 
+## [3.9.38] — 2026-09-04
+
+### Fixed — 🛡️ Audit menyeluruh v3: 34 bug/issue diperbaiki lintas seluruh domain (rekber, tiket, data layer, automod, router)
+
+Audit penuh seluruh codebase (~23.400 baris) menemukan 34 issue nyata — semuanya diverifikasi dengan bukti kode sebelum diperbaiki. Dua di antaranya berdampak langsung ke alur uang escrow.
+
+- 🔴 **Observer add/remove deal bypass `transitionLocks`** — handler 👥 Tambah Member / ➖ Keluarkan Member menulis snapshot deal STALE ke disk setelah await permission → transisi tervalidasi (mis. Dana Masuk) bisa TERREVERT: deal mundur state, history hilang, DISPUTE bisa unfreeze tanpa resolve admin. Kini: lock transisi di-acquire + deal di-RE-READ fresh setelah await sebelum ditulis.
+- 🔴 (lanjutan) **Race dobel-submit formulir deal** — re-submit dropdown penjual saat window in-flight menciptakan 2 deal + 2 channel untuk pasangan buyer/seller sama. Kini: session pending dihapus SEBELUM await + re-check `hasActiveDealFor` tepat sebelum `setDeal`.
+- 🟠 **Self-healing tiket hapus meta tiket AKTIF saat error transient** — `findActiveTicketFor` men-treat 429/5xx sebagai "channel hilang" → meta terhapus → user bisa buka tiket kedua + guard invoice/isCompleted hilang. Kini hanya error code 10003 (Unknown Channel) yang memicu cleanup (mirror pola rekber).
+- 🟠 **Set Key tanpa gate `isCompleted`** → invoice dobel di channel testimoni + stats dobel + pembeli dapat 2 key. Kini: gate di tombol + re-check di modal + lock per-channel (`completionLocks`) yang juga melindungi Kirim Pesanan & tombol ✅ Pesanan Sukses (race 2 admin → recordPurchase dobel).
+- 🟠 **Giveaway dobel-end** — scheduler pakai snapshot stale vs `/giveaway end` manual (namespace lock berbeda) → winner ditimpa + announce/DM 2×. Kini: re-load fresh dari disk setelah lock + `/giveaway end` cek `isGiveawayProcessing()` dulu.
+- 🟠 **`linkAllowedRoles` = whitelist SEMUA automod** — role yang di-whitelist untuk link jadi bebas spam/kata terlarang/mass-mention. Kini: split `isUserWhitelisted` (admin-only) vs `isLinkAllowed` (khusus cek link).
+- 🟡 **`parsePriceNumber("1.5m")` → 15.000.000** (desimal jadi digit ekstra, inflasi 10×) — kini separator hanya valid sebagai grup ribuan (`1.000.000` ✓, `1.5m` → ditolak).
+- 🟡 **Meta tiket simpan label produk, bukan value** — rename produk mematikan Set Key di semua tiket terbuka (fix v3.9.26 tidak efektif); label dobal → role salah. Kini meta menyimpan `productValue` + helper `resolveProduct()` (value-first, label fallback untuk tiket lama).
+- 🟡 **Poll multi-choice: unvote tidak pernah jalan** (klik opsi yang sudah di-vote = no-op senyap) — kini toggle beneran untuk single & multi.
+- 🟡 **Cooldown 0 tidak bisa matikan responder** (`0 || 3000`) & **leveling** (`0 || 60000`) — kini `??` (nullish): 0 = off sesuai dokumentasi.
+- 🟡 **`containsLink` miss domain polos** (`discord.gg/xxx`, `t.me/x`) — kini regex TLD kurasi match domain tanpa scheme/www.
+- 🟡 **Kata exempt menutupi kata terlarang terpisah** (`"asus asu"` lolos) — kini exempt di-mask per-occurrence SEBELUM deteksi.
+- 🟡 **`/setup-ticket` crash saat body + `{price_list}` > 4096** — kini di-validasi pre-send dengan pesan jelas.
+- 🟡 **`/config-show` crash di ~12 produk** (field > 1024) & **`/announce-list` crash di ~27 entry** — kini di-cap dengan note "+N lainnya".
+- 🟡 **`/announce-schedule` klaim WITA tapi parse timezone host** — VPS UTC = telat 8 jam. Kini offset eksplisit default +8, configurable via env `TZ_OFFSET_HOURS`.
+- 🟢 **Transcript hanya 100 pesan terakhir** (bukti transfer di awal hilang) — kini paginasi sampai 1000 pesan + note truncation.
+- 🟢 Key kosong (spasi) ditolak di 3 lapis; **raw key tidak lagi bocor ke console** (masking len-only, pesan error duplikat tanpa nilai key).
+- 🟢 `endGiveaway` kini set `endedAt` (GC akurat); **AFK di-GC** (entry >30 hari di-prune oleh `pruneStaleData`); `parsePrice` tolak harga negatif.
+- 🟢 Deal terminal zombie (channel gagal dihapus ≠ 10003) ikut di-reconcile; creator pihak ketiga masuk `observers` (bisa dikeluarkan lewat tombol); `handleEvent` deferReply duluan (tidak lagi "interaction failed" >3s).
+- 🟢 Temp voice orphan saat music bot keluar terakhir — event bot kini tetap menjalankan cleanup channel kosong.
+- 🟢 `/set-role` validasi role assignable (@everyone/managed/posisi di atas bot ditolak); `/announce` + `/announce-schedule` validasi tipe channel (kategori/forum ditolak); `/help` auto-split 2 embed saat > 5800 char; dedup router mark-AFTER-success (replay interaction yang crash bisa retry); whole-word boundary unicode-aware (Cyrillic/CJK); truncation surrogate-safe (`truncateUtf8Safe`).
+
+### Tests
+
+- 🟢 +62 unit test (total **386**, dari 324) di 5 file baru: `hardeningV38Midman` (12 — lock interleaving, TOCTOU, parse), `hardeningV38Ticket` (12 — transient fetch, race 2 admin, productValue, transcript 150 pesan), `hardeningV38Data` (12 — giveaway double-end, poll toggle, cooldown 0, AFK GC), `hardeningV38Automod` (14 — bare domain, exempt masking, whitelist split, unicode, bot voice cleanup), `hardeningV38Router` (12 — TZ offset, dedup retry, set-role validation, truncateUtf8Safe). Full suite: 386/386 hijau, ESLint 0 warning.
+
 ## [3.9.37] — 2026-09-02
 
 ### Fixed — 🐛 /help kedaluwarsa + audit menyeluruh v2: 5 bug/issue pasca-fitur rekber (user-reported: "auto split masih 2")

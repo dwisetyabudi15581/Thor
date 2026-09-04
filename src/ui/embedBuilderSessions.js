@@ -22,6 +22,9 @@
 
 const sessions = new Map();
 
+// v3.9.38: potong teks per code point (emoji/surrogate pair aman).
+const { truncateUtf8Safe } = require('../infra/text');
+
 // P3-4 FIX: TTL supaya session yang ditinggal user tidak menjadi memory leak.
 const SESSION_TTL_MS = 60 * 60 * 1000; // 1 jam
 const CLEANUP_INTERVAL_MS = 10 * 60 * 1000; // cleanup tiap 10 menit
@@ -157,8 +160,11 @@ function buildEmbed(session) {
         // → render draft gagal → user lihat broken panel.
         if (d.fields && d.fields.length > 0) {
             const safeFields = d.fields.slice(0, 25).map(f => ({
-                name: String(f.name || '\u200B').slice(0, 256),
-                value: String(f.value || '\u200B').slice(0, 1024),
+                // v3.9.38 FIX: potong per code point (slice() biasa bisa motong
+                // surrogate pair emoji jadi lone surrogate → embed ditolak API).
+                // maxLen dikurangi 1 supaya total DENGAN ellipsis '…' tetap ≤ 256/1024.
+                name: truncateUtf8Safe(String(f.name || '\u200B'), 255),
+                value: truncateUtf8Safe(String(f.value || '\u200B'), 1023),
                 inline: !!f.inline
             }));
             embed.addFields(safeFields);

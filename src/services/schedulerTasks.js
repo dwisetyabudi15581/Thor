@@ -23,6 +23,7 @@ const { hasPermanentKey, getMaxExpireAtByUserAndRole } = require('../data/keyMan
 // discord.js selalu sudah ter-load saat bot start).
 const { EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
 const {
+    get: getGiveawayById,
     end: endGiveaway,
     pickWinners: pickGiveawayWinners,
     pruneEndedOlderThan: pruneOldGiveaways
@@ -35,10 +36,14 @@ const {
 const { pruneClosedOlderThan: pruneOldPolls } = require('../data/pollManager');
 const { recordGiveawayWin: trackGiveawayWin } = require('../data/statsManager');
 // v3.9.37: reconcile deal rekber zombie (lihat reconcileZombieDeals di bawah).
+// v3.9.38 FIX: loadDeals dipakai supaya reconcile bisa iterasi SEMUA deal
+// (termasuk terminal) — getActiveDealsByGuild tidak lagi dipakai di sini.
 const {
-    getActiveDealsByGuild: getActiveDeals,
+    loadDeals: loadAllDeals,
     removeDeal: removeDealMeta
 } = require('../data/midmanManager');
+// v3.9.38 FIX: GC entry AFK lama (lihat pruneStaleData di bawah).
+const { pruneOldAFK } = require('../data/afkManager');
 
 // v3.9.8 FIX: in-memory guard supaya giveaway/announcement yang sama tidak
 // diproses 2x paralel oleh scheduler tick. Sebelumnya, kalau satu
@@ -206,62 +211,85 @@ async function processGiveawayEnd(client, gw, options = {}) {
     }
     processingGiveaways.add(gw.id);
     try {
-        const guild = await client.guilds.fetch(gw.guildId).catch(() => null);
+        // v3.9.38 FIX: re-read state FRESH dari disk SETELAH lock scheduler
+        // dipegang. `gw` bisa snapshot STALE dari getEnding() (scheduler await
+        // item tick lain dulu), sementara manual /giveaway end — yang memakai
+        // lock BERBEDA (withUserLock('gw_end'), bukan Set ini) — sudah pick
+        // winners + persist + announce. Scheduler lanjut dengan snapshot lama
+        // → pick KEDUA + endGiveaway menimpa winnerIds → 2x announce + 2x DM.
+        const fresh = getGiveawayById(gw.id);
+        if (!fresh) {
+            console.log(`⏭️ processGiveawayEnd ${gw.id} di-skip (giveaway tidak ada di disk).`);
+            return;
+        }
+        // Jalur announce manual: giveaway SUDAH ended dengan winner ter-persist
+        // (dipick manual oleh /giveaway end sebelum memanggil ini) dan caller
+        // minta skipPick → lanjut announce pakai winnerIds dari disk, TIDAK re-pick.
+        const isManualAnnounce = Boolean(options.skipPick && fresh.winnerIds && fresh.winnerIds.length > 0);
+        if (fresh.ended && !isManualAnnounce) {
+            // Sudah di-fully-ended & di-announce oleh proses lain (manual end
+            // ATAU tick scheduler sebelumnya) → jangan dobel announce/DM.
+            console.log(`⏭️ processGiveawayEnd ${gw.id} di-skip (sudah berakhir — dihandle proses lain).`);
+            return;
+        }
+
+        const guild = await client.guilds.fetch(fresh.guildId).catch(() => null);
         // Kalau guild gak ketemu (bot di-kick / guild di-delete), mark giveaway sebagai ended
         // biar gak di-pick ulang tiap tick. Sebelumnya ini bikin infinite retry loop 60-an.
         if (!guild) {
             console.warn(
-                `⚠️ Giveaway ${gw.id}: guild ${gw.guildId} tidak ditemukan, mark ended (bot di-kick / guild di-delete?).`
+                `⚠️ Giveaway ${fresh.id}: guild ${fresh.guildId} tidak ditemukan, mark ended (bot di-kick / guild di-delete?).`
             );
-            endGiveaway(gw.id, []);
+            endGiveaway(fresh.id, []);
             return;
         }
 
-        const channel = guild.channels.cache.get(gw.channelId);
+        const channel = guild.channels.cache.get(fresh.channelId);
         // Sama — kalau channel udah di-delete, mark ended biar gak infinite retry.
         if (!channel) {
             console.warn(
-                `⚠️ Giveaway ${gw.id}: channel ${gw.channelId} tidak ditemukan di guild ${gw.guildId}, mark ended.`
+                `⚠️ Giveaway ${fresh.id}: channel ${fresh.channelId} tidak ditemukan di guild ${fresh.guildId}, mark ended.`
             );
-            endGiveaway(gw.id, []);
+            endGiveaway(fresh.id, []);
             return;
         }
 
-        // Pick winners (skip kalau sudah di-pick sebelumnya — untuk manual /giveaway end)
+        // Pick winners dari state FRESH (skip kalau sudah di-pick sebelumnya — untuk manual /giveaway end).
+        // v3.9.38 FIX: pakai fresh.participantIds/winnersCount, bukan snapshot `gw` yang bisa stale.
         let winnerIds;
-        if (options.skipPick && gw.winnerIds && gw.winnerIds.length > 0) {
-            winnerIds = gw.winnerIds;
+        if (isManualAnnounce) {
+            winnerIds = fresh.winnerIds;
         } else {
-            winnerIds = pickGiveawayWinners(gw.participantIds, gw.winnersCount);
-            endGiveaway(gw.id, winnerIds);
+            winnerIds = pickGiveawayWinners(fresh.participantIds, fresh.winnersCount);
+            endGiveaway(fresh.id, winnerIds);
         }
 
         // Edit message
-        const msg = await channel.messages.fetch(gw.messageId).catch(() => null);
+        const msg = await channel.messages.fetch(fresh.messageId).catch(() => null);
         const winnersStr = winnerIds.length > 0 ? winnerIds.map(id => `<@${id}>`).join(', ') : '_(tidak ada peserta)_';
         if (msg) {
             const embed = new EmbedBuilder()
                 .setTitle('🎉 GIVEAWAY BERAKHIR!')
                 .setDescription(
-                    `🎁 **Prize:** ${gw.prize}\n\n` +
+                    `🎁 **Prize:** ${fresh.prize}\n\n` +
                         `🏆 **Pemenang:** ${winnersStr}\n` +
-                        `👥 **Peserta:** ${gw.participantIds.length}\n` +
-                        `⏰ **Berakhir:** <t:${Math.floor(gw.endsAt / 1000)}:R>\n\n` +
+                        `👥 **Peserta:** ${fresh.participantIds.length}\n` +
+                        `⏰ **Berakhir:** <t:${Math.floor(fresh.endsAt / 1000)}:R>\n\n` +
                         (winnerIds.length > 0
                             ? '🎊 Selamat kepada pemenang! Host akan DM kalian untuk klaim hadiah.'
                             : '_(Tidak ada peserta yang ikut)_')
                 )
                 .setColor(winnerIds.length > 0 ? 0x57f287 : 0x95a5a6)
-                .setFooter({ text: `Host: ${gw.hostTag} | ID: ${gw.id}` })
+                .setFooter({ text: `Host: ${fresh.hostTag} | ID: ${fresh.id}` })
                 .setTimestamp();
             const row = new ActionRowBuilder().addComponents(
                 new ButtonBuilder()
-                    .setCustomId(`gw_join:${gw.id}`)
+                    .setCustomId(`gw_join:${fresh.id}`)
                     .setLabel('🎉 Join (Ended)')
                     .setStyle(ButtonStyle.Success)
                     .setDisabled(true),
                 new ButtonBuilder()
-                    .setCustomId(`gw_leave:${gw.id}`)
+                    .setCustomId(`gw_leave:${fresh.id}`)
                     .setLabel('🚪 Leave (Ended)')
                     .setStyle(ButtonStyle.Secondary)
                     .setDisabled(true)
@@ -273,7 +301,7 @@ async function processGiveawayEnd(client, gw, options = {}) {
         if (winnerIds.length > 0) {
             await channel
                 .send({
-                    content: `🎊 **GIVEAWAY WINNERS!** 🎊\n\nPrize: **${gw.prize}**\nPemenang: ${winnersStr}\n\nSelamat! 🎉`
+                    content: `🎊 **GIVEAWAY WINNERS!** 🎊\n\nPrize: **${fresh.prize}**\nPemenang: ${winnersStr}\n\nSelamat! 🎉`
                 })
                 .catch(() => {});
 
@@ -283,29 +311,40 @@ async function processGiveawayEnd(client, gw, options = {}) {
                 if (user) {
                     await user
                         .send(
-                            `🎊 **Selamat! Kamu menang giveaway!**\n\nPrize: **${gw.prize}**\nHost: ${gw.hostTag}\nServer: ${guild.name}\n\nHubungi host untuk klaim hadiahmu.`
+                            `🎊 **Selamat! Kamu menang giveaway!**\n\nPrize: **${fresh.prize}**\nHost: ${fresh.hostTag}\nServer: ${guild.name}\n\nHubungi host untuk klaim hadiahmu.`
                         )
                         .catch(() => {});
                 }
                 // Track giveaway win untuk leaderboard
                 // v3.9.4: scoped per guild — sebelumnya bocor ke guild lain.
                 try {
-                    trackGiveawayWin(gw.guildId, wid);
+                    trackGiveawayWin(fresh.guildId, wid);
                 } catch (_) {}
             }
         } else {
             await channel
-                .send({ content: `📭 Giveaway **${gw.prize}** berakhir tanpa pemenang (tidak ada peserta).` })
+                .send({ content: `📭 Giveaway **${fresh.prize}** berakhir tanpa pemenang (tidak ada peserta).` })
                 .catch(() => {});
         }
 
-        console.log(`🎉 Giveaway ${gw.id} (${gw.prize}) berakhir. Winners: ${winnerIds.length}`);
+        console.log(`🎉 Giveaway ${fresh.id} (${fresh.prize}) berakhir. Winners: ${winnerIds.length}`);
     } catch (err) {
         console.error('Error processGiveawayEnd:', err);
     } finally {
         // v3.9.8: pastikan processing lock dilepas walau ada error / return.
         processingGiveaways.delete(gw.id);
     }
+}
+
+/**
+ * v3.9.38 FIX: cek apakah scheduler lagi memproses giveaway ini (natural end).
+ * Dipakai /giveaway end (commands/giveaway.js) SEBELUM lock manual — lock
+ * manual (withUserLock 'gw_end') dan lock scheduler (Set processingGiveaways)
+ * tadinya disjoint: manual end yang masuk di tengah scheduler end bisa
+ * menimpa winnerIds yang sedang di-announce → announce/DM dobel.
+ */
+function isGiveawayProcessing(giveawayId) {
+    return processingGiveaways.has(giveawayId);
 }
 
 /**
@@ -448,11 +487,21 @@ function pruneStaleData() {
     } catch (err) {
         console.warn('⚠️ GC announcement error:', err.message);
     }
+    // v3.9.38 FIX: GC entry AFK lama — afk.json sebelumnya TIDAK PERNAH di-GC
+    // (user yang leave guild tetap AFK selamanya, file tumbuh tanpa batas).
+    try {
+        const afkRemoved = pruneOldAFK(PRUNE_OLDER_THAN_MS);
+        if (afkRemoved > 0) console.log(`🧹 GC: ${afkRemoved} AFK entry >30h dihapus.`);
+    } catch (err) {
+        console.warn('⚠️ GC afk error:', err.message);
+    }
 }
 
 /**
- * v3.9.37: reconcile deal rekber zombie — deal non-terminal yang channel-nya
- * sudah tidak ada (dihapus manual dari UI Discord oleh admin / channel hilang).
+ * v3.9.37: reconcile deal rekber zombie — deal yang channel-nya sudah tidak ada
+ * (dihapus manual dari UI Discord oleh admin / channel hilang).
+ * v3.9.38 FIX: SEMUA deal di-inspect (aktif + terminal) — deal terminal yang
+ * gagal hapus channel saat finalize juga dibersihkan.
  *
  * Tanpa reconcile, user yang terlibat deal zombie TERKUNCI SELAMANYA:
  *   - tidak bisa buka tiket reguler (hasActiveDealFor → tolak di createTicket),
@@ -473,7 +522,13 @@ async function reconcileZombieDeals(client) {
     for (const [gid, guild] of client.guilds.cache) {
         let deals;
         try {
-            deals = getActiveDeals(gid);
+            // v3.9.38 FIX: iterasi SEMUA deal guild ini (aktif + terminal).
+            // Sebelumnya hanya deal non-terminal (getActiveDealsByGuild) →
+            // deal terminal (COMPLETED/CANCELLED/REFUNDED) yang gagal hapus
+            // channel-nya saat finalize (error ≠ 10003) TIDAK PERNAH
+            // dibersihkan → meta menumpuk di deals.json selamanya.
+            // loadDeals = full map (key channelId) — filter guild lokal di sini.
+            deals = Object.values(loadAllDeals()).filter(d => d && d.guildId === gid);
         } catch (err) {
             console.warn(`⚠️ Reconcile deal: gagal load deals guild ${gid}:`, err.message);
             continue;
@@ -499,7 +554,7 @@ async function reconcileZombieDeals(client) {
                     removeDealMeta(deal.channelId);
                     removed++;
                     console.log(
-                        `🧹 Reconcile deal: channel ${deal.channelId} (guild ${gid}) sudah tidak ada — meta deal dihapus, pembeli/penjual dibebaskan dari lock.`
+                        `🧹 Reconcile deal: channel ${deal.channelId} (guild ${gid}, state ${deal.state}) sudah tidak ada — meta deal dihapus.`
                     );
                 }
             } catch (_) {
@@ -531,11 +586,14 @@ async function reconcileZombieDealsDaily(client) {
 function attachToClient(client) {
     client.processGiveawayEnd = processGiveawayEnd;
     client.announceRerollWinner = announceRerollWinner;
+    // v3.9.38 FIX: dipakai /giveaway end untuk cek scheduler in-flight (anti dobel end).
+    client.isGiveawayProcessing = isGiveawayProcessing;
 }
 
 module.exports = {
     processExpiredRole,
     processGiveawayEnd,
+    isGiveawayProcessing,
     announceRerollWinner,
     processScheduledAnnouncement,
     pruneStaleData,

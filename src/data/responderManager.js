@@ -102,7 +102,9 @@ function addResponder(guildId, data) {
         createdAt: Date.now(),
         useCount: 0,
         lastUsedAt: null,
-        cooldownMs: data.cooldownMs || 3000,
+        // v3.9.38 FIX: cooldownMs 0 = cooldown MATI (sesuai dok registry). `||`
+        // menelan 0 → diam-diam jadi 3000; nullish coalescing menjaga 0 tetap 0.
+        cooldownMs: data.cooldownMs ?? 3000,
         lastFiredAt: null, // legacy — gak dipake lagi, disimpen untuk backward compat
         userCooldowns: {} // map cooldown per-user
     };
@@ -147,7 +149,9 @@ function findMatch(guildId, messageContent, userId) {
         // Match kalau pesan == trigger, ATAU pesan diikuti spasi/newline (mis. "!sosmed" match "!sosmed halo")
         if (lower === trig || lower.startsWith(trig + ' ') || lower.startsWith(trig + '\n')) {
             // Cek cooldown per-user. cooldownMs = 0 artinya cooldown dimatikan.
-            const cooldownMs = r.cooldownMs || 3000;
+            // v3.9.38 FIX: `??` (bukan `||`) supaya 0 tetap 0 — sebelumnya
+            // 0 diam-diam jadi 3000, opsi "matiin cooldown" gak pernah bisa.
+            const cooldownMs = r.cooldownMs ?? 3000;
             if (cooldownMs > 0 && userId && r.userCooldowns && r.userCooldowns[userId]) {
                 const lastFired = r.userCooldowns[userId];
                 if (now - lastFired < cooldownMs) {

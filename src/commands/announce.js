@@ -24,7 +24,11 @@ const {
     EMBED_LIMITS
 } = require('./_shared');
 // v3.9.24: normalisasi \n literal → newline asli (input command di PC tidak bisa Enter).
-const { normalizeNewlines } = require('../infra/text');
+// v3.9.38: truncateUtf8Safe — potong teks per code point (emoji aman) untuk cap description.
+const { normalizeNewlines, truncateUtf8Safe } = require('../infra/text');
+// v3.9.38 FIX: ChannelType untuk validasi tipe channel tujuan announce
+// (kategori/forum/voice tidak bisa menerima pesan announce).
+const { ChannelType } = require('discord.js');
 
 module.exports = async function (interaction) {
     // ====================================================
@@ -34,6 +38,16 @@ module.exports = async function (interaction) {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
         const channel = interaction.options.getChannel('channel');
+
+        // v3.9.38 FIX: validasi tipe channel — kategori/forum/voice tidak bisa
+        // terima announce. Sebelumnya baru gagal di send() dengan error generik.
+        // GuildAnnouncement (type 5) boleh — channel itu memang untuk broadcast.
+        if (channel.type !== ChannelType.GuildText && channel.type !== ChannelType.GuildAnnouncement) {
+            return safeEditReply(interaction, {
+                content: '❌ Channel harus text channel biasa (bukan kategori/forum/voice).'
+            });
+        }
+
         const title = interaction.options.getString('title');
         // v3.9.24: dukung \n literal → newline asli (dulu cuma /send-message yang support).
         // Normalisasi SEBELUM validasi panjang supaya limit dihitung pada teks final.
@@ -167,6 +181,16 @@ module.exports = async function (interaction) {
     if (interaction.commandName === 'announce-schedule') {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         const channel = interaction.options.getChannel('channel');
+
+        // v3.9.38 FIX: validasi tipe channel — sama seperti /announce. Sebelumnya
+        // kategori/voice lolos → announce terjadwal, lalu GAGAL SENYAP saat fire
+        // time (entry mubazir, admin baru sadar announce tidak pernah terkirim).
+        if (channel.type !== ChannelType.GuildText && channel.type !== ChannelType.GuildAnnouncement) {
+            return safeEditReply(interaction, {
+                content: '❌ Channel harus text channel biasa (bukan kategori/forum/voice).'
+            });
+        }
+
         const title = interaction.options.getString('title');
         // v3.9.24: dukung \n literal → newline asli (konsisten dengan /announce).
         const description = normalizeNewlines(interaction.options.getString('description'));
@@ -182,7 +206,7 @@ module.exports = async function (interaction) {
         if (!sendAt) {
             return safeEditReply(interaction, {
                 content:
-                    '❌ Format waktu tidak valid.\n\nFormat yang didukung:\n• Relative: `30m`, `2h`, `1d`\n• Absolute: `2026-01-15 20:00` (WITA, format YYYY-MM-DD HH:MM)'
+                    '❌ Format waktu tidak valid.\n\nFormat yang didukung:\n• Relative: `30m`, `2h`, `1d`\n• Absolute: `2026-01-15 20:00` (zona waktu bot — default WITA/UTC+8, bisa diubah via env TZ_OFFSET_HOURS; format YYYY-MM-DD HH:MM)'
             });
         }
         if (sendAt <= Date.now()) {
@@ -293,14 +317,32 @@ module.exports = async function (interaction) {
                 content: '📭 Tidak ada announce terjadwal yang pending. Pakai `/announce-schedule` untuk bikin.'
             });
         }
-        const lines = pending
-            .map(e => {
-                return `• 📝 **${e.data.title}**\n  🆔 \`${e.id}\`\n  📍 <#${e.channelId}> | ⏰ <t:${Math.floor(e.sendAt / 1000)}:F> (<t:${Math.floor(e.sendAt / 1000)}:R>)\n  ${e.recurring ? `🔄 Recurring: ${e.recurring}\n  ` : ''}👤 Oleh: ${e.data.authorTag}`;
-            })
-            .join('\n\n');
+        // v3.9.38 FIX: cap entry yang ditampilkan (15) + suffix; total description
+        // SELALU dihitung terhadap limit 4096 — sebelumnya lines unbounded →
+        // setDescription throw RangeError di ~27 pending (command /announce-list
+        // mati total sampai entry berkurang lewat send/cancel).
+        const MAX_SHOWN_ENTRIES = 15;
+        const entryLine = e => {
+            return `• 📝 **${e.data.title}**\n  🆔 \`${e.id}\`\n  📍 <#${e.channelId}> | ⏰ <t:${Math.floor(e.sendAt / 1000)}:F> (<t:${Math.floor(e.sendAt / 1000)}:R>)\n  ${e.recurring ? `🔄 Recurring: ${e.recurring}\n  ` : ''}👤 Oleh: ${e.data.authorTag}`;
+        };
+        const listHeader = `Total **${pending.length}** announce pending.\n\n`;
+        let listDescription = '';
+        for (let n = Math.min(MAX_SHOWN_ENTRIES, pending.length); n >= 1; n--) {
+            const shown = pending.slice(0, n);
+            const hidden = pending.length - shown.length;
+            const footerNote = hidden > 0 ? `\n\n… +${hidden} announcement lainnya` : '';
+            listDescription = `${listHeader}${shown.map(entryLine).join('\n\n')}${footerNote}`;
+            if (listDescription.length <= EMBED_LIMITS.DESCRIPTION) break;
+        }
+        // Defense terakhir: entry tunggal super panjang (praktis mustahil —
+        // title ≤ 256 divalidasi saat schedule) → potong per code point.
+        // maxLen - 1 supaya total DENGAN ellipsis tetap ≤ 4096 code unit.
+        if (listDescription.length > EMBED_LIMITS.DESCRIPTION) {
+            listDescription = truncateUtf8Safe(listDescription, EMBED_LIMITS.DESCRIPTION - 1);
+        }
         const embed = new EmbedBuilder()
             .setTitle('⏰ ANNOUNCE TERJADWAL')
-            .setDescription(`Total **${pending.length}** announce pending.\n\n${lines}`)
+            .setDescription(listDescription)
             .setColor(0x5865f2)
             .setFooter({
                 text: interaction.client.user.username,

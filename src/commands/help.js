@@ -6,6 +6,9 @@
  * + modal editor untuk message config + ticket body template variables.
  * v3.9.37: Auto-Split di-update ke 3 kategori (tambah 🤝 REKBER), tambah section
  * Midman/Rekber, dan versi embed kini dinamis dari package.json (anti stale).
+ * v3.9.38: embed /help diukur total karakternya (limit Discord 6000) — kalau
+ * lewat 5800 (buffer 200), fields dipecah ke 2 embed (reply + followUp) supaya
+ * penambahan command berikutnya tidak bikin /help throw/meragukan API.
  */
 
 const { EmbedBuilder, MessageFlags } = require('./_shared');
@@ -16,14 +19,61 @@ const { EmbedBuilder, MessageFlags } = require('./_shared');
 const { version: BOT_VERSION } = require('../../package.json');
 
 module.exports = async function (interaction) {
-    const helpEmbed = new EmbedBuilder()
-        .setTitle('🤖 COMMUNITY BOT — HELP')
-        .setDescription(
-            `Halo ${interaction.user}! Anda terverifikasi sebagai **Admin/Staff**.\n` +
-                `Berikut daftar lengkap command yang tersedia (v${BOT_VERSION}).`
-        )
-        .setColor(0x5865f2)
-        .addFields(
+    // v3.9.38 FIX: /help embed saat ini ±5419/6000 char (audit) — makin banyak
+    // command, makin besar. Kalau total > 5800, EmbedBuilder + Discord API
+    // bakal menolak (embed > 6000) → /help mati diam-diam. Solusi: ukur total
+    // (title + description + fields + footer), kalau lewat budget, pecah
+    // field terakhir ke embed kedua yang dikirim sebagai followUp (visibility
+    // ephemeral sama dengan reply pertama).
+    const HELP_TOTAL_SPLIT_THRESHOLD = 5800;
+
+    /**
+     * Hitung total karakter embed seperti cara Discord menghitung limit 6000:
+     * title + description + field (name+value) + footer.text + author.name.
+     * @param {EmbedBuilder} embed
+     * @returns {number}
+     */
+    function embedTotalChars(embed) {
+        const data = embed.data;
+        let total = 0;
+        if (data.title) total += data.title.length;
+        if (data.description) total += data.description.length;
+        for (const f of data.fields || []) {
+            total += (f.name?.length || 0) + (f.value?.length || 0);
+        }
+        if (data.footer?.text) total += data.footer.text.length;
+        if (data.author?.name) total += data.author.name.length;
+        return total;
+    }
+
+    /**
+     * Bangun embed /help dari potongan fields. `part` diisi kalau ini embed
+     * lanjutan (2/2) supaya user tampilannya nyambung.
+     * @param {Array} fields - array field object untuk addFields
+     * @param {string|null} part - null untuk embed utama, '2/2' untuk lanjutan
+     * @returns {EmbedBuilder}
+     */
+    function buildHelpEmbed(fields, part = null) {
+        const embed = new EmbedBuilder()
+            .setTitle(part ? `🤖 COMMUNITY BOT — HELP (${part})` : '🤖 COMMUNITY BOT — HELP')
+            .setDescription(
+                part
+                    ? `_Lanjutan daftar command (v${BOT_VERSION})._`
+                    : `Halo ${interaction.user}! Anda terverifikasi sebagai **Admin/Staff**.\n` +
+                          `Berikut daftar lengkap command yang tersedia (v${BOT_VERSION}).`
+            )
+            .setColor(0x5865f2);
+        if (fields.length > 0) embed.addFields(fields);
+        embed
+            .setFooter({
+                text: `${interaction.client.user.username} v${BOT_VERSION} — All-in-One Community Bot`,
+                iconURL: interaction.client.user.displayAvatarURL({ dynamic: true })
+            })
+            .setTimestamp();
+        return embed;
+    }
+
+    const helpFields = [
             {
                 name: '📋 Informasi',
                 value: [
@@ -228,12 +278,23 @@ module.exports = async function (interaction) {
                 ].join('\n'),
                 inline: false
             }
-        )
-        .setFooter({
-            text: `${interaction.client.user.username} v${BOT_VERSION} — All-in-One Community Bot`,
-            iconURL: interaction.client.user.displayAvatarURL({ dynamic: true })
-        })
-        .setTimestamp();
+    ];
 
-    return interaction.reply({ embeds: [helpEmbed], flags: MessageFlags.Ephemeral });
+    // v3.9.38 FIX: ukur dulu — hanya pecah kalau lewat budget (embed saat ini
+    // 5419 → masih 1 embed, tidak ada perubahan perilaku untuk user).
+    let firstFields = helpFields;
+    const secondFields = [];
+    while (firstFields.length > 1 && embedTotalChars(buildHelpEmbed(firstFields)) > HELP_TOTAL_SPLIT_THRESHOLD) {
+        // Pindahkan field TERAKHIR ke embed kedua (berulang sampai muat).
+        secondFields.unshift(firstFields[firstFields.length - 1]);
+        firstFields = firstFields.slice(0, -1);
+    }
+
+    if (secondFields.length > 0) {
+        // Over budget → kirim 2 embed berurutan dengan visibility sama.
+        await interaction.reply({ embeds: [buildHelpEmbed(firstFields)], flags: MessageFlags.Ephemeral });
+        return interaction.followUp({ embeds: [buildHelpEmbed(secondFields, '2/2')], flags: MessageFlags.Ephemeral });
+    }
+
+    return interaction.reply({ embeds: [buildHelpEmbed(helpFields)], flags: MessageFlags.Ephemeral });
 };

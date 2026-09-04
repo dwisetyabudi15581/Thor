@@ -133,7 +133,11 @@ async function hookAutoMod(message) {
     const config = automodManager.getGuildConfig(message.guild.id);
     if (!config || !config.enabled) return false;
 
-    // Admin always whitelisted
+    // v3.9.38 FIX: whitelist GLOBAL sekarang CUMA admin (Administrator/ManageGuild).
+    // Sebelumnya isUserWhitelisted juga me-return true untuk role di
+    // `linkAllowedRoles` — member dengan role itu bypass SEMUA cek (spam, kata
+    // terlarang, mass-mention) padahal field itu (lihat /add-link-whitelist)
+    // cuma dimaksudkan exempt LINK.
     if (automodManager.isUserWhitelisted(message.member, config)) return false;
 
     const content = message.content || '';
@@ -149,9 +153,15 @@ async function hookAutoMod(message) {
         automodManager.resetSpamTracker(message.guild.id, message.author.id);
     }
 
-    // 2. Cek link (kalo blockLinks aktif & channel bukan whitelist)
+    // 2. Cek link (kalo blockLinks aktif & channel/role bukan whitelist)
+    // v3.9.38 FIX: role link-whitelist (linkAllowedRoles) dicek lewat
+    // isLinkAllowed() dan CUMA exempt cek LINK — spam/kata terlarang/
+    // mass-mention tetap di-enforce untuk member dengan role itu.
     if (!shouldDelete && config.blockLinks && automodManager.containsLink(content)) {
-        if (!config.linkAllowedChannels?.includes(message.channel.id)) {
+        if (
+            !config.linkAllowedChannels?.includes(message.channel.id) &&
+            !automodManager.isLinkAllowed(message.member, config)
+        ) {
             shouldDelete = true;
             actionReason = 'Link diblokir di channel ini';
             actionToTake = 'delete_only';

@@ -68,17 +68,29 @@ function addKey(data) {
     const days = Number(data.days) || 0;
     const expireAt = days > 0 ? now + days * 24 * 60 * 60 * 1000 : null;
 
+    // v3.9.38 FIX (FIX 5c): harden data layer — key kosong/whitespace DITOLAK.
+    // Sebelumnya hanya truthy-check `data.key &&` di dup-check → "   " lolos
+    // tersimpan sebagai key blank (buyers tidak bisa redeem apa-apa). Key
+    // di-trim dulu, dan versi ter-trim yang disimpan supaya dup-check akurat.
+    const key = typeof data.key === 'string' ? data.key.trim() : '';
+    if (!key) {
+        throw new Error('Key tidak boleh kosong');
+    }
+
     // v3.9.8 FIX: cek uniqueness key. Sebelumnya tidak ada cek → admin typo
     // / copy-paste bisa bikin 2 entry dengan key sama, dan getActiveKeysByUserAndRole
     // double-count (meski max() idempotent, tetap UX confusion + bisa bikin
     // member redeem 2x kalau redemption logic pakai find-by-key).
-    if (data.key && list.some(k => k.key === data.key)) {
-        throw new Error(`Key "${data.key}" sudah ada di database (duplicate).`);
+    // v3.9.38 FIX (FIX 6c): pesan error TIDAK lagi menyertakan nilai key —
+    // error ini mengalir ke console log handler (ticket.js/keys.js) → raw key
+    // bocor ke log. Admin sudah tahu key yang barusan dia ketik.
+    if (list.some(k => k.key === key)) {
+        throw new Error('Key sudah ada di database (duplicate).');
     }
 
     const entry = {
         id: genId(),
-        key: data.key,
+        key,
         userId: data.userId,
         username: data.username || '',
         roleId: data.roleId,

@@ -123,6 +123,9 @@ function setTicketMeta(channelId, meta) {
     all[channelId] = {
         userId: meta.userId,
         productName: meta.productName,
+        // v3.9.38 FIX (FIX 3): productValue = ID stabil produk (rename-proof).
+        // null untuk tiket lama / produk sintetis kategori tanpa produk.
+        productValue: meta.productValue || null,
         price: meta.price,
         guildId: meta.guildId,
         createdAt: meta.createdAt || Date.now(),
@@ -251,11 +254,26 @@ async function findActiveTicketFor(guild, userId) {
             if (ch) return ch;
             // v3.9.8: channel gak ter-cache, tapi metadata ada. Fetch dari API —
             // kalau benar-benar hilang, cleanup metadata zombie.
+            // v3.9.38 FIX: guild.channels.fetch THROW pada Unknown Channel
+            // (10003), tidak return null. Pola lama `.catch(() => null)` membawa
+            // SEMUA error (429 rate-limit, 5xx, network blip) ke null → meta tiket
+            // yang masih LIVE ikut terhapus → user bisa buka tiket ke-2 dan guard
+            // invoice/completion hilang. Sekarang mirror pola reconcileZombieDeals
+            // (services/schedulerTasks.js): hanya 10003 yang dianggap channel
+            // benar-benar dihapus; error lain = transient, meta dipertahankan.
             try {
-                const fetched = await guild.channels.fetch(chId).catch(() => null);
+                const fetched = await guild.channels.fetch(chId);
                 if (fetched) return fetched;
-                removeTicketMeta(chId);
-            } catch (_) {}
+            } catch (err) {
+                // v3.9.38 FIX: 10003 = Unknown Channel — channel benar-benar dihapus.
+                // Error lain (5xx/network/rate-limit) = TRANSIENT — jangan hapus meta,
+                // biarkan percobaan berikutnya retry.
+                if (err?.code === 10003) {
+                    removeTicketMeta(chId);
+                } else {
+                    console.warn(`⚠️ Gagal fetch channel tiket ${chId} (transient): ${err?.message ?? err}`);
+                }
+            }
         }
     }
     return null;
@@ -414,9 +432,15 @@ async function createTicket(interaction, product) {
         // v3.9.11 Phase 2: simpan category & requiresKey juga.
         // v3.9.27: simpan isTransaction EKSPLISIT — close flow & invoice tidak
         // lagi salah menganggap produk non-key (akun/jasa) sebagai tiket bantuan.
+        // v3.9.38 FIX (FIX 3): simpan productValue (ID stabil) DI SAMPING
+        // productName (label — tetap disimpan untuk display & backward compat).
+        // Sebelumnya meta hanya menyimpan label → admin rename produk via
+        // /update-product membuat lookup produk di semua tiket aktif miss
+        // ("Produk tidak ditemukan"), dan label duplikat resolve ke produk salah.
         setTicketMeta(ticketChannel.id, {
             userId: user.id,
             productName: product.label,
+            productValue: product.value || null,
             price: product.price,
             guildId: guild.id,
             createdAt: Date.now(),
@@ -547,6 +571,32 @@ async function sendInvoice(channel, userId, productName, price, closer) {
 }
 
 /**
+ * v3.9.38 FIX (FIX 3): SATU helper lookup produk dari meta tiket.
+ *
+ * Meta menyimpan label (productName) sejak v3.9.1 — label bisa di-rename
+ * admin ("VIP 30 Hari" → "VIP 1 Bulan") → lookup by label miss. Mulai
+ * v3.9.38 meta juga menyimpan productValue (ID stabil). Prioritas:
+ *   1. by value: p.value === (meta.productValue || meta.productName)
+ *      (meta.productName dipakai sebagai value-query dulu supaya tiket
+ *      legacy yang kebetulan menyimpan value tetap match — pola v3.9.26)
+ *   2. by label: p.label === meta.productName (tiket legacy, fallback)
+ *   3. null (produk dihapus → caller pakai meta.productName untuk display)
+ *
+ * @param {Object} config - config bot (config.products)
+ * @param {Object|null} meta - metadata tiket dari tickets.json
+ * @returns {Object|null} objek produk dari config, atau null
+ */
+function resolveProduct(config, meta) {
+    if (!meta) return null;
+    const products = config?.products || [];
+    return (
+        products.find(p => p.value === (meta.productValue || meta.productName)) ||
+        products.find(p => p.label === meta.productName) ||
+        null
+    );
+}
+
+/**
  * v3.9.11 Phase 3: Save transcript tiket ke channel transcript.
  *
  * Fetch semua messages di channel tiket, format jadi text, kirim ke channel
@@ -569,17 +619,42 @@ async function saveTranscript(ticketChannel, meta, closer, isSuccess) {
     const transcriptChannel = ticketChannel.guild?.channels?.cache?.get(transcriptChannelId);
     if (!transcriptChannel) return false;
 
-    // Fetch semua messages (limit 100 — cukup untuk mayoritas ticket)
+    // v3.9.38 FIX (FIX 7): fetch SEMUA pesan secara paginated, bukan cuma 100
+    // terakhir. Bukti pembayaran dikirim di AWAL tiket — dengan limit 100,
+    // transcript tiket panjang kehilangan pesan-pesan awal persis yang paling
+    // penting. Loop pakai `before: <idTerlama>` sampai halaman kosong/parsial,
+    // dengan hard cap MAX_TRANSCRIPT_MESSAGES untuk melindungi rate limit.
+    // (API mengembalikan batch urut terbaru→terlama; ID snowflake naik seiring
+    // waktu, jadi id TERKECIL di batch = pesan terlama = cursor `before`.)
+    const MAX_TRANSCRIPT_MESSAGES = 1000;
+    const collected = [];
+    let capped = false;
     let messages;
     try {
-        messages = await ticketChannel.messages.fetch({ limit: 100 });
+        let oldestId = null;
+        for (;;) {
+            const fetchOpts = { limit: 100 };
+            if (oldestId) fetchOpts.before = oldestId;
+            const batch = await ticketChannel.messages.fetch(fetchOpts);
+            if (batch.size === 0) break;
+            for (const m of batch.values()) collected.push(m);
+            for (const id of batch.keys()) {
+                if (oldestId === null || BigInt(id) < BigInt(oldestId)) oldestId = id;
+            }
+            if (batch.size < 100) break; // halaman terakhir — tidak ada pesan lebih lama
+            if (collected.length >= MAX_TRANSCRIPT_MESSAGES) {
+                capped = true; // masih ada pesan lebih lama, tapi cap tercapai
+                break;
+            }
+        }
+        messages = collected;
     } catch (err) {
         console.warn(`⚠️ Gagal fetch messages untuk transcript: ${err.message}`);
         return false;
     }
 
     // Sort oldest-first supaya transcript terbaca kronologis
-    const sorted = [...messages.values()].sort((a, b) => a.createdTimestamp - b.createdTimestamp);
+    const sorted = [...messages].sort((a, b) => a.createdTimestamp - b.createdTimestamp);
 
     // Build transcript text
     const lines = [];
@@ -596,6 +671,10 @@ async function saveTranscript(ticketChannel, meta, closer, isSuccess) {
     lines.push(`║ 📅 Dibuat: ${meta?.createdAt ? new Date(meta.createdAt).toLocaleString('id-ID') : 'unknown'}`);
     lines.push(`║ 📅 Ditutup: ${new Date().toLocaleString('id-ID')}`);
     lines.push(`╚═══════════════════════════════════════════`);
+    // v3.9.38 FIX (FIX 7): tanda kalau transcript di-truncate oleh hard cap.
+    if (capped) {
+        lines.push(`║ ⚠️ NOTE: channel punya lebih dari ${MAX_TRANSCRIPT_MESSAGES} pesan — hanya ${MAX_TRANSCRIPT_MESSAGES} pesan TERBARU yang diarsipkan (proteksi rate-limit).`);
+    }
     lines.push('');
     lines.push('--- CHAT HISTORY ---');
 
@@ -763,7 +842,12 @@ async function closeTicket(channel, closer, isSuccess) {
 
         if (isSuccess && userId && ticketType.isTransaction && !invoiceAlreadySent) {
             try {
-                await sendInvoice(channel, userId, productName, price, closer);
+                // v3.9.38 FIX (FIX 3e): tampilkan label produk TERKINI di invoice —
+                // meta menyimpan label beku saat tiket dibuat; resolve by
+                // productValue (stabil) dulu, fallback ke label meta kalau produk
+                // sudah dihapus.
+                const invoiceLabel = resolveProduct(config, meta)?.label || productName;
+                await sendInvoice(channel, userId, invoiceLabel, price, closer);
             } catch (invoiceErr) {
                 console.warn(`⚠️ Gagal kirim invoice saat close ticket ${channelId}:`, invoiceErr.message);
             }
@@ -835,5 +919,8 @@ module.exports = {
     patchTicketMeta,
     removeTicketMeta,
     resolveTicketType,
-    classifyProduct
+    classifyProduct,
+    // v3.9.38 FIX (FIX 3): helper lookup produk by meta (dipakai ticket.js
+    // + closeTicket, dan unit test hardeningV38Ticket).
+    resolveProduct
 };

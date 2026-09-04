@@ -140,7 +140,9 @@ function addXp(guildId, userId, xpGain, config) {
     const all = load();
     const k = keyFor(guildId, userId);
     const now = Date.now();
-    const cooldownMs = config?.cooldownMs || 60000;
+    // v3.9.38 FIX: cooldownMs 0 = XP di TIAP pesan (sesuai dokumentasi config).
+    // `||` menelan 0 → diam-diam jadi 60000; nullish coalescing menjaga 0 tetap 0.
+    const cooldownMs = config?.cooldownMs ?? 60000;
 
     if (!all[k]) {
         all[k] = {
@@ -155,8 +157,11 @@ function addXp(guildId, userId, xpGain, config) {
 
     const user = all[k];
 
-    // Cooldown check — kalau masih dalam cooldown, skip XP gain
-    if (user.lastMessageAt && now - user.lastMessageAt < cooldownMs) {
+    // Cooldown check — kalau masih dalam cooldown, skip XP gain.
+    // v3.9.38 FIX: gate `cooldownMs > 0` supaya 0 = tanpa cooldown (explicit,
+    // juga aman kalau clock-skew bikin lastMessageAt > now) — sebelumnya 0
+    // sudah diubah jadi 60000 oleh `||`, jadi opsi ini gak pernah bisa dipakai.
+    if (cooldownMs > 0 && user.lastMessageAt && now - user.lastMessageAt < cooldownMs) {
         return { leveledUp: false, newLevel: user.level, oldLevel: user.level, user, onCooldown: true };
     }
 

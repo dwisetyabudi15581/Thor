@@ -163,8 +163,9 @@ function getByGuild(guildId) {
 }
 
 /**
- * Vote option. Kalau multiple=false, otomatis unvote option lain dulu.
- * Kalau user sudah vote option yang sama, unvote (toggle).
+ * Vote option (toggle). Kalau multiple=false, otomatis unvote option lain dulu.
+ * Kalau user sudah vote option yang sama, unvote (toggle) — BERLAKU untuk
+ * single maupun multi mode.
  *
  * Return shape konsisten: selalu return poll object (atau null kalau poll gak ada).
  * Caller bisa cek result.closed untuk lihat status poll.
@@ -182,15 +183,22 @@ function vote(id, userId, optionIndex) {
     const option = poll.options[optionIndex];
     const alreadyVoted = option.votes.includes(userId);
 
+    // v3.9.38 FIX: toggle beneran — klik opsi yang sudah di-vote = UNVOTE,
+    // baik single maupun multi. Sebelumnya: strip hanya jalan saat !multiple
+    // dan push hanya jalan saat !alreadyVoted → untuk multiple=true +
+    // alreadyVoted, TIDAK ADA yang terjadi (silent no-op) padahal embed/UI
+    // menjanjikan "Klik tombol di bawah untuk vote (toggle)".
     if (!poll.multiple) {
         // Hapus vote user dari semua option dulu
         for (const opt of poll.options) {
             opt.votes = opt.votes.filter(u => u !== userId);
         }
     }
-
-    // Toggle vote
-    if (!alreadyVoted) {
+    if (alreadyVoted) {
+        // unvote (di single-mode, strip di atas sudah menghapus vote ini →
+        // filter jadi no-op yang aman; efek net = vote terhapus = toggle benar)
+        option.votes = option.votes.filter(u => u !== userId);
+    } else {
         option.votes.push(userId);
     }
 

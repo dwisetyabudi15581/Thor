@@ -108,6 +108,12 @@ async function handlePollButton(interaction) {
         const poll = result.poll;
         await updatePollVoteMessage(interaction, poll);
         const opt = poll.options[optionIndex];
+        // v3.9.38 FIX: cek post-state dari manager — sekarang unvote multi-choice
+        // benar-benar terjadi (toggle di pollManager), jadi cabang "Vote
+        // dibatalkan" reachable untuk poll multi juga (dulu toggle multi =
+        // silent no-op → selalu "Vote tercatat"). Embed re-render di atas
+        // (updatePollVoteMessage) sudah pakai state poll yang sama → bar chart
+        // mengikuti hasil toggle.
         const voted = opt.votes.includes(interaction.user.id);
         return interaction.reply({
             content: voted ? `✅ Vote tercatat untuk **${opt.label}**!` : `🚪 Vote dibatalkan untuk **${opt.label}**.`,

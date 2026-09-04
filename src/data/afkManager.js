@@ -142,6 +142,32 @@ function listGuildAFK(guildId) {
         .sort((a, b) => b.since - a.since);
 }
 
+/**
+ * v3.9.38 FIX (GC): hapus entry AFK yang lebih tua dari `maxAgeMs`.
+ * afk.json sebelumnya TIDAK PERNAH di-GC — user yang leave guild / lupa clear
+ * tetap tercatat AFK selamanya (auto-reply terus menyebut user yang sudah lama
+ * pergi + file tumbuh pelan tanpa batas). Entry lama TANPA field `since`
+ * (format pra-v3.9.x) di-keep — umurnya tidak bisa ditentukan, jangan di-break.
+ * Dipanggil scheduler harian (pruneStaleData di schedulerTasks.js).
+ * Return jumlah entry yang dihapus.
+ */
+function pruneOldAFK(maxAgeMs = 30 * 24 * 60 * 60 * 1000) {
+    const all = load();
+    const cutoff = Date.now() - maxAgeMs;
+    let removed = 0;
+    for (const [k, entry] of Object.entries(all)) {
+        if (!entry || typeof entry !== 'object') continue;
+        // Entry tanpa `since` (bukan number) → keep, jangan break data lama.
+        if (typeof entry.since !== 'number' || Number.isNaN(entry.since)) continue;
+        if (entry.since < cutoff) {
+            delete all[k];
+            removed++;
+        }
+    }
+    if (removed > 0) save(all);
+    return removed;
+}
+
 module.exports = {
     setAFK,
     clearAFK,
@@ -150,5 +176,7 @@ module.exports = {
     getAFKBatch,
     formatDuration,
     listGuildAFK,
-    invalidateCache
+    invalidateCache,
+    // v3.9.38
+    pruneOldAFK
 };
