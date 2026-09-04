@@ -77,7 +77,7 @@ function makeFetchGuild({ cachedEntries = [], fetchImpl }) {
     };
 }
 
-test('FIX 1: fetch throw code 429 (transient) → meta tiket LIVE DIPERTAHANKAN, return null', async () => {
+test('FIX 1: fetch throw code 429 (transient) → meta tiket LIVE DIPERTAHANKAN, throw TICKET_VERIFY_TRANSIENT', async () => {
     resetDataFile('tickets.json', {
         'ch-tr-429': { userId: 'user-429', guildId: 'g38', productName: 'VIP 30 Hari', productValue: 'vip30' }
     });
@@ -89,10 +89,17 @@ test('FIX 1: fetch throw code 429 (transient) → meta tiket LIVE DIPERTAHANKAN,
         }
     });
 
-    const ch = await findActiveTicketFor(guild, 'user-429');
-    assert.strictEqual(ch, null, 'blip transient → tidak ada channel aktif yang bisa di-return');
-    // Inti fix: metadata JANGAN terhapus — channel masih hidup, cuma fetch-nya
-    // gagal sesaat. Sebelum v3.9.38, meta terhapus → user bisa buka tiket ke-2.
+    // v3.9.40: kontrak diperkuat — transient bukan "tidak ada tiket" (null),
+    // tapi THROW berkode TICKET_VERIFY_TRANSIENT supaya caller (createTicket,
+    // midman pick buyer/seller) bisa abort & minta retry, bukan bikin tiket dobel.
+    await assert.rejects(
+        findActiveTicketFor(guild, 'user-429'),
+        err => err.code === 'TICKET_VERIFY_TRANSIENT',
+        'blip transient → harus throw TICKET_VERIFY_TRANSIENT (bukan null)'
+    );
+    // Inti fix tetap: metadata JANGAN terhapus — channel masih hidup, cuma
+    // fetch-nya gagal sesaat. Sebelum v3.9.38, meta terhapus → user bisa buka
+    // tiket ke-2.
     const raw = JSON.parse(fs.readFileSync(path.join(DATA_DIR, 'tickets.json'), 'utf8'));
     assert.ok(raw['ch-tr-429'], 'metadata tiket live tetap ada (retry percobaan berikutnya)');
 });

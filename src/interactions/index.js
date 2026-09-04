@@ -33,6 +33,11 @@
 
 const { check, mark } = require('./_dedup');
 
+// v3.9.40: interaction yang SEDANG di-dispatch (in-flight) — menutup window
+// duplicate-delivery PARALEL antara check() dan mark() (lihat komentar di
+// routeInteraction). In-memory, tidak perlu TTL (selalu di-delete di finally).
+const inFlightInteractions = new Set();
+
 // Domain handlers — masing-masing export `async function(interaction)`.
 const verifyDomain = require('./verify');
 const ticketDomain = require('./ticket');
@@ -188,6 +193,18 @@ async function routeInteraction(interaction) {
     if (check(interaction.id)) {
         return;
     }
+    // v3.9.40 FIX: guard IN-FLIGHT. v3.9.38 memindahkan mark ke SETELAH sukses,
+    // tapi itu membuka window: replay gateway yang datang SELAMA handler
+    // pertama masih jalan lolos dari check() (belum ditandai) + guard
+    // replied/deferred (instance replay punya flag sendiri yang masih false)
+    // → handler jalan 2x PARALEL. Flow uang terlindungi lock internal domain,
+    // tapi toggle non-idempotent (sr_btn selfrole — 2 klik = role balik ke
+    // semula) bisa ter-double-execute. Duplicate yang datang saat in-flight
+    // di-drop senyap — instance pertama yang akan ack via token interaction
+    // yang sama (reply dari instance kedua justru bikin instance pertama gagal).
+    if (inFlightInteractions.has(interaction.id)) {
+        return;
+    }
 
     // Guard: skip kalau interaction sudah replied/deferred.
     // Modal submit yang sudah replied = ANGGAP SUDAH DIPROSES, jangan lanjut.
@@ -203,9 +220,17 @@ async function routeInteraction(interaction) {
         // error ke caller, entry TIDAK ditandai) → replay gateway (Discord retry
         // interaction yang sama) bisa memproses ulang. Tanpa try/catch rethrow
         // karena semantiknya identik (eslint no-useless-catch).
-        const result = await handler(interaction);
-        mark(interaction.id);
-        return result;
+        inFlightInteractions.add(interaction.id);
+        try {
+            const result = await handler(interaction);
+            mark(interaction.id);
+            return result;
+        } finally {
+            // v3.9.40: in-flight selalu dilepas (sukses ataupun throw — kalau
+            // throw, retry Discord berikutnya tetap bisa masuk, preserve
+            // semantik crash-retry v3.9.38).
+            inFlightInteractions.delete(interaction.id);
+        }
     }
 
     // v3.9.9 refactor: fallback ke legacy handler DIHAPUS. Semua customId yang

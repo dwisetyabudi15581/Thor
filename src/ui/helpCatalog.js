@@ -30,6 +30,7 @@ const {
     StringSelectMenuOptionBuilder
 } = require('discord.js');
 const { EMBED_LIMITS, DISCORD_LIMITS } = require('../infra/constants');
+const { truncateUtf8Safe } = require('../infra/text');
 
 // v3.9.37: versi diambil dinamis dari package.json (single source of truth)
 // supaya /help gak pernah stale lagi.
@@ -344,39 +345,54 @@ function buildCategoryEmbed(client, categoryId) {
 
 /**
  * 📖 All — daftar lengkap SEMUA command (tampilan klasik).
- * Dipecah ke max 2 embed kalau lewat budget (total gabungan tetap ≤ 6000 —
- * satu pesan bisa punya banyak embed dengan TOTAL 6000).
- * Return array EmbedBuilder (1 atau 2 elemen).
+ * Return array 1 EmbedBuilder (kontrak array dipertahankan).
+ *
+ * v3.9.40 REWRITE: dalam SATU pesan, TOTAL semua embed = 6000 char —
+ * "auto-split 2 embed" v3.9.39 TIDAK menambah budget sama sekali (jalur itu
+ * dead code — konten saat ini 5.4K < 5.800 — dan kalau katalog tumbuh, split
+ * justru bisa bikin total overshoot + embed 1/2 kebagian deskripsi "Lanjutan"
+ * yang salah). Sekarang 1 embed dengan GUARANTEE muat selalu:
+ *   - Guard 1: setiap field value di-cap 1024 (truncate surrogate-safe + note).
+ *   - Guard 2: max 25 field (Discord; saat ini 19 kategori).
+ *   - Guard 3: kalau total > budget (5.800), kategori paling belakang di-drop
+ *     bergantian + note pengganti yang mengarah ke 📂 dropdown / 🔍 Cari —
+ *     total pesan TIDAK PERNAH lewat 6.000, untuk ukuran kategori apa pun.
  */
 function buildAllEmbeds() {
-    const fields = HELP_CATEGORIES.map(c => ({ name: `${c.emoji} ${c.name}`, value: c.lines.join('\n'), inline: false }));
-    const desc = `_Daftar lengkap semua command (v${BOT_VERSION})._`;
-    const makeEmbed = (fs, part) => {
-        const e = baseEmbed()
-            .setTitle(part ? `🤖 SEMUA COMMAND (${part})` : '🤖 SEMUA COMMAND')
-            .setDescription(part ? `_Lanjutan daftar command (v${BOT_VERSION})._` : desc);
-        if (fs.length) e.addFields(fs);
-        return e;
+    // Guard 1: field value ≤ 1024 — sisakan ruang utk note truncation.
+    const capField = lines => {
+        const text = lines.join('\n');
+        if (text.length <= EMBED_LIMITS.FIELD_VALUE) return text;
+        return truncateUtf8Safe(text, EMBED_LIMITS.FIELD_VALUE - 45) + '\n… +baris lainnya tidak ditampilkan.';
     };
+    // Guard 2: slice 25 — kategori ke-26+ tidak pernah masuk addFields.
+    // (const: hanya di-mutate via pop, tidak pernah di-reassign.)
+    const fields = HELP_CATEGORIES.slice(0, EMBED_LIMITS.FIELDS_COUNT).map(c => ({
+        name: `${c.emoji} ${c.name}`,
+        value: capField(c.lines),
+        inline: false
+    }));
 
-    // Budget total semua embed dalam SATU pesan = 6000 (EMBED_LIMITS.TOTAL_CHARS).
-    // Ukur pakai builder asli (embedTotalChars) supaya title/footer/desc ikut
-    // dihitung — kedua embed sekarang berada dalam SATU pesan (beda dengan
-    // v3.9.38 yang kirim 2 pesan terpisah).
+    const droppedNote = n =>
+        `\n\n… +${n} kategori lainnya tidak dimuat (batas ukuran 1 pesan) — pakai 📂 dropdown atau 🔍 Cari Command.`;
+    const build = (fs, extra) =>
+        baseEmbed()
+            .setTitle('🤖 SEMUA COMMAND')
+            .setDescription(`_Daftar lengkap semua command (v${BOT_VERSION})._${extra || ''}`)
+            .addFields(fs);
+
+    // Budget total SEMUA embed dalam 1 pesan = 6.000 — slack 200 utk overhead
+    // note + hitungan embedTotalChars (title/footer ikut dihitung).
     const BUDGET = EMBED_LIMITS.TOTAL_CHARS - 200;
-    let first = fields;
-    const second = [];
-    const totalSize = () =>
-        embedTotalChars(makeEmbed(first, null)) + (second.length > 0 ? embedTotalChars(makeEmbed(second, '2/2')) : 0);
-    while (first.length > 1 && totalSize() > BUDGET) {
-        // Pindahkan field TERAKHIR ke embed kedua (berulang sampai muat).
-        second.unshift(first[first.length - 1]);
-        first = first.slice(0, -1);
+    let dropped = 0;
+    let embed = build(fields, '');
+    // Guard 3: drop kategori paling belakang sampai total muat (min 1 field).
+    while (fields.length > 1 && embedTotalChars(embed) > BUDGET) {
+        fields.pop();
+        dropped++;
+        embed = build(fields, droppedNote(dropped));
     }
-    if (second.length > 0) {
-        return [makeEmbed(first, '1/2'), makeEmbed(second, '2/2')];
-    }
-    return [makeEmbed(fields, null)];
+    return [embed];
 }
 
 // === Search ===
@@ -407,7 +423,15 @@ function buildBlocks(lines) {
  * Return { query, groups: [{ cat, blocks }], totalBlocks, truncated, emptyQuery }
  */
 function searchHelp(rawQuery) {
-    const query = String(rawQuery || '').trim().toLowerCase();
+    // v3.9.40 FIX: cap input 100 char sebelum diproses. Registry slash option
+    // kini juga max_length:100, tapi builder ini dipakai DUA pintu (slash + modal)
+    // dan modal lama/pesan lama masih bisa lewat — defensive di satu titik ini
+    // menutup semua jalur. Tanpa cap, query ribuan char di-echo ke embed hasil
+    // → description > 4096 → EmbedBuilder.setDescription throw (uncaught).
+    const query = String(rawQuery || '')
+        .slice(0, 100)
+        .trim()
+        .toLowerCase();
     if (!query) return { query: '', groups: [], totalBlocks: 0, truncated: false, emptyQuery: true };
 
     const groups = [];
@@ -463,8 +487,12 @@ function buildSearchEmbed(rawQuery) {
         sections.push(`**${group.cat.emoji} ${group.cat.name}**\n${lines.join('\n')}`);
     }
 
+    // v3.9.40 FIX: backtick di query bisa menutup inline-code header dan
+    // merusak styling sisa embed — sanitize untuk display (match tetap pakai
+    // query mentah, hasil identik).
+    const safeQuery = result.query.replace(/`/g, "'");
     const header =
-        `Kata kunci: \`${result.query}\` — ` +
+        `Kata kunci: \`${safeQuery}\` — ` +
         (result.totalBlocks > 0
             ? `**${result.totalBlocks}** hasil ditemukan`
             : 'tidak ada yang cocok') +

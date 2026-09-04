@@ -40,7 +40,11 @@ const { recordGiveawayWin: trackGiveawayWin } = require('../data/statsManager');
 // (termasuk terminal) — getActiveDealsByGuild tidak lagi dipakai di sini.
 const {
     loadDeals: loadAllDeals,
-    removeDeal: removeDealMeta
+    removeDeal: removeDealMeta,
+    // v3.9.40: Set lock transisi per-channel dari midmanManager — dipakai
+    // reconcileZombieDeals supaya TIDAK menghapus meta deal yang sedang
+    // diproses handler (setDeal setelah removeDealMeta = zombie kebangkit).
+    transitionLocks: mmTransitionLocks
 } = require('../data/midmanManager');
 // v3.9.38 FIX: GC entry AFK lama (lihat pruneStaleData di bawah).
 const { pruneOldAFK } = require('../data/afkManager');
@@ -222,10 +226,17 @@ async function processGiveawayEnd(client, gw, options = {}) {
             console.log(`⏭️ processGiveawayEnd ${gw.id} di-skip (giveaway tidak ada di disk).`);
             return;
         }
-        // Jalur announce manual: giveaway SUDAH ended dengan winner ter-persist
-        // (dipick manual oleh /giveaway end sebelum memanggil ini) dan caller
-        // minta skipPick → lanjut announce pakai winnerIds dari disk, TIDAK re-pick.
-        const isManualAnnounce = Boolean(options.skipPick && fresh.winnerIds && fresh.winnerIds.length > 0);
+        // Jalur announce manual: giveaway SUDAH ended (dipersist oleh
+        // /giveaway end sebelum memanggil ini — winnerIds bisa saja KOSONG
+        // karena 0 peserta, dan itu legitimate) → lanjut announce pakai
+        // winnerIds dari disk, TIDAK re-pick.
+        // v3.9.40 FIX: syarat lama `fresh.winnerIds.length > 0` bikin giveaway
+        // manual end dengan 0 peserta di-skip SENYAP (early return) — pesan
+        // giveaway tidak di-edit (tombol Join masih hidup), tidak ada announce
+        // "berakhir tanpa pemenang", padahal admin sudah lihat pesan sukses.
+        // Penanda jalur manual yang benar: skipPick && ended (caller manual
+        // SELALU persist ended dulu sebelum panggil — lihat commands/giveaway.js).
+        const isManualAnnounce = Boolean(options.skipPick && fresh.ended);
         if (fresh.ended && !isManualAnnounce) {
             // Sudah di-fully-ended & di-announce oleh proses lain (manual end
             // ATAU tick scheduler sebelumnya) → jangan dobel announce/DM.
@@ -471,19 +482,19 @@ function pruneStaleData() {
 
     try {
         const gwRemoved = pruneOldGiveaways(PRUNE_OLDER_THAN_MS);
-        if (gwRemoved > 0) console.log(`🧹 GC: ${gwRemoved} giveaway ended >30h dihapus.`);
+        if (gwRemoved > 0) console.log(`🧹 GC: ${gwRemoved} giveaway ended >30 hari dihapus.`);
     } catch (err) {
         console.warn('⚠️ GC giveaway error:', err.message);
     }
     try {
         const pollRemoved = pruneOldPolls(PRUNE_OLDER_THAN_MS);
-        if (pollRemoved > 0) console.log(`🧹 GC: ${pollRemoved} poll closed >30h dihapus.`);
+        if (pollRemoved > 0) console.log(`🧹 GC: ${pollRemoved} poll closed >30 hari dihapus.`);
     } catch (err) {
         console.warn('⚠️ GC poll error:', err.message);
     }
     try {
         const annRemoved = pruneOldAnns(PRUNE_OLDER_THAN_MS);
-        if (annRemoved > 0) console.log(`🧹 GC: ${annRemoved} scheduled announcement terkirim >30h dihapus.`);
+        if (annRemoved > 0) console.log(`🧹 GC: ${annRemoved} scheduled announcement terkirim >30 hari dihapus.`);
     } catch (err) {
         console.warn('⚠️ GC announcement error:', err.message);
     }
@@ -491,7 +502,7 @@ function pruneStaleData() {
     // (user yang leave guild tetap AFK selamanya, file tumbuh tanpa batas).
     try {
         const afkRemoved = pruneOldAFK(PRUNE_OLDER_THAN_MS);
-        if (afkRemoved > 0) console.log(`🧹 GC: ${afkRemoved} AFK entry >30h dihapus.`);
+        if (afkRemoved > 0) console.log(`🧹 GC: ${afkRemoved} AFK entry >30 hari dihapus.`);
     } catch (err) {
         console.warn('⚠️ GC afk error:', err.message);
     }
@@ -535,6 +546,13 @@ async function reconcileZombieDeals(client) {
         }
         for (const deal of deals) {
             if (!deal.channelId) continue;
+            // v3.9.40 FIX: skip deal yang SEDANG di-transition oleh handler
+            // (midman.js memegang mm.transitionLocks). Tanpa ini, window race:
+            // channel deal dihapus manual pas handler masih memegang lock →
+            // reconcile removeDealMeta → handler setDeal MENULIS ULANG meta
+            // → zombie meta hidup lagi sampai reconcile berikutnya (buyer/seller
+            // terkunci dari hasActiveDealFor sampai 24 jam).
+            if (mmTransitionLocks.has(deal.channelId)) continue;
             try {
                 // Cache dulu, fetch API kalau cache miss (pola findActiveTicketFor).
                 let ch = guild.channels.cache.get(deal.channelId);

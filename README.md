@@ -2,7 +2,7 @@
 
 Bot Discord serbaguna untuk komunitas apa pun — server jualan, gaming, content creator, hingga komunitas umum. Semua konfigurasi dapat diatur langsung dari Discord melalui slash command, tanpa mengedit file.
 
-> **v3.9.39** · 82 slash command · 412 unit test · discord.js v14 · Node.js 18+ · single-guild
+> **v3.9.40** · 82 slash command · 429 unit test · discord.js v14 · Node.js 18+ · single-guild
 >
 > 📖 **[Panduan Admin Lengkap](./docs/ADMIN_GUIDE.md)** — setup, operasional harian, troubleshooting
 > 📜 **[Changelog](./CHANGELOG.md)** — riwayat semua versi
@@ -52,7 +52,7 @@ Bot Discord serbaguna untuk komunitas apa pun — server jualan, gaming, content
 - **Announce** — quick embed, scheduled (one-shot & recurring daily/weekly/monthly), embed builder interaktif dengan live preview.
 - **Warn system** — auto-action: 3 warning → mute 1 jam, 5 → mute 1 hari, 7 → kick.
 - **Backup** — otomatis tiap 24 jam + saat start, maks 7 backup, restore dengan 2-step confirmation + safety backup.
-- **Audit log** — semua admin action tercatat ke channel khusus (50 action types, retry otomatis).
+- **Audit log** — semua admin action tercatat ke channel khusus (63 action types, retry otomatis).
 
 ---
 
@@ -66,13 +66,13 @@ Thor/
 │   ├── bot/events/               # Discord event handlers
 │   ├── commands/                 # Slash command handlers (per-domain)
 │   ├── interactions/             # Button/select/modal handlers (per-domain)
-│   ├── data/                     # JSON persistence layer (16 managers)
+│   ├── data/                     # JSON persistence layer (18 managers)
 │   ├── services/                 # Business logic (scheduler, dll)
 │   ├── ui/                       # Embed/panel builders
 │   └── infra/                    # safeWrite, safeReply, userLock, permissions, auditLog
 ├── data/                         # Runtime JSON files (gitignored)
 ├── docs/                         # ADMIN_GUIDE + index dokumen
-├── tests/unit/                   # 412 unit test (node:test)
+├── tests/unit/                   # 429 unit test (node:test)
 ├── CHANGELOG.md                  # Riwayat versi
 ├── .env.example
 ├── eslint.config.js
@@ -140,7 +140,7 @@ Panduan lengkap termasuk contoh produk, kategori custom, dan operasional harian:
 | ---------------- | -------------------------------------- |
 | `npm start`      | Jalankan bot                           |
 | `npm run dev`    | Jalankan dengan nodemon (auto-restart) |
-| `npm test`       | Jalankan semua unit test (412 test)    |
+| `npm test`       | Jalankan semua unit test (429 test)    |
 | `npm run lint`   | ESLint check                           |
 | `npm run format` | Prettier format semua file             |
 

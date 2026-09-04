@@ -1,4 +1,4 @@
-# 📖 Admin Guide — Thor Bot v3.9.37
+# 📖 Admin Guide — Thor Bot v3.9.40
 
 Panduan lengkap untuk admin server Discord yang menjalankan bot ini — cocok untuk admin baru yang pertama kali setup, maupun admin yang sudah berjalan sebagai referensi harian.
 
@@ -50,6 +50,8 @@ npm start
 - Di Discord, ketik `/` — semua **82 slash command** harus muncul
 - Jika command tidak muncul, pastikan `GUILD_ID` di `.env` benar
 
+> 💡 **Lupa command apa namanya?** Ketik `/help` — sejak v3.9.39 ini **navigator interaktif** (bukan lagi satu embed panjang yang harus di-scroll): 🏠 home ringkas 19 kategori, 📂 **dropdown kategori** untuk melompat ke kelompok command (tiket, produk, rekber, warn, dll.), 🔍 **Cari Command** untuk mencari kata kunci bebas (`key`, `panel`, `vip`...), atau langsung `/help search:<kata kunci>`. Semua navigasi terjadi di satu pesan ephemeral — tidak memenuhi channel.
+
 ---
 
 ## 2. Setup Awal Server
@@ -86,7 +88,7 @@ Urutan berikut adalah **rekomendasi** untuk server baru. Lewati langkah yang sud
 - `welcome` — channel tempat bot mengirim welcome message saat member join
 - `goodbye` — channel tempat bot mengirim goodbye message saat member leave/kick/ban
 - `invoice` — channel testimoni transaksi (otomatis terisi setiap Set Key / Kirim Pesanan / Pesanan Sukses — **sekali per tiket**, tidak dobel)
-- `audit-log` — channel tempat bot mencatat SEMUA admin action (50 action types; dikirim ulang 1x otomatis bila gagal karena rate limit/network)
+- `audit-log` — channel tempat bot mencatat SEMUA admin action (63 action types; dikirim ulang 1x otomatis bila gagal karena rate limit/network)
 - `transcript` — channel arsip transcript tiket (chat history tersimpan otomatis setiap tiket di-close)
 
 > 💡 Sejak v3.9.30 semua channel diatur lewat **satu command** `/set-channel` — termasuk transcript (dulu command terpisah `/set-transcript-channel`). Hapus dengan `/remove-channel <tipe>`.
@@ -924,10 +926,11 @@ Cooldown bersifat **per-user** — user A memicu tidak memengaruhi user B.
 
 ## 11. Riwayat Versi
 
-Riwayat lengkap semua versi (v3.9.0 – v3.9.39) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
+Riwayat lengkap semua versi (v3.9.0 – v3.9.40) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
 
 Ringkasan 3 versi terbaru:
 
+- **v3.9.40** (2026-09-04) — 🛡️ audit menyeluruh pasca-v3.9.39 (cek kode + sinkron docs): **6 bug nyata diperbaiki** + docs di-sinkronkan ke kode — `/help search` query panjang tidak lagi crash (cap 100 + `max_length`), `/giveaway end` manual dengan 0 peserta kini benar-benar mengumumkan "berakhir tanpa pemenang" + menonaktifkan tombol (dulu senyap), verifikasi tiket error transient kini ABORT (bukan tiket dobel — `TICKET_VERIFY_TRANSIENT`), race tutup-tiket vs set-key/kirim-pesanan di-gate `completionLocks` (transcript tidak lagi kontradiktif), replay interaction PARALEL di-drop guard in-flight router, reconcile deal zombie skip deal yang sedang di-lock; plus hardening minor (guard limit embed "Semua Command" utk katalog raksasa, escape ``` di transcript, revoke izin ghost member, ack customId help asing) + **docs**: seluruh angka stale dibenerin (versi dokumen 3.9.37/3.9.30 → 3.9.40, jumlah test, 18 data managers, 63 action types audit) + tip /help navigator di Section 1; +17 unit test (total 429).
 - **v3.9.39** (2026-09-04) — 🚀 **/help redesign jadi navigator interaktif** (user request: "cari command gampang"): 🏠 home ringkas + 📂 dropdown 19 kategori + 🔍 **Cari Command** (tombol → modal kata kunci, atau langsung `/help search:<kata kunci>`) + 📖 Semua Command (daftar lengkap lama tetap ada); semua navigasi meng-edit SATU pesan ephemeral (tidak spam), customId stabil (pesan lama tetap bisa diklik setelah restart); isi help kini single-source-of-truth di `src/ui/helpCatalog.js` — tambah kategori = 1 entry, dropdown/search/all otomatis ikut; +26 unit test (total 82 command, 412 unit test).
 - **v3.9.38** (2026-09-04) — 🛡️ audit menyeluruh v3: **34 bug diperbaiki** lintas domain — race condition rekber (observer add/remove bypass lock transisi, dobel-submit formulir deal), self-healing tiket hanya bersih di error 10003 (bukan 429/5xx), gate `isCompleted` di Set Key/Kirim Pesanan (anti invoice+stats dobel), giveaway dobel-end, `linkAllowedRoles` tidak lagi mem-bypass SEMUA automod, `parsePriceNumber("1.5m")` tidak lagi jadi 15 juta, meta tiket simpan `productValue` (rename produk tidak mematikan Set Key), unvote multi-choice jalan, cooldown 0 = off, `containsLink` kenal domain polos, embed overflow (`/config-show`/`/announce-list`/panel body) di-cap validasi, `/announce-schedule` timezone eksplisit (+8 default, `TZ_OFFSET_HOURS`), transcript sampai 1000 pesan, key tidak bocor ke console, +62 unit test (total 386).
 - **v3.9.37** (2026-09-02) — 🐛 fix **/help** (Auto-Split kini 3 kategori TRANSAKSI/BANTUAN/REKBER — bug user-reported "masih 2"), section Midman/Rekber ditambah, versi embed kini dinamis dari package.json (anti stale); 🩹 audit menyeluruh v2: **restore-backup tidak lagi memutus deal rekber** (deals.json bolong dari FILES_TO_BACKUP), **deal zombie di-reconcile otomatis** (channel dihapus manual → pembeli/penjual dibebaskan dari lock, startup + harian), router `ticket_cat:midman` kini exact-match (kategori `midman_*` custom tidak mati), penjual deal kini juga dicek tiket aktifnya, deskripsi dropdown & warning panel rekber tidak menyesatkan lagi, label audit MIDMAN_*, +12 unit test (total 82 command, 324 unit test).
@@ -954,6 +957,6 @@ Jika ada masalah yang tidak ada di Troubleshooting:
 
 ---
 
-**Versi dokumen:** v3.9.37
-**Last updated:** 2 September 2026
-**Bot version:** 3.9.37 · 82 slash command · 324 unit test
+**Versi dokumen:** v3.9.40
+**Last updated:** 4 September 2026
+**Bot version:** 3.9.40 · 82 slash command · 429 unit test

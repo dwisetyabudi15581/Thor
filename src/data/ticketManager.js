@@ -261,17 +261,32 @@ async function findActiveTicketFor(guild, userId) {
             // invoice/completion hilang. Sekarang mirror pola reconcileZombieDeals
             // (services/schedulerTasks.js): hanya 10003 yang dianggap channel
             // benar-benar dihapus; error lain = transient, meta dipertahankan.
+            //
+            // v3.9.40 FIX: error transient kini di-THROW (kode
+            // TICKET_VERIFY_TRANSIENT), bukan di-skip ke return null. Sebelumnya:
+            // meta dipertahankan di disk (benar), TAPI fungsi tetap return null →
+            // createTicket / validasi deal rekber menganggap "tidak ada tiket
+            // aktif" → tiket/channel KEDUA dibuat untuk user yang sama — 2 meta
+            // aktif, invoice/completion guard terpecah antara 2 channel. Caller
+            // (createTicket + midman pick buyer/seller) catch error ini dan
+            // meminta user coba lagi beberapa detik kemudian.
             try {
                 const fetched = await guild.channels.fetch(chId);
                 if (fetched) return fetched;
             } catch (err) {
-                // v3.9.38 FIX: 10003 = Unknown Channel — channel benar-benar dihapus.
-                // Error lain (5xx/network/rate-limit) = TRANSIENT — jangan hapus meta,
-                // biarkan percobaan berikutnya retry.
+                // 10003 = Unknown Channel — channel benar-benar dihapus.
                 if (err?.code === 10003) {
                     removeTicketMeta(chId);
                 } else {
+                    // Error lain (5xx/network/rate-limit) = TRANSIENT — jangan
+                    // hapus meta & jangan anggap "tidak ada tiket": THROW supaya
+                    // caller tahu verifikasi GAGAL dan bisa abort dengan aman.
                     console.warn(`⚠️ Gagal fetch channel tiket ${chId} (transient): ${err?.message ?? err}`);
+                    const ex = new Error(
+                        `Gagal verifikasi tiket aktif user ${userId} (transient: ${err?.message ?? err})`
+                    );
+                    ex.code = 'TICKET_VERIFY_TRANSIENT';
+                    throw ex;
                 }
             }
         }
@@ -310,7 +325,20 @@ async function createTicket(interaction, product) {
         //      user ID yang merupakan prefix dari user ID lain tidak false-match.
         // v3.9.32: loop tickets.json di bawah diekstrak ke findActiveTicketFor()
         //      (dipakai ulang oleh deal rekber) — perilaku identik.
-        let existingTicket = await findActiveTicketFor(guild, user.id);
+        let existingTicket;
+        try {
+            existingTicket = await findActiveTicketFor(guild, user.id);
+        } catch (verifyErr) {
+            // v3.9.40 FIX: verifikasi tiket aktif GAGAL (429/5xx/network) —
+            // JANGAN lanjut bikin tiket (return null di fungsi lama bikin tiket
+            // dobel untuk user yang punya tiket live). Abort + minta retry.
+            if (verifyErr?.code === 'TICKET_VERIFY_TRANSIENT') {
+                return safeEditReply(interaction, {
+                    content: '⚠️ Gagal memverifikasi tiket aktif kamu (jaringan Discord sedang sibuk). Coba lagi beberapa detik lagi.'
+                });
+            }
+            throw verifyErr;
+        }
         // Fallback: scan channel topic (tiket lama)
         if (!existingTicket) {
             // v3.9.8: tambah ` |` supaya ID yang prefix dari ID lain tidak false-match.
@@ -746,8 +774,13 @@ async function saveTranscript(ticketChannel, meta, closer, isSuccess) {
 
     for (let i = 0; i < chunks.length; i++) {
         const header = chunks.length > 1 ? `\n[Part ${i + 1}/${chunks.length}]\n` : '';
+        // v3.9.40 FIX: isi pesan user bisa mengandung ``` → menutup code fence
+        // transcript lebih awal (sisa chunk jadi markdown liar / render rusak).
+        // Backtick triple di-escape dengan zero-width space — fence tetap utuh,
+        // teks tetap terbaca.
+        const safeChunk = String(chunks[i]).replace(/```/g, '`\u200b`\u200b`');
         await transcriptChannel.send({
-            content: `${header}\`\`\`\n${chunks[i]}\n\`\`\``
+            content: `${header}\`\`\`\n${safeChunk}\n\`\`\``
         });
     }
 

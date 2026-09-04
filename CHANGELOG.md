@@ -5,6 +5,29 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 Legend: 🔴 critical · 🟠 high · 🟡 medium · 🟢 improvement
 
+## [3.9.40] — 2026-09-04
+
+### Fixed — 🛡️ Audit menyeluruh pasca-v3.9.39 ("cek keseluruhan kode + sinkron docs"): 6 bug nyata + hardening + docs sync
+
+Review 3 domain paralel (escrow/scheduler, tiket/automod/data-layer, /help redesign) atas hasil v3.9.38 & v3.9.39 — **semua fix v3.9.38 terkonfirmasi benar** (transitionLocks, gate isCompleted, fresh re-read giveaway, dll.) dan **cross-check 82 command registry vs katalog help bersih** (0 command hilang/stale). Bug baru yang ditemukan & diperbaiki:
+
+- 🟠 **`/help search:<query panjang>` crash** — opsi slash string Discord bisa sampai 6.000 char; query ≥ ±3.875 char di-echo ke embed hasil → description > 4096 → `EmbedBuilder.setDescription` THROW (uncaught) → fitur error diam-diam. Kini: `max_length: 100` di registry (konsisten dengan modal yang sudah 100) + cap 100 di `searchHelp` (defensive — nutup dua pintu sekaligus); backtick di query di-sanitize supaya tidak merusak styling header embed.
+- 🟠 **`/giveaway end` manual dengan 0 peserta senyap** — `isManualAnnounce` mensyaratkan `winnerIds.length > 0`; giveaway sepi (tanpa peserta) di-skip TOTAL: pesan giveaway tidak di-edit (tombol 🎉 Join masih hidup & bisa diklik!), tidak ada announce "berakhir tanpa pemenang" — padahal admin melihat pesan sukses "pesan giveaway sudah diupdate + winner sudah di-DM + diumumkan". Kini penanda jalur manual yang benar: `skipPick && ended` → embed berakhir + tombol disabled + announce tanpa pemenang terkirim.
+- 🟠 **Verifikasi tiket transient → tiket dobel** — `findActiveTicketFor` pada error 429/5xx tetap return `null` (meta aman di disk, tapi caller menganggap "tidak ada tiket aktif") → `createTicket` membuat channel KEDUA untuk user ber-tiket live (2 meta aktif, guard invoice/isCompleted terpecah). Kini: throw berkode `TICKET_VERIFY_TRANSIENT`; `createTicket` + 3 call-site rekber (pick buyer/seller) menangkapnya dan meminta retry — invariant 1-tiket-aktif-per-user terjaga.
+- 🟠 **Race tutup-tiket vs completion** — admin B klik "❌ Tutup Tanpa Selesai" / "✅ Selesai" saat admin A masih memproses Set Key / Kirim Pesanan (memegang `completionLocks`) → channel + meta dihapus duluan → flow A menulis ke meta hilang → pembeli tetap dapat key/role/invoice tapi transcript terarsip "Dibatalkan" (record kontradiktif). Kini kedua tombol close menolak dengan "⏳ sedang diproses admin lain" selama lock dipegang.
+- 🟠 **Replay interaction PARALEL dobel-eksekusi** — v3.9.38 memindahkan mark dedup ke SETELAH handler sukses (benar untuk crash-retry), tapi membuka window: replay gateway yang datang SELAMA handler masih jalan lolos check + guard replied → handler jalan 2x paralel (toggle selfrole bisa ter-revert). Kini: guard `inFlightInteractions` (drop senyap — instance pertama yang memegang token interaction); semantik crash-retry v3.9.38 tetap utuh.
+- 🟡 **Reconcile deal zombie bisa kebangkit** — `reconcileZombieDeals` menghapus meta deal yang channel-nya sudah tidak ada TANPA cek `transitionLocks`; kalau handler sedang memproses transisi di channel yang sama, `setDeal`-nya menulis ulang meta yang barusan dihapus → zombie hidup lagi (buyer/seller terkunci `hasActiveDealFor` sampai 24 jam). Kini reconcile skip deal yang sedang di-lock.
+- 🟢 **Hardening minor**: guard limit "📖 Semua Command" untuk katalog raksasa (field value ≤ 1024 + fields ≤ 25 + guarantee total ≤ 6.000 dengan note pengarah ke dropdown/search — menggantikan jalur split-2-embed v3.9.39 yang dead code & bisa overshoot); izin channel "ghost member" di-revoke saat fresh-check rekber gagal setelah grant; transcript escape ``` di konten user (fence code block tidak rusak); customId `help_*` asing di-ack dengan pesan ephemeral (bukan "interaction failed" merah); `require('discord.js')` di automodManager di-hoist keluar hot-path; log GC ">30h" → ">30 hari" (sesuai konstanta 30 hari).
+
+### Docs — 📚 sinkronisasi dokumentasi ke kode aktual (temuan audit docs)
+
+- 🟢 Versi dokumen stale dibenerin semuanya: `docs/ADMIN_GUIDE.md` header & footer (3.9.37 → 3.9.40), `docs/README.md` (3.9.30 → 3.9.40), jumlah unit test di ketiga dokumen (248/324/412 → **429**), "16 managers" → **18** (sesuai file aktual `src/data/`), "50 action types" → **63** (sesuai `ACTION_LABELS`).
+- 🟢 Tip baru di ADMIN_GUIDE Section 1: cara pakai `/help` navigator interaktif (dropdown 19 kategori + Cari Command + `/help search:`) — sebelumnya fitur v3.9.39 tidak terdokumentasi di body panduan.
+
+### Tests
+
+- 🟢 +17 unit test (total **429**, dari 412): `tests/unit/hardeningV40.test.js` — query panjang/backtick (slash+modal), registry max_length, stress katalog 49 kategori & field raksasa (guard 1024/25/6000 + note), giveaway manual end 0 peserta, transient throw + createTicket abort (invariant 1-meta), race close-vs-completionLocks (2 tombol), replay paralel in-flight + retry pasca-throw, reconcile skip locked deal, transcript fence ``` , ack customId help asing; + update kontrak test transient v3.9.38 (null → throw `TICKET_VERIFY_TRANSIENT`). Full suite 429/429 hijau, ESLint 0 warning.
+
 ## [3.9.39] — 2026-09-04
 
 ### Changed — 🚀 /help redesign: navigator interaktif — cari command tanpa scroll (user-reported: "satu embed utuh, nyari harus scroll")

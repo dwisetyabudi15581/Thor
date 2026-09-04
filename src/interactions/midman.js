@@ -526,7 +526,20 @@ async function handlePickBuyer(interaction) {
     }
     // Pembeli tidak boleh punya tiket reguler aktif bersamaan (kebijakan
     // 1 channel aktif per user — konsisten dengan createTicket).
-    const activeTicket = await findActiveTicketFor(guild, buyerId);
+    // v3.9.40 FIX: catch TICKET_VERIFY_TRANSIENT — jangan anggap "tidak ada
+    // tiket" (bisa lolos bikin deal padahal pembeli punya tiket live).
+    let activeTicket;
+    try {
+        activeTicket = await findActiveTicketFor(guild, buyerId);
+    } catch (verifyErr) {
+        if (verifyErr?.code === 'TICKET_VERIFY_TRANSIENT') {
+            return safeEditReply(interaction, {
+                content: '⚠️ Gagal memverifikasi tiket aktif (jaringan Discord sibuk). Coba pilih pembeli lagi beberapa detik lagi.',
+                components: buyerSelectRow()
+            });
+        }
+        throw verifyErr;
+    }
     if (activeTicket) {
         return safeEditReply(interaction, {
             content: `❌ <@${buyerId}> masih punya tiket aktif di ${activeTicket}. Tutup dulu sebelum buat deal rekber. Pilih pembeli lain:`,
@@ -618,7 +631,19 @@ async function handlePickSeller(interaction) {
     }
     // Pembeli tidak boleh punya tiket reguler aktif bersamaan (kebijakan 1
     // channel aktif per user — konsisten dengan createTicket).
-    const activeTicket = await findActiveTicketFor(guild, buyerId);
+    // v3.9.40 FIX: catch TICKET_VERIFY_TRANSIENT — verifikasi gagal ≠ "tidak
+    // ada tiket"; abort supaya tidak buat deal untuk user ber-tiket live.
+    let activeTicket;
+    try {
+        activeTicket = await findActiveTicketFor(guild, buyerId);
+    } catch (verifyErr) {
+        if (verifyErr?.code === 'TICKET_VERIFY_TRANSIENT') {
+            return safeEditReply(interaction, {
+                content: '⚠️ Gagal memverifikasi tiket aktif pembeli (jaringan Discord sibuk). Coba lagi beberapa detik lagi.'
+            });
+        }
+        throw verifyErr;
+    }
     if (activeTicket) {
         return safeEditReply(interaction, {
             content: `❌ <@${buyerId}> ternyata sudah punya tiket aktif di ${activeTicket}. Tutup dulu sebelum buat deal rekber.`
@@ -628,7 +653,17 @@ async function handlePickSeller(interaction) {
     // pembeli yang dicek, jadi user dengan tiket terbuka bisa jadi penjual
     // (asimetris dengan kebijakan 1-channel-per-user yang berlaku di 3 arah
     // lain: buat tiket, jadi pembeli deal, jadi penjual deal).
-    const sellerTicket = await findActiveTicketFor(guild, sellerId);
+    let sellerTicket;
+    try {
+        sellerTicket = await findActiveTicketFor(guild, sellerId);
+    } catch (verifyErr) {
+        if (verifyErr?.code === 'TICKET_VERIFY_TRANSIENT') {
+            return safeEditReply(interaction, {
+                content: '⚠️ Gagal memverifikasi tiket aktif penjual (jaringan Discord sibuk). Coba lagi beberapa detik lagi.'
+            });
+        }
+        throw verifyErr;
+    }
     if (sellerTicket) {
         return safeEditReply(interaction, {
             content: `❌ <@${sellerId}> masih punya tiket aktif di ${sellerTicket}. Pilih penjual lain:`,
@@ -1199,8 +1234,14 @@ async function handlePickMember(interaction) {
         // — transisi state (fundin/dispute/dll) bisa tersimpan selama await itu.
         // Mutasi + setDeal dilakukan pada objek FRESH, bukan snapshot awal,
         // supaya transisi tervalidasi tidak di-revert oleh stale write.
+        // v3.9.40 FIX: kalau fresh-check GAGAL setelah permissionOverwrites.edit
+        // sukses, akses channel user harus di-REVOKE best-effort — tanpa ini
+        // user bisa masuk channel (permission granted) tapi tidak tercatat di
+        // deal.observers → "ghost member": tidak kelihatan di Deal Board dan
+        // tidak bisa dikeluarkan lewat tombol ➖.
         const fresh = mm.getDeal(channel.id);
         if (!fresh || mm.TERMINAL_STATES.has(fresh.state)) {
+            await channel.permissionOverwrites.delete(userId).catch(() => {});
             return safeEditReply(interaction, { content: '❌ Deal sudah selesai — member tidak bisa diubah.' });
         }
         const freshCheck = mm.canAddObserver(fresh, userId);
@@ -1211,6 +1252,7 @@ async function handlePickMember(interaction) {
                     : freshCheck.reason === 'duplicate'
                       ? '❌ Dia sudah jadi member tambahan di deal ini.'
                       : `❌ Maksimal **${mm.MAX_OBSERVERS}** member tambahan per deal.`;
+            await channel.permissionOverwrites.delete(userId).catch(() => {});
             return safeEditReply(interaction, { content: hint, components: memberSelectRow() });
         }
 

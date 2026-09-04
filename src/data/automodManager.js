@@ -40,6 +40,11 @@
 const fs = require('fs');
 const path = require('path');
 const { safeWriteJSON, quarantineCorruptFile } = require('../infra/safeWrite');
+// v3.9.40: hoist require discord.js ke atas — sebelumnya PermissionFlagsBits
+// di-require DI DALAM isUserWhitelisted()/isLinkAllowed() yang dipanggil per
+// pesan (hot path). Module cache bikin murah, tapi hoist lebih bersih dan
+// menghindari lookup berulang tiap message.
+const { PermissionFlagsBits } = require('discord.js');
 
 const filePath = path.join(__dirname, '..', '..', 'data', 'automod.json');
 
@@ -503,7 +508,6 @@ function countMentions(message) {
 function isUserWhitelisted(member, config) {
     if (!member) return false;
     // Admin (Administrator/ManageGuild) selalu whitelist dari semua cek
-    const { PermissionFlagsBits } = require('discord.js');
     if (member.permissions?.has(PermissionFlagsBits.Administrator)) return true;
     if (member.permissions?.has(PermissionFlagsBits.ManageGuild)) return true;
     // Whitelist role GLOBAL (bukan link) — belum ada field-nya di schema config.
@@ -529,7 +533,6 @@ function isLinkAllowed(member, config) {
     if (!member || !config) return false;
     // Admin selalu boleh link — konsisten dengan guard global (admin di-return
     // duluan oleh hookAutoMod, jadi cek ini murni belt-and-suspenders).
-    const { PermissionFlagsBits } = require('discord.js');
     if (member.permissions?.has(PermissionFlagsBits.Administrator)) return true;
     if (member.permissions?.has(PermissionFlagsBits.ManageGuild)) return true;
     // Role whitelist link

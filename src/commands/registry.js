@@ -16,11 +16,18 @@ function getCommands() {
             defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
             options: [
                 // v3.9.39: cari langsung tanpa buka menu (alternatif modal 🔍).
+                // v3.9.40 FIX: max_length 100 — tanpa ini Discord mengizinkan
+                // input string option sampai 6000 char → query panjang
+                // di-echo ke embed hasil pencarian → description > 4096 →
+                // EmbedBuilder THROW (uncaught) → /help search error diam-diam.
+                // Modal search sudah di-cap 100 (setMaxLength di interactions/help.js);
+                // slash path kini konsisten.
                 {
                     type: 3,
                     name: 'search',
                     description: 'Kata kunci command yang dicari (mis. key, rekber, panel)',
-                    required: false
+                    required: false,
+                    max_length: 100
                 }
             ]
         },

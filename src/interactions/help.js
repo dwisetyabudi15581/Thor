@@ -15,7 +15,7 @@
  * terbuka tetap bisa diklik setelah bot restart.
  */
 
-const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
+const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, MessageFlags } = require('discord.js');
 const {
     HELP_IDS,
     buildHomeEmbed,
@@ -86,6 +86,14 @@ module.exports = async function handleHelpInteraction(interaction) {
         return interaction.update({ embeds: buildAllEmbeds(), components: buildHelpComponents('all') });
     }
 
-    // customId help_* lainnya (tidak seharusnya terjadi) — defensive noop.
+    // customId help_* lainnya (tidak seharusnya terjadi) — v3.9.40: di-ack
+    // dengan pesan ephemeral, bukan warn-only. Tanpa ack, user lihat
+    // "This interaction failed" merah di Discord (komponen pesan help lama
+    // dari versi bot sebelumnya yang customId-nya sudah tidak dikenal).
     console.warn(`[help] customId help tidak dikenali: ${id}`);
+    if (typeof interaction.reply === 'function' && !interaction.replied) {
+        return interaction
+            .reply({ content: '❓ Komponen help tidak dikenal (mungkin pesan dari versi lama). Jalankan `/help` lagi untuk menu terbaru.', flags: MessageFlags.Ephemeral })
+            .catch(() => {});
+    }
 };

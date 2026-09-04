@@ -86,7 +86,6 @@ function passesVerifiedCheck(interaction, config) {
 
 module.exports = async function (interaction) {
     const config = getConfig();
-
     // ====================================================
     // === v3.9.14: TIKET KATEGORI SELECT MENU (DROPDOWN PANEL) ===
     // === customId: ticket_cat_select (exact match)         ===
@@ -543,6 +542,18 @@ module.exports = async function (interaction) {
                 flags: MessageFlags.Ephemeral
             });
         }
+        // v3.9.40 FIX: race close-vs-complete — admin B klik "✅ Selesai" persis
+        // saat admin A masih memegang completionLocks (set key / kirim pesanan
+        // / ✅ Pesanan Sukses sedang jalan). Tanpa gate ini closeTicket menghapus
+        // channel + meta dulu → flow A menulis ke meta yang sudah hilang →
+        // transcript terarsip "Dibatalkan" padahal pembeli dapat key/role/invoice
+        // (record saling kontradiksi). Mirror gate busy di set-key/deliver.
+        if (interaction.channel?.id && completionLocks.has(interaction.channel.id)) {
+            return interaction.reply({
+                content: '⏳ Tiket sedang diproses admin lain (set key / kirim pesanan). Tunggu sebentar, lalu tutup lagi.',
+                flags: MessageFlags.Ephemeral
+            });
+        }
         try {
             await interaction.deferUpdate();
         } catch (err) {
@@ -624,6 +635,15 @@ module.exports = async function (interaction) {
         if (!getTicketMeta(interaction.channel?.id, interaction.channel?.topic || '')) {
             return interaction.reply({
                 content: '❌ Channel ini bukan tiket yang terdaftar (mungkin sudah ditutup admin lain).',
+                flags: MessageFlags.Ephemeral
+            });
+        }
+        // v3.9.40 FIX: race close-vs-cancel — mirror gate di ticket_close_success.
+        // "❌ Tidak Jadi Beli" / "❌ Tutup Tanpa Selesai" saat completion masih
+        // in-flight → jangan tutup dulu (menghindar transcript kontradiktif).
+        if (interaction.channel?.id && completionLocks.has(interaction.channel.id)) {
+            return interaction.reply({
+                content: '⏳ Tiket sedang diproses admin lain (set key / kirim pesanan). Tunggu sebentar, lalu tutup lagi.',
                 flags: MessageFlags.Ephemeral
             });
         }
@@ -1336,6 +1356,11 @@ module.exports = async function (interaction) {
         }
     }
 };
+
+// v3.9.40: completionLocks di-attach ke export (untuk testing race
+// close-vs-complete). Handler tetap dipanggil sebagai fungsi seperti biasa
+// (router: ticketDomain(interaction)) — property tambahan tidak mengganggu.
+module.exports.completionLocks = completionLocks;
 
 /**
  * v3.9.27: Side-effect "✅ Pesanan Sukses" untuk transaksi non-key yang di-close
