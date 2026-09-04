@@ -188,9 +188,13 @@ async function handleAutoTransferOwnership(client, guildId, channelId, channelIn
 
         tempVoiceManager.transferOwnership(guildId, channelId, newOwner.id, newOwner.user.tag);
 
+        // v3.9.42: notifikasi owner baru via CHAT voice channel (bukan DM) — user request.
+        // Alasan: DM sering tidak sampai (user menutup DM) / tidak terbaca; lewat chat
+        // voice channel pesan pasti terlihat member yang ada di dalamnya, + mention
+        // owner baru supaya tetap dapat ping notifikasi.
         try {
-            await newOwner.send(
-                `🎁 **Kamu sekarang owner voice channel: ${voiceChannel.name}**\n\n` +
+            await voiceChannel.send(
+                `🎁 <@${newOwner.id}> **Kamu sekarang owner voice channel: ${voiceChannel.name}**\n\n` +
                     `Ownership otomatis dipindahkan ke kamu karena owner sebelumnya (<@${oldOwnerId}>) keluar dari voice.\n\n` +
                     `🎛️ Kamu bisa kontrol channel ini lewat panel global temp voice di server.`
             );

@@ -1,4 +1,4 @@
-# 📖 Admin Guide — Thor Bot v3.9.41
+# 📖 Admin Guide — Thor Bot v3.9.42
 
 Panduan lengkap untuk admin server Discord yang menjalankan bot ini — cocok untuk admin baru yang pertama kali setup, maupun admin yang sudah berjalan sebagai referensi harian.
 
@@ -700,7 +700,7 @@ Bot membalas pesan otomatis saat member mengetik trigger di awal pesan (case-ins
 
 - Member join channel trigger → bot membuat voice channel pribadi (otomatis menjadi owner)
 - Kontrol via panel: rename, lock, limit user, transfer ownership, delete
-- Channel kosong otomatis dihapus; owner keluar → auto-transfer ke member paling senior
+- Channel kosong otomatis dihapus; owner keluar → auto-transfer ke member paling senior — owner baru diberi tahu via **chat voice channel** + mention (bukan DM, sejak v3.9.42)
 
 ### Multi-Panel Tiket + Kustomisasi
 
@@ -926,10 +926,11 @@ Cooldown bersifat **per-user** — user A memicu tidak memengaruhi user B.
 
 ## 11. Riwayat Versi
 
-Riwayat lengkap semua versi (v3.9.0 – v3.9.41) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
+Riwayat lengkap semua versi (v3.9.0 – v3.9.42) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
 
 Ringkasan 3 versi terbaru:
 
+- **v3.9.42** (2026-09-05) — 🔔 perubahan perilaku atas user request ("jangan DM owner voice, cukup lewat chat voice"): notifikasi **owner baru temp voice** (auto-transfer saat owner keluar & transfer manual via panel) kini dikirim ke **text chat voice channel itu sendiri** dengan mention owner baru (tetap dapat ping) — bukan DM (yang sering gagal senyap karena DM user ditutup / tidak terbaca); +3 unit test kontrak anti-regresi `voiceNotify.test.js`; total 82 command, 436 unit test.
 - **v3.9.41** (2026-09-05) — 🔍 debug ulang atas laporan error produksi ("Interaction Error: ExpectedConstraintError — label > 45 char"): **modal kirim embed & set message EN mati total** (label 48 & 49 char vs limit Discord 45 — versi ID kebetulan selamat karena teks Indonesia lebih pendek; fix limit v3.9.27 dulu hanya meng-cover alur tiket) → label dipendekkan, hint dipindah ke placeholder; disertai **sweep menyeluruh semua batasan komponen** (TextInput label/placeholder/maxLength, modal title, button label, select option) di kedua repo — 0 pelanggaran tersisa, semua titik dynamic terverifikasi ter-guard; +4 unit test jaring pengaman permanen (`componentLimits.test.js`: scan statis seluruh src/ — PR dengan label kepanjangan langsung merah — + kontrak runtime builder asli) (total 82 command, 433 unit test).
 - **v3.9.40** (2026-09-04) — 🛡️ audit menyeluruh pasca-v3.9.39 (cek kode + sinkron docs): **6 bug nyata diperbaiki** + docs di-sinkronkan ke kode — `/help search` query panjang tidak lagi crash (cap 100 + `max_length`), `/giveaway end` manual dengan 0 peserta kini benar-benar mengumumkan "berakhir tanpa pemenang" + menonaktifkan tombol (dulu senyap), verifikasi tiket error transient kini ABORT (bukan tiket dobel — `TICKET_VERIFY_TRANSIENT`), race tutup-tiket vs set-key/kirim-pesanan di-gate `completionLocks` (transcript tidak lagi kontradiktif), replay interaction PARALEL di-drop guard in-flight router, reconcile deal zombie skip deal yang sedang di-lock; plus hardening minor (guard limit embed "Semua Command" utk katalog raksasa, escape ``` di transcript, revoke izin ghost member, ack customId help asing) + **docs**: seluruh angka stale dibenerin (versi dokumen 3.9.37/3.9.30 → 3.9.40, jumlah test, 18 data managers, 63 action types audit) + tip /help navigator di Section 1; +17 unit test (total 429).
 - **v3.9.39** (2026-09-04) — 🚀 **/help redesign jadi navigator interaktif** (user request: "cari command gampang"): 🏠 home ringkas + 📂 dropdown 19 kategori + 🔍 **Cari Command** (tombol → modal kata kunci, atau langsung `/help search:<kata kunci>`) + 📖 Semua Command (daftar lengkap lama tetap ada); semua navigasi meng-edit SATU pesan ephemeral (tidak spam), customId stabil (pesan lama tetap bisa diklik setelah restart); isi help kini single-source-of-truth di `src/ui/helpCatalog.js` — tambah kategori = 1 entry, dropdown/search/all otomatis ikut; +26 unit test (total 82 command, 412 unit test).
@@ -958,6 +959,6 @@ Jika ada masalah yang tidak ada di Troubleshooting:
 
 ---
 
-**Versi dokumen:** v3.9.41
+**Versi dokumen:** v3.9.42
 **Last updated:** 5 September 2026
-**Bot version:** 3.9.41 · 82 slash command · 433 unit test
+**Bot version:** 3.9.42 · 82 slash command · 436 unit test

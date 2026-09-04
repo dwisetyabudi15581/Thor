@@ -550,15 +550,21 @@ async function handleTempVoiceTransferExecute(interaction) {
             return safeEditReply(interaction, { content: `❌ Gagal update permission: ${err.message}` });
         }
 
+        // Capture owner LAMA sebelum registry ditimpa oleh transferOwnership —
+        // dipakai di pesan notifikasi di bawah (revoke permission di atas
+        // sudah membaca ownerId lama secara langsung sebelum line ini).
+        const oldOwnerId = found.channelInfo.ownerId;
+
         tempVoiceManager.transferOwnership(found.guild.id, found.channelId, newOwnerId, newOwner.user.tag);
 
-        // v3.9.8 FIX: DM owner baru (konsisten dengan auto-transfer di index.js).
-        // Sebelumnya owner baru gak diberi tahu → dia gak sadar dapat permission
-        // manage channel sampai coba pakai panel.
+        // v3.9.8 FIX: owner baru diberi tahu (dulu tidak diberi tahu sama sekali).
+        // v3.9.42: notifikasi via CHAT voice channel (bukan DM) — user request:
+        // DM sering tidak sampai (DM ditutup / terabaikan) → cukup info di chat
+        // voice channel itu + mention owner baru supaya tetap dapat ping.
         try {
-            await newOwner.send(
-                `🎁 **Kamu sekarang owner voice channel: ${found.channel.name}**\n\n` +
-                    `Ownership dipindahkan ke kamu oleh <@${found.channelInfo.ownerId}>.\n\n` +
+            await found.channel.send(
+                `🎁 <@${newOwnerId}> **Kamu sekarang owner voice channel: ${found.channel.name}**\n\n` +
+                    `Ownership dipindahkan ke kamu oleh <@${oldOwnerId}>.\n\n` +
                     `🎛️ Kamu bisa kontrol channel ini lewat panel global temp voice.`
             );
         } catch (_) {}

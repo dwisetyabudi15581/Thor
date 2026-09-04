@@ -5,6 +5,19 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 Legend: 🔴 critical · 🟠 high · 🟡 medium · 🟢 improvement
 
+## [3.9.42] — 2026-09-05
+
+### Changed — 🔔 user request: "DM owner voice jangan lewat DM, cukup beritahu lewat chat voice saja"
+
+Notifikasi **owner baru temp voice** tidak lagi dikirim via DM — sekarang dikirim ke **text chat voice channel itu sendiri** dengan mention owner baru (ping notifikasi tetap jalan). Berlaku untuk kedua jalur perpindahan ownership:
+
+- 🟢 **Auto-transfer (owner keluar dari voice)** — sebelumnya DM ke member paling senior yang mewarisi channel; DM sering gagal senyap (DM user ditutup — `catch (_) {}` menelan error) atau tidak terbaca. Sekarang: pesan `🎁 <@ownerBaru> Kamu sekarang owner voice channel...` muncul di chat voice channel, terlihat semua member di dalamnya.
+- 🟢 **Transfer manual via panel** — pola yang sama; plus `oldOwnerId` kini di-capture eksplisit **sebelum** `transferOwnership` menimpa registry, supaya pesan "Ownership dipindahkan ke kamu oleh <@ownerLama>" tidak bergantung pada objek in-memory yang bisa berubah kalau `load()` suatu saat di-cache.
+
+### Tests
+
+- 🟢 +3 unit test (total **436**, dari 433): `tests/unit/voiceNotify.test.js` — kontrak statis anti-regresi: (1) auto-transfer lewat `voiceChannel.send` bukan `newOwner.send` + mention owner baru, (2) transfer manual lewat `found.channel.send` + urutan capture `oldOwnerId` sebelum `transferOwnership`, (3) regression: domain temp voice bebas DM owner baru. Full suite 436/436 hijau, ESLint 0 warning.
+
 ## [3.9.41] — 2026-09-05
 
 ### Fixed — 🔍 Debug ulang atas laporan error produksi ("Interaction Error: ExpectedConstraintError — s.string().lengthLessThanOrEqual()")
