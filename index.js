@@ -72,6 +72,10 @@ const client = new Client({
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.GuildMembers,
         GatewayIntentBits.GuildVoiceStates,
+        // v3.9.43: GuildBans — wajib untuk event guildBanAdd/guildBanRemove
+        // (server log ban/unban, termasuk ban manual dari UI Discord).
+        // Intent REGULER (bukan privileged) — tidak perlu toggle Developer Portal.
+        GatewayIntentBits.GuildBans,
         // WAJIB: Message Content Intent. Tanpa ini, message.content selalu kosong buat
         // pesan user lain, jadi auto-responder, anti-spam kata/link, dan AFK mention
         // reply gak bakal jalan.
@@ -118,7 +122,15 @@ const eventHandlers = [
     require('./src/bot/events/guildMemberAdd'),
     require('./src/bot/events/guildMemberRemove'),
     require('./src/bot/events/messageCreate'),
-    require('./src/bot/events/voiceStateUpdate')
+    require('./src/bot/events/voiceStateUpdate'),
+    // v3.9.43: server log events (log ke channel config.channels['server-log']).
+    // Kalau channel belum di-set, semua handler ini no-op (silent skip).
+    require('./src/bot/events/messageDelete'),
+    require('./src/bot/events/messageUpdate'),
+    require('./src/bot/events/messageBulkDelete'),
+    require('./src/bot/events/guildBanAdd'),
+    require('./src/bot/events/guildBanRemove'),
+    require('./src/bot/events/guildMemberUpdate')
 ];
 
 for (const handler of eventHandlers) {

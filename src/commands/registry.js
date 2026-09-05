@@ -72,7 +72,7 @@ function getCommands() {
         // supaya admin cuma hafal SATU command channel.
         {
             name: 'set-channel',
-            description: 'Atur channel (invoice / welcome / goodbye / audit-log / transcript)',
+            description: 'Atur channel (invoice / welcome / goodbye / audit-log / server-log / transcript)',
             defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
             options: [
                 {
@@ -85,6 +85,7 @@ function getCommands() {
                         { name: 'Welcome', value: 'welcome' },
                         { name: 'Goodbye', value: 'goodbye' },
                         { name: 'Audit Log (catat admin action)', value: 'audit-log' },
+                        { name: 'Server Log (pesan hapus/edit, join/leave, ban)', value: 'server-log' },
                         { name: 'Transcript Tiket (auto-save saat close)', value: 'transcript' }
                     ]
                 },
@@ -576,7 +577,7 @@ function getCommands() {
         // === REMOVE CHANNEL (hapus channel dari config) ===
         {
             name: 'remove-channel',
-            description: 'Hapus channel dari config (invoice / welcome / goodbye / audit-log / transcript)',
+            description: 'Hapus channel dari config (invoice / welcome / goodbye / audit-log / server-log / transcript)',
             defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
             options: [
                 {
@@ -589,6 +590,7 @@ function getCommands() {
                         { name: 'Welcome', value: 'welcome' },
                         { name: 'Goodbye', value: 'goodbye' },
                         { name: 'Audit Log', value: 'audit-log' },
+                        { name: 'Server Log', value: 'server-log' },
                         { name: 'Transcript Tiket', value: 'transcript' }
                     ]
                 }
@@ -995,6 +997,89 @@ function getCommands() {
             description: 'Hapus SEMUA warning milik user',
             defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
             options: [{ type: 6, name: 'user', description: 'User yang ingin di-clear warn-nya', required: true }]
+        },
+
+        // === MODERATION (v3.9.43) ===
+        // Router: boleh dipakai admin ATAU member dengan Discord permission
+        // sesuai (ModerateMembers/KickMembers/BanMembers/ManageMessages) —
+        // lihat MODERATION_COMMANDS di src/commands/index.js. Guard hierarki
+        // tetap dijalankan di handler (role harus lebih tinggi dari target).
+        {
+            name: 'timeout',
+            description: 'Mute member sementara (maks 28 hari) — tercatat di riwayat moderasi',
+            defaultMemberPermissions: PermissionFlagsBits.ModerateMembers,
+            options: [
+                { type: 6, name: 'user', description: 'Member yang di-mute', required: true },
+                {
+                    type: 4,
+                    name: 'duration',
+                    description: 'Durasi dalam MENIT (mis. 60 = 1 jam, 1440 = 1 hari, maks 40320 = 28 hari)',
+                    required: true,
+                    min_value: 1,
+                    max_value: 40320
+                },
+                { type: 3, name: 'reason', description: 'Alasan (dikirim via DM ke member)', required: false }
+            ]
+        },
+        {
+            name: 'untimeout',
+            description: 'Lepas mute (timeout) member lebih awal',
+            defaultMemberPermissions: PermissionFlagsBits.ModerateMembers,
+            options: [
+                { type: 6, name: 'user', description: 'Member yang timeout-nya dihapus', required: true },
+                { type: 3, name: 'reason', description: 'Alasan pelepasan', required: false }
+            ]
+        },
+        {
+            name: 'purge',
+            description: 'Hapus pesan massal di channel (1-100, hanya pesan <14 hari)',
+            defaultMemberPermissions: PermissionFlagsBits.ManageMessages,
+            options: [
+                {
+                    type: 4,
+                    name: 'amount',
+                    description: 'Jumlah pesan yang dihapus (1-100)',
+                    required: true,
+                    min_value: 1,
+                    max_value: 100
+                },
+                { type: 6, name: 'user', description: 'Kosongkan = semua pesan; isi = hanya pesan user ini', required: false }
+            ]
+        },
+        {
+            name: 'kick',
+            description: 'Keluarkan member dari server (tercatat di riwayat moderasi)',
+            defaultMemberPermissions: PermissionFlagsBits.KickMembers,
+            options: [
+                { type: 6, name: 'user', description: 'Member yang di-kick', required: true },
+                { type: 3, name: 'reason', description: 'Alasan (dikirim via DM ke member)', required: false }
+            ]
+        },
+        {
+            name: 'ban',
+            description: 'Ban member + hapus pesan opsional 0-7 hari (tercatat di riwayat moderasi)',
+            defaultMemberPermissions: PermissionFlagsBits.BanMembers,
+            options: [
+                { type: 6, name: 'user', description: 'Member yang di-ban', required: true },
+                {
+                    type: 4,
+                    name: 'delete_days',
+                    description: 'Hapus pesan member N hari terakhir (0-7, default 0)',
+                    required: false,
+                    min_value: 0,
+                    max_value: 7
+                },
+                { type: 3, name: 'reason', description: 'Alasan (dikirim via DM ke member)', required: false }
+            ]
+        },
+        {
+            name: 'unban',
+            description: 'Cabut ban berdasarkan User ID (user tidak perlu ada di server)',
+            defaultMemberPermissions: PermissionFlagsBits.BanMembers,
+            options: [
+                { type: 3, name: 'user_id', description: 'User ID 17-20 digit (Developer Mode → Copy User ID)', required: true },
+                { type: 3, name: 'reason', description: 'Alasan unban', required: false }
+            ]
         },
 
         // === STATS & LEADERBOARD ===

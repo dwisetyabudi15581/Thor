@@ -4,7 +4,7 @@
  * v3.9.39 REDESIGN: /help dulunya SATU embed raksasa (±5.400 char) → admin
  * harus scroll jauh untuk mencari command. Sekarang /help jadi navigator
  * interaktif:
- *   - 🏠 Home   : ringkasan kategori + dropdown 📂 (19 kategori) + tombol
+ *   - 🏠 Home   : ringkasan kategori + dropdown 📂 (20 kategori) + tombol
  *   - 📂 Kategori: detail command per kategori (embed kecil, gampang dibaca)
  *   - 🔍 Search : modal kata kunci ATAU /help search:<keyword> → hasil instan
  *   - 📖 All    : daftar lengkap (tampilan lama, tetap tersedia)
@@ -16,7 +16,7 @@
  *   - src/interactions/help.js  (dropdown/tombol/modal navigation)
  *
  * Kontrak Discord yang dijaga (di-unit-test di tests/unit/helpNav.test.js):
- *   - StringSelectMenu max 25 opsi (saat ini 19 kategori — ada guard test).
+ *   - StringSelectMenu max 25 opsi (saat ini 20 kategori — ada guard test).
  *   - Opsi select: label ≤ 100, description ≤ 100, value ≤ 100.
  *   - Embed description ≤ 4096; total semua embed dalam 1 pesan ≤ 6000.
  */
@@ -258,6 +258,19 @@ const HELP_CATEGORIES = [
             '• `/announce-schedule channel:#ch at:30m recurring?:daily`',
             '• `/announce-list` `/announce-cancel`',
             '• `/warn` `/warn-list` `/warn-remove` `/warn-clear` (3=mute1h, 5=mute1d, 7=kick)'
+        ]
+    },
+    {
+        id: 'moderation',
+        emoji: '🛡️',
+        name: 'Moderation & Server Log',
+        short: 'Timeout, purge, kick, ban + log event server',
+        lines: [
+            '• `/timeout user duration reason` — mute dalam menit (maks 40320 = 28 hari)',
+            '• `/untimeout` `/purge amount:100 user?` — lepas mute · hapus massal (<14 hari)',
+            '• `/kick` `/ban` `/unban` — tindakan keras, tercatat di `/warn-list`',
+            '• `/set-channel server-log #ch` — aktifkan log event server',
+            '• 🗑️✏️ pesan hapus/edit · 📥 📤 join/leave · 🔨 ban · 🎭 role — semua tercatat'
         ]
     },
     {

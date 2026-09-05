@@ -173,7 +173,7 @@ test('v3.9.40 FIX: buildAllEmbeds — satu kategori dengan baris raksasa → fie
     }
 });
 
-test('v3.9.40: buildAllEmbeds katalog normal (19 kategori) → tanpa note truncation, total ≤ 6000', () => {
+test('v3.9.40: buildAllEmbeds katalog normal (20 kategori) → tanpa note truncation, total ≤ 6000', () => {
     const embeds = buildAllEmbeds();
     assert.strictEqual(embeds.length, 1);
     assert.ok(embedTotalChars(embeds[0]) <= EMBED_LIMITS.TOTAL_CHARS);

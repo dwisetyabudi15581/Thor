@@ -5,6 +5,43 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 Legend: 🔴 critical · 🟠 high · 🟡 medium · 🟢 improvement
 
+## [3.9.43] — 2026-09-06
+
+### Added — 🛡️ user request: "paket moderation lengkap + log server untuk delete message edit message dan lain lain"
+
+**Paket moderasi lengkap — 6 command baru (total 88):**
+
+- 🟢 **`/timeout user duration reason`** — mute sementara; `duration` dalam **menit** (60 = 1 jam, 1440 = 1 hari, maks 40320 = 28 hari — limit Discord); DM alasan ke member (best-effort); tercatat di riwayat moderasi + audit log (`MOD_TIMEOUT`).
+- 🟢 **`/untimeout user reason`** — lepas mute lebih awal; hanya jalan kalau user memang sedang di-mute (`isCommunicationDisabled()`), tidak menimpa timer orang lain.
+- 🟢 **`/purge amount user?`** — hapus pesan massal 1–100; filter opsional per-user; pesan **>14 hari otomatis dilewati** (limit API bulk delete) dengan laporan jumlah yang dilewati; 1 pesan → delete tunggal (bulkDelete butuh ≥2); log audit `MOD_PURGE`.
+- 🟢 **`/kick user reason`** — DM dikirim SEBELUM kick (konteks member masih ada, delivery paling pasti); tercatat + audit.
+- 🟢 **`/ban user reason delete_days?`** — `delete_days` 0–7 (limit API `deleteMessageSeconds`); DM sebelum ban; tercatat + audit.
+- 🟢 **`/unban user_id reason`** — pakai User ID string (user tidak ada di guild); validasi snowflake 17–20 digit; cek ban list dulu supaya pesan error-nya jelas; tercatat + audit.
+
+**Guard & desain (unit-tested, `src/infra/moderationGuards.js`):**
+
+- 🟢 **Hierarki dua arah**: role moderator *dan* role bot wajib lebih tinggi dari target — setingkat = ditolak (konsisten `/warn` v3.9.8); tolak self/bot/bot-target.
+- 🟢 **Parity limit dua sisi**: batas opsi slash command (min/max value) = batas guard runtime (40320 menit, 100 purge, 7 hari) — tidak bisa bocor lewat salah satu sisi.
+- 🟢 **Permission bot dicek awal** (ModerateMembers/KickMembers/BanMembers/ManageMessages) dengan pesan Indonesia yang jelas — bukan error mentah "Missing Permissions" dari API.
+- 🟢 **`MODERATION_COMMANDS` gate di router**: moderator non-admin dengan Discord permission sesuai kini boleh pakai command moderasi — staff tidak perlu role admin bot (least privilege; guard hierarki tetap jalan di handler).
+- 🟢 **modLogManager (`data/modlogs.json`)** — tindakan TIDAK dihitung sebagai warn (sanksi tidak ganda: 3x timeout tidak memicu auto-mute tambahan); tapi tampil di `/warn-list` seksi **"⚡ Catatan Moderasi"** — 0-warn user dengan riwayat moderasi tetap tampil (pull sebelum early-return); description di-guard `truncateUtf8Safe` 4096.
+
+**Server Log — 8 event server ke channel baru `server-log` (terpisah dari `audit-log`):**
+
+- 🟢 **Pesan dihapus** (`messageDelete`) — isi pesan + **siapa penghapusnya** (deteksi executor via audit log Discord, window 60 detik — menangkap penghapusan manual dari UI Discord, satu-satunya cara melihat isi pesan terhapus); partial → catatan "tidak di-cache".
+- 🟢 **Pesan diedit** (`messageUpdate`) — before/after + link pesan (bukti seller ganti harga setelah deal); skip edit tanpa perubahan konten (pin/embed-only).
+- 🟢 **Purge massal** (`messageBulkDelete`) — jumlah + executor; menangkap purge manual & AutoMod, bukan cuma `/purge` bot.
+- 🟢 **Join/leave** (di `guildMemberAdd`/`Remove`) — umur akun (deteksi akun baru), total member; **kick manual dari UI Discord terdeteksi** via audit MemberKick (beda label dengan leave biasa).
+- 🟢 **Ban/unban** (`guildBanAdd`/`Remove`) — termasuk ban manual dari UI Discord; executor + reason resmi dari audit log.
+- 🟢 **Role & nickname berubah** (`guildMemberUpdate`) — deteksi penipu ganti identitas / role akses dadakan; partial old state → skip per-seksi.
+- 🟢 Guard semua handler: single-guild `GUILD_ID` (pattern v3.9.26), skip bot (anti banjir log embed sendiri), fetch audit best-effort (tanpa ViewAudit Log tetap jalan), `logServerEvent` **tidak pernah throw** + truncate field 1024/25/6000 (event error tidak boleh crash bot); tanpa channel ter-set semua no-op.
+- 🟡 **Intent `GuildBans` diaktifkan** di `index.js` — tanpa itu event ban/unban TIDAK pernah nyala (intent reguler, tanpa toggle Developer Portal). TANPA INI: fitur ban log mati senyap.
+- 🟢 **`/set-channel` & `/remove-channel`** kini mengenal tipe `server-log`; label audit `MOD_*` (6) ditambahkan.
+
+### Tests
+
+- 🟢 +21 unit test (total **457**, dari 436): `tests/unit/moderation.test.js` (12) — guard hierarki/limit behavioral, modLogManager roundtrip + file korup karantina, parity registry↔guard, router mapping + gate moderator, kontrak handler (timeout dipanggil, DM best-effort, filterBulkDeletable, deleteMessageSeconds v14), integrasi /warn-list (urutan pull sebelum early-return, guard 4096), label audit; `tests/unit/serverLog.test.js` (9) — logServerEvent behavioral (channel belum di-set → false, embed judul/warna/field, truncate 1024 + 25 field, send throw → false tanpa re-throw), snip, findAuditExecutor (window/target/channel), registrasi event + intent GuildBans, guard per event file. Full suite 457/457 hijau, ESLint 0 warning.
+
 ## [3.9.42] — 2026-09-05
 
 ### Changed — 🔔 user request: "DM owner voice jangan lewat DM, cukup beritahu lewat chat voice saja"

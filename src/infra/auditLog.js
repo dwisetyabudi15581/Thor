@@ -110,7 +110,14 @@ const ACTION_LABELS = {
     MIDMAN_RESOLVE_RELEASE: '⚖️ Resolve Dispute — Cairkan',
     MIDMAN_RESOLVE_REFUND: '⚖️ Resolve Dispute — Refund',
     MIDMAN_MEMBER_ADD: '➕ Tambah Member Deal',
-    MIDMAN_MEMBER_REMOVE: '➖ Keluarkan Member Deal'
+    MIDMAN_MEMBER_REMOVE: '➖ Keluarkan Member Deal',
+    // Moderation (v3.9.43)
+    MOD_TIMEOUT: '🔇 Timeout Member',
+    MOD_UNTIMEOUT: '🔊 Lepas Timeout',
+    MOD_PURGE: '🧹 Purge Pesan',
+    MOD_KICK: '👢 Kick Member',
+    MOD_BAN: '🔨 Ban Member',
+    MOD_UNBAN: '♻️ Unban Member'
 };
 
 const RETRY_DELAY_MS = 500;

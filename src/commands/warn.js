@@ -21,8 +21,13 @@ const {
     markActionTaken,
     WARN_THRESHOLDS,
     logAudit,
-    safeEditReply
+    safeEditReply,
+    // v3.9.43: riwayat moderasi (timeout/kick/ban/...) tampil di /warn-list
+    getModLogs,
+    modLogTypeLabel
 } = require('./_shared');
+const { formatDurationMinutes } = require('../infra/moderationGuards');
+const { truncateUtf8Safe } = require('../infra/text');
 
 // v3.9.25: konversi \n literal → newline asli (fitur multi-line PC)
 const { normalizeNewlines } = require('../infra/text');
@@ -149,8 +154,11 @@ module.exports = async function (interaction) {
         const user = interaction.options.getUser('user');
         // v3.9.0: getWarns sekarang scoped per guild
         const warns = getWarns(interaction.guild.id, user.id);
-        if (warns.length === 0) {
-            return safeEditReply(interaction, { content: `✅ <@${user.id}> tidak punya warning.` });
+        // v3.9.43: riwayat moderasi ikut ditarik SEBELUM early-return — user
+        // tanpa warn tapi pernah di-timeout/kick tetap punya catatan.
+        const modLogs = getModLogs(interaction.guild.id, user.id);
+        if (warns.length === 0 && modLogs.length === 0) {
+            return safeEditReply(interaction, { content: `✅ <@${user.id}> tidak punya warning maupun riwayat moderasi.` });
         }
         const lines = warns
             .map((w, i) => {
@@ -158,11 +166,35 @@ module.exports = async function (interaction) {
                 return `\`${i + 1}.\` 🆔 \`${w.id}\`\n   📝 ${w.reason}\n   👤 Oleh: ${w.warnedByTag} | ⏰ <t:${Math.floor(w.createdAt / 1000)}:R>${w.actionTaken ? ` | ⚡ ${w.actionTaken}` : ''}`;
             })
             .join('\n\n');
+
+        // v3.9.43: seksi riwayat moderasi (tindakan nyata, bukan pelanggaran).
+        // Digabung di /warn-list supaya admin lihat gambaran lengkap satu user
+        // dalam satu view — tapi TIDAK dihitung untuk threshold warn (sanksi
+        // tidak ganda, penjelasan desain di modLogManager.js).
+        const MAX_MODLOG_SHOWN = 8;
+        let modSection = '';
+        if (modLogs.length > 0) {
+            const shown = modLogs.slice(-MAX_MODLOG_SHOWN).reverse(); // termutakhir dulu
+            const modLines = shown
+                .map(
+                    m =>
+                        `\`${m.id.slice(4, 12)}\` ${modLogTypeLabel(m.type)}${m.durationMs ? ` (${formatDurationMinutes(Math.round(m.durationMs / 60000))})` : ''}\n   📝 ${m.reason}\n   👤 Oleh: ${m.moderatorTag} | ⏰ <t:${Math.floor(m.createdAt / 1000)}:R>`
+                )
+                .join('\n\n');
+            const more = modLogs.length > MAX_MODLOG_SHOWN ? `\n\n_+${modLogs.length - MAX_MODLOG_SHOWN} tindakan lainnya (lihat data/modlogs.json)_` : '';
+            modSection = `\n\n## ⚡ Catatan Moderasi (${modLogs.length})\n\n${modLines}${more}`;
+        }
+
+        // v3.9.43: guard description ≤ 4096 — warn list panjang + seksi moderasi
+        // bisa nembus limit (polo lama: warns doang, hampir gak pernah nembus).
+        const description = truncateUtf8Safe(
+            `Total **${warns.length}** warning.${modLogs.length > 0 ? ` Riwayat moderasi: **${modLogs.length}** tindakan.` : ''}\n\n${lines}${modSection}\n\n**Threshold:**\n• ${WARN_THRESHOLDS.mute1h} warn → mute 1 jam\n• ${WARN_THRESHOLDS.mute1d} warn → mute 1 hari\n• ${WARN_THRESHOLDS.kick} warn → kick`,
+            4090
+        );
+
         const embed = new EmbedBuilder()
-            .setTitle(`⚠️ WARN HISTORY — ${user.tag}`)
-            .setDescription(
-                `Total **${warns.length}** warning.\n\n${lines}\n\n**Threshold:**\n• ${WARN_THRESHOLDS.mute1h} warn → mute 1 jam\n• ${WARN_THRESHOLDS.mute1d} warn → mute 1 hari\n• ${WARN_THRESHOLDS.kick} warn → kick`
-            )
+            .setTitle(`⚠️ RIWAYAT — ${user.tag}`)
+            .setDescription(description)
             .setColor(
                 warns.length >= WARN_THRESHOLDS.kick
                     ? 0xed4245

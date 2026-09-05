@@ -2,7 +2,7 @@
 
 Bot Discord serbaguna untuk komunitas apa pun — server jualan, gaming, content creator, hingga komunitas umum. Semua konfigurasi dapat diatur langsung dari Discord melalui slash command, tanpa mengedit file.
 
-> **v3.9.42** · 82 slash command · 436 unit test · discord.js v14 · Node.js 18+ · single-guild
+> **v3.9.43** · 88 slash command · 457 unit test · discord.js v14 · Node.js 18+ · single-guild
 >
 > 📖 **[Panduan Admin Lengkap](./docs/ADMIN_GUIDE.md)** — setup, operasional harian, troubleshooting
 > 📜 **[Changelog](./CHANGELOG.md)** — riwayat semua versi
@@ -31,6 +31,14 @@ Bot Discord serbaguna untuk komunitas apa pun — server jualan, gaming, content
 - Spam detection (N pesan dalam window → action) + mass-mention block.
 - Link blocking dengan whitelist channel/role.
 - **Word filter fleksibel**: tambah kata satu per satu (`/add-word`), action per kata, exempt word, matching **whole-word** ("asu" tidak match "asus").
+
+### ⚔️ Moderasi Langsung
+
+- **`/timeout` `/untimeout`** — mute sementara (menit → maks 28 hari) dengan DM alasan ke member.
+- **`/purge`** — hapus pesan massal 1–100 (filter per-user, otomatis skip pesan >14 hari sesuai limit API).
+- **`/kick` `/ban` `/unban`** — tindakan keras tercatat di riwayat user (`/warn-list`), tanpa sanksi ganda.
+- **Guard hierarki dua arah** — role moderator & bot wajib lebih tinggi dari target; command bisa diberikan ke moderator non-admin (permission Discord, least privilege).
+- **Server Log** — pesan dihapus/diedit (isi + by siapa), purge massal, join/leave (umur akun, kick terdeteksi), ban/unban (termasuk manual dari UI Discord), perubahan role & nickname → channel `server-log` terpisah.
 
 ### 💬 Auto-Responder & AFK
 
@@ -72,7 +80,7 @@ Thor/
 │   └── infra/                    # safeWrite, safeReply, userLock, permissions, auditLog
 ├── data/                         # Runtime JSON files (gitignored)
 ├── docs/                         # ADMIN_GUIDE + index dokumen
-├── tests/unit/                   # 436 unit test (node:test)
+├── tests/unit/                   # 457 unit test (node:test)
 ├── CHANGELOG.md                  # Riwayat versi
 ├── .env.example
 ├── eslint.config.js

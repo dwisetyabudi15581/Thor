@@ -23,6 +23,10 @@ stats.json
 tempVoice.json
 tickets.json
 
+# Karantina file korup (pattern safeWrite) — bisa muncul kapan saja runtime,
+# termasuk residu test file-korup (v3.9.43: modlogs.json.corrupt-*).
+data/*.corrupt-*
+
 # === Backup folder ===
 backups/
 

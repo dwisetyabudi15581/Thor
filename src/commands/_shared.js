@@ -96,6 +96,9 @@ const {
 const { createBackup, listBackups, restoreBackup, formatSize: formatBackupSize } = require('../data/backupManager');
 // v3.9.9 refactor: sendInvoice dipakai /set-key untuk kirim invoice ke channel invoice.
 const { sendInvoice } = require('../data/ticketManager');
+// v3.9.43: riwayat tindakan moderasi (timeout/kick/ban/...) — dipakai
+// domain moderation.js + ditampilkan di /warn-list (warn.js).
+const { addModLog, getModLogs, getModLogCount, modLogTypeLabel } = require('../data/modLogManager');
 
 // === UI builders ===
 const { Embeds } = require('../ui/embedBuilder');
@@ -197,6 +200,10 @@ module.exports = {
     restoreBackup,
     formatBackupSize,
     sendInvoice,
+    addModLog,
+    getModLogs,
+    getModLogCount,
+    modLogTypeLabel,
     tempVoiceManager,
     // UI
     Embeds,

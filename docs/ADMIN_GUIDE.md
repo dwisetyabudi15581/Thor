@@ -1,4 +1,4 @@
-# 📖 Admin Guide — Thor Bot v3.9.42
+# 📖 Admin Guide — Thor Bot v3.9.43
 
 Panduan lengkap untuk admin server Discord yang menjalankan bot ini — cocok untuk admin baru yang pertama kali setup, maupun admin yang sudah berjalan sebagai referensi harian.
 
@@ -12,7 +12,7 @@ Panduan lengkap untuk admin server Discord yang menjalankan bot ini — cocok un
 2. [Setup Awal Server](#2-setup-awal-server)
 3. [Manajemen Produk & VIP](#3-manajemen-produk--vip)
 4. [Operasional Harian (Tiket, Announce, Embed)](#4-operasional-harian-tiket-announce-embed)
-5. [Moderation (Warn System)](#5-moderation-warn-system)
+5. [Moderation (Warn + Tindakan Langsung)](#5-moderation-warn--tindakan-langsung)
 6. [Engagement (Giveaway & Poll)](#6-engagement-giveaway--poll)
 7. [Fitur Komunitas Lanjutan](#7-fitur-komunitas-lanjutan)
 8. [Backup & Restore](#8-backup--restore)
@@ -47,7 +47,7 @@ npm start
 
 - Console menampilkan: `✅ Bot online sebagai NamaBot`
 - Console menampilkan: `✅ Slash Commands terdaftar ke guild: Nama Server (instan!)`
-- Di Discord, ketik `/` — semua **82 slash command** harus muncul
+- Di Discord, ketik `/` — semua **88 slash command** harus muncul
 - Jika command tidak muncul, pastikan `GUILD_ID` di `.env` benar
 
 > 💡 **Lupa command apa namanya?** Ketik `/help` — sejak v3.9.39 ini **navigator interaktif** (bukan lagi satu embed panjang yang harus di-scroll): 🏠 home ringkas 19 kategori, 📂 **dropdown kategori** untuk melompat ke kelompok command (tiket, produk, rekber, warn, dll.), 🔍 **Cari Command** untuk mencari kata kunci bebas (`key`, `panel`, `vip`...), atau langsung `/help search:<kata kunci>`. Semua navigasi terjadi di satu pesan ephemeral — tidak memenuhi channel.
@@ -514,7 +514,7 @@ Layanan jasa tengah untuk transaksi antar-member: **pembeli + penjual + midman**
 
 ---
 
-## 5. Moderation (Warn System)
+## 5. Moderation (Warn + Tindakan Langsung)
 
 ### Beri Warning
 
@@ -558,6 +558,56 @@ Bot menolak `/warn` jika:
 - Admin mencoba warn diri sendiri
 - Admin mencoba warn bot
 - Admin mencoba warn member dengan role setingkat/lebih tinggi dari dirinya
+
+### Tindakan Langsung (v3.9.43)
+
+Paket moderasi lengkap — tangga sanksi kini berakhir di tindakan nyata, bukan cuma catatan. Semua tindakan: **tercatat di riwayat user** (tampil di `/warn-list` seksi "Catatan Moderasi"), **log ke channel audit-log**, dan **DM alasan ke member** (best-effort).
+
+| Command | Fungsi | Catatan |
+|---|---|---|
+| `/timeout user duration reason` | Mute sementara | duration dalam **menit** (60 = 1 jam, 1440 = 1 hari, maks 40320 = 28 hari — limit Discord) |
+| `/untimeout user reason` | Lepas mute lebih awal | hanya jalan kalau user memang sedang di-mute |
+| `/purge amount user?` | Hapus pesan massal | 1–100 pesan; pesan **>14 hari tidak bisa** bulk-delete (limit API) — otomatis dilewati; isi `user` = hanya pesan dia |
+| `/kick user reason` | Keluarkan member | member bisa join lagi lewat invite |
+| `/ban user reason delete_days?` | Ban + hapus pesan | `delete_days` 0–7 (limit Discord); DM dikirim SEBELUM ban supaya sampai |
+| `/unban user_id reason` | Cabut ban | pakai **User ID** (17–20 digit) karena user tidak ada di server |
+
+**Guard keamanan (semua tindakan):**
+
+- Tidak bisa menindak diri sendiri, bot, atau member dengan role setingkat/lebih tinggi (baik dari moderator MAUPUN dari bot — dicek dua-duanya)
+- Permission bot dicek dulu dengan pesan jelas (bukan error mentah "Missing Permissions")
+- Command boleh dipakai **admin** ATAU member dengan Discord permission sesuai (Timeout/Kick/Ban/Manage Messages) — staff moderasi tidak perlu role admin bot (least privilege)
+
+**Contoh pemakaian cepat:**
+
+```
+/timeout user:@spammer duration:60 reason:"Spam iklan di #general"
+/purge amount:50 user:@spammer        → bersihkan iklannya juga
+/warn-list user:@spammer              → lihat catatan lengkap + riwayat moderasi
+```
+
+> **Desain:** tindakan moderasi TIDAK dihitung sebagai warn — jadi 3x timeout tidak memicu auto-mute tambahan (tidak ada sanksi ganda). Warn = pelanggaran; modlog = tindakan. Dua-duanya tampil di `/warn-list` dalam satu view.
+
+### Server Log (Event Server, v3.9.43)
+
+```
+/set-channel tipe:"Server Log (pesan hapus/edit, join/leave, ban)" channel:#server-log
+```
+
+Aktifkan sekali, lalu semua event ini tercatat otomatis ke channel itu (channel **terpisah** dari audit-log supaya log admin dan log aktivitas tidak tercampur):
+
+- 🗑️ **Pesan dihapus** — isi pesan + siapa penghapusnya (dideteksi dari audit log Discord; berlaku juga untuk penghapusan manual lewat UI Discord) — satu-satunya cara melihat isi pesan yang sudah dihapus
+- ✏️ **Pesan diedit** — before/after + link pesan (bukti seller ganti harga setelah deal)
+- 🧹 **Purge massal** — jumlah pesan + siapa yang purge
+- 📥📤 **Join/leave** — umur akun (deteksi akun baru), total member; **kick manual dari UI Discord ikut terdeteksi** (bukan cuma keluar sendiri)
+- 🔨 **Ban/unban** — termasuk ban manual dari UI Discord (tidak hanya /ban lewat bot), lengkap dengan executor & alasan
+- 🎭 **Role berubah** & 📝 **nickname berubah** — deteksi penipu ganti identitas / dapat role akses dadakan
+
+**Catatan penting:**
+
+- Bot butuh permission **View Audit Log** supaya kolom "oleh siapa" terisi (tanpa itu tetap jalan, kolomnya jadi "tidak diketahui")
+- Pesan bot di-skip (supaya log tidak kebanjiran embed bot sendiri)
+- Kalau channel belum di-set, semua event di atas no-op — tidak ada error
 
 ---
 
@@ -926,10 +976,11 @@ Cooldown bersifat **per-user** — user A memicu tidak memengaruhi user B.
 
 ## 11. Riwayat Versi
 
-Riwayat lengkap semua versi (v3.9.0 – v3.9.42) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
+Riwayat lengkap semua versi (v3.9.0 – v3.9.43) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
 
 Ringkasan 3 versi terbaru:
 
+- **v3.9.43** (2026-09-06) — 🛡️ **paket moderasi lengkap + server log** (user request: "tambahkan fitur paket moderation lengkap dan log server untuk delete message edit message dan lain lain"): 6 command baru **`/timeout` `/untimeout` `/purge` `/kick` `/ban` `/unban`** (total 88) dengan guard hierarki dua arah (role moderator & bot wajib lebih tinggi dari target, setingkat = tolak), limit Discord dijaga di kedua sisi (timeout maks 28 hari = 40320 menit, purge 1–100 + skip pesan >14 hari limit bulk API, ban hapus pesan 0–7 hari), permission bot dicek awal dgn pesan jelas, DM alasan best-effort, tindakan **tidak dihitung sebagai warn** (modlog = tindakan, warn = pelanggaran — sanksi tidak ganda) tapi tampil di `/warn-list` seksi **Catatan Moderasi**; router kini mengizinkan **moderator non-admin** dengan Discord permission sesuai (least privilege); **Server Log**: event `pesan dihapus` (isi + executor via audit log — termasuk hapus manual dari UI Discord), `pesan diedit` (before/after + link), `purge massal`, `join/leave` (umur akun + kick manual terdeteksi), `ban/unban` manual & via bot, `role/nickname berubah` — dikirim ke channel baru `server-log` (terpisah dari audit-log; `/set-channel tipe:server-log`); intent **GuildBans** diaktifkan (tanpa itu event ban tidak pernah nyala); +21 unit test (moderation.test.js + serverLog.test.js, total 457).
 - **v3.9.42** (2026-09-05) — 🔔 perubahan perilaku atas user request ("jangan DM owner voice, cukup lewat chat voice"): notifikasi **owner baru temp voice** (auto-transfer saat owner keluar & transfer manual via panel) kini dikirim ke **text chat voice channel itu sendiri** dengan mention owner baru (tetap dapat ping) — bukan DM (yang sering gagal senyap karena DM user ditutup / tidak terbaca); +3 unit test kontrak anti-regresi `voiceNotify.test.js`; total 82 command, 436 unit test.
 - **v3.9.41** (2026-09-05) — 🔍 debug ulang atas laporan error produksi ("Interaction Error: ExpectedConstraintError — label > 45 char"): **modal kirim embed & set message EN mati total** (label 48 & 49 char vs limit Discord 45 — versi ID kebetulan selamat karena teks Indonesia lebih pendek; fix limit v3.9.27 dulu hanya meng-cover alur tiket) → label dipendekkan, hint dipindah ke placeholder; disertai **sweep menyeluruh semua batasan komponen** (TextInput label/placeholder/maxLength, modal title, button label, select option) di kedua repo — 0 pelanggaran tersisa, semua titik dynamic terverifikasi ter-guard; +4 unit test jaring pengaman permanen (`componentLimits.test.js`: scan statis seluruh src/ — PR dengan label kepanjangan langsung merah — + kontrak runtime builder asli) (total 82 command, 433 unit test).
 - **v3.9.40** (2026-09-04) — 🛡️ audit menyeluruh pasca-v3.9.39 (cek kode + sinkron docs): **6 bug nyata diperbaiki** + docs di-sinkronkan ke kode — `/help search` query panjang tidak lagi crash (cap 100 + `max_length`), `/giveaway end` manual dengan 0 peserta kini benar-benar mengumumkan "berakhir tanpa pemenang" + menonaktifkan tombol (dulu senyap), verifikasi tiket error transient kini ABORT (bukan tiket dobel — `TICKET_VERIFY_TRANSIENT`), race tutup-tiket vs set-key/kirim-pesanan di-gate `completionLocks` (transcript tidak lagi kontradiktif), replay interaction PARALEL di-drop guard in-flight router, reconcile deal zombie skip deal yang sedang di-lock; plus hardening minor (guard limit embed "Semua Command" utk katalog raksasa, escape ``` di transcript, revoke izin ghost member, ack customId help asing) + **docs**: seluruh angka stale dibenerin (versi dokumen 3.9.37/3.9.30 → 3.9.40, jumlah test, 18 data managers, 63 action types audit) + tip /help navigator di Section 1; +17 unit test (total 429).
@@ -959,6 +1010,6 @@ Jika ada masalah yang tidak ada di Troubleshooting:
 
 ---
 
-**Versi dokumen:** v3.9.42
-**Last updated:** 5 September 2026
-**Bot version:** 3.9.42 · 82 slash command · 436 unit test
+**Versi dokumen:** v3.9.43
+**Last updated:** 6 September 2026
+**Bot version:** 3.9.43 · 88 slash command · 457 unit test
