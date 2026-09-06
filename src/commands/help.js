@@ -2,9 +2,12 @@
  * Domain: help
  * Slash commands: /help [search]
  *
+ * v3.9.44: katalog disusun ulang — 20 kategori diurut prioritas pemakaian,
+ *   /warn* pindah ke Moderasi, + kategori 🚀 Panduan Cepat (lihat
+ *   src/ui/helpCatalog.js). Handler ini tidak berubah.
  * v3.9.39 REDESIGN (user request: "/help satu embed utuh, nyari harus scroll"):
  *   /help kini menampilkan navigator interaktif — BUKAN lagi satu embed raksasa:
- *     - 🏠 Home   : index 19 kategori + dropdown 📂 + tombol 🔍/📖
+ *     - 🏠 Home   : index 20 kategori + dropdown 📂 + tombol 🔍/📖
  *     - 📂 Kategori: detail command per kategori (embed kecil)
  *     - 🔍 Search : modal kata kunci ATAU `/help search:<keyword>` langsung
  *     - 📖 All    : daftar lengkap (tampilan lama, tetap tersedia)

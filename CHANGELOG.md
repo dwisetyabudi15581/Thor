@@ -5,6 +5,26 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 Legend: 🔴 critical · 🟠 high · 🟡 medium · 🟢 improvement
 
+## [3.9.44] — 2026-09-06
+
+### Changed — ✨ user request: "/warn kok masuk kategori Scheduled Announce — tolong baca sync semua fitur & susun ulang /help biar mudah dipahami"
+
+**Redesign total katalog `/help` — 20 kategori diurut prioritas pemakaian:**
+
+- 🟢 **Fix keluhan utama:** `/warn` `/warn-list` `/warn-remove` `/warn-clear` **pindah ke kategori Moderasi** (dulu nyangkut di "Scheduled Announce & Warn" — janggal). Moderasi kini satu pintu lengkap: warn → timeout → kick → ban + purge, dengan penjelasan tangga sanksi (3=mute 1j, 5=mute 1h, 7=kick).
+- 🟢 **Kategori baru 🚀 Panduan Cepat** — urutan setup server baru dalam 5 langkah (`/set-role verified` → kategori & produk → panel tiket → verifikasi → server-log). Admin baru tidak perlu menebak harus mulai dari mana.
+- 🟢 **Struktur diurut ulang dari yang paling sering dipakai:** Panduan Cepat → Moderasi → Produk → Key → Panel → Kategori → Rekber → Log & Channel → Auto-Mod → Responder → Role → Leveling → AFK → Giveaway → Pengumuman → Pesan & Embed → Voice → Backup → Stats → Info.
+- 🟢 **Kategori amburadul dirapikan:**
+  - "Scheduled Announce & Warn" → **Pengumuman Terjadwal** (murni announce, tanpa warn).
+  - "Announce, Embed & Backup" → dipecah jadi **Pesan & Embed Builder** + **Backup & Maintenance** (backup & reset-config bukan sekadar "announce").
+  - "Stats & Lainnya" → **Statistik** murni; `audit-log` pindah ke **Log & Channel**, `reset-config` pindah ke **Backup & Maintenance**.
+  - **`/set-channel` tadinya tersebar di 3 kategori** → kini satu pintu di **Log & Channel** (server-log, audit-log, transcript, welcome, goodbye, invoice + penjelasan tiap tipe).
+- 🟢 **Home 🏠 baru** — seksi "Butuh apa sekarang?" (member nakal? → Moderasi · mau jualan? → Panduan Cepat · mau pantau? → Log & Channel · server sepi? → Giveaway & Leveling) memandu admin langsung ke kategori yang tepat tanpa harus membaca semua.
+- 🟢 Setiap command kini diberi **penjelasan 1 frasa** — admin baru tidak perlu menebak fungsi command dari namanya saja.
+- 🟢 **Budget "📖 Semua Command" tetap aman** — seluruh 20 kategori tetap muat dalam 1 embed (5.579 dari budget 5.800 char; versi lama 5.752) — guard drop kategori tidak aktif, tidak ada kategori yang disembunyikan.
+- 🟢 Pencarian otomatis ikut struktur baru — `search:warn` kini mendarat di **Moderasi**; kategori lama (id `schedule`/`selfrole`/`channels`/`announce` lama) di pesan ephemeral lama tetap aman diklik (fallback ke home, bukan crash — mekanisme yang sudah ada).
+- 🟢 +2 unit test kontrak regression (total **459**): `/warn*` wajib di Moderation & kategori announce tidak boleh menyentuh warn; Panduan Cepat di urutan pertama + kategori baru (logging/backup/stats/info) wajib ada.
+
 ## [3.9.43] — 2026-09-06
 
 ### Added — 🛡️ user request: "paket moderation lengkap + log server untuk delete message edit message dan lain lain"

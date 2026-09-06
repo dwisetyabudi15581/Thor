@@ -2,7 +2,7 @@
  * Unit tests untuk /help navigasi interaktif (v3.9.39).
  *
  * Verifikasi:
- *   - Integritas katalog: 19 kategori, id unik, semua opsi select menu
+ *   - Integritas katalog: 20 kategori, id unik, semua opsi select menu
  *     within Discord limits (label/desc/value ≤ 100, opsi ≤ 25).
  *   - Semua view embed within limits (description ≤ 4096, total ≤ 6000 —
  *     termasuk view 📖 Semua Command yang bisa 2 embed dalam 1 pesan).
@@ -447,4 +447,42 @@ test('helpNav: konten lama tetap utuh di katalog (regression v3.9.37/v3.9.38)', 
     assert.match(allText, /use_dropdown/);
     assert.match(allText, /update-category/);
     assert.match(allText, /update-product/);
+});
+
+// ====================================================
+// === 7. Redesign v3.9.44 — moderasi satu pintu ===
+// ====================================================
+
+test('helpNav: v3.9.44 — /warn* hidup di kategori Moderasi, BUKAN kategori pengumuman (regression)', () => {
+    // Keluhan user: "/warn kok masuknya di Scheduled Announce" — kontrak ini
+    // menjaga supaya command moderasi tidak pernah nyasar lagi.
+    const moderation = HELP_CATEGORIES.find(c => c.id === 'moderation');
+    assert.ok(moderation, 'kategori moderation wajib ada');
+    const modText = moderation.lines.join('\n');
+    for (const cmd of ['/warn', '/warn-list', '/timeout', '/untimeout', '/kick', '/ban', '/unban', '/purge']) {
+        assert.ok(modText.includes(cmd), `moderasi harus memuat ${cmd}`);
+    }
+    // Kategori pengumuman murni announce — tidak boleh menyentuh warn.
+    const announce = HELP_CATEGORIES.find(c => c.id === 'announce');
+    assert.ok(announce, 'kategori announce (murni) wajib ada');
+    assert.doesNotMatch(announce.lines.join('\n'), /warn/i, 'kategori announce tidak boleh memuat command warn');
+    // Search "warn" harus mendarat di moderation.
+    const r = searchHelp('warn');
+    assert.ok(r.groups.some(g => g.cat.id === 'moderation'), 'searchHelp(warn) → moderation');
+});
+
+test('helpNav: v3.9.44 — Panduan Cepat di urutan pertama + dropdown berisi semua kategori baru', () => {
+    assert.strictEqual(HELP_CATEGORIES[0].id, 'quickstart', 'urutan pertama = Panduan Cepat');
+    for (const id of ['quickstart', 'moderation', 'logging', 'backup', 'stats', 'info']) {
+        assert.ok(HELP_CATEGORIES.some(c => c.id === id), `kategori baru wajib: ${id}`);
+    }
+    // set-channel (server-log/audit-log/transcript) kini satu pintu di logging.
+    const logging = HELP_CATEGORIES.find(c => c.id === 'logging');
+    const logText = logging.lines.join('\n');
+    for (const tipe of ['server-log', 'audit-log', 'transcript']) {
+        assert.ok(logText.includes(tipe), `logging harus memuat ${tipe}`);
+    }
+    // reset-config pindah ke backup & maintenance.
+    const backup = HELP_CATEGORIES.find(c => c.id === 'backup');
+    assert.match(backup.lines.join('\n'), /reset-config/);
 });

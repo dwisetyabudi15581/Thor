@@ -1,13 +1,30 @@
 /**
- * Help Catalog — single source of truth untuk isi /help (v3.9.39).
+ * Help Catalog — single source of truth untuk isi /help (v3.9.44).
  *
- * v3.9.39 REDESIGN: /help dulunya SATU embed raksasa (±5.400 char) → admin
- * harus scroll jauh untuk mencari command. Sekarang /help jadi navigator
- * interaktif:
- *   - 🏠 Home   : ringkasan kategori + dropdown 📂 (20 kategori) + tombol
+ * v3.9.44 REDESIGN (user request: "/warn kok masuk kategori Scheduled
+ * Announce — tolong baca & sync semua fitur, susun ulang biar mudah
+ * dipahami"):
+ *   - /warn* PINDAH ke kategori Moderasi (dulu nyangkut di "Scheduled
+ *     Announce & Warn" — janggal). Moderasi kini satu pintu: warn →
+ *     timeout → kick → ban + purge.
+ *   - 20 kategori diurut dari yang paling sering dipakai: 🚀 Panduan Cepat
+ *     (BARU — urutan setup server baru) → Moderasi → jualan (produk, key,
+ *     panel, kategori, rekber) → pengawasan (log, auto-mod) → engagement
+ *     (giveaway, leveling, role) → utility (pesan, backup, stats).
+ *   - Kategori lama yang amburadul dirapikan: "Scheduled Announce & Warn"
+ *     → murni Pengumuman; "Announce, Embed & Backup" → dipecah jadi
+ *     "Pesan & Embed Builder" + "Backup & Maintenance"; "Stats & Lainnya"
+ *     → murni Statistik (audit-log pindah ke Log & Channel, reset-config
+ *     pindah ke Backup); set-channel (tadinya tersebar di 3 kategori) kini
+ *     satu pintu di Log & Channel.
+ *   - Setiap command diberi penjelasan 1 frasa — admin baru tidak perlu
+ *     menebak fungsi dari nama command saja.
+ *
+ * Arsitektur navigator (tidak berubah dari v3.9.39):
+ *   - 🏠 Home   : ringkasan kategori + tugas populer + dropdown 📂 + tombol
  *   - 📂 Kategori: detail command per kategori (embed kecil, gampang dibaca)
  *   - 🔍 Search : modal kata kunci ATAU /help search:<keyword> → hasil instan
- *   - 📖 All    : daftar lengkap (tampilan lama, tetap tersedia)
+ *   - 📖 All    : daftar lengkap (dengan guard budget — lihat buildAllEmbeds)
  * Semua view di-render ke SATU pesan ephemeral (interaction.update) — tidak
  * ada spam pesan baru tiap kali ganti kategori.
  *
@@ -53,149 +70,87 @@ const FOOTER_TEXT = `Community Bot v${BOT_VERSION} — All-in-One`;
 const SEARCH_MAX_LINES = 20;
 
 /**
- * Katalog kategori help. `lines` = isi detail kategori (baris command).
+ * Katalog kategori help (v3.9.44 — urutan = prioritas pemakaian).
+ * `lines` = isi detail kategori (baris command).
  * `short` = deskripsi singkat untuk opsi dropdown (≤100 char, di-guard test).
  */
 const HELP_CATEGORIES = [
     {
-        id: 'info',
-        emoji: '📋',
-        name: 'Informasi',
-        short: 'Bantuan, daftar produk/kategori/pesan & konfigurasi',
+        id: 'quickstart',
+        emoji: '🚀',
+        name: 'Panduan Cepat',
+        short: 'Baru pakai bot? Urutan setup server dari nol',
         lines: [
-            '• `/help` — tampilkan pusat bantuan (atau `/help search:kata kunci`)',
-            '• `/list-products` — lihat semua produk',
-            '• `/list-categories` — lihat semua kategori tiket',
-            '• `/list-messages` — lihat semua teks pesan embed',
-            '• `/config-show` — lihat semua konfigurasi bot'
+            '**Baru pakai bot? Ikuti urutan ini:**',
+            '1️⃣ `/set-role verified @Verified` — role member terverifikasi',
+            '2️⃣ `/add-category` + `/add-product` — siapkan katalog',
+            '3️⃣ `/setup-ticket-panel` — pasang panel tiket',
+            '4️⃣ `/setup-verify` — verifikasi member baru',
+            '5️⃣ `/set-channel server-log #log` — aktifkan log',
+            '💡 Lanjut eksplor kategori lain lewat dropdown 📂.'
         ]
     },
     {
-        id: 'panels',
-        emoji: '🏗️',
-        name: 'Panel Tiket (Multi-Panel)',
-        short: 'Setup panel verifikasi & multi-panel tiket',
-        lines: [
-            '• `/setup-verify` — pasang panel verifikasi',
-            '• `/setup-ticket` — pasang panel tiket (legacy)',
-            '• `/setup-ticket-panel` — panel multi-panel penuh:',
-            '   opsi: `title` `body` `color:#ff5733` `image` `thumbnail` `footer` `categories` `channel` `use_dropdown`',
-            '• `/list-panels` `/update-panel` `/refresh-panel` `/delete-panel`',
-            '• `/set-verify-button` — kustomisasi tombol verifikasi',
-            '💡 Multi-panel = tiap panel custom sendiri. Disimpan ke panels.json.'
-        ]
-    },
-    {
-        id: 'categories',
-        emoji: '🎫',
-        name: 'Kategori Tiket (CRUD)',
-        short: 'Tambah / edit / hapus kategori tiket',
-        lines: [
-            '• `/add-category id:jasa label:"Jasa" emoji:🎮 style:Success requires_key:false`',
-            '• `/update-category id:jasa label:"Jasa Premium" emoji:"🛠️"` — edit tanpa hapus',
-            '• `/list-categories` — lihat semua kategori',
-            '• `/remove-category id:jasa` — hapus kategori (default dilindungi)',
-            '💡 v3.9.19: behavior fleksibel — kategori dengan produk → dropdown, kategori tanpa produk → langsung bikin tiket.'
-        ]
-    },
-    {
-        id: 'responder',
-        emoji: '💬',
-        name: 'Auto-Responder',
-        short: 'Auto-reply FAQ saat member kirim trigger',
-        lines: ['• `/add-responder` `/list-responder` `/remove-responder`', '💡 Member kirim trigger → bot auto-reply. Cocok untuk FAQ.']
-    },
-    {
-        id: 'automod',
+        id: 'moderation',
         emoji: '🛡️',
-        name: 'Anti-Spam & Auto-Mod',
-        short: 'Blocklist kata, whitelist link, action otomatis',
+        name: 'Moderasi',
+        short: 'Warn, timeout, kick, ban, purge — satu pintu',
         lines: [
-            '• `/set-automod` `/automod-show` `/automod-toggle`',
-            '• `/add-word words:kata1,kata2 action:Mute_10_menit` — tambah kata (append)',
-            '• `/remove-word word:kata` `/list-words` — hapus/lihat kata',
-            '• `/add-word tipe:Exempt_(kata_diizinkan)` — whitelist kata anti false-positive',
-            '• `/add-link-whitelist` `/remove-link-whitelist`',
-            '💡 v3.9.23: action per kata + matching whole-word ("asu" tidak match "asus")'
-        ]
-    },
-    {
-        id: 'afk',
-        emoji: '💤',
-        name: 'AFK System',
-        short: 'Auto-reply saat user AFK di-mention',
-        lines: ['• `/afk` `/afk-clear` `/afk-list`', '💡 Bot auto-reply saat user AFK di-mention.']
-    },
-    {
-        id: 'leveling',
-        emoji: '📊',
-        name: 'Leveling System',
-        short: 'XP per pesan, level up auto-role',
-        lines: [
-            '• `/setup-leveling` `/add-level-role` `/list-level-roles` `/remove-level-role`',
-            '• `/rank` `/leaderboard-level` (public)',
-            '💡 XP per message, level up → auto-assign role.'
-        ]
-    },
-    {
-        id: 'roles',
-        emoji: '🎭',
-        name: 'Atur Role',
-        short: 'Set role verified / admin / midman di config',
-        lines: [
-            '• `/set-role verified @role` — set role (verified/unverified/admin/**midman**)',
-            '• `/remove-role verified` — hapus role dari config'
-        ]
-    },
-    {
-        id: 'channels',
-        emoji: '📢',
-        name: 'Atur Channel & Auto-Split Tiket',
-        short: 'Set channel & auto-split 3 kategori tiket',
-        lines: [
-            '• `/set-channel welcome #ch` — set (welcome/goodbye/invoice/audit-log/**transcript**)',
-            '• `/remove-channel welcome` — hapus channel dari config',
-            '• `/set-channel transcript #ch` — auto-save transcript tiket sebelum close',
-            '',
-            '**🎫 Auto-Split:** Bot pisah tiket jadi 3 kategori otomatis:',
-            '• **`🎫 TRANSAKSI`** — semua tiket produk: pakai key (🔑 Set Key) ATAU non-key (📦 Kirim Pesanan)',
-            '• **`🎫 BANTUAN`** — tiket kategori tanpa produk (help/report/claim_giveaway)',
-            '• **`🤝 REKBER`** — channel deal escrow middleman (dibuat saat deal rekber dibuka)',
-            'Custom nama? Edit `data/config.json`: `ticketCategoryKey`, `ticketCategoryNoKey`, `midman.category`'
-        ]
-    },
-    {
-        id: 'messages',
-        emoji: '✏️',
-        name: 'Atur Pesan Embed',
-        short: 'Edit teks welcome/goodbye/tiket + template vars',
-        lines: [
-            '• `/set-message ticketBody teks...` (cepat, 1-line)',
-            '• `/edit-message tipe:"Ticket Body"` → buka modal editor multi-line',
-            '• `/reset-message ticketBody` / `/reset-message ALL`',
-            '',
-            '**Template vars:** `{server}` `{price_header}` `{price_list}` `{price_list:cat}` `{categories_list}`'
+            '**Riwayat pelanggaran:**',
+            '• `/warn user reason` — peringatan (3=mute 1j, 5=mute 1h, 7=kick)',
+            '• `/warn-list user` — riwayat warn + sanksi · `/warn-remove` `/warn-clear`',
+            '**Tindakan langsung:**',
+            '• `/timeout user menit reason` — mute (maks 40320 = 28 hari) · `/untimeout`',
+            '• `/kick` keluarkan · `/ban` blokir · `/unban` buka blokir',
+            '• `/purge amount:100 user?` — hapus massal pesan (1-100)',
+            '💡 Tercatat otomatis di `/warn-list` + log server. Role lebih tinggi kebal tindakan.'
         ]
     },
     {
         id: 'products',
         emoji: '📦',
         name: 'Produk & Auto-Role',
-        short: 'CRUD produk, role auto-assign + expire',
+        short: 'CRUD produk + role otomatis saat beli',
         lines: [
-            '• `/add-product` `/remove-product` `/list-products`',
-            '• `/update-product value:vip30 label:"VIP 30 Hari" price:"Rp 30.000"` — edit tanpa hapus',
-            '• `/set-product-role` `/remove-product-role` `/list-product-roles`',
-            '💡 VIP role + auto-expire (days). Bisa campur produk key & non-key (jasa).',
-            '💡 Produk non-key (akun, jasa)? `/add-product ... requires_key:false` → tiket dapat tombol **📦 Kirim Pesanan** (detail dikirim via DM ke pembeli + auto-role + invoice + stats).'
+            '• `/add-product value:vip30 label:"VIP 30 Hari" price:"Rp 30.000"` — produk key',
+            '• `/add-product ... requires_key:false` — jasa/akun (detail dikirim DM pembeli)',
+            '• `/update-product value:vip30 label:"..."` — edit · `/remove-product` · `/list-products`',
+            '• `/set-product-role` — role otomatis saat beli (+ expire) · `/remove-product-role` `/list-product-roles`'
         ]
     },
     {
         id: 'keys',
         emoji: '🔑',
         name: 'Key Manager',
-        short: 'Set key produk, list & clear jadwal user',
-        lines: ['• `/set-key user:@user value:vip30 key:ABCDE-12345`', '• `/list-keys user:@user`', '• `/clear-schedule user:@user clear_keys:true`']
+        short: 'Stok key produk & jadwal expire member',
+        lines: [
+            '• `/set-key user:@user value:vip30 key:ABCDE-12345` — set key produk',
+            '• `/list-keys user:@user` — key member · `/clear-schedule user clear_keys:true` — bersihkan'
+        ]
+    },
+    {
+        id: 'panels',
+        emoji: '🎫',
+        name: 'Panel Tiket & Verifikasi',
+        short: 'Pasang panel tiket & verifikasi member',
+        lines: [
+            '• `/setup-ticket-panel` — panel multi-kategori (opsi: `title` `body` `categories` `color` `image` `footer` `channel` `use_dropdown`)',
+            '• `/list-panels` `/update-panel` `/refresh-panel` `/delete-panel` — kelola panel',
+            '• `/setup-verify` — verifikasi member baru · `/set-verify-button` — kustom tombol',
+            '• `/setup-ticket` — panel legacy 1 kategori'
+        ]
+    },
+    {
+        id: 'categories',
+        emoji: '🗂️',
+        name: 'Kategori Tiket',
+        short: 'CRUD kategori + auto-split 3 kategori',
+        lines: [
+            '• `/add-category id:jasa label:"Jasa" emoji:🎮 style:Success requires_key:false`',
+            '• `/update-category id:jasa label:...` — edit · `/remove-category` · `/list-categories`',
+            '💡 Berproduk → dropdown; tanpa produk → langsung buat tiket.',
+            '**Auto-Split** 3 kategori: 🎫 TRANSAKSI (produk) · 🎫 BANTUAN (help/report) · 🤝 REKBER (deal). Nama custom: `ticketCategoryKey` `ticketCategoryNoKey` `midman.category`'
+        ]
     },
     {
         id: 'midman',
@@ -203,39 +158,79 @@ const HELP_CATEGORIES = [
         name: 'Midman / Rekber (Escrow)',
         short: 'Deal escrow 3-pihak + fee otomatis',
         lines: [
-            '• `/set-role midman @role` — WAJIB di-set dulu sebelum deal bisa dibuka',
-            '• `/set-midman-fee mode:Persen value:5` — fee otomatis per deal (persen / flat, 0 = gratis)',
-            '• `/midman-deals` — lihat semua deal rekber aktif di server',
-            '💡 Deal 3-pihak (pembeli ⇄ penjual + midman pegang dana). Siapa pun bisa buka lewat tombol **🤝 Rekber** di panel — 3 langkah: item & harga → pilih pembeli → pilih penjual, lalu kedua pihak klik **Setuju Deal**.'
+            '• `/set-role midman @role` — WAJIB di-set sebelum deal dibuka',
+            '• `/set-midman-fee mode:Persen value:5` — fee per deal (persen/flat, 0=gratis)',
+            '• `/midman-deals` — semua deal aktif',
+            '💡 Escrow 3-pihak: pembeli ⇄ penjual, midman pegang dana. Buka lewat tombol **🤝 Rekber** di panel — 3 langkah sampai kedua pihak **Setuju Deal**.'
         ]
     },
     {
-        id: 'selfrole',
+        id: 'logging',
+        emoji: '📜',
+        name: 'Log & Channel',
+        short: 'Aktifkan server-log, audit, transcript, welcome',
+        lines: [
+            '• `/set-channel server-log #ch` — log pesan hapus/edit, join/leave, ban, role',
+            '• `/set-channel audit-log #ch` — aksi admin · `transcript #ch` — arsip tiket',
+            '• `/set-channel welcome/goodbye/invoice #ch` — sambutan & invoice',
+            '• `/remove-channel tipe` — matikan salah satu',
+            'ℹ️ Tanpa `server-log`, event server tidak dicatat.'
+        ]
+    },
+    {
+        id: 'automod',
+        emoji: '🤖',
+        name: 'Anti-Spam & Auto-Mod',
+        short: 'Blocklist kata, whitelist link, action otomatis',
+        lines: [
+            '• `/set-automod` `/automod-show` `/automod-toggle` — aktifkan & lihat',
+            '• `/add-word words:kata1,kata2 action:Mute_10_menit` — kata + sanksinya',
+            '• `/remove-word` `/list-words` · `/add-word tipe:Exempt_(kata)` — whitelist',
+            '• `/add-link-whitelist` `/remove-link-whitelist` — link diizinkan',
+            '💡 Whole-word: "asu" tidak match "asus"'
+        ]
+    },
+    {
+        id: 'responder',
+        emoji: '💬',
+        name: 'Auto-Responder',
+        short: 'Auto-reply FAQ saat member kirim trigger',
+        lines: [
+            '• `/add-responder trigger:halo reply:...` — pasang auto-reply (cocok untuk FAQ)',
+            '• `/list-responder` · `/remove-responder` — lihat & hapus'
+        ]
+    },
+    {
+        id: 'roles',
         emoji: '🎭',
-        name: 'Self-Role Panel',
-        short: 'Panel role pilihan member',
+        name: 'Role & Self-Role',
+        short: 'Role sistem + panel role pilihan member',
         lines: [
-            '• `/setup-selfrole title:... type:button exclusive:false`',
-            '• `/selfrole-add` `/selfrole-remove` `/selfrole-list` `/selfrole-delete`',
-            '💡 `requires_role:@Verified` — conditional role'
+            '• `/set-role verified @role` — role sistem (verified/unverified/admin/**midman**) · `/remove-role`',
+            '• `/setup-selfrole title:... type:button` — panel role pilihan member',
+            '• `/selfrole-add` `/selfrole-remove` — kelola daftar · `/selfrole-list` `/selfrole-delete`',
+            '💡 `requires_role:@Verified` — role terkunci syarat'
         ]
     },
     {
-        id: 'tempvoice',
-        emoji: '🎤',
-        name: 'Temp Voice',
-        short: 'Voice pribadi otomatis saat join trigger',
-        lines: ['• `/setup-tempvoice` / `/tempvoice-remove`', '💡 Member join trigger channel → otomatis bikin voice pribadi']
+        id: 'leveling',
+        emoji: '📊',
+        name: 'Leveling',
+        short: 'XP per pesan + role otomatis saat level up',
+        lines: [
+            '• `/setup-leveling` — aktifkan XP per pesan',
+            '• `/add-level-role level:5 role:@VIP` — role saat naik level · `/list-level-roles` `/remove-level-role`',
+            '• `/rank` — XP sendiri · `/leaderboard-level` — top member'
+        ]
     },
     {
-        id: 'announce',
-        emoji: '📢',
-        name: 'Announce, Embed & Backup',
-        short: 'Pengumuman, embed builder, backup data',
+        id: 'afk',
+        emoji: '💤',
+        name: 'AFK System',
+        short: 'Auto-reply saat user AFK di-mention',
         lines: [
-            '• `/announce channel:#ch title:... description:...`',
-            '• `/send-message` `/embed-builder` `/embed-list` `/embed-cancel`',
-            '• `/backup-now` `/backup-list` `/restore-backup` (auto 24h, max 7)'
+            '• `/afk alasan:...` — set AFK (bot auto-reply saat di-mention)',
+            '• `/afk-clear` — kembali aktif · `/afk-list` — siapa saja AFK'
         ]
     },
     {
@@ -244,44 +239,73 @@ const HELP_CATEGORIES = [
         name: 'Giveaway & Poll',
         short: 'Buat / kelola giveaway & polling',
         lines: [
-            '• `/giveaway create channel:#ch prize:... winners:1 duration:60`',
-            '• `/giveaway list` `/giveaway end` `/giveaway reroll`',
-            '• `/poll create` `/poll list` `/poll close`'
+            '• `/giveaway create channel:#ch prize:... winners:1 duration:60` — mulai',
+            '• `/giveaway list` `/giveaway end` `/giveaway reroll` — kelola',
+            '• `/poll create` `/poll list` `/poll close` — polling'
         ]
     },
     {
-        id: 'schedule',
-        emoji: '⏰',
-        name: 'Scheduled Announce & Warn',
-        short: 'Pengumuman terjadwal & sistem warn',
+        id: 'announce',
+        emoji: '📢',
+        name: 'Pengumuman Terjadwal',
+        short: 'Kirim pengumuman sekarang / terjadwal',
         lines: [
-            '• `/announce-schedule channel:#ch at:30m recurring?:daily`',
-            '• `/announce-list` `/announce-cancel`',
-            '• `/warn` `/warn-list` `/warn-remove` `/warn-clear` (3=mute1h, 5=mute1d, 7=kick)'
+            '• `/announce channel:#ch title:... description:...` — kirim pengumuman',
+            '• `/announce-schedule at:30m recurring:daily` — terjadwal (sekali/berulang)',
+            '• `/announce-list` `/announce-cancel` — lihat & batalkan jadwal'
         ]
     },
     {
-        id: 'moderation',
-        emoji: '🛡️',
-        name: 'Moderation & Server Log',
-        short: 'Timeout, purge, kick, ban + log event server',
+        id: 'messages',
+        emoji: '✏️',
+        name: 'Pesan & Embed Builder',
+        short: 'Edit teks sistem + kirim embed custom',
         lines: [
-            '• `/timeout user duration reason` — mute dalam menit (maks 40320 = 28 hari)',
-            '• `/untimeout` `/purge amount:100 user?` — lepas mute · hapus massal (<14 hari)',
-            '• `/kick` `/ban` `/unban` — tindakan keras, tercatat di `/warn-list`',
-            '• `/set-channel server-log #ch` — aktifkan log event server',
-            '• 🗑️✏️ pesan hapus/edit · 📥 📤 join/leave · 🔨 ban · 🎭 role — semua tercatat'
+            '**Teks sistem:** `/set-message ticketBody teks...` · `/edit-message` (modal) · `/reset-message` · `/list-messages`',
+            '**Embed custom:** `/send-message` (form) · `/embed-builder` · `/embed-list` `/embed-cancel`',
+            '💡 Vars: `{server}` `{price_header}` `{price_list}` `{price_list:cat}` `{categories_list}`'
+        ]
+    },
+    {
+        id: 'tempvoice',
+        emoji: '🎤',
+        name: 'Voice Pribadi',
+        short: 'Voice otomatis saat member join trigger',
+        lines: [
+            '• `/setup-tempvoice` — pasang trigger channel · `/tempvoice-remove` — matikan',
+            '💡 Join trigger → otomatis bikin voice pribadi + panel kontrol (rename, lock, transfer)'
+        ]
+    },
+    {
+        id: 'backup',
+        emoji: '💾',
+        name: 'Backup & Maintenance',
+        short: 'Backup data, restore, reset konfigurasi',
+        lines: [
+            '• `/backup-now` — backup sekarang (auto 24 jam, maks 7 slot)',
+            '• `/backup-list` `/restore-backup` — lihat & pulihkan',
+            '• `/reset-config` — ⚠️ HAPUS SEMUA konfigurasi (2-step)'
         ]
     },
     {
         id: 'stats',
-        emoji: '📊',
-        name: 'Stats & Lainnya',
-        short: 'Statistik server/user, audit log, reset config',
+        emoji: '📈',
+        name: 'Statistik',
+        short: 'Statistik server, leaderboard, transaksi',
         lines: [
-            '• `/stats` `/leaderboard metric:messages|vipPurchases|totalSpent` `/my-stats`',
-            '• `/set-channel audit-log #ch` — catat admin action',
-            '• `/reset-config` — ⚠️ HAPUS SEMUA setting (konfirmasi 2-step)'
+            '• `/stats` — statistik server (member, tiket, transaksi)',
+            '• `/leaderboard metric:messages|vipPurchases|totalSpent` — peringkat',
+            '• `/my-stats` — statistik transaksi pribadi'
+        ]
+    },
+    {
+        id: 'info',
+        emoji: '📋',
+        name: 'Informasi Bot',
+        short: 'Pusat bantuan & lihat semua konfigurasi',
+        lines: [
+            '• `/help` — pusat bantuan (atau `/help search:kata kunci`)',
+            '• `/config-show` — lihat semua konfigurasi bot sekaligus'
         ]
     }
 ];
@@ -316,7 +340,7 @@ function embedTotalChars(embed) {
 // === Embed builders ===
 
 /**
- * 🏠 Home — index kategori (ringkas, tanpa daftar command).
+ * 🏠 Home — index kategori + tugas populer (ringkas, tanpa daftar command).
  */
 function buildHomeEmbed(client, user) {
     const mention = user ? `${user}` : 'Admin';
@@ -329,9 +353,13 @@ function buildHomeEmbed(client, user) {
     return baseEmbed()
         .setTitle('🤖 COMMUNITY BOT — HELP')
         .setDescription(
-            `Halo ${mention}! Anda terverifikasi sebagai **Admin/Staff** (v${BOT_VERSION}).\n` +
-                `**${HELP_CATEGORIES.length} kategori command** tersedia.\n\n` +
-                `**Cara cepat cari command:**\n` +
+            `Halo ${mention}! Anda masuk sebagai **Admin/Staff** — ini pusat kendali bot (v${BOT_VERSION}), **${HELP_CATEGORIES.length} kategori command**.\n\n` +
+                `**Butuh apa sekarang?**\n` +
+                `> 🛡️ Ada member nakal? → **Moderasi** (warn/timeout/kick/ban)\n` +
+                `> 🛒 Mau mulai jualan? → **Panduan Cepat** · **Produk** · **Midman/Rekber**\n` +
+                `> 👀 Mau pantau server? → **Log & Channel**\n` +
+                `> 🎉 Server sepi? → **Giveaway & Poll** · **Leveling**\n\n` +
+                `**Cara pakai:**\n` +
                 `> 1️⃣ Pilih kategori di dropdown **📂** di bawah\n` +
                 `> 2️⃣ Klik **🔍 Cari Command** — ketik kata kunci (mis. \`key\`, \`rekber\`)\n` +
                 `> 3️⃣ Atau langsung \`/help search:panel\` tanpa buka menu\n` +
@@ -366,7 +394,7 @@ function buildCategoryEmbed(client, categoryId) {
  * justru bisa bikin total overshoot + embed 1/2 kebagian deskripsi "Lanjutan"
  * yang salah). Sekarang 1 embed dengan GUARANTEE muat selalu:
  *   - Guard 1: setiap field value di-cap 1024 (truncate surrogate-safe + note).
- *   - Guard 2: max 25 field (Discord; saat ini 19 kategori).
+ *   - Guard 2: max 25 field (Discord; saat ini 20 kategori).
  *   - Guard 3: kalau total > budget (5.800), kategori paling belakang di-drop
  *     bergantian + note pengganti yang mengarah ke 📂 dropdown / 🔍 Cari —
  *     total pesan TIDAK PERNAH lewat 6.000, untuk ukuran kategori apa pun.
@@ -534,7 +562,7 @@ function buildSelectRow() {
         .setCustomId(HELP_IDS.SELECT)
         .setPlaceholder('📂 Pilih kategori command…')
         .addOptions(
-            // Guard: Discord max 25 opsi per select (19 kategori saat ini —
+            // Guard: Discord max 25 opsi per select (20 kategori saat ini —
             // kalau katalog tumbuh > 25, test helpNav gagal duluan).
             HELP_CATEGORIES.slice(0, DISCORD_LIMITS.SELECT_MENU_MAX_OPTIONS).map(
                 c =>

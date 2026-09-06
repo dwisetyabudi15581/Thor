@@ -1,4 +1,4 @@
-# 📖 Admin Guide — Thor Bot v3.9.43
+# 📖 Admin Guide — Thor Bot v3.9.44
 
 Panduan lengkap untuk admin server Discord yang menjalankan bot ini — cocok untuk admin baru yang pertama kali setup, maupun admin yang sudah berjalan sebagai referensi harian.
 
@@ -50,7 +50,7 @@ npm start
 - Di Discord, ketik `/` — semua **88 slash command** harus muncul
 - Jika command tidak muncul, pastikan `GUILD_ID` di `.env` benar
 
-> 💡 **Lupa command apa namanya?** Ketik `/help` — sejak v3.9.39 ini **navigator interaktif** (bukan lagi satu embed panjang yang harus di-scroll): 🏠 home ringkas 19 kategori, 📂 **dropdown kategori** untuk melompat ke kelompok command (tiket, produk, rekber, warn, dll.), 🔍 **Cari Command** untuk mencari kata kunci bebas (`key`, `panel`, `vip`...), atau langsung `/help search:<kata kunci>`. Semua navigasi terjadi di satu pesan ephemeral — tidak memenuhi channel.
+> 💡 **Lupa command apa namanya?** Ketik `/help` — sejak v3.9.39 ini **navigator interaktif** (bukan lagi satu embed panjang yang harus di-scroll), dan sejak **v3.9.44** katalognya disusun ulang jadi **20 kategori diurut prioritas pemakaian**: 🏠 home kini membuka dengan seksi **"Butuh apa sekarang?"** (member nakal? → Moderasi · mau jualan? → Panduan Cepat · mau pantau? → Log & Channel · server sepi? → Giveaway & Leveling), 📂 **dropdown kategori** untuk melompat (kategori **🚀 Panduan Cepat** berisi urutan setup server baru 5 langkah), 🔍 **Cari Command** untuk kata kunci bebas (`key`, `panel`, `warn`...), atau langsung `/help search:<kata kunci>`. Semua navigasi terjadi di satu pesan ephemeral — tidak memenuhi channel.
 
 ---
 
@@ -976,10 +976,11 @@ Cooldown bersifat **per-user** — user A memicu tidak memengaruhi user B.
 
 ## 11. Riwayat Versi
 
-Riwayat lengkap semua versi (v3.9.0 – v3.9.43) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
+Riwayat lengkap semua versi (v3.9.0 – v3.9.44) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
 
 Ringkasan 3 versi terbaru:
 
+- **v3.9.44** (2026-09-06) — ✨ **redesign total katalog `/help`** (user request: "/warn kok masuk kategori Scheduled Announce — tolong sync semua fitur & susun ulang biar mudah dipahami"): **20 kategori diurut prioritas pemakaian** (Panduan Cepat → Moderasi → Produk → Key → Panel → Kategori → Rekber → Log & Channel → Auto-Mod → dst.); `/warn*` **pindah ke kategori Moderasi** (satu pintu: warn → timeout → kick → ban + purge); kategori baru **🚀 Panduan Cepat** (urutan setup server baru 5 langkah); kategori lama yang amburadul dirapikan ("Scheduled Announce & Warn" → murni Pengumuman Terjadwal; "Announce, Embed & Backup" dipecah jadi Pesan & Embed Builder + Backup & Maintenance; "Stats & Lainnya" → murni Statistik); `/set-channel` yang tadinya tersebar di 3 kategori kini **satu pintu di Log & Channel**; home 🏠 baru dengan seksi "Butuh apa sekarang?"; setiap command diberi penjelasan 1 frasa; seluruh 20 kategori tetap muat di 1 embed Semua Command (5.579 / 5.800 char — tanpa drop); +2 unit test kontrak regression (total **459**).
 - **v3.9.43** (2026-09-06) — 🛡️ **paket moderasi lengkap + server log** (user request: "tambahkan fitur paket moderation lengkap dan log server untuk delete message edit message dan lain lain"): 6 command baru **`/timeout` `/untimeout` `/purge` `/kick` `/ban` `/unban`** (total 88) dengan guard hierarki dua arah (role moderator & bot wajib lebih tinggi dari target, setingkat = tolak), limit Discord dijaga di kedua sisi (timeout maks 28 hari = 40320 menit, purge 1–100 + skip pesan >14 hari limit bulk API, ban hapus pesan 0–7 hari), permission bot dicek awal dgn pesan jelas, DM alasan best-effort, tindakan **tidak dihitung sebagai warn** (modlog = tindakan, warn = pelanggaran — sanksi tidak ganda) tapi tampil di `/warn-list` seksi **Catatan Moderasi**; router kini mengizinkan **moderator non-admin** dengan Discord permission sesuai (least privilege); **Server Log**: event `pesan dihapus` (isi + executor via audit log — termasuk hapus manual dari UI Discord), `pesan diedit` (before/after + link), `purge massal`, `join/leave` (umur akun + kick manual terdeteksi), `ban/unban` manual & via bot, `role/nickname berubah` — dikirim ke channel baru `server-log` (terpisah dari audit-log; `/set-channel tipe:server-log`); intent **GuildBans** diaktifkan (tanpa itu event ban tidak pernah nyala); +21 unit test (moderation.test.js + serverLog.test.js, total 457).
 - **v3.9.42** (2026-09-05) — 🔔 perubahan perilaku atas user request ("jangan DM owner voice, cukup lewat chat voice"): notifikasi **owner baru temp voice** (auto-transfer saat owner keluar & transfer manual via panel) kini dikirim ke **text chat voice channel itu sendiri** dengan mention owner baru (tetap dapat ping) — bukan DM (yang sering gagal senyap karena DM user ditutup / tidak terbaca); +3 unit test kontrak anti-regresi `voiceNotify.test.js`; total 82 command, 436 unit test.
 - **v3.9.41** (2026-09-05) — 🔍 debug ulang atas laporan error produksi ("Interaction Error: ExpectedConstraintError — label > 45 char"): **modal kirim embed & set message EN mati total** (label 48 & 49 char vs limit Discord 45 — versi ID kebetulan selamat karena teks Indonesia lebih pendek; fix limit v3.9.27 dulu hanya meng-cover alur tiket) → label dipendekkan, hint dipindah ke placeholder; disertai **sweep menyeluruh semua batasan komponen** (TextInput label/placeholder/maxLength, modal title, button label, select option) di kedua repo — 0 pelanggaran tersisa, semua titik dynamic terverifikasi ter-guard; +4 unit test jaring pengaman permanen (`componentLimits.test.js`: scan statis seluruh src/ — PR dengan label kepanjangan langsung merah — + kontrak runtime builder asli) (total 82 command, 433 unit test).
@@ -1010,6 +1011,6 @@ Jika ada masalah yang tidak ada di Troubleshooting:
 
 ---
 
-**Versi dokumen:** v3.9.43
+**Versi dokumen:** v3.9.44
 **Last updated:** 6 September 2026
-**Bot version:** 3.9.43 · 88 slash command · 457 unit test
+**Bot version:** 3.9.44 · 88 slash command · 459 unit test
