@@ -10,6 +10,11 @@
 const {
     EmbedBuilder,
     MessageFlags,
+    // v3.9.45 hotfix: moderation.js destructure PermissionFlagsBits dari sini,
+    // tapi sebelumnya TIDAK diekspor → undefined saat runtime → /purge /timeout
+    // /kick /ban crash "Cannot read properties of undefined (reading
+    // 'ManageMessages')". Kini diekspor resmi (pola satu pintu _shared).
+    PermissionFlagsBits,
     ButtonBuilder,
     ButtonStyle,
     ActionRowBuilder,
@@ -127,6 +132,7 @@ module.exports = {
     // discord.js classes
     EmbedBuilder,
     MessageFlags,
+    PermissionFlagsBits,
     ButtonBuilder,
     ButtonStyle,
     ActionRowBuilder,

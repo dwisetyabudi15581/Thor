@@ -5,6 +5,16 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 Legend: 🔴 critical · 🟠 high · 🟡 medium · 🟢 improvement
 
+## [3.9.45] — 2026-09-07
+
+### Fixed — 🔴 hotfix: semua command moderasi crash di cek permission pertama ("TypeError: Cannot read properties of undefined (reading 'ManageMessages')")
+
+- 🔴 **Laporan error produksi:** `npm start` → `/purge` → `Interaction Error: TypeError: Cannot read properties of undefined (reading 'ManageMessages') at moderation.js:193` — ranjau yang sama juga terpasang di `/timeout` `/untimeout` `/kick` `/ban`.
+- 🔴 **Root cause:** `src/commands/moderation.js` (baru di v3.9.43) mendestrukturisasi `PermissionFlagsBits` dari `./_shared` — padahal `_shared.js` tidak pernah mengimpor/mengekspornya. Destructuring export yang hilang itu *senyap*: variabelnya hanya menjadi `undefined` saat require, lalu meledak saat cek permission bot pertama membaca `.ManageMessages` / `.ModerateMembers` / `.KickMembers` / `.BanMembers`. Satu bug, enam command mati.
+- 🔴 **Kenapa lolos semua gerbang QC (457 test hijau, ESLint 0):** export yang hilang bukan syntax error dan bukan variabel undefined (binding-nya ada), dan tidak ada unit test yang mengeksekusi path cek permission moderasi dengan grafik modul asli — test kontrak handler-nya statis.
+- 🟢 **Fix (satu baris export):** `_shared.js` kini mengimpor & mengekspor ulang `PermissionFlagsBits` dari discord.js — pola satu pintu `_shared` tetap utuh, keenam command moderasi hidup lagi.
+- 🟢 +2 unit test regression (total **461**, `sharedExports.test.js`): **(A)** `_shared` wajib mengekspor `PermissionFlagsBits` discord.js asli (referensi objek sama + 5 bit yang dipakai moderasi/rekber); **(B)** jaring pengaman kelas bug — semua identifier yang di-destructure dari `require(..._shared)` di mana pun di `src/**` dicocokkan saat test dengan exports runtime, jadi export yang hilang berikutnya gagal di CI, bukan crash di produksi saat user pertama kali menjalankan command-nya.
+
 ## [3.9.44] — 2026-09-06
 
 ### Changed — ✨ user request: "/warn kok masuk kategori Scheduled Announce — tolong baca sync semua fitur & susun ulang /help biar mudah dipahami"
