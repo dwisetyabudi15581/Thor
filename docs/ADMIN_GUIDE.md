@@ -1,4 +1,4 @@
-# 📖 Admin Guide — Thor Bot v3.9.45
+# 📖 Admin Guide — Thor Bot v3.9.46
 
 Panduan lengkap untuk admin server Discord yang menjalankan bot ini — cocok untuk admin baru yang pertama kali setup, maupun admin yang sudah berjalan sebagai referensi harian.
 
@@ -976,10 +976,11 @@ Cooldown bersifat **per-user** — user A memicu tidak memengaruhi user B.
 
 ## 11. Riwayat Versi
 
-Riwayat lengkap semua versi (v3.9.0 – v3.9.45) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
+Riwayat lengkap semua versi (v3.9.0 – v3.9.46) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
 
 Ringkasan 3 versi terbaru:
 
+- **v3.9.46** (2026-09-09) — 🟡 **fix: hint console "Message Content Intent" FALSE ALARM** (laporan produksi: hint muncul saat startup padahal bot online dan intent aktif — bot yang online *membuktikan* intent ON, karena discord.js crash saat login kalau toggle portal OFF): filter hint cuma mengecualikan attachment/sticker/components, jadi pesan yang memang tanpa teks salah didiagnosis — **poll native** (`message.poll`), **pesan GIF picker Tenor** (embed gifv), **pesan sistem** (notifikasi join, pin). Fix: pengecualian dipusatkan di helper yang diekspor `isContentlessByDesign()`; hint kini hanya muncul untuk pesan yang seharusnya ber-teks tapi datang kosong. +3 unit test regression (total **464**).
 - **v3.9.45** (2026-09-07) — 🔴 **hotfix: command moderasi crash di cek permission pertama** (laporan error produksi: `/purge` → `TypeError: Cannot read properties of undefined (reading 'ManageMessages')`): `moderation.js` (v3.9.43) mendestrukturisasi `PermissionFlagsBits` dari `_shared.js` yang tidak pernah mengekspornya — `undefined` *senyap* (export yang hilang tidak error saat require) yang lolos dari 457 test hijau + ESLint bersih. Semua `/purge` `/timeout` `/untimeout` `/kick` `/ban` mati sebelum sempat berbuat apa-apa. Fix: `_shared.js` resmi mengekspor ulang `PermissionFlagsBits`; +2 unit test jaring pengaman (total **461**) yang mencocokkan semua destructure `_shared` di `src/**` saat test — kelas bug ini tidak akan lolos lagi.
 - **v3.9.44** (2026-09-06) — ✨ **redesign total katalog `/help`** (user request: "/warn kok masuk kategori Scheduled Announce — tolong sync semua fitur & susun ulang biar mudah dipahami"): **20 kategori diurut prioritas pemakaian** (Panduan Cepat → Moderasi → Produk → Key → Panel → Kategori → Rekber → Log & Channel → Auto-Mod → dst.); `/warn*` **pindah ke kategori Moderasi** (satu pintu: warn → timeout → kick → ban + purge); kategori baru **🚀 Panduan Cepat** (urutan setup server baru 5 langkah); kategori lama yang amburadul dirapikan ("Scheduled Announce & Warn" → murni Pengumuman Terjadwal; "Announce, Embed & Backup" dipecah jadi Pesan & Embed Builder + Backup & Maintenance; "Stats & Lainnya" → murni Statistik); `/set-channel` yang tadinya tersebar di 3 kategori kini **satu pintu di Log & Channel**; home 🏠 baru dengan seksi "Butuh apa sekarang?"; setiap command diberi penjelasan 1 frasa; seluruh 20 kategori tetap muat di 1 embed Semua Command (5.579 / 5.800 char — tanpa drop); +2 unit test kontrak regression (total **459**).
 - **v3.9.43** (2026-09-06) — 🛡️ **paket moderasi lengkap + server log** (user request: "tambahkan fitur paket moderation lengkap dan log server untuk delete message edit message dan lain lain"): 6 command baru **`/timeout` `/untimeout` `/purge` `/kick` `/ban` `/unban`** (total 88) dengan guard hierarki dua arah (role moderator & bot wajib lebih tinggi dari target, setingkat = tolak), limit Discord dijaga di kedua sisi (timeout maks 28 hari = 40320 menit, purge 1–100 + skip pesan >14 hari limit bulk API, ban hapus pesan 0–7 hari), permission bot dicek awal dgn pesan jelas, DM alasan best-effort, tindakan **tidak dihitung sebagai warn** (modlog = tindakan, warn = pelanggaran — sanksi tidak ganda) tapi tampil di `/warn-list` seksi **Catatan Moderasi**; router kini mengizinkan **moderator non-admin** dengan Discord permission sesuai (least privilege); **Server Log**: event `pesan dihapus` (isi + executor via audit log — termasuk hapus manual dari UI Discord), `pesan diedit` (before/after + link), `purge massal`, `join/leave` (umur akun + kick manual terdeteksi), `ban/unban` manual & via bot, `role/nickname berubah` — dikirim ke channel baru `server-log` (terpisah dari audit-log; `/set-channel tipe:server-log`); intent **GuildBans** diaktifkan (tanpa itu event ban tidak pernah nyala); +21 unit test (moderation.test.js + serverLog.test.js, total 457).
@@ -1012,6 +1013,6 @@ Jika ada masalah yang tidak ada di Troubleshooting:
 
 ---
 
-**Versi dokumen:** v3.9.45
-**Last updated:** 7 September 2026
-**Bot version:** 3.9.45 · 88 slash command · 461 unit test
+**Versi dokumen:** v3.9.46
+**Last updated:** 9 September 2026
+**Bot version:** 3.9.46 · 88 slash command · 464 unit test

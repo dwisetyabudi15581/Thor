@@ -23,6 +23,10 @@ const levelManager = require('../../data/levelManager');
 // Akibatnya: auto-responder, anti-spam, AFK reply gak jalan.
 // Set ini cuma buat nge-warning sekali per server biar console gak kebanjiran.
 //
+// v3.9.46: cuma muncul untuk pesan yang benar-benar mencurigakan — lihat
+// isContentlessByDesign() di bawah. Poll native, GIF Tenor, dan pesan sistem
+// (notifikasi join, pin) dulu bikin FALSE ALARM padahal intent sudah aktif.
+//
 // v3.9.17 FIX: cleanup periodic. Sebelumnya, Set tumbuh terus selama process
 // lifetime (untuk bot yang sering join/leave guild). Sekarang: cleanup tiap
 // 24 jam, hapus guild yang sudah >24 jam tidak terdeteksi lagi.
@@ -52,6 +56,29 @@ function debugLogIntentMissing(message) {
     }
 }
 
+/**
+ * v3.9.46: helper murni — apakah pesan ini memang sah tanpa teks?
+ * Hint intent-missing cuma boleh muncul untuk pesan yang SEHARUSNYA punya
+ * teks tapi datang dengan message.content === "". Sumber false-positive
+ * yang dikecualikan (pesan sah-sahaja tanpa teks kalau berupa):
+ *   - hanya attachment/sticker        (foto, file, stiker)          [sudah ada]
+ *   - components                      (pesan UI bot)               [sudah ada]
+ *   - hanya embeds                    (GIF picker Tenor = embed "gifv", preview link)
+ *   - poll native Discord             (message.poll)
+ *   - pesan sistem                    (notifikasi join, pin, ganti nama channel — message.type !== 0)
+ */
+function isContentlessByDesign(message) {
+    return Boolean(
+        message.attachments?.size ||
+        message.stickers?.size ||
+        message.components?.length ||
+        message.embeds?.length ||
+        message.poll ||
+        message.system ||
+        message.type
+    );
+}
+
 async function onMessageCreate(message) {
     try {
         // v3.9.24 FIX: guard gabungan + filter webhook.
@@ -72,12 +99,13 @@ async function onMessageCreate(message) {
         if (process.env.GUILD_ID && message.guild.id !== process.env.GUILD_ID) return;
 
         // Deteksi kalo Message Content Intent belum di-enable.
-        // Kalo pesan user lain isinya kosong padahal bukan attachment/sticker, kemungkinan besar intent missing.
-        // Skip warning kalau pesan cuma berisi attachment/sticker (memang gak ada content-nya).
-        if (!message.content) {
-            if (!message.attachments?.size && !message.stickers?.size && !message.components?.length) {
-                debugLogIntentMissing(message);
-            }
+        // Pesan user yang datang dengan content kosong DAN bukan "memang tanpa
+        // teks" kemungkinan besar intent missing. v3.9.46: daftar pengecualian
+        // dipusatkan di isContentlessByDesign() — sebelumnya poll native, GIF
+        // Tenor, dan pesan sistem (notifikasi join, pin) bikin FALSE ALARM
+        // padahal intent sudah aktif.
+        if (!message.content && !isContentlessByDesign(message)) {
+            debugLogIntentMissing(message);
         }
 
         // Jalanin 4 hook community. Urutan: automod dulu (kalo pesan ke-delete,
@@ -402,5 +430,6 @@ async function hookLeveling(message) {
 
 module.exports = {
     name: Events.MessageCreate,
-    execute: onMessageCreate
+    execute: onMessageCreate,
+    isContentlessByDesign
 };

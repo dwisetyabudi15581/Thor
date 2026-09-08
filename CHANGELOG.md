@@ -5,6 +5,15 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 Legend: 🔴 critical · 🟠 high · 🟡 medium · 🟢 improvement
 
+## [3.9.46] — 2026-09-09
+
+### Fixed — 🟡 hint console "Message Content Intent" FALSE ALARM padahal intent aktif
+
+- 🟡 **Laporan produksi:** `⚠️ [HINT] Pesan dari thor064747 ... isinya kosong` muncul saat startup padahal bot online dan intent aktif. Bukti intentnya ON: `index.js` meminta `GatewayIntentBits.MessageContent` di payload IDENTIFY — kalau toggle portal OFF, discord.js langsung crash saat login (`Privileged intent provided is not enabled or whitelisted`), jadi bot yang online = intent yang aktif.
+- 🟡 **Root cause:** filter hint hanya mengecualikan attachment/sticker/components. Pesan yang memang tanpa teks lolos dan salah didiagnosis: **poll native Discord** (`message.poll`), **pesan GIF picker Tenor** (embed "gifv" tanpa content), dan **pesan sistem** (notifikasi join, pin — `message.type !== 0`). Satu pesan begitu dari member → admin disuruh "memperbaiki" setting portal yang sebenarnya sudah benar.
+- 🟢 **Fix:** daftar pengecualian dipusatkan di helper murni yang diekspor `isContentlessByDesign(message)` (attachment, sticker, components, embeds, poll, system, type non-DEFAULT). Hint kini hanya muncul untuk pesan yang seharusnya ber-teks tapi datang kosong — masalah intent yang beneran.
+- 🟢 +3 unit test regression (total **464**, `messageContentHint.test.js`): cek murni helper untuk 7 sumber; end-to-end `execute()` dengan `console.warn` di-stub (poll/gif/sistem/attachment → 0 warning); dan kontrak lama tetap — pesan polos kosong tetap memperingatkan tepat sekali per guild per 24 jam.
+
 ## [3.9.45] — 2026-09-07
 
 ### Fixed — 🔴 hotfix: semua command moderasi crash di cek permission pertama ("TypeError: Cannot read properties of undefined (reading 'ManageMessages')")
