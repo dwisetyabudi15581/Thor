@@ -604,7 +604,11 @@ module.exports = async function (interaction) {
                             `• Goodbye: ${fmt(config.channels.goodbye, '#')}`,
                             `• Invoice: ${fmt(config.channels.invoice, '#')}`,
                             `• Audit Log: ${fmt(config.channels['audit-log'], '#')}`,
-                            `• Transcript Tiket: ${fmt(config.channels.transcript, '#')}`
+                            `• Transcript Tiket: ${fmt(config.channels.transcript, '#')}`,
+                            // v3.9.49: server-log hilang dari tampilan ini sejak
+                            // v3.9.43 (bisa di-set tapi tak terlihat) + channel booster baru.
+                            `• Server Log: ${fmt(config.channels['server-log'], '#')}`,
+                            `• Server Booster: ${fmt(config.channels['server-booster'], '#')}`
                         ].join('\n')
                     ),
                     inline: false

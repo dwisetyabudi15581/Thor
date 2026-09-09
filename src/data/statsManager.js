@@ -356,7 +356,21 @@ function parsePrice(priceStr) {
     if (!priceStr) return 0;
     let s = String(priceStr).toLowerCase().replace(/rp\.?/g, '').replace(/\s/g, '');
     let multiplier = 1;
-    if (s.endsWith('k')) {
+    // v3.9.49 FIX (laporan user: "total revenue gak ke update"): suffix Indonesia
+    // dulu salah parse SENYAP — "25rb" menyisakan 'rb' di ekor, parseFloat cuma
+    // mengambil angka di depan → tercatat 25 bukannya 25.000, jadi tiap penjualan
+    // hanya menambah jumlah nyaris tak terlihat ke revenue.
+    // Urutan penting: 'juta' sebelum 'jt' (yang terpanjang duluan).
+    if (s.endsWith('juta')) {
+        multiplier = 1000000;
+        s = s.slice(0, -4);
+    } else if (s.endsWith('jt')) {
+        multiplier = 1000000;
+        s = s.slice(0, -2);
+    } else if (s.endsWith('rb')) {
+        multiplier = 1000;
+        s = s.slice(0, -2);
+    } else if (s.endsWith('k')) {
         multiplier = 1000;
         s = s.slice(0, -1);
     } else if (s.endsWith('m')) {

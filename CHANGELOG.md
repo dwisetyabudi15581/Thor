@@ -5,6 +5,26 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 Legend: 🔴 critical · 🟠 high · 🟡 medium · 🟢 improvement
 
+## [3.9.49] — 2026-09-10
+
+### Added — ✨ permintaan user: "server booster — biar tau siapa yang boost + dikirim ke channel server booster"
+
+**Fitur Server Booster (baru):**
+
+- 🟢 **Deteksi boost tambah/hilang:** Discord TIDAK punya event boost khusus — bot menurunkannya dari diff `premium_since` di `guildMemberUpdate` (null → tanggal = boost baru, tanggal → null = boost berakhir). Tiap boost mengirim embed perayaan pink (`🚀 BOOST SERVER BARU!` + mention + tanggal mulai + level server) dan tiap berhenti embed abu-abu (`💔 BOOST BERAKHIR`) ke **channel server-booster** — atur dengan `/set-channel tipe:server-booster #channel`.
+- 🟢 **BARU `/boosters`** (total 90 command, public): daftar booster live langsung dari Discord (fetch roster lengkap — pendukung paling awal duluan, bot dikecualikan, tiap nama dengan tanggal boost-nya) + level & jumlah boost server + seksi terlacak "Aktivitas Boost Terbaru". Ada empty state ("belum punya booster aktif 🌱").
+- 🟢 **`boostManager` (boosts.json):** riwayat booster persisten per user (streak saat ini, `totalBoosts` sepanjang waktu, event terakhir) — tahu siapa yang boost tetap awet melewati restart; **catch-up offline**: saat startup state live direkonsiliasi dengan riwayat (roster member di-fetch dulu), dan perubahan yang terlewat diumumkan dalam SATU embed catch-up gabungan (anti spam) + tercatat di server log (tipe event `BOOST_ADD` / `BOOST_REMOVE`) walau channel server-booster belum di-set.
+- 🟢 Event boost juga masuk **server log** (independen dari channel booster) + `boosts.json` kini di-backup `/backup-now` & bisa di-restore.
+- 🟢 Pola diagnosabilitas v3.9.48 diperluas: channel server-booster belum di-set / terhapus → warning console dengan perintah solusi persis; gagal kirim menyebut channel + permission yang dicek; cek startup `ready.js` kini mencakup `server-booster` bersama welcome/goodbye.
+
+### Fixed — 🐛 laporan user: "stats server masih belum sesuai — total revenue gak ke update, member tracked vs member live: kalau fungsinya sama bikin satu aja"
+
+- 🔴 **Total revenue nyaris tak bergerak — suffix harga Indonesia salah parse SENYAP:** `25rb` tercatat **Rp 25** bukannya **Rp 25.000** (si 'rb' di ekor tidak pernah di-strip, parseFloat cuma ambil angka depan) — tiap penjualan hanya menambah jumlah nyaris tak terlihat, jadi revenue terlihat beku. `parsePrice` (toko/tiket) dan `parsePriceNumber` (deal rekber) kini paham `rb`/`jt`/`juta` (`25rb` → 25.000, `2jt`/`2juta` → 2.000.000, `Rp 25 rb` → 25.000), suffix terpanjang duluan; format lama tidak berubah, dan ketatnya rekber tetap (suffix + pemisah seperti `1.5rb` tetap ditolak — guard harga 10x).
+- 🟡 **Harga produk tidak pernah divalidasi:** `/add-product harga:murah` dulu diterima senyap, dan tiap penjualan berikutnya mencatat Rp 0 ke stats/leaderboard. `/add-product` dan `/update-product` kini menolak harga yang tak terparse beserta daftar format yang diterima, dan konfirmasi tambah menampilkan bagaimana harga dihitung (`💰 Tercatat di stats: Rp 25.000 per penjualan`) — salah format kelihatan saat setup, bukan setelah N penjualan tak terlihat.
+- 🟢 **Satu field member, bukan dua:** "Member (live)" + "Member Terlacak" digabung jadi satu `👥 Member` (jumlah live dari Discord), dan "Rata-rata Pesan/Member" kini dibagi jumlah LIVE supaya angkanya cocok dengan yang embed tampilkan. Footer menjelaskan apa yang dihitung revenue (penjualan tiket + rekber).
+- 🟢 `/config-show` seksi Channels: **server-log hilang sejak v3.9.43** (bisa di-set tapi tak terlihat) — kini tampil, bersama channel server-booster yang baru.
+- 🟢 +15 unit test (total 518): `boosters.test.js` (11 — state boostManager/idempoten/rekonsiliasi dua arah, builder embed murni, event live end-to-end add/remove/senyap, warning channel-belum-di-set beserta perintah solusi, command `/boosters` end-to-end termasuk sorting/bot/empty state, kontrak registry + router + PUBLIC + server-log + help-catalog + backup) + kasus `parsePrice` rb/jt/juta dengan skenario laporan user + guard no-regression + ketatnya midman; statsDisplay diperbarui untuk field member yang digabung.
+
 ## [3.9.48] — 2026-09-09
 
 ### Changed — 🐛 laporan user: "ada bug — Welcome tidak muncul"

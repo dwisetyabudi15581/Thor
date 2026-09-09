@@ -38,7 +38,11 @@ const SERVER_LOG_EVENTS = {
     BAN_ADD: { color: 0xed4245, title: '🔨 Member Di-ban' },
     BAN_REMOVE: { color: 0x57f287, title: '♻️ Ban Dicabut' },
     ROLE_UPDATE: { color: 0xfee75c, title: '🎭 Role Member Berubah' },
-    NICK_UPDATE: { color: 0x992d22, title: '📝 Nickname Berubah' }
+    NICK_UPDATE: { color: 0x992d22, title: '📝 Nickname Berubah' },
+    // v3.9.49: boost server tambah/hilang (dideteksi via diff premium_since di
+    // guildMemberUpdate — tetap dicatat walau channel server-booster belum di-set).
+    BOOST_ADD: { color: 0xf472b6, title: '🚀 Boost Dimulai' },
+    BOOST_REMOVE: { color: 0x95a5a6, title: '💔 Boost Berakhir' }
 };
 
 /**

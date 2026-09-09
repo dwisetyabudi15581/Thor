@@ -72,7 +72,7 @@ function getCommands() {
         // supaya admin cuma hafal SATU command channel.
         {
             name: 'set-channel',
-            description: 'Atur channel (invoice / welcome / goodbye / audit-log / server-log / transcript)',
+            description: 'Atur channel (invoice / welcome / goodbye / audit-log / server-log / transcript / server-booster)',
             defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
             options: [
                 {
@@ -86,6 +86,7 @@ function getCommands() {
                         { name: 'Goodbye', value: 'goodbye' },
                         { name: 'Audit Log (catat admin action)', value: 'audit-log' },
                         { name: 'Server Log (pesan hapus/edit, join/leave, ban)', value: 'server-log' },
+                        { name: 'Server Booster (notifikasi boost)', value: 'server-booster' },
                         { name: 'Transcript Tiket (auto-save saat close)', value: 'transcript' }
                     ]
                 },
@@ -613,6 +614,7 @@ function getCommands() {
                         { name: 'Goodbye', value: 'goodbye' },
                         { name: 'Audit Log', value: 'audit-log' },
                         { name: 'Server Log', value: 'server-log' },
+                        { name: 'Server Booster', value: 'server-booster' },
                         { name: 'Transcript Tiket', value: 'transcript' }
                     ]
                 }
@@ -1131,6 +1133,12 @@ function getCommands() {
         {
             name: 'my-stats',
             description: 'Lihat statistik pribadi kamu (public — boleh dipakai member biasa)'
+        },
+        // v3.9.49: daftar server booster — siapa yang boost sekarang (live dari
+        // Discord) + riwayat boost/berhenti terbaru (terlacak di boosts.json).
+        {
+            name: 'boosters',
+            description: 'Daftar server booster saat ini + riwayat boost terbaru (public)'
         },
 
         // === POLL SYSTEM ===

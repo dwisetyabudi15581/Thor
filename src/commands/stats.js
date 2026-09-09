@@ -19,6 +19,15 @@
  * mencatat join sejak v3.2 — member lama tampil "belum tercatat" padahal
  * Discord tahu tanggal gabungnya).
  *
+ * v3.9.49 (laporan user: "member tracked & member live — kalau fungsinya sama
+ * bikin satu aja"): field member DOBEL dihapus — SATU field "Member" (jumlah
+ * live langsung dari Discord). "Rata-rata Pesan/Member" kini dibagi jumlah
+ * member LIVE juga, jadi angkanya konsisten dengan yang embed tampilkan.
+ * v3.9.49 juga membenahi KENAPA "total revenue gak ke update": suffix harga
+ * Indonesia ("25rb"/"2jt") salah parse jadi jumlah nyaris nol, dan harga
+ * produk tak terparse dulu diterima senyap (lihat products.js +
+ * statsManager.parsePrice).
+ *
  * Catatan: permission check untuk /leaderboard & /my-stats (public command)
  *          ada di router (src/commands/index.js). Domain file ini tidak perlu
  *          repeat check tersebut.
@@ -35,6 +44,11 @@ const {
 
 // v3.9.47: penghitung "tiket terbuka" live untuk overview /stats.
 const { getActiveTicketCount } = require('../data/ticketManager');
+
+// v3.9.49: /boosters — daftar booster live + riwayat terlacak. Embed dibangun
+// di boostHandler (satu sumber kebenaran — builder yang sama dengan event live).
+const { buildBoostersEmbed } = require('../bot/boostHandler');
+const { getRecentEvents: getRecentBoostEvents } = require('../data/boostManager');
 
 module.exports = async function (interaction) {
     // ====================================================
@@ -62,29 +76,56 @@ module.exports = async function (interaction) {
             .setColor(0x5865f2)
             .addFields(
                 // Baris 1 — data live (bisa diverifikasi ke Discord kapan saja)
-                { name: '👥 Member (live)', value: `${liveMembers}`, inline: true },
+                { name: '👥 Member', value: `${liveMembers}`, inline: true },
                 { name: '🎫 Tiket Terbuka', value: `${activeTickets}`, inline: true },
                 { name: '🚀 Boost Server', value: boostText, inline: true },
                 // Baris 2 — aktivitas terlacak (dari stats.json, sejak v3.2)
                 { name: '💬 Total Pesan Terlacak', value: `${stats.totalMessages.toLocaleString('id-ID')}`, inline: true },
-                { name: '👤 Member Terlacak', value: `${stats.totalUsers}`, inline: true },
                 {
                     name: '📈 Rata-rata Pesan/Member',
-                    value: stats.totalUsers > 0 ? `${Math.round(stats.totalMessages / stats.totalUsers)}` : '0',
+                    value: liveMembers > 0 ? `${Math.round(stats.totalMessages / liveMembers)}` : '0',
                     inline: true
                 },
+                { name: '🎁 Total Giveaway Won', value: `${stats.totalGiveawaysWon}`, inline: true },
                 // Baris 3 — transaksi terlacak (order tiket + deal rekber)
                 { name: '🛒 Total Transaksi', value: `${stats.totalPurchases}`, inline: true },
-                { name: '💰 Total Revenue', value: `Rp ${stats.totalRevenue.toLocaleString('id-ID')}`, inline: true },
-                { name: '🎁 Total Giveaway Won', value: `${stats.totalGiveawaysWon}`, inline: true }
+                { name: '💰 Total Revenue', value: `Rp ${stats.totalRevenue.toLocaleString('id-ID')}`, inline: true }
             )
             .setFooter({
-                text: 'Member/boost/tiket = live dari Discord • pesan & transaksi terlacak sejak v3.2'
+                text: 'Member/boost/tiket = live dari Discord • pesan & transaksi terlacak sejak v3.2 • revenue = penjualan tiket + rekber'
             })
             .setTimestamp();
         // v3.9.47: ikon server kalau ada (null-safe).
         const icon = typeof guild.iconURL === 'function' ? guild.iconURL() : null;
         if (icon) embed.setThumbnail(icon);
+        return safeEditReply(interaction, { embeds: [embed] });
+    }
+
+    // ====================================================
+    // === /boosters (v3.9.49) ===
+    // ====================================================
+    if (interaction.commandName === 'boosters') {
+        await interaction.deferReply();
+        const guild = interaction.guild;
+
+        // Fetch daftar member lengkap supaya premiumSinceTimestamp akurat untuk
+        // SEMUA member (cache hanya menyimpan member yang bot lihat sejak restart
+        // terakhir). Intent GuildMembers wajib — bot yang online membuktikan
+        // intent itu nyala. Fallback: cache (dengan warning di console).
+        try {
+            await guild.members.fetch();
+        } catch (err) {
+            console.warn(
+                `⚠️ /boosters: gagal fetch daftar member lengkap (${err.message}) — memakai cache memori sebagai gantinya.`
+            );
+        }
+
+        const boosters = [...guild.members.cache.values()]
+            .filter(m => !m.user?.bot && m.premiumSinceTimestamp)
+            .sort((a, b) => (a.premiumSinceTimestamp || 0) - (b.premiumSinceTimestamp || 0));
+
+        const recent = getRecentBoostEvents(guild.id, 5);
+        const embed = buildBoostersEmbed(guild, boosters, recent);
         return safeEditReply(interaction, { embeds: [embed] });
     }
 

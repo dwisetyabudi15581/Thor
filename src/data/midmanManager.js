@@ -316,7 +316,8 @@ function calcTotals(priceNum, fee) {
 
 /**
  * Parse harga dari input modal. Terima: "100000", "100.000", "100,000",
- * "100k", "1m", "Rp100.000". Return 0 kalau invalid.
+ * "100k", "1m", "Rp100.000" + v3.9.49 suffix Indonesia "25rb", "2jt",
+ * "2juta". Return 0 kalau invalid.
  *
  * v3.9.38 FIX: desimal tidak lagi "lolos" jadi digit ekstra (bug 10x harga).
  *   - Dengan suffix k/m: sisa input TIDAK BOLEH mengandung `.`/`,` ("1.5m"
@@ -335,13 +336,27 @@ function parsePriceNumber(input) {
         .replace(/rp\.?/g, '')
         .replace(/\s/g, '');
     let multiplier = 1;
-    const hasSuffix = s.endsWith('k') || s.endsWith('m');
-    if (s.endsWith('k')) {
+    // v3.9.49: suffix Indonesia (terpanjang duluan supaya 'juta' menang atas 'jt').
+    // Sebelumnya "25rb"/"2jt" → 0 (pembuatan deal ditolak dengan error "harga
+    // invalid" yang membingungkan, sementara parsePrice sisi TOKO juga tak paham).
+    let hasSuffix = true;
+    if (s.endsWith('juta')) {
+        multiplier = 1000000;
+        s = s.slice(0, -4);
+    } else if (s.endsWith('jt')) {
+        multiplier = 1000000;
+        s = s.slice(0, -2);
+    } else if (s.endsWith('rb')) {
+        multiplier = 1000;
+        s = s.slice(0, -2);
+    } else if (s.endsWith('k')) {
         multiplier = 1000;
         s = s.slice(0, -1);
     } else if (s.endsWith('m')) {
         multiplier = 1000000;
         s = s.slice(0, -1);
+    } else {
+        hasSuffix = false;
     }
     // v3.9.38 FIX: validasi pemisah SEBELUM strip — lihat JSDoc di atas.
     if (/[.,]/.test(s)) {

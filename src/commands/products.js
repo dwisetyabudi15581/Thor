@@ -7,7 +7,26 @@
  * Behavior: kelola produk + auto-role mapping per produk.
  */
 
-const { MessageFlags, getConfig, saveConfig, Embeds, logAudit, safeEditReply } = require('./_shared');
+const { MessageFlags, getConfig, saveConfig, Embeds, logAudit, safeEditReply, parsePriceNum } = require('./_shared');
+
+/**
+ * v3.9.49 (laporan user: "total revenue gak ke update"): validasi harga produk
+ * SEBELUM disimpan. String harga yang tidak bisa diparse bot (mis. "murah",
+ * "negosiasi", "25rb2") dulu diterima senyap — tiap penjualan berikutnya lalu
+ * mencatat parsePrice(harga) = Rp 0 ke stats/leaderboard, dan revenue tidak
+ * pernah bergerak. Return null kalau valid (harga gratis "0"/"free"/"gratis"
+ * diperbolehkan), atau pesan error kalau invalid.
+ */
+function priceValidationError(price) {
+    const raw = String(price || '').trim();
+    const FREE = ['0', 'free', 'gratis'];
+    if (FREE.includes(raw.toLowerCase())) return null; // memang gratis — OK
+    if (parsePriceNum(raw) > 0) return null; // terparse jadi jumlah positif — OK
+    return (
+        `❌ Harga \`${raw}\` tidak bisa dibaca sebagai angka — nanti akan tercatat **Rp 0** di stats/revenue setiap penjualan.\n` +
+        `✅ Format yang diterima: \`25000\` · \`25.000\` · \`Rp 25.000\` · \`25rb\` · \`25k\` · \`2jt\` · \`2juta\` · \`gratis\``
+    );
+}
 
 module.exports = async function (interaction) {
     const embeds = new Embeds(interaction.client);
@@ -38,6 +57,10 @@ module.exports = async function (interaction) {
         // defensif, simpanan config juga biar rapi.
         const safeLabel = label.slice(0, 80);
         const safePrice = price.slice(0, 100);
+
+        // v3.9.49 FIX: tolak harga yang akan mencatat revenue Rp 0 senyap.
+        const priceErr = priceValidationError(safePrice);
+        if (priceErr) return safeEditReply(interaction, { content: priceErr });
 
         if (config.products.some(p => p.value === value)) {
             return safeEditReply(interaction, { content: `❌ Produk dengan value \`${value}\` sudah ada.` });
@@ -86,8 +109,15 @@ module.exports = async function (interaction) {
             details: `Tambah produk: **${label}** (\`${value}\`) — ${price}${durationInfo}${catInfo}`,
             guildId: interaction.guild.id
         });
+        // v3.9.49: tampilkan bagaimana harga akan dihitung di revenue /stats — jadi
+        // salah format kelihatan saat setup, bukan setelah N penjualan tak terlihat.
+        const priceNum = parsePriceNum(safePrice);
+        const revenueNote =
+            priceNum > 0
+                ? `\n💰 Tercatat di stats: **Rp ${priceNum.toLocaleString('id-ID')}** per penjualan (transaksi tiket + rekber)`
+                : '';
         return safeEditReply(interaction, {
-            content: `✅ Produk ditambahkan: **${label}** — ${price}${durationInfo}\n📦 Kategori: \`${finalCategory}\` | 🔑 Requires Key: ${finalRequiresKey ? 'Yes' : 'No'}`
+            content: `✅ Produk ditambahkan: **${label}** — ${price}${durationInfo}${revenueNote}\n📦 Kategori: \`${finalCategory}\` | 🔑 Requires Key: ${finalRequiresKey ? 'Yes' : 'No'}`
         });
     }
 
@@ -259,6 +289,9 @@ module.exports = async function (interaction) {
             changes.push(`label: \`${before.label}\` → \`${product.label}\``);
         }
         if (newPrice !== null) {
+            // v3.9.49 FIX: guard yang sama dengan /add-product — tolak harga tak terparse.
+            const priceErr = priceValidationError(newPrice);
+            if (priceErr) return safeEditReply(interaction, { content: priceErr });
             product.price = newPrice;
             changes.push(`price: \`${before.price}\` → \`${newPrice}\``);
         }

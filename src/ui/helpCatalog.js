@@ -172,7 +172,7 @@ const HELP_CATEGORIES = [
         lines: [
             '• `/set-channel server-log #ch` — log pesan hapus/edit, join/leave, ban',
             '• `audit-log #ch` — aksi admin · `transcript #ch` — arsip tiket',
-            '• `/set-channel welcome/goodbye/invoice #ch` — sambutan & invoice',
+            '• `/set-channel welcome/goodbye/invoice/server-booster #ch`',
             '• `/test-welcome` — diagnosis kenapa welcome tidak muncul + preview',
             '• `/remove-channel tipe` — matikan salah satu',
             'ℹ️ Tanpa `server-log`, event server tidak dicatat.'
@@ -197,7 +197,7 @@ const HELP_CATEGORIES = [
         name: 'Auto-Responder',
         short: 'Auto-reply FAQ saat pesan mengandung trigger',
         lines: [
-            '• `/add-responder trigger:beli reply:...` — auto-reply ke pesan apa pun yang mengandung kata "beli"',
+            '• `/add-responder trigger:beli reply:...` — auto-reply ke pesan yang mengandung "beli"',
             '• `match_mode:contains|exact` — kata di mana saja, atau awal pesan saja',
             '• `/list-responder` · `/remove-responder` — lihat & hapus'
         ]
@@ -293,9 +293,10 @@ const HELP_CATEGORIES = [
         id: 'stats',
         emoji: '📈',
         name: 'Statistik',
-        short: 'Statistik live server, leaderboard, statistik pribadi',
+        short: 'Statistik live server, booster, leaderboard',
         lines: [
-            '• `/stats` — statistik live (member, boost, tiket) + aktivitas terlacak',
+            '• `/stats` — statistik live + aktivitas terlacak',
+            '• `/boosters` — siapa yang boost sekarang + riwayat boost',
             '• `/leaderboard metric:messages|vipPurchases|totalSpent` — peringkat',
             '• `/my-stats` — pesan, transaksi, kemenangan & tanggal gabung kamu'
         ]

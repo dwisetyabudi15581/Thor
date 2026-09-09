@@ -187,6 +187,8 @@ const COMMAND_TO_DOMAIN = {
     stats: 'stats',
     leaderboard: 'stats',
     'my-stats': 'stats',
+    // v3.9.49: daftar server booster (live + riwayat)
+    boosters: 'stats',
 
     // poll
     poll: 'poll',
@@ -253,7 +255,7 @@ const COMMAND_TO_DOMAIN = {
 
 // Command yang boleh dipakai member biasa (bukan admin).
 // v3.9.13: tambah afk, afk-clear, rank, leaderboard-level (public community features)
-const PUBLIC_COMMANDS = ['leaderboard', 'my-stats', 'afk', 'afk-clear', 'rank', 'leaderboard-level'];
+const PUBLIC_COMMANDS = ['leaderboard', 'my-stats', 'boosters', 'afk', 'afk-clear', 'rank', 'leaderboard-level'];
 
 // v3.9.43: command moderasi — boleh dipakai moderator non-admin selama punya
 // Discord permission yang sesuai (role hierarchy tetap dicek di handler).
@@ -314,5 +316,7 @@ async function routeCommand(interaction) {
 // persis kejadian pada /update-category & /update-product sebelum fix ini).
 routeCommand.COMMAND_TO_DOMAIN = COMMAND_TO_DOMAIN;
 routeCommand.DOMAIN_HANDLERS = DOMAIN_HANDLERS;
+// v3.9.49: diekspor untuk test kontrak (daftar public command harus sinkron).
+routeCommand.PUBLIC_COMMANDS = PUBLIC_COMMANDS;
 
 module.exports = routeCommand;

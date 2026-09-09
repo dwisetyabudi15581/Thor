@@ -417,7 +417,10 @@ test('kontrak router: test-welcome diarahkan ke domain config', () => {
 test('kontrak ready.js: startup bicara saat channel welcome belum dikonfigurasi', () => {
     const src = fs.readFileSync(path.join(__dirname, '..', '..', 'src', 'bot', 'events', 'ready.js'), 'utf8');
     // Cek startup harus mencakup KEDUA key dan menyebut perintah solusinya.
-    assert.ok(src.includes("'welcome'"), 'welcome dicek saat startup');
-    assert.ok(src.includes("'goodbye'"), 'goodbye dicek saat startup');
+    // v3.9.49: key pindah ke CHANNEL_LABELS (object key tanpa kutip) + channel
+    // server-booster ikut dicek dengan pola yang sama.
+    assert.match(src, /welcome:\s*'pesan welcome'/, 'welcome dicek saat startup');
+    assert.match(src, /goodbye:\s*'pesan goodbye'/, 'goodbye dicek saat startup');
+    assert.match(src, /'server-booster':\s*'notifikasi boost'/, 'server-booster dicek saat startup (v3.9.49)');
     assert.match(src, /\/set-channel \$\{key\} #channel/);
 });

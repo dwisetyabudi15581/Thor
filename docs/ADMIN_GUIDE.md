@@ -1,4 +1,4 @@
-# 📖 Admin Guide — Thor Bot v3.9.48
+# 📖 Admin Guide — Thor Bot v3.9.49
 
 Panduan lengkap untuk admin server Discord yang menjalankan bot ini — cocok untuk admin baru yang pertama kali setup, maupun admin yang sudah berjalan sebagai referensi harian.
 
@@ -47,7 +47,7 @@ npm start
 
 - Console menampilkan: `✅ Bot online sebagai NamaBot`
 - Console menampilkan: `✅ Slash Commands terdaftar ke guild: Nama Server (instan!)`
-- Di Discord, ketik `/` — semua **89 slash command** harus muncul
+- Di Discord, ketik `/` — semua **90 slash command** harus muncul
 - Jika command tidak muncul, pastikan `GUILD_ID` di `.env` benar
 
 > 💡 **Lupa command apa namanya?** Ketik `/help` — sejak v3.9.39 ini **navigator interaktif** (bukan lagi satu embed panjang yang harus di-scroll), dan sejak **v3.9.44** katalognya disusun ulang jadi **20 kategori diurut prioritas pemakaian**: 🏠 home kini membuka dengan seksi **"Butuh apa sekarang?"** (member nakal? → Moderasi · mau jualan? → Panduan Cepat · mau pantau? → Log & Channel · server sepi? → Giveaway & Leveling), 📂 **dropdown kategori** untuk melompat (kategori **🚀 Panduan Cepat** berisi urutan setup server baru 5 langkah), 🔍 **Cari Command** untuk kata kunci bebas (`key`, `panel`, `warn`...), atau langsung `/help search:<kata kunci>`. Semua navigasi terjadi di satu pesan ephemeral — tidak memenuhi channel.
@@ -81,6 +81,7 @@ Urutan berikut adalah **rekomendasi** untuk server baru. Lewati langkah yang sud
 /set-channel invoice #testimoni
 /set-channel audit-log #audit-log
 /set-channel transcript #transcript
+/set-channel server-booster #booster
 ```
 
 **Penjelasan:**
@@ -90,6 +91,7 @@ Urutan berikut adalah **rekomendasi** untuk server baru. Lewati langkah yang sud
 - `invoice` — channel testimoni transaksi (otomatis terisi setiap Set Key / Kirim Pesanan / Pesanan Sukses — **sekali per tiket**, tidak dobel)
 - `audit-log` — channel tempat bot mencatat SEMUA admin action (63 action types; dikirim ulang 1x otomatis bila gagal karena rate limit/network)
 - `transcript` — channel arsip transcript tiket (chat history tersimpan otomatis setiap tiket di-close)
+- `server-booster` — (v3.9.49, opsional) channel notifikasi boost: embed pink `🚀 BOOST SERVER BARU!` saat member mulai boost, abu-abu `💔 BOOST BERAKHIR` saat berhenti, plus SATU embed catch-up gabungan saat startup untuk perubahan yang terjadi saat bot offline. Boost juga SELALU tercatat di **server log**. Tanpa channel ini `/boosters` tetap jalan — hanya notifikasinya yang mati.
 
 > 💡 Sejak v3.9.30 semua channel diatur lewat **satu command** `/set-channel` — termasuk transcript (dulu command terpisah `/set-transcript-channel`). Hapus dengan `/remove-channel <tipe>`.
 
@@ -879,6 +881,13 @@ Menampilkan semua backup, termasuk safety backup `pre-restore_*` (jika pernah re
 
 Bot membutuhkan akses ke `message.content`. Tanpa intent itu, Discord mengirim content sebagai **string kosong** → trigger tidak pernah match.
 
+### Total revenue tidak bergerak saat jualan (v3.9.49 membenahi penyebabnya)
+
+- **Suffix harga Indonesia kini diparse benar:** `25rb` = Rp 25.000, `2jt` / `2juta` = Rp 2.000.000 — sebelum v3.9.49, `25rb` hanya tercatat Rp 25 per penjualan (revenue terlihat beku).
+- **`/add-product` kini menolak harga yang tak terparse** (mis. `murah`, `negosiasi`) beserta daftar format yang diterima, dan menampilkan `💰 Tercatat di stats: Rp 25.000 per penjualan` di konfirmasi — format buruk tidak bisa lagi mencatat Rp 0 senyap.
+- Cek produk yang ada dengan `/list-products` — perbaiki harga yang formatnya buruk lewat `/update-product value:... price:25.000`.
+- Revenue menghitung **order tiket + penyelesaian rekber** (harga + fee) yang diproses lewat bot. Penjualan manual di luar tiket/deal tidak terlacak — itulah satu-satunya celah tersisa yang bisa bikin angkanya "tidak cocok" dengan catatanmu.
+
 **Cara fix:**
 
 1. Buka https://discord.com/developers/applications
@@ -988,10 +997,11 @@ Cooldown bersifat **per-user** — user A memicu tidak memengaruhi user B.
 
 ## 11. Riwayat Versi
 
-Riwayat lengkap semua versi (v3.9.0 – v3.9.48) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
+Riwayat lengkap semua versi (v3.9.0 – v3.9.49) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
 
 Ringkasan 3 versi terbaru:
 
+- **v3.9.49** (2026-09-10) — ✨ **permintaan user: fitur Server Booster** + 🐛 **laporan user: "stats server masih belum sesuai — revenue gak ke update, member tracked vs member live"**. Booster: tambah/hilangnya boost dideteksi dari diff `premium_since` di `guildMemberUpdate` (Discord tak punya event boost khusus) → embed pink `🚀 BOOST SERVER BARU!` / abu-abu `💔 BOOST BERAKHIR` ke **channel server-booster** baru (`/set-channel tipe:server-booster`), selalu tercatat di server log, riwayat persisten di `boosts.json` (di-backup & bisa di-restore), **catch-up offline** dalam satu embed gabungan saat startup, dan command publik baru **`/boosters`** (total 90) berisi daftar live (pendukung terawal duluan) + riwayat boost terbaru. Fix stats: 🔴 suffix harga Indonesia salah parse senyap — `25rb` tercatat **Rp 25** per penjualan bukannya Rp 25.000 (revenue terlihat beku) — kedua parser harga kini paham `rb`/`jt`/`juta`; `/add-product` & `/update-product` kini **menolak harga tak terparse** dan menampilkan jumlah yang dihitung per penjualan; field dobel "Member (live)" + "Member Terlacak" digabung jadi **satu `👥 Member`** (jumlah live, rata-rata dibagi jumlah itu); `/config-show` kini menampilkan channel server-log (hilang sejak v3.9.43) + channel booster baru. +15 unit test (total **518**).
 - **v3.9.48** (2026-09-09) — 🐛 **laporan user: "ada bug — Welcome tidak muncul"**. Investigasi: jalur kode welcome terbukti JALAN (simulasi end-to-end dengan modul asli — join → role unverified + embed + server log, leave → embed goodbye); bug sebenarnya adalah **diagnosabilitas**: saat channel welcome/goodbye belum di-set / terhapus / ID dari server lain, bot TIDAK mengeluarkan log apa pun saat startup MAUPUN saat member beneran join. Fix: setiap skip kini meninggalkan log penyebab + perintah solusi; **BARU `/test-welcome`** (89 command) diagnosis seluruh rantai (config → channel ada → permission bot) + kirim **preview langsung** dibangun builder yang sama dengan event asli; startup memvalidasi konfigurasi; join dari guild lain (GUILD_ID beda) kini kelihatan. +17 unit test (total **503**).
 - **v3.9.47** (2026-09-09) — ✨ **permintaan user: match mode auto-responder + statistik akurat**. Auto-responder: trigger dulu hanya aktif di AWAL pesan — trigger `beli` tidak pernah cocok dengan "bagaimana cara beli". Sekarang tiap responder punya match mode (opsi baru `/add-responder match_mode`): **contains** (default, juga untuk entri lama — trigger cocok sebagai KATA UTUH di mana saja dalam pesan: `beli` menjawab "bagaimana cara beli"/"mau beli?" tapi TIDAK "belian"/"membeli") atau **exact** (perilaku awal-pesan yang lama). Bonus: responder yang cooldown tidak lagi membatalkan scan — trigger kedua yang overlap tetap bisa membalas. Statistik (laporan user: "stats-nya gak sesuai"): `/stats` kini memimpin dengan data LIVE dari Discord (jumlah member asli, tier+jumlah boost, tiket terbuka) disusul aktivitas terlacak berlabel jelas; "Pembelian VIP" di-rename jadi **Transaksi** (dihitung order tiket + deal rekber); `/my-stats` menampilkan tanggal gabung ASLI dari objek member, bukan "belum tercatat" untuk member pra-v3.2. +22 unit test (total **486**).
 - **v3.9.46** (2026-09-09) — 🟡 **fix: hint console "Message Content Intent" FALSE ALARM** (laporan produksi: hint muncul saat startup padahal bot online dan intent aktif — bot yang online *membuktikan* intent ON, karena discord.js crash saat login kalau toggle portal OFF): filter hint cuma mengecualikan attachment/sticker/components, jadi pesan yang memang tanpa teks salah didiagnosis — **poll native** (`message.poll`), **pesan GIF picker Tenor** (embed gifv), **pesan sistem** (notifikasi join, pin). Fix: pengecualian dipusatkan di helper yang diekspor `isContentlessByDesign()`; hint kini hanya muncul untuk pesan yang seharusnya ber-teks tapi datang kosong. +3 unit test regression (total **464**).
@@ -1027,6 +1037,6 @@ Jika ada masalah yang tidak ada di Troubleshooting:
 
 ---
 
-**Versi dokumen:** v3.9.48
-**Last updated:** 9 September 2026
-**Bot version:** 3.9.48 · 89 slash command · 503 unit test
+**Versi dokumen:** v3.9.49
+**Last updated:** 10 September 2026
+**Bot version:** 3.9.49 · 90 slash command · 518 unit test

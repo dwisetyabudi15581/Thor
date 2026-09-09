@@ -1,16 +1,16 @@
 /**
- * Unit test v3.9.47 — akurasi tampilan /stats & /my-stats.
+ * Unit tests for v3.9.47 — /stats & /my-stats display accuracy.
  *
- * Laporan user: "stats-nya gak sesuai". Akar masalah yang diperbaiki v3.9.47:
- *   1. /stats menampilkan "Total Member Tracked" (entri stats.json) — BUKAN
- *      jumlah member asli, dan gak ada data live server sama sekali.
- *   2. Label bilang "Pembelian VIP" padahal dihitung SEMUA transaksi
- *      (order tiket + deal rekber).
- *   3. /my-stats menampilkan "Joined Tracking: belum tercatat" untuk semua
- *      orang yang gabung sebelum v3.2 — tanggal gabung asli ada di objek member.
+ * User report: "the stats don't match". Root causes fixed in v3.9.47:
+ *   1. /stats showed "Total Member Tracked" (stats.json entries) — NOT the
+ *      real member count, and no live server data at all.
+ *   2. The label said "VIP Purchases" while it counts ALL transactions
+ *      (ticket orders + escrow deals).
+ *   3. /my-stats showed "Joined Tracking: not recorded" for everyone who
+ *      joined before v3.2 — the real join date lives on the member object.
  *
- * Test ini menjalankan modul command ASLI end-to-end dengan interaction stub
- * (deferReply/editReply ditangkap) lalu memverifikasi isi embed.
+ * These tests run the REAL command module end-to-end with a stubbed
+ * interaction (deferReply/editReply captured) and assert the embed content.
  */
 
 const test = require('node:test');
@@ -26,13 +26,12 @@ if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 const GUILD_ID = 'test_guild_statsdisp';
 const USER_ID = 'test_user_statsdisp';
-// Timestamp tetap supaya asersi <t:...:R> deterministik.
+// Fixed timestamps so the <t:...:R> assertions are deterministic.
 const REAL_JOINED_TS = 1600000000000;
 
 /**
- * Interaction stub yang bentuknya persis seperti yang disentuh
- * src/commands/stats.js: commandName / deferReply / editReply (ditangkap) /
- * guild / user / member.
+ * Stub interaction shaped exactly like what src/commands/stats.js touches:
+ * commandName / deferReply / editReply (captured) / guild / user / member.
  */
 function makeStubInteraction(overrides = {}) {
     const replies = [];
@@ -61,36 +60,36 @@ function makeStubInteraction(overrides = {}) {
 }
 
 function fieldMap(embed) {
-    // embeds[0].data.fields → { name → value } (nama field unik di embed kita)
+    // embeds[0].data.fields → { name → value } (names are unique in our embeds)
     return Object.fromEntries((embed.data.fields || []).map(f => [f.name, f.value]));
 }
 
-/** Isi stats.json + tickets.json dengan data test yang deterministik. */
+/** Populate stats.json + tickets.json with deterministic test data. */
 function seedTestData() {
     const statsManager = require('../../src/data/statsManager');
-    // 3 pesan untuk user test (sekalian men-seed "member terlacak").
+    // 3 messages for the test user (also seeds "members tracked").
     for (let i = 0; i < 3; i++) statsManager.incrementMessages(GUILD_ID, USER_ID);
-    // 2 transaksi × Rp 10.000 → revenue Rp 20.000.
+    // 2 transactions × Rp 10.000 → revenue Rp 20.000.
     statsManager.recordPurchase(GUILD_ID, USER_ID, 10000);
     statsManager.recordPurchase(GUILD_ID, USER_ID, 10000);
 
-    // 2 tiket terbuka untuk guild ini (tickets.json di-scope via meta.guildId).
+    // 2 open tickets for this guild (tickets.json is scoped by meta.guildId).
     const { setTicketMeta } = require('../../src/data/ticketManager');
     setTicketMeta('test_guild_statsdisp_ch1', {
         userId: USER_ID,
-        productName: 'Produk Test A',
+        productName: 'Test Product A',
         price: 'Rp 10.000',
         guildId: GUILD_ID
     });
     setTicketMeta('test_guild_statsdisp_ch2', {
         userId: USER_ID,
-        productName: 'Produk Test B',
+        productName: 'Test Product B',
         price: 'Rp 10.000',
         guildId: GUILD_ID
     });
 }
 
-test('LAPORAN USER /stats: member live, boost, tiket + aktivitas terlacak', async () => {
+test('USER REPORT /stats: jumlah member live, boost, tiket + aktivitas terlacak', async () => {
     seedTestData();
     const statsCommand = require('../../src/commands/stats');
 
@@ -102,35 +101,42 @@ test('LAPORAN USER /stats: member live, boost, tiket + aktivitas terlacak', asyn
     const fields = fieldMap(embed);
 
     // Data live langsung dari objek guild — bisa diverifikasi ke Discord.
-    assert.strictEqual(fields['👥 Member (live)'], '123');
+    assert.strictEqual(fields['👥 Member'], '123');
     assert.strictEqual(fields['🎫 Tiket Terbuka'], '2');
     assert.strictEqual(fields['🚀 Boost Server'], 'Level 2 (5 boost)');
 
     // Aktivitas terlacak dari stats.json — di-seed di atas.
     assert.strictEqual(fields['💬 Total Pesan Terlacak'], '3');
-    assert.strictEqual(fields['👤 Member Terlacak'], '1');
     assert.strictEqual(fields['🛒 Total Transaksi'], '2');
     assert.strictEqual(fields['💰 Total Revenue'], 'Rp 20.000');
 
-    // Judul menyebut nama server; ikon dilampirkan kalau ada.
+    // v3.9.49 (laporan user: "member tracked & member live — kalau fungsinya
+    // sama bikin satu aja"): TEPAT SATU field member (jumlah live) + rata-rata
+    // dibagi jumlah member LIVE supaya angkanya konsisten.
+    const names = (embed.data.fields || []).map(f => f.name);
+    assert.strictEqual(names.filter(n => /member/i.test(n) && !/rata/i.test(n)).length, 1, `tepat satu field member: ${names.join(' | ')}`);
+    assert.ok(!names.includes('👤 Member Terlacak'), 'field Member Terlacak yang dobel harus hilang');
+    assert.strictEqual(fields['📈 Rata-rata Pesan/Member'], `${Math.round(3 / 123)}`);
+
+    // Judul menyebut nama server; ikon terpasang kalau ada.
     assert.match(embed.data.title, /STATISTIK SERVER — Test Server/);
     assert.strictEqual(embed.data.thumbnail?.url, 'https://example.com/icon.png');
 });
 
-test('LAPORAN USER /stats: label menyesatkan "Pembelian VIP" sudah dihapus', async () => {
+test('USER REPORT /stats: label "Pembelian VIP" yang menyesatkan sudah hilang', async () => {
     const statsCommand = require('../../src/commands/stats');
     const interaction = makeStubInteraction();
     await statsCommand(interaction);
 
     const embed = interaction.__replies[0].embeds[0];
     const names = (embed.data.fields || []).map(f => f.name);
-    // Rename v3.9.47: dihitung SEMUA transaksi (order tiket + rekber), jadi
-    // kata "VIP" yang lama tidak boleh balik lagi.
-    assert.ok(!names.some(n => /VIP/i.test(n)), `tidak boleh ada field "VIP": ${names.join(' | ')}`);
+    // Rename v3.9.47: ini menghitung SEMUA transaksi (order tiket + rekber),
+    // jadi kata "VIP" tidak boleh muncul lagi.
+    assert.ok(!names.some(n => /VIP/i.test(n)), `tidak ada field yang menyebut "VIP": ${names.join(' | ')}`);
     assert.ok(names.includes('🛒 Total Transaksi'));
 });
 
-test('/stats edge: tanpa boost → "Belum ada"; tanpa ikon → tidak ada thumbnail', async () => {
+test('/stats edge: tanpa boost → "Belum ada"; tanpa ikon → tanpa thumbnail', async () => {
     const statsCommand = require('../../src/commands/stats');
     const interaction = makeStubInteraction({
         guild: {
@@ -147,11 +153,11 @@ test('/stats edge: tanpa boost → "Belum ada"; tanpa ikon → tidak ada thumbna
     const embed = interaction.__replies[0].embeds[0];
     const fields = fieldMap(embed);
     assert.strictEqual(fields['🚀 Boost Server'], 'Belum ada');
-    assert.strictEqual(fields['👥 Member (live)'], '7');
+    assert.strictEqual(fields['👥 Member'], '7');
     assert.strictEqual(embed.data.thumbnail, undefined, 'iconURL() null → tanpa thumbnail');
 });
 
-test('LAPORAN USER /my-stats: tanggal gabung ASLI + label transaksi', async () => {
+test('USER REPORT /my-stats: tanggal gabung ASLI + label transaksi', async () => {
     const statsCommand = require('../../src/commands/stats');
     const interaction = makeStubInteraction({ commandName: 'my-stats' });
     await statsCommand(interaction);
@@ -160,17 +166,17 @@ test('LAPORAN USER /my-stats: tanggal gabung ASLI + label transaksi', async () =
     const fields = fieldMap(embed);
 
     // Tanggal gabung asli dari objek member — BUKAN tracking v3.2
-    // (stats.joinedAt null di sini: recordJoin tidak pernah dipanggil).
+    // (stats.joinedAt null di sini: recordJoin tak pernah dipanggil untuk user ini).
     assert.strictEqual(fields['📅 Gabung Server Ini'], `<t:${Math.floor(REAL_JOINED_TS / 1000)}:R>`);
     assert.strictEqual(fields['💬 Pesan'], '3');
     assert.strictEqual(fields['🛒 Transaksi'], '2');
     assert.strictEqual(fields['💰 Total Belanja'], 'Rp 20.000');
 
     const names = (embed.data.fields || []).map(f => f.name);
-    assert.ok(!names.some(n => /VIP/i.test(n)), 'my-stats juga tidak boleh bilang "VIP"');
+    assert.ok(!names.some(n => /VIP/i.test(n)), 'my-stats juga tidak boleh menyebut "VIP"');
 });
 
-test('/my-stats edge: member partial (tanpa data gabung) → "tidak diketahui"', async () => {
+test('/my-stats edge: member partial (tanpa data gabung di mana pun) → "tidak diketahui"', async () => {
     const statsCommand = require('../../src/commands/stats');
     const interaction = makeStubInteraction({ commandName: 'my-stats', member: undefined });
     await statsCommand(interaction);
@@ -179,19 +185,19 @@ test('/my-stats edge: member partial (tanpa data gabung) → "tidak diketahui"',
     assert.strictEqual(fields['📅 Gabung Server Ini'], 'tidak diketahui');
 });
 
-test('ticketManager: getActiveTicketCount ter-scope per guild (v3.9.47)', () => {
+test('ticketManager: getActiveTicketCount is guild-scoped (v3.9.47)', () => {
     const { getActiveTicketCount } = require('../../src/data/ticketManager');
     assert.strictEqual(getActiveTicketCount(GUILD_ID), 2);
     assert.strictEqual(getActiveTicketCount('test_guild_other'), 0);
     assert.strictEqual(getActiveTicketCount(''), 0);
 });
 
-// ============ CLEANUP (sisa seeding) ============
+// ============ CLEANUP (residue from seeding) ============
 
-test('v3.9.47 cleanup: hapus sisa test stats/tickets', () => {
+test('v3.9.47 cleanup: remove stats/tickets test residue', () => {
     const statsManager = require('../../src/data/statsManager');
 
-    // 1) stats.json — buang semua key test_guild.
+    // 1) stats.json — drop every test_guild key.
     if (fs.existsSync(STATS_PATH)) {
         try {
             const data = JSON.parse(fs.readFileSync(STATS_PATH, 'utf8'));
@@ -207,14 +213,14 @@ test('v3.9.47 cleanup: hapus sisa test stats/tickets', () => {
             }
         } catch (_) {}
     }
-    // Reset cache in-memory + flag dirty supaya tidak ada flush data basi.
+    // Reset the in-memory cache + dirty flag so nothing flushes stale data back.
     statsManager.reload();
 
-    // 2) tickets.json — hapus channel tiket sintetis.
+    // 2) tickets.json — remove the synthetic ticket channels.
     const { removeTicketMeta, getActiveTicketCount } = require('../../src/data/ticketManager');
     removeTicketMeta('test_guild_statsdisp_ch1');
     removeTicketMeta('test_guild_statsdisp_ch2');
-    assert.strictEqual(getActiveTicketCount(GUILD_ID), 0, 'sisa tiket sudah dibersihkan');
+    assert.strictEqual(getActiveTicketCount(GUILD_ID), 0, 'ticket residue removed');
 
-    assert.ok(true, 'cleanup stats/tickets selesai');
+    assert.ok(true, 'stats/tickets cleanup done');
 });

@@ -58,7 +58,12 @@ const FILES_TO_BACKUP = [
     // sebelumnya memutus SEMUA deal escrow aktif (pembeli/penjual terkunci
     // selamanya karena meta hilang). Ketemu oleh guard test "file live harus
     // di-backup" begitu deals.json ada di data/.
-    'deals.json'
+    'deals.json',
+    // v3.9.49: boosts.json — riwayat server booster. Tanpa ini, restore-backup
+    // senyap kehilangan seluruh riwayat boost (siapa boost, streak, totalBoosts)
+    // padahal booster live masih ada — seksi "Aktivitas Boost Terbaru" di
+    // /boosters jadi kosong untuk event yang bot sendiri pernah umumkan.
+    'boosts.json'
 ];
 
 // v3.9.10: helper untuk resolve path file data (ke data/ folder).

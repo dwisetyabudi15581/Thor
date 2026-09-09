@@ -46,6 +46,7 @@ async function onReady(client) {
     // dihapus, atau ID-nya milik server lain. Sebelumnya bot DIAM baik saat
     // startup MAUPUN saat member benar-benar join — kini keduanya bicara.
     // /test-welcome melakukan cek lebih dalam (permission + preview langsung).
+    // v3.9.49: server-booster ikut dicek dengan pola yang sama (notifikasi boost).
     try {
         const { getConfig } = require('../../data/configManager');
         const config = getConfig();
@@ -55,11 +56,16 @@ async function onReady(client) {
               ? client.guilds.cache.first()
               : null;
         if (guild) {
-            for (const key of ['welcome', 'goodbye']) {
+            const CHANNEL_LABELS = {
+                welcome: 'pesan welcome',
+                goodbye: 'pesan goodbye',
+                'server-booster': 'notifikasi boost'
+            };
+            for (const key of Object.keys(CHANNEL_LABELS)) {
                 const id = config.channels[key];
                 if (!id) {
                     console.warn(
-                        `⚠️ Channel ${key} BELUM di-set — pesan ${key} MATI. Solusi: /set-channel ${key} #channel`
+                        `⚠️ Channel ${key} BELUM di-set — ${CHANNEL_LABELS[key]} MATI. Solusi: /set-channel ${key} #channel`
                     );
                 } else if (!guild.channels.cache.get(id)) {
                     console.warn(
@@ -72,6 +78,62 @@ async function onReady(client) {
         }
     } catch (err) {
         console.warn('⚠️ Cek startup welcome/goodbye gagal:', err.message);
+    }
+
+    // === 1d. v3.9.49: catch-up boost offline ===
+    // Boost yang mulai/berhenti saat bot offline sebelumnya tak terlihat.
+    // Rekonsiliasi state live (cache member guild) dengan boosts.json, lalu
+    // kirim SATU embed catch-up gabungan ke channel server-booster kalau ada
+    // yang benar-benar berubah (anti spam: satu embed, bukan satu per member).
+    try {
+        const guild = GUILD_ID
+            ? client.guilds.cache.get(GUILD_ID)
+            : client.guilds.cache.size > 0
+              ? client.guilds.cache.first()
+              : null;
+        if (guild) {
+            // Cache member kosong tepat setelah login — fetch roster dulu supaya
+            // premiumSinceTimestamp diketahui untuk SEMUA member, bukan cuma yang
+            // kebetulan ada di cache.
+            try {
+                await guild.members.fetch();
+            } catch (fetchErr) {
+                console.warn(`⚠️ Rekonsiliasi boost: fetch member gagal (${fetchErr.message}) — pakai cache saja.`);
+            }
+            const boostManager = require('../../data/boostManager');
+            const { added, removed } = boostManager.reconcileBoosters(guild);
+            if (added.length > 0 || removed.length > 0) {
+                const lines = [];
+                if (added.length > 0) lines.push(`🚀 Booster baru saat bot offline: ${added.map(id => `<@${id}>`).join(' ')}`);
+                if (removed.length > 0) lines.push(`💔 Berhenti boost saat bot offline: ${removed.map(id => `<@${id}>`).join(' ')}`);
+                console.log(`🚀 Catch-up boost: ${added.length} baru, ${removed.length} berhenti sejak run terakhir.`);
+                const { getConfig } = require('../../data/configManager');
+                const boostChId = getConfig().channels['server-booster'];
+                const boostCh = boostChId ? guild.channels.cache.get(boostChId) : null;
+                if (boostCh && typeof boostCh.send === 'function') {
+                    try {
+                        const { EmbedBuilder } = require('discord.js');
+                        await boostCh.send({
+                            embeds: [
+                                new EmbedBuilder()
+                                    .setTitle('🚀 CATCH-UP BOOST')
+                                    .setDescription(
+                                        `Perubahan boost yang terjadi saat bot offline:\n\n${lines.join('\n')}`
+                                    )
+                                    .setColor(0xf472b6)
+                                    .setTimestamp()
+                            ]
+                        });
+                    } catch (sendErr) {
+                        console.warn(`⚠️ Gagal mengirim pesan catch-up boost: ${sendErr.message}`);
+                    }
+                }
+            } else {
+                console.log(`✅ Booster sinkron (${guild.premiumSubscriptionCount ?? 0} boost, level ${guild.premiumTier ?? 0}).`);
+            }
+        }
+    } catch (err) {
+        console.warn('⚠️ Rekonsiliasi boost startup gagal:', err.message);
     }
 
     // === 1. Register slash commands ke guild spesifik (instan) ===
