@@ -93,6 +93,28 @@ function getCommands() {
             ]
         },
 
+        // v3.9.48: diagnosis + preview embed welcome/goodbye tanpa menunggu ada
+        // member yang benar-benar join — jawaban langsung untuk "kenapa welcome
+        // tidak muncul?" (cek config, keberadaan channel, permission bot + kirim
+        // embed preview ke channel sekarang).
+        {
+            name: 'test-welcome',
+            description: 'Diagnosis & preview embed welcome/goodbye (cari tahu kenapa tidak muncul)',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
+            options: [
+                {
+                    type: 3,
+                    name: 'tipe',
+                    description: 'Mau tes yang mana',
+                    required: true,
+                    choices: [
+                        { name: 'Welcome', value: 'welcome' },
+                        { name: 'Goodbye', value: 'goodbye' }
+                    ]
+                }
+            ]
+        },
+
         // === SET PESAN ===
         {
             name: 'set-message',

@@ -15,7 +15,13 @@ const { logServerEvent, findAuditExecutor } = require('../../infra/serverLog');
 async function onEvent(member) {
     try {
         // v3.9.26 (single-guild hardening): abaikan member dari guild lain.
-        if (process.env.GUILD_ID && member.guild?.id && member.guild.id !== process.env.GUILD_ID) return;
+        // v3.9.48: skip ini kini KELIHATAN (dulu return diam-diam).
+        if (process.env.GUILD_ID && member.guild?.id && member.guild.id !== process.env.GUILD_ID) {
+            console.warn(
+                `⚠️ Leave member dari guild lain (ID: ${member.guild.id}) diabaikan — GUILD_ID di-set ke server yang berbeda. Goodbye hanya jalan di guild GUILD_ID.`
+            );
+            return;
+        }
         await onMemberRemove(member);
 
         // v3.9.43: server log leave/kick (best effort).

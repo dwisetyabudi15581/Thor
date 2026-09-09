@@ -170,9 +170,10 @@ const HELP_CATEGORIES = [
         name: 'Log & Channel',
         short: 'Aktifkan server-log, audit, transcript, welcome',
         lines: [
-            '• `/set-channel server-log #ch` — log pesan hapus/edit, join/leave, ban, role',
-            '• `/set-channel audit-log #ch` — aksi admin · `transcript #ch` — arsip tiket',
+            '• `/set-channel server-log #ch` — log pesan hapus/edit, join/leave, ban',
+            '• `audit-log #ch` — aksi admin · `transcript #ch` — arsip tiket',
             '• `/set-channel welcome/goodbye/invoice #ch` — sambutan & invoice',
+            '• `/test-welcome` — diagnosis kenapa welcome tidak muncul + preview',
             '• `/remove-channel tipe` — matikan salah satu',
             'ℹ️ Tanpa `server-log`, event server tidak dicatat.'
         ]

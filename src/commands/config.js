@@ -2,11 +2,12 @@
  * Domain: config
  * Slash commands: /setup-verify, /setup-ticket, /set-role, /set-channel,
  *                 /set-message, /remove-role, /remove-channel, /list-messages,
- *                 /reset-message, /reset-config, /config-show
+ *                 /reset-message, /reset-config, /config-show, /test-welcome
  *
  * Dipisah dari handlers/commandHandler.js (v3.9.9 refactor).
  * Behavior: kelola config bot (roles, channels, messages) + setup panel verifikasi/tiket.
  * v3.9.30: /set-transcript-channel (panels) digabung ke /set-channel tipe:transcript.
+ * v3.9.48: /test-welcome — diagnosis + preview embed welcome/goodbye.
  */
 
 const {
@@ -15,6 +16,7 @@ const {
     ButtonStyle,
     ActionRowBuilder,
     MessageFlags,
+    PermissionFlagsBits,
     getConfig,
     saveConfig,
     setField,
@@ -29,6 +31,10 @@ const {
     getSessionsByUser,
     EMBED_LIMITS
 } = require('./_shared');
+
+// v3.9.48: preview /test-welcome memakai builder yang SAMA dengan event asli
+// (memberHandler) — preview tidak mungkin berbeda dari yang aslinya.
+const { buildWelcomeEmbed, buildGoodbyeEmbed } = require('../bot/memberHandler');
 
 // v3.9.12: ModalBuilder untuk /edit-message
 // v3.9.30: ChannelType untuk validasi /set-channel (semua tipe butuh text channel)
@@ -296,6 +302,68 @@ module.exports = async function (interaction) {
             guildId: interaction.guild.id
         });
         return safeEditReply(interaction, { content: `✅ Role **${tipe}** diatur ke ${role} (\`${role.id}\`)` });
+    }
+
+    // === TEST WELCOME (v3.9.48) ===
+    // Jawaban langsung untuk "kenapa welcome tidak muncul?": cek setiap mata
+    // rantai (config → channel ada → permission bot) + kirim PREVIEW embed yang
+    // persis diterima member baru — dibangun builder yang sama dengan event asli
+    // (buildWelcomeEmbed/buildGoodbyeEmbed — tidak mungkin drift).
+    if (interaction.commandName === 'test-welcome') {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        const tipe = interaction.options.getString('tipe'); // 'welcome' | 'goodbye'
+        const me = interaction.guild.members.me;
+        const configuredId = config.channels[tipe];
+
+        // --- diagnosis setiap mata rantai ---
+        const lines = [];
+        let channel = null;
+        if (!configuredId) {
+            lines.push(`❌ **Channel ${tipe}: belum di-set** → atur dengan \`/set-channel ${tipe} #channel\``);
+        } else {
+            channel = interaction.guild.channels.cache.get(configuredId);
+            if (!channel) {
+                lines.push(
+                    `❌ **Channel ${tipe}: tidak ditemukan** (ID \`${configuredId}\`) — sudah dihapus, atau ID milik server lain → set ulang dengan \`/set-channel ${tipe} #channel\``
+                );
+            } else {
+                lines.push(`✅ **Channel ${tipe}:** ${channel} (\`${channel.id}\`)`);
+                if (me) {
+                    const perms = channel.permissionsFor(me);
+                    const canSend = perms?.has?.(PermissionFlagsBits.SendMessages) ?? false;
+                    const canEmbed = perms?.has?.(PermissionFlagsBits.EmbedLinks) ?? false;
+                    const canView = perms?.has?.(PermissionFlagsBits.ViewChannel) ?? true;
+                    lines.push(
+                        `${canView ? '✅' : '❌'} Lihat Channel · ${canSend ? '✅' : '❌'} Kirim Pesan · ${canEmbed ? '✅' : '❌'} Embed Links (permission bot di channel itu)`
+                    );
+                    if (!canSend || !canEmbed) {
+                        lines.push('→ solusi: Pengaturan Server → channel itu → tambah bot → aktifkan **Kirim Pesan** + **Embed Links**');
+                    }
+                }
+            }
+        }
+        // Event hanya jalan kalau bot online dengan intent GuildMembers — bot
+        // yang online membuktikan intent NYALA (intent privileged yang mati
+        // bikin login crash, tidak pernah jalan diam-diam).
+        lines.push('ℹ️ Event Join/Leave member: ✅ aktif (bot online dengan intent GuildMembers)');
+
+        // --- preview langsung: embed PERSIS yang diterima member baru ---
+        // interaction.member berperan sebagai "member yang baru join".
+        const embed = tipe === 'welcome' ? buildWelcomeEmbed(interaction.member, config) : buildGoodbyeEmbed(interaction.member, config);
+        let previewNote;
+        try {
+            await interaction.channel.send({
+                content: tipe === 'welcome' ? `<@${interaction.user.id}>` : undefined,
+                embeds: [embed]
+            });
+            previewNote = `🧪 Preview dikirim ke **channel ini** — ${tipe} aslinya dikirim ke ${channel ? channel : 'channel yang kamu set'}. Preview memakai datamu sendiri sebagai "member baru".`;
+        } catch (sendErr) {
+            previewNote = `⚠️ Preview TIDAK BISA dikirim ke channel ini: ${sendErr.message}\nCek permission Kirim Pesan + Embed Links bot DI SINI juga — channel ${tipe} kemungkinan besar bermasalah yang sama.`;
+        }
+
+        return safeEditReply(interaction, {
+            content: `${lines.join('\n')}\n\n${previewNote}`
+        });
     }
 
     // === SET CHANNEL ===

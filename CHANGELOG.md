@@ -5,6 +5,21 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 Legend: 🔴 critical · 🟠 high · 🟡 medium · 🟢 improvement
 
+## [3.9.48] — 2026-09-09
+
+### Changed — 🐛 laporan user: "ada bug — Welcome tidak muncul"
+
+**Diagnostik Welcome & Goodbye (silent failure kini bicara):**
+
+- 🟡 **Hasil investigasi:** jalur kode welcome terbukti JALAN (simulasi end-to-end dengan modul asli: join → role + embed + server log, leave → embed goodbye). Bug sebenarnya adalah **diagnosabilitas**: saat channel welcome belum di-set / terhapus / ID dari server lain, bot TIDAK mengeluarkan log apa pun saat startup MAUPUN saat member benar-benar join — admin tanpa petunjuk, dan tidak ada cara men-test tanpa ada member yang join sungguhan.
+- 🟢 **`memberHandler`:** setiap alasan skip kini meninggalkan log + solusi — channel belum di-set → `Solusi: /set-channel welcome #channel`; channel tidak ditemukan → sama + "sudah dihapus, atau ID milik server lain"; gagal kirim → menyebut channel + permission yang harus dicek (Send Messages + Embed Links). Sukses juga di-log (`👋 Welcome terkirim untuk X di #channel`) supaya alurnya kelihatan.
+- 🟢 **BARU command `/test-welcome`** (total 89 command): jawaban langsung untuk "kenapa tidak muncul?" — diagnosis setiap mata rantai (config → channel ada → permission bot Lihat/Kirim/Embed di channel itu), mencatat event Join/Leave aktif (bot yang online membuktikan intent GuildMembers NYALA — intent privileged yang mati justru bikin login crash), dan **mengirim embed preview** ke channel sekarang, dibangun builder yang SAMA dengan event asli (`buildWelcomeEmbed`/`buildGoodbyeEmbed` — preview tidak mungkin berbeda dari aslinya). `tipe:welcome|goodbye`.
+- 🟢 **Cek startup di `ready.js`:** warning saat channel welcome/goodbye belum di-set atau ID-nya tidak ada di guild (plus perintah solusi); konfirmasi satu baris saat sudah terpasang — salah konfigurasi ketahuan saat boot, bukan saat join acak berikutnya.
+- 🟢 **`guildMemberAdd`/`guildMemberRemove`:** event member dari guild lain (GUILD_ID beda) kini KELIHATAN (dulu return diam-diam — join di guild kedua tampak persis seperti "welcome-nya rusak").
+- 🟢 Builder embed diekstrak (`buildWelcomeEmbed` / `buildGoodbyeEmbed`, diekspor) — satu sumber kebenaran untuk event asli dan preview `/test-welcome`.
+- 🟢 Katalog `/help`: Log & Channel mendokumentasikan `/test-welcome`; embed Semua Command diukur ulang dalam budget 5.800 dengan 20 kategori utuh (5.758 terpakai).
+- 🟢 +17 unit test (`welcomeDiagnostics.test.js`, total 503): builder murni, happy path join/leave end-to-end (modul asli + stub), semua warning silent-failure, visibilitas guard GUILD_ID, `/test-welcome` end-to-end lewat modul command asli (sehat / belum di-set / ID hantu / permission kurang / goodbye), kontrak registry + router + ready.js.
+
 ## [3.9.47] — 2026-09-09
 
 ### Changed — ✨ permintaan user: "trigger 'beli' harus juga menjawab 'bagaimana cara beli' — dan kasih setting pilih exact atau contains" + "stats-nya gak sesuai"

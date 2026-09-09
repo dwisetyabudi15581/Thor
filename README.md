@@ -2,7 +2,7 @@
 
 Bot Discord serbaguna untuk komunitas apa pun — server jualan, gaming, content creator, hingga komunitas umum. Semua konfigurasi dapat diatur langsung dari Discord melalui slash command, tanpa mengedit file.
 
-> **v3.9.47** · 88 slash command · 486 unit test · discord.js v14 · Node.js 18+ · single-guild
+> **v3.9.48** · 89 slash command · 503 unit test · discord.js v14 · Node.js 18+ · single-guild
 >
 > 📖 **[Panduan Admin Lengkap](./docs/ADMIN_GUIDE.md)** — setup, operasional harian, troubleshooting
 > 📜 **[Changelog](./CHANGELOG.md)** — riwayat semua versi
@@ -131,12 +131,13 @@ Registrasi slash command berlangsung instan ke guild yang ditentukan `GUILD_ID`.
 3. `/set-role unverified @role` — role default member baru
 4. `/set-channel welcome #channel` — channel welcome
 5. `/set-channel goodbye #channel` — channel goodbye
-6. `/set-channel invoice #channel` — channel invoice/testimoni
-7. `/set-channel audit-log #channel` — channel audit log
-8. `/set-channel transcript #channel` — channel arsip transcript tiket (opsional)
-9. `/setup-verify` — pasang panel verifikasi
-10. `/setup-ticket` — pasang panel tiket
-11. `/config-show` — verifikasi semua setting
+6. `/test-welcome tipe:welcome` — pastikan welcome berfungsi (diagnosis + preview langsung)
+7. `/set-channel invoice #channel` — channel invoice/testimoni
+8. `/set-channel audit-log #channel` — channel audit log
+9. `/set-channel transcript #channel` — channel arsip transcript tiket (opsional)
+10. `/setup-verify` — pasang panel verifikasi
+11. `/setup-ticket` — pasang panel tiket
+12. `/config-show` — verifikasi semua setting
 
 Panduan lengkap termasuk contoh produk, kategori custom, dan operasional harian: **[docs/ADMIN_GUIDE.md](./docs/ADMIN_GUIDE.md)**.
 
@@ -191,6 +192,10 @@ Penyebab paling sering: **Message Content Intent** belum diaktifkan.
 4. Save Changes → restart bot
 
 Jika console bot menampilkan warning `⚠️ [HINT] Pesan dari ... isinya kosong`, intent memang belum aktif.
+
+### Welcome / goodbye tidak muncul
+
+Jalankan **`/test-welcome tipe:welcome`** — command ini mendiagnosis setiap mata rantai (channel sudah di-set? channel masih ada? permission bot di channel itu?) + mengirim preview langsung. Sejak v3.9.48 bot juga **menyebut alasannya** di console setiap kali welcome ter-skip (channel belum di-set / tidak ditemukan / gagal kirim), dan mengecek konfigurasi saat startup. Intent GuildMembers bukan penyebabnya — bot yang online membuktikan intent itu NYALA (intent privileged yang mati justru bikin login crash).
 
 Troubleshooting lengkap (tiket, role, stats, backup, dll): **[docs/ADMIN_GUIDE.md → Section 9](./docs/ADMIN_GUIDE.md)**.
 

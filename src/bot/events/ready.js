@@ -41,6 +41,39 @@ async function onReady(client) {
     // gagal setelahnya, bot jadi ZERO command di mana-mana sampai restart sukses.
     // (Wipe global tetap perlu supaya gak duplikat versi lama yang pernah global.)
 
+    // === 1c. v3.9.48: cek konfigurasi welcome/goodbye saat startup ===
+    // Laporan "welcome tidak muncul" #1 = channel belum pernah di-set, sudah
+    // dihapus, atau ID-nya milik server lain. Sebelumnya bot DIAM baik saat
+    // startup MAUPUN saat member benar-benar join — kini keduanya bicara.
+    // /test-welcome melakukan cek lebih dalam (permission + preview langsung).
+    try {
+        const { getConfig } = require('../../data/configManager');
+        const config = getConfig();
+        const guild = GUILD_ID
+            ? client.guilds.cache.get(GUILD_ID)
+            : client.guilds.cache.size > 0
+              ? client.guilds.cache.first()
+              : null;
+        if (guild) {
+            for (const key of ['welcome', 'goodbye']) {
+                const id = config.channels[key];
+                if (!id) {
+                    console.warn(
+                        `⚠️ Channel ${key} BELUM di-set — pesan ${key} MATI. Solusi: /set-channel ${key} #channel`
+                    );
+                } else if (!guild.channels.cache.get(id)) {
+                    console.warn(
+                        `⚠️ Channel ${key} (ID ${id}) tidak ada di "${guild.name}" — sudah dihapus, atau ID milik server lain. Solusi: /set-channel ${key} #channel`
+                    );
+                } else {
+                    console.log(`✅ Channel ${key} terpasang: #${guild.channels.cache.get(id).name} (ID ${id})`);
+                }
+            }
+        }
+    } catch (err) {
+        console.warn('⚠️ Cek startup welcome/goodbye gagal:', err.message);
+    }
+
     // === 1. Register slash commands ke guild spesifik (instan) ===
     let registeredToGuild = false;
     try {

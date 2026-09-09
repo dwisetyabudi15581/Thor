@@ -14,7 +14,14 @@ const { logServerEvent } = require('../../infra/serverLog');
 async function onEvent(member) {
     try {
         // v3.9.26 (single-guild hardening): abaikan member dari guild lain.
-        if (process.env.GUILD_ID && member.guild?.id && member.guild.id !== process.env.GUILD_ID) return;
+        // v3.9.48: skip ini kini KELIHATAN (dulu return diam-diam — member join di
+        // guild lain & admin tidak tahu kenapa welcome tidak muncul).
+        if (process.env.GUILD_ID && member.guild?.id && member.guild.id !== process.env.GUILD_ID) {
+            console.warn(
+                `⚠️ Join member dari guild lain (ID: ${member.guild.id}) diabaikan — GUILD_ID di-set ke server yang berbeda. Welcome hanya jalan di guild GUILD_ID.`
+            );
+            return;
+        }
         await onMemberAdd(member);
 
         // v3.9.43: server log join (best effort — tidak boleh gagalkan welcome).
