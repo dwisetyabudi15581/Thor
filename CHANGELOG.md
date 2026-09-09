@@ -5,6 +5,25 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 Legend: 🔴 critical · 🟠 high · 🟡 medium · 🟢 improvement
 
+## [3.9.47] — 2026-09-09
+
+### Changed — ✨ permintaan user: "trigger 'beli' harus juga menjawab 'bagaimana cara beli' — dan kasih setting pilih exact atau contains" + "stats-nya gak sesuai"
+
+**Match mode Auto-Responder:**
+
+- 🟡 **Laporan user:** trigger hanya aktif kalau pesan DIAWALI trigger — trigger `beli` tidak pernah cocok dengan `bagaimana cara beli`. Sekarang tiap responder punya `matchMode`, dan `/add-responder` punya opsi baru `match_mode`:
+  - **Contains (default, juga diterapkan ke entri lama tanpa field ini):** trigger cocok sebagai **KATA UTUH di mana saja dalam pesan** — `beli` aktif pada `bagaimana cara beli` / `mau beli?` — tapi TIDAK pada `belian` / `membeli`. Batas kata sadar huruf/angka (`\p{L}\p{N}` lewat regex Unicode, semua karakter meta trigger di-escape), jadi kata panjang yang sekadar MENGANDUNG trigger sebagai substring tidak memicu alarm palsu. Trigger multi-kata (`cara beli`) didukung, dan whitespace pesan diratakan supaya spasi dobel tetap cocok.
+  - **Awal pesan (exact):** perilaku prefix lama — `!sosmed` cocok `!sosmed halo` tapi tidak `oi !sosmed halo`.
+- 🟢 Konfirmasi add/list kini menampilkan match mode per entri (dengan contoh `beli` di hint), dan `/list-responder` menampilkannya per baris.
+- 🟢 Fix cooldown sekalian: responder yang sedang cooldown tidak lagi membatalkan seluruh scan (`return null`) — loop lanjut, jadi trigger kedua yang overlap (mis. `beli` + `cara beli` dalam satu pesan) tetap bisa membalas.
+
+**Akurasi stats (laporan user: "stats-nya gak sesuai"):**
+
+- 🟡 `/stats` dulu hanya menampilkan angka akumulasi `stats.json`: "Total Member Tracked" (hanya member yang tercatat bot — ≠ jumlah member asli) dan "Total Pembelian VIP" (label bilang VIP, padahal dihitung SEMUA transaksi: order tiket + deal rekber) — tanpa data live server sama sekali, jadi embed-nya jarang cocok dengan yang admin lihat di Discord. Sekarang `/stats` memimpin dengan **data live langsung dari objek guild** (jumlah member asli, tier + jumlah boost, tiket terbuka via helper baru `ticketManager.getActiveTicketCount()`) disusul aktivitas terlacak berlabel jelas, nama server di judul, dan ikon server sebagai thumbnail. "Pembelian VIP" di-rename jadi **Transaksi**.
+- 🟡 `/my-stats` menampilkan "Joined Tracking: belum tercatat" untuk semua orang yang gabung sebelum v3.2 — embed kini menampilkan tanggal gabung ASLI dari `interaction.member.joinedTimestamp` (nilai terlacak jadi fallback untuk member partial).
+- 🟢 Katalog `/help`: kategori Statistik + Auto-Responder kini menjelaskan apa yang command-nya KERJAKAN (kategori responder juga mendokumentasikan `match_mode`); embed Semua Command diukur ulang supaya tetap di bawah budget 5.800 char dengan 20 kategori utuh (5.709 terpakai).
+- 🟢 +22 unit test (total **486**): `responderMatchMode.test.js` (14) — matcher murni (contains/batas-kata/exact/multi-kata/escape-regex/input invalid), default penyimpanan, migrasi entri lama, skenario persis user, interaksi cooldown termasuk fix continue-scan, kontrak registry; `statsDisplay.test.js` (8) — end-to-end `/stats` & `/my-stats` lewat modul command asli dengan interaction stub (field live, regression rename label transaksi, edge boost/tiket/tanggal-gabung, jumlah tiket ter-scope guild, pembersihan sisa test).
+
 ## [3.9.46] — 2026-09-09
 
 ### Fixed — 🟡 hint console "Message Content Intent" FALSE ALARM padahal intent aktif

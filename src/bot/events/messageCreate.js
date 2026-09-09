@@ -273,7 +273,11 @@ async function hookAutoMod(message) {
 
 /**
  * Hook 2: Auto-Responder
- * Kalo pesan diawali trigger keyword (mis. "!sosmed"), bot auto-reply.
+ * Pesan cocok dengan trigger keyword → bot auto-reply.
+ * v3.9.47: dua match mode per responder (lihat responderManager) —
+ * 'contains' (default: trigger muncul sebagai kata utuh di mana saja, mis.
+ * trigger "beli" cocok dengan "bagaimana cara beli") atau 'exact' (pesan
+ * harus diawali trigger, mis. "!sosmed halo").
  */
 async function hookAutoResponder(message) {
     // Kirim userId biar cooldown-nya per-user (bukan global per-trigger)

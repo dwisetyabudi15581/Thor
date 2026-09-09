@@ -2,7 +2,7 @@
 
 Bot Discord serbaguna untuk komunitas apa pun — server jualan, gaming, content creator, hingga komunitas umum. Semua konfigurasi dapat diatur langsung dari Discord melalui slash command, tanpa mengedit file.
 
-> **v3.9.46** · 88 slash command · 464 unit test · discord.js v14 · Node.js 18+ · single-guild
+> **v3.9.47** · 88 slash command · 486 unit test · discord.js v14 · Node.js 18+ · single-guild
 >
 > 📖 **[Panduan Admin Lengkap](./docs/ADMIN_GUIDE.md)** — setup, operasional harian, troubleshooting
 > 📜 **[Changelog](./CHANGELOG.md)** — riwayat semua versi
@@ -42,13 +42,13 @@ Bot Discord serbaguna untuk komunitas apa pun — server jualan, gaming, content
 
 ### 💬 Auto-Responder & AFK
 
-- Trigger keyword (`!sosmed`, `!jadwal`, ...) → auto-reply plain text atau embed, dengan cooldown per-user.
+- Trigger keyword (`beli`, `!sosmed`, ...) → auto-reply plain text atau embed, dengan cooldown per-user. Dua match mode (v3.9.47): **contains** (default — trigger cocok sebagai kata utuh di mana saja dalam pesan, mis. `beli` menjawab "bagaimana cara beli") atau **exact** (pesan harus diawali trigger).
 - AFK system: auto-reply saat di-mention, auto-clear saat kembali, `/afk-list` untuk admin.
 
 ### 📊 Leveling & Stats
 
 - XP per pesan (cooldown anti-spam) + role reward per level + `/rank` + `/leaderboard-level`.
-- Stats & leaderboard server: messages, purchases, totalSpent, giveawaysWon.
+- Stats server: jumlah member live, boost, tiket terbuka (langsung dari Discord) + aktivitas terlacak, transaksi & revenue. Leaderboard messages/purchases/spending/wins; `/my-stats` menampilkan tanggal gabung asli.
 
 ### 🎭 Lainnya
 
@@ -80,7 +80,7 @@ Thor/
 │   └── infra/                    # safeWrite, safeReply, userLock, permissions, auditLog
 ├── data/                         # Runtime JSON files (gitignored)
 ├── docs/                         # ADMIN_GUIDE + index dokumen
-├── tests/unit/                   # 464 unit test (node:test)
+├── tests/unit/                   # 486 unit test (node:test)
 ├── CHANGELOG.md                  # Riwayat versi
 ├── .env.example
 ├── eslint.config.js

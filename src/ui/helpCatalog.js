@@ -194,9 +194,10 @@ const HELP_CATEGORIES = [
         id: 'responder',
         emoji: '💬',
         name: 'Auto-Responder',
-        short: 'Auto-reply FAQ saat member kirim trigger',
+        short: 'Auto-reply FAQ saat pesan mengandung trigger',
         lines: [
-            '• `/add-responder trigger:halo reply:...` — pasang auto-reply (cocok untuk FAQ)',
+            '• `/add-responder trigger:beli reply:...` — auto-reply ke pesan apa pun yang mengandung kata "beli"',
+            '• `match_mode:contains|exact` — kata di mana saja, atau awal pesan saja',
             '• `/list-responder` · `/remove-responder` — lihat & hapus'
         ]
     },
@@ -291,11 +292,11 @@ const HELP_CATEGORIES = [
         id: 'stats',
         emoji: '📈',
         name: 'Statistik',
-        short: 'Statistik server, leaderboard, transaksi',
+        short: 'Statistik live server, leaderboard, statistik pribadi',
         lines: [
-            '• `/stats` — statistik server (member, tiket, transaksi)',
+            '• `/stats` — statistik live (member, boost, tiket) + aktivitas terlacak',
             '• `/leaderboard metric:messages|vipPurchases|totalSpent` — peringkat',
-            '• `/my-stats` — statistik transaksi pribadi'
+            '• `/my-stats` — pesan, transaksi, kemenangan & tanggal gabung kamu'
         ]
     },
     {

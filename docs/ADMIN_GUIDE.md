@@ -1,4 +1,4 @@
-# 📖 Admin Guide — Thor Bot v3.9.46
+# 📖 Admin Guide — Thor Bot v3.9.47
 
 Panduan lengkap untuk admin server Discord yang menjalankan bot ini — cocok untuk admin baru yang pertama kali setup, maupun admin yang sudah berjalan sebagai referensi harian.
 
@@ -680,15 +680,20 @@ Bot menonaktifkan semua tombol + menampilkan hasil akhir.
 
 ### Auto-Responder
 
-Bot membalas pesan otomatis saat member mengetik trigger di awal pesan (case-insensitive).
+Bot membalas pesan otomatis saat pesan member cocok dengan trigger (case-insensitive). Dua match mode (v3.9.47):
+
+- **Contains** (default) — trigger cocok sebagai **KATA UTUH di mana saja dalam pesan**: trigger `beli` menjawab `bagaimana cara beli`, `mau beli?` — tapi TIDAK `belian` / `membeli` (gak ada alarm palsu dari kata yang lebih panjang). Responder yang dibuat sebelum v3.9.47 otomatis ikut berperilaku contains.
+- **Awal pesan (exact)** — perilaku lama: pesan harus diawali trigger (`!sosmed` cocok `!sosmed halo`, tidak cocok `halo !sosmed`).
 
 ```
-/add-responder trigger:"!sosmed" reply:"Instagram: ig.com/serverkita\nYouTube: yt.com/@serverkita" reply_type:embed
+/add-responder trigger:"beli" reply:"Silakan ketik /tiket untuk order!" match_mode:contains
+/add-responder trigger:"!sosmed" reply:"Instagram: ig.com/serverkita\nYouTube: yt.com/@serverkita" reply_type:embed match_mode:exact
 /list-responder
-/remove-responder trigger:"!sosmed"
+/remove-responder trigger:"beli"
 ```
 
 - `reply_type`: `text` (plain) atau `embed`
+- `match_mode`: `contains` (kata utuh di mana saja, default) atau `exact` (awal pesan)
 - Support `\n` untuk multi-baris
 - Cooldown default 3 detik per-user (dapat diatur per responder, `0` = nonaktif)
 - Maks 50 responder per guild
@@ -881,7 +886,7 @@ Bot membutuhkan akses ke `message.content`. Tanpa intent itu, Discord mengirim c
 6. Klik **Save Changes**
 7. **Restart bot** (`npm start`)
 
-Cek juga `/list-responder` untuk memastikan responder terdaftar. Trigger bersifat case-insensitive dan harus berada di awal pesan (`!sosmed` match `!sosmed halo`, tetapi tidak match `halo !sosmed`).
+Cek juga `/list-responder` untuk memastikan responder terdaftar. Trigger bersifat case-insensitive. Default (`match_mode:contains`) trigger cocok sebagai kata utuh di mana saja dalam pesan — `beli` menjawab "bagaimana cara beli" tapi TIDAK "belian"; pilih `match_mode:exact` kalau pesan harus diawali trigger (`!sosmed` cocok `!sosmed halo`, tidak cocok `halo !sosmed`).
 
 ### Cooldown auto-responder terasa lama
 
@@ -900,12 +905,13 @@ Cooldown bersifat **per-user** — user A memicu tidak memengaruhi user B.
 - Cek bot punya `Send Messages` + `Embed Links` + `View Audit Log` di channel itu
 - Audit log otomatis dikirim ulang 1x jika gagal karena rate limit/network
 
-### Stats tidak update
+### Stats tidak update / angkanya gak sesuai
 
-- Stats di-cache di memory, di-flush setiap 30 detik — tunggu sebentar lalu cek lagi
+- `/stats` menampilkan **data live dulu** (member, boost, tiket terbuka — langsung dari Discord, selalu mutakhir), baru aktivitas terlacak (pesan, transaksi, revenue). Bagian terlacak di-cache di memory dan di-flush tiap 30 detik — tunggu sebentar lalu cek lagi
 - Jika bot baru restart, stats lama tetap ada di `stats.json`
 - Setelah restore backup, stats cache otomatis di-reload
-- Cek `/stats` untuk agregat server, `/my-stats` untuk pribadi
+- "Member Terlacak" hanya menghitung member yang sempat tercatat bot (tracking v3.2+) — jumlah member ASLI ada di field "Member (live)"
+- Cek `/stats` untuk overview server, `/my-stats` untuk statistik pribadi (pesan, transaksi, kemenangan, tanggal gabung asli)
 
 ### Tiket tidak bisa dibuat
 
@@ -976,10 +982,11 @@ Cooldown bersifat **per-user** — user A memicu tidak memengaruhi user B.
 
 ## 11. Riwayat Versi
 
-Riwayat lengkap semua versi (v3.9.0 – v3.9.46) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
+Riwayat lengkap semua versi (v3.9.0 – v3.9.47) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
 
 Ringkasan 3 versi terbaru:
 
+- **v3.9.47** (2026-09-09) — ✨ **permintaan user: match mode auto-responder + statistik akurat**. Auto-responder: trigger dulu hanya aktif di AWAL pesan — trigger `beli` tidak pernah cocok dengan "bagaimana cara beli". Sekarang tiap responder punya match mode (opsi baru `/add-responder match_mode`): **contains** (default, juga untuk entri lama — trigger cocok sebagai KATA UTUH di mana saja dalam pesan: `beli` menjawab "bagaimana cara beli"/"mau beli?" tapi TIDAK "belian"/"membeli") atau **exact** (perilaku awal-pesan yang lama). Bonus: responder yang cooldown tidak lagi membatalkan scan — trigger kedua yang overlap tetap bisa membalas. Statistik (laporan user: "stats-nya gak sesuai"): `/stats` kini memimpin dengan data LIVE dari Discord (jumlah member asli, tier+jumlah boost, tiket terbuka) disusul aktivitas terlacak berlabel jelas; "Pembelian VIP" di-rename jadi **Transaksi** (dihitung order tiket + deal rekber); `/my-stats` menampilkan tanggal gabung ASLI dari objek member, bukan "belum tercatat" untuk member pra-v3.2. +22 unit test (total **486**).
 - **v3.9.46** (2026-09-09) — 🟡 **fix: hint console "Message Content Intent" FALSE ALARM** (laporan produksi: hint muncul saat startup padahal bot online dan intent aktif — bot yang online *membuktikan* intent ON, karena discord.js crash saat login kalau toggle portal OFF): filter hint cuma mengecualikan attachment/sticker/components, jadi pesan yang memang tanpa teks salah didiagnosis — **poll native** (`message.poll`), **pesan GIF picker Tenor** (embed gifv), **pesan sistem** (notifikasi join, pin). Fix: pengecualian dipusatkan di helper yang diekspor `isContentlessByDesign()`; hint kini hanya muncul untuk pesan yang seharusnya ber-teks tapi datang kosong. +3 unit test regression (total **464**).
 - **v3.9.45** (2026-09-07) — 🔴 **hotfix: command moderasi crash di cek permission pertama** (laporan error produksi: `/purge` → `TypeError: Cannot read properties of undefined (reading 'ManageMessages')`): `moderation.js` (v3.9.43) mendestrukturisasi `PermissionFlagsBits` dari `_shared.js` yang tidak pernah mengekspornya — `undefined` *senyap* (export yang hilang tidak error saat require) yang lolos dari 457 test hijau + ESLint bersih. Semua `/purge` `/timeout` `/untimeout` `/kick` `/ban` mati sebelum sempat berbuat apa-apa. Fix: `_shared.js` resmi mengekspor ulang `PermissionFlagsBits`; +2 unit test jaring pengaman (total **461**) yang mencocokkan semua destructure `_shared` di `src/**` saat test — kelas bug ini tidak akan lolos lagi.
 - **v3.9.44** (2026-09-06) — ✨ **redesign total katalog `/help`** (user request: "/warn kok masuk kategori Scheduled Announce — tolong sync semua fitur & susun ulang biar mudah dipahami"): **20 kategori diurut prioritas pemakaian** (Panduan Cepat → Moderasi → Produk → Key → Panel → Kategori → Rekber → Log & Channel → Auto-Mod → dst.); `/warn*` **pindah ke kategori Moderasi** (satu pintu: warn → timeout → kick → ban + purge); kategori baru **🚀 Panduan Cepat** (urutan setup server baru 5 langkah); kategori lama yang amburadul dirapikan ("Scheduled Announce & Warn" → murni Pengumuman Terjadwal; "Announce, Embed & Backup" dipecah jadi Pesan & Embed Builder + Backup & Maintenance; "Stats & Lainnya" → murni Statistik); `/set-channel` yang tadinya tersebar di 3 kategori kini **satu pintu di Log & Channel**; home 🏠 baru dengan seksi "Butuh apa sekarang?"; setiap command diberi penjelasan 1 frasa; seluruh 20 kategori tetap muat di 1 embed Semua Command (5.579 / 5.800 char — tanpa drop); +2 unit test kontrak regression (total **459**).
@@ -1013,6 +1020,6 @@ Jika ada masalah yang tidak ada di Troubleshooting:
 
 ---
 
-**Versi dokumen:** v3.9.46
+**Versi dokumen:** v3.9.47
 **Last updated:** 9 September 2026
-**Bot version:** 3.9.46 · 88 slash command · 464 unit test
+**Bot version:** 3.9.47 · 88 slash command · 486 unit test

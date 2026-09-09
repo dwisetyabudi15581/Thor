@@ -1241,6 +1241,18 @@ function getCommands() {
                     description: 'Cooldown dalam detik (anti-spam, default: 3, 0 = matiin)',
                     required: false,
                     min_value: 0
+                },
+                {
+                    // v3.9.47: cara trigger dicocokkan dengan pesan. Default = contains
+                    // (kata utuh di mana saja, mis. trigger "beli" cocok dengan "bagaimana cara beli").
+                    type: 3,
+                    name: 'match_mode',
+                    description: 'Cara trigger dicocokkan ke pesan (default: Contains)',
+                    required: false,
+                    choices: [
+                        { name: 'Contains — di mana saja dalam kalimat', value: 'contains' },
+                        { name: 'Awal pesan — exact', value: 'exact' }
+                    ]
                 }
             ]
         },

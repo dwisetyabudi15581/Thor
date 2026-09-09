@@ -941,6 +941,26 @@ async function closeTicket(channel, closer, isSuccess) {
     }
 }
 
+/**
+ * v3.9.47: hitung tiket AKTIF untuk sebuah guild (dipakai /stats).
+ * tickets.json hanya menyimpan meta tiket yang masih terbuka — meta dihapus
+ * saat channel dihapus (closeTicket) — jadi menghitung entri yang ter-scoped
+ * ke guild ini = tiket yang sedang terbuka. Entri lama tanpa guildId
+ * (pra-v3.9.8) tidak bisa di-scope dan tidak dihitung.
+ *
+ * @param {string} guildId
+ * @returns {number}
+ */
+function getActiveTicketCount(guildId) {
+    if (!guildId) return 0;
+    const all = loadTickets();
+    let count = 0;
+    for (const meta of Object.values(all)) {
+        if (meta && meta.guildId === guildId) count++;
+    }
+    return count;
+}
+
 module.exports = {
     createTicket,
     closeTicket,
@@ -953,6 +973,8 @@ module.exports = {
     removeTicketMeta,
     resolveTicketType,
     classifyProduct,
+    // v3.9.47: penghitung "tiket terbuka" live untuk /stats
+    getActiveTicketCount,
     // v3.9.38 FIX (FIX 3): helper lookup produk by meta (dipakai ticket.js
     // + closeTicket, dan unit test hardeningV38Ticket).
     resolveProduct
