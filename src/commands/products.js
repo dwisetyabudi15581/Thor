@@ -13,12 +13,18 @@ const { MessageFlags, getConfig, saveConfig, Embeds, logAudit, safeEditReply, pa
  * v3.9.49 (laporan user: "total revenue gak ke update"): validasi harga produk
  * SEBELUM disimpan. String harga yang tidak bisa diparse bot (mis. "murah",
  * "negosiasi", "25rb2") dulu diterima senyap — tiap penjualan berikutnya lalu
- * mencatat parsePrice(harga) = Rp 0 ke stats/leaderboard, dan revenue tidak
+ * mencatat parsePrice(harga) = 0 ke stats/leaderboard, dan revenue tidak
  * pernah bergerak. Return null kalau valid (harga gratis "0"/"free"/"gratis"
  * diperbolehkan), atau pesan error kalau invalid.
+ *
  * v3.9.50 (laporan user: "saya kasih harga 3$ USD | Rp. 25.000"): harga
- * ganda dua-mata-uang kini VALID — bagian Rupiah yang dicatat ke stats.
- * Harga USD-only dapat pesan khusus yang menjelaskan revenue = Rupiah.
+ * ganda dua-mata-uang VALID — bagian Rupiah yang dicatat ke stats.
+ *
+ * v3.9.54 (permintaan user: "bot akan dipakai orang di luar Indonesia juga"):
+ * mata uang APA SAJA diterima ("$3", "€25", "¥1000", "25 usd"...) — bot
+ * sekarang currency-AGNOSTIC, mencatat nominal angka dalam mata uang apapun
+ * yang admin pakai. Harga USD-only tidak lagi ditolak. Harga ganda dua mata
+ * uang tetap mencatat bagian Rp (v3.9.50, tidak berubah).
  * Diekspor untuk unit test (tests/unit/parsePrice.test.js).
  */
 function priceValidationError(price) {
@@ -26,16 +32,9 @@ function priceValidationError(price) {
     const FREE = ['0', 'free', 'gratis'];
     if (FREE.includes(raw.toLowerCase())) return null; // memang gratis — OK
     if (parsePriceNum(raw) > 0) return null; // terparse jadi jumlah positif — OK
-    // v3.9.50: USD-only ("$3", "3 usd") — stats mencatat Rupiah, tidak ada konversi.
-    if (/\$|usd/i.test(raw) && !/rp/i.test(raw)) {
-        return (
-            `❌ Harga \`${raw}\` hanya USD — revenue dicatat dalam **Rupiah**, dan bot tidak bisa konversi mata uang.\n` +
-            `✅ Cantumkan nominal Rupiah, mis. \`3$ USD | Rp 25.000\` — stats akan mencatat **bagian Rp** (25.000) dari setiap penjualan.`
-        );
-    }
     return (
-        `❌ Harga \`${raw}\` tidak bisa dibaca sebagai angka — nanti akan tercatat **Rp 0** di stats/revenue setiap penjualan.\n` +
-        `✅ Format yang diterima: \`25000\` · \`25.000\` · \`Rp 25.000\` · \`25rb\` · \`2jt\` · \`3$ USD | Rp 25.000\` (yang dicatat bagian Rp) · \`gratis\``
+        `❌ Harga \`${raw}\` tidak bisa dibaca sebagai angka — nanti akan tercatat **0** di stats setiap penjualan.\n` +
+        `✅ Format yang diterima: \`25000\` · \`25.000\` · \`25,000\` · \`$3\` · \`€25\` · \`Rp 30.000\` · \`30rb\` · \`3jt\` · \`3$ USD | Rp 25.000\` (yang dicatat bagian Rp) · \`gratis\``
     );
 }
 
@@ -120,12 +119,14 @@ module.exports = async function (interaction) {
             details: `Tambah produk: **${label}** (\`${value}\`) — ${price}${durationInfo}${catInfo}`,
             guildId: interaction.guild.id
         });
-        // v3.9.49: tampilkan bagaimana harga akan dihitung di revenue /stats — jadi
+        // v3.9.49: tampilkan bagaimana harga akan dihitung di /stats — jadi
         // salah format kelihatan saat setup, bukan setelah N penjualan tak terlihat.
+        // v3.9.54: tanpa prefiks "Rp" — bot currency-agnostic, mencatat nominal
+        // angka dalam mata uang yang dipakai admin sendiri.
         const priceNum = parsePriceNum(safePrice);
         const revenueNote =
             priceNum > 0
-                ? `\n💰 Tercatat di stats: **Rp ${priceNum.toLocaleString('id-ID')}** per penjualan (transaksi tiket + rekber)`
+                ? `\n💰 Tercatat di stats: **${priceNum.toLocaleString('id-ID')}** per penjualan (transaksi tiket + rekber)`
                 : '';
         return safeEditReply(interaction, {
             content: `✅ Produk ditambahkan: **${label}** — ${price}${durationInfo}${revenueNote}\n📦 Kategori: \`${finalCategory}\` | 🔑 Requires Key: ${finalRequiresKey ? 'Yes' : 'No'}`
@@ -310,7 +311,7 @@ module.exports = async function (interaction) {
             // saat update.
             const newPriceNum = parsePriceNum(newPrice);
             if (newPriceNum > 0) {
-                changes.push(`💰 tercatat di stats: **Rp ${newPriceNum.toLocaleString('en-US')}** per penjualan`);
+                changes.push(`💰 tercatat di stats: **${newPriceNum.toLocaleString('en-US')}** per penjualan`);
             }
         }
         if (newDuration !== null) {

@@ -443,7 +443,7 @@ function getCommands() {
                 {
                     type: 3,
                     name: 'price',
-                    description: 'Harga (mis. Rp. 50.000, maks 100 char)',
+                    description: 'Harga (mis. Rp 50.000 / $3 / 25rb — maks 100 char)',
                     required: true,
                     max_length: 100
                 },
@@ -508,7 +508,7 @@ function getCommands() {
                 {
                     type: 3,
                     name: 'price',
-                    description: 'Harga baru (mis. "Rp 25.000")',
+                    description: 'Harga baru (mis. "Rp 25.000" / "$3")',
                     required: false,
                     min_length: 1,
                     max_length: 100
@@ -579,13 +579,13 @@ function getCommands() {
                     required: true,
                     choices: [
                         { name: 'Persen (%) dari harga deal', value: 'percent' },
-                        { name: 'Nominal flat (Rp per deal)', value: 'flat' }
+                        { name: 'Nominal flat (per deal)', value: 'flat' }
                     ]
                 },
                 {
                     type: 10,
                     name: 'value',
-                    description: 'Nilai fee (persen: 0-90, flat: nominal Rp). 0 = gratis',
+                    description: 'Nilai fee (persen: 0-90, flat: nominal per deal). 0 = gratis',
                     required: true,
                     minValue: 0
                 }

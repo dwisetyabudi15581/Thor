@@ -36,6 +36,12 @@
  * Statistik belanja pribadi tetap ada di tempat yang per-user dan tidak
  * ambigu: /my-stats "Total Belanja" dan /leaderboard "Top Spender".
  *
+ * v3.9.54 (permintaan user: "bot akan dipakai orang di luar Indonesia juga"):
+ * jumlah belanja kini tampil TANPA prefiks "Rp" yang di-hardcode — bot
+ * currency-AGNOSTIC, mencatat nominal angka dalam mata uang apapun yang
+ * dipakai admin server terkait untuk harga produknya (lihat
+ * statsManager.parsePrice). Pakai SATU mata uang yang konsisten per server.
+ *
  * Catatan: permission check untuk /leaderboard & /my-stats (public command)
  *          ada di router (src/commands/index.js). Domain file ini tidak perlu
  *          repeat check tersebut.
@@ -158,7 +164,8 @@ module.exports = async function (interaction) {
         const metricFormat = {
             messages: v => `${v.toLocaleString('id-ID')} pesan`,
             vipPurchases: v => `${v} transaksi`,
-            totalSpent: v => `Rp ${v.toLocaleString('id-ID')}`,
+            // v3.9.54: angka polos — currency-agnostic (tanpa prefiks "Rp").
+            totalSpent: v => v.toLocaleString('id-ID'),
             giveawaysWon: v => `${v} menang`
         };
 
@@ -199,7 +206,8 @@ module.exports = async function (interaction) {
             .addFields(
                 { name: '💬 Pesan', value: `${stats.messages.toLocaleString('id-ID')}`, inline: true },
                 { name: '🛒 Transaksi', value: `${stats.vipPurchases}`, inline: true },
-                { name: '💰 Total Belanja', value: `Rp ${stats.totalSpent.toLocaleString('id-ID')}`, inline: true },
+                // v3.9.54: angka polos — currency-agnostic (tanpa prefiks "Rp").
+                { name: '💰 Total Belanja', value: stats.totalSpent.toLocaleString('id-ID'), inline: true },
                 { name: '🎉 Giveaway Won', value: `${stats.giveawaysWon}`, inline: true },
                 {
                     name: '📅 Gabung Server Ini',

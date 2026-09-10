@@ -57,11 +57,11 @@ module.exports = async function (interaction) {
         const examplePrice = 100000;
         const exampleFee = mm.calcFee(examplePrice, mode, value);
         const exampleTotals = mm.calcTotals(examplePrice, exampleFee);
-        const feeLabel = mode === 'percent' ? `**${value}%** dari harga deal` : `**${mm.formatRupiah(value)}** flat per deal`;
+        const feeLabel = mode === 'percent' ? `**${value}%** dari harga deal` : `**${mm.formatMoney(value)}** flat per deal`;
         return safeEditReply(interaction, {
             content:
                 `✅ Fee rekber diatur: ${feeLabel} — fee **DITAMBAH di atas harga** (tidak dipotong dari dana penjual).\n` +
-                `💡 Contoh: deal **${mm.formatRupiah(examplePrice)}** → fee **${mm.formatRupiah(exampleTotals.midmanKeeps)}** → pembeli transfer **${mm.formatRupiah(exampleTotals.buyerPays)}**, penjual menerima **${mm.formatRupiah(exampleTotals.sellerGets)}** (penuh).\n` +
+                `💡 Contoh: deal **${mm.formatMoney(examplePrice)}** → fee **${mm.formatMoney(exampleTotals.midmanKeeps)}** → pembeli transfer **${mm.formatMoney(exampleTotals.buyerPays)}**, penjual menerima **${mm.formatMoney(exampleTotals.sellerGets)}** (penuh).\n` +
                 `Fee berlaku untuk deal BARU (deal berjalan tetap pakai fee saat deal dibuat).`
         });
     }
@@ -83,7 +83,7 @@ module.exports = async function (interaction) {
             return (
                 `<#${d.channelId}> — **${stateLabel}**\n` +
                 `┣ 🛒 <@${d.buyerId}> ⇄ 🏷️ <@${d.sellerId}>\n` +
-                `┗ 📦 ${String(d.item).slice(0, 60)} • ${mm.formatRupiah(totals.buyerPays)} (harga ${mm.formatRupiah(totals.sellerGets)} + fee ${mm.formatRupiah(totals.midmanKeeps)}) • ${age} jam lalu`
+                `┗ 📦 ${String(d.item).slice(0, 60)} • ${mm.formatMoney(totals.buyerPays)} (harga ${mm.formatMoney(totals.sellerGets)} + fee ${mm.formatMoney(totals.midmanKeeps)}) • ${age} jam lalu`
             );
         });
 

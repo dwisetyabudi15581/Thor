@@ -15,7 +15,7 @@
  *     "sellerAgreed": false,
  *     "observers":  ["123..."],  // v3.9.34: member tambahan (non-peserta) di channel deal
  *     "item":       "Akun ML Mythic",
- *     "priceNum":   100000,     // harga deal dalam rupiah (number)
+ *     "priceNum":   100000,     // harga deal (number — v3.9.54: currency-agnostic, mata uang yang dipakai admin)
  *     "priceText":  "Rp100.000",
  *     "fee":        5000,       // fee midman (dihitung saat deal dibuat)
  *     "feeMode":    "percent",  // v3.9.33: snapshot mode fee saat deal dibuat
@@ -49,7 +49,7 @@
  * menulis terms harus menyetujuinya".
  *
  * Fungsi pure (canTransition, nextState, actorAllowed, calcFee,
- * calcTotals, parsePriceNumber, formatRupiah, applyAgreement,
+ * calcTotals, parsePriceNumber, formatMoney, applyAgreement,
  * canAddObserver, addObserver, removeObserver) mengikuti pola
  * classifyProduct() v3.9.28: di-ekstrak supaya bisa di-unit-test tanpa mock
  * Discord.
@@ -274,10 +274,10 @@ function actorAllowed(event, roles) {
  * sebesar harga deal (fee flat boleh melebihi harga; /set-midman-fee sudah
  * membatasi persen maks 90% sebagai sanity guard di sisi command).
  *
- * @param {number} priceNum - harga deal (rupiah)
+ * @param {number} priceNum - harga deal (nominal, mata uang yang dipakai admin)
  * @param {string} feeMode - 'percent' | 'flat'
  * @param {number} feeValue - persen (mis. 5 = 5%) atau nominal flat
- * @returns {number} fee nominal rupiah
+ * @returns {number} fee nominal
  */
 function calcFee(priceNum, feeMode, feeValue) {
     const price = Number(priceNum) || 0;
@@ -325,7 +325,7 @@ function calcTotals(priceNum, fee) {
  *   - Tanpa suffix: `.`/`,` hanya sah sebagai pemisah RIBUAN — format
  *     `^\d{1,3}([.,]\d{3})*$` dengan JENIS separator konsisten ("1.000.000"
  *     dan "1,000,000" valid; "2.5", "1.000,000", "100000." invalid → 0).
- *     Harga deal rekber memang selalu integer rupiah.
+ *     Harga deal rekber memang selalu angka bulat (currency-agnostic, v3.9.54).
  */
 function parsePriceNumber(input) {
     if (typeof input === 'number') return input > 0 ? Math.floor(input) : 0;
@@ -334,8 +334,7 @@ function parsePriceNumber(input) {
         .toLowerCase()
         .trim();
     // v3.9.50 FIX: harga ganda ("3$ USD | Rp. 25.000") — baca bagian Rupiahnya
-    // langsung (mata uang stats/rekber). USD-only (tanpa 'rp') → 0: rekber
-    // berdenominasi Rupiah dan tidak ada konversi yang andal.
+    // langsung (perilaku lama dipertahankan untuk server yang sudah jalan).
     if (/rp/.test(s)) {
         const m = s.match(/rp\.?\s*([0-9][0-9.,]*\s*(?:juta|jt|rb|k|m)?)/);
         if (m) {
@@ -343,8 +342,19 @@ function parsePriceNumber(input) {
         } else {
             s = s.replace(/rp\.?/g, '');
         }
-    } else if (/\$|usd/.test(s)) {
-        return 0;
+    } else if (/[|$€£¥₩₱₹₫฿]|\b(?:usd|eur|gbp|jpy|krw|php|inr|vnd|thb|myr|sgd|idr|aud|cad|chf)\b/.test(s)) {
+        // v3.9.54 (permintaan user: "bot akan dipakai orang di luar Indonesia
+        // juga"): penanda mata uang APA SAJA diterima — rekber sekarang
+        // currency-AGNOSTIC, nominal deal dalam mata uang apapun yang
+        // diketik para pihak (tanpa konversi). Penanda dibuang; nominal
+        // PERTAMA yang menang ("$3 | €2" → 3). Rp tetap punya cabang khusus
+        // di atas supaya harga ganda tetap mencatat bagian Rupiah.
+        s = s
+            .replace(/[|$€£¥₩₱₹₫฿]/g, ' ')
+            .replace(/\b(?:usd|eur|gbp|jpy|krw|php|inr|vnd|thb|myr|sgd|idr|aud|cad|chf)\b/g, ' ');
+        const m = s.match(/[0-9][0-9.,]*(?:\s*(?:juta|jt|rb)|[km])?/);
+        if (!m) return 0; // ada penanda tapi tanpa nominal ("usd") → invalid
+        s = m[0];
     }
     s = s
         .replace(/rp\.?/g, '')
@@ -386,11 +396,14 @@ function parsePriceNumber(input) {
 }
 
 /**
- * Format rupiah: 95000 → "Rp95.000" (locale id-ID).
+ * v3.9.54 (permintaan user: pengguna internasional): format nominal deal
+ * jadi angka locale polos — currency-AGNOSTIC (tanpa prefiks "Rp").
+ * 95000 → "95.000". Mata uangnya apapun yang diketik para pihak deal;
+ * bot tidak pernah konversi.
  */
-function formatRupiah(n) {
+function formatMoney(n) {
     const num = Number(n) || 0;
-    return 'Rp' + num.toLocaleString('id-ID');
+    return num.toLocaleString('id-ID');
 }
 
 /**
@@ -520,7 +533,7 @@ module.exports = {
     calcFee,
     calcTotals,
     parsePriceNumber,
-    formatRupiah,
+    formatMoney,
     // constants
     STATES,
     TRANSITIONS,

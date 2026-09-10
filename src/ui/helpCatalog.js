@@ -164,7 +164,7 @@ const HELP_CATEGORIES = [
             '• `/set-product-role value role days` — role pembeli diberikan OTOMATIS saat deal selesai, dan dihapus otomatis setelah `days` hari (kosong = permanen).',
             '• `/remove-product-role value` — berhenti memberikan · `/list-product-roles` — lihat semua.',
             '',
-            '❓ **Format harga?** Rupiah, dengan/tanpa titik/suffix: `Rp 30.000`, `30000`, `30rb`. Dua mata uang juga bisa (`3$ USD | Rp 25.000` — nominal Rp yang tercatat di stats). USD-only ditolak: stats dalam Rupiah.',
+            '❓ **Format harga?** Mata uang APA SAJA: `30000`, `30.000`, `$3`, `€25`, `¥1000`, `Rp 30.000`, `30rb`, `3jt`. Dua mata uang juga bisa (`3$ USD | Rp 25.000` — nominal Rp yang tercatat). Stats mencatat ANGKANYA (currency-agnostic) — pakai SATU mata uang yang konsisten.',
             '❓ **Pembeli lihat harganya?** Ya — daftar harga di panel tiket memakai `label` + `price` persis seperti yang kamu tulis.'
         ]
     },
@@ -255,7 +255,7 @@ const HELP_CATEGORIES = [
             '**Rekber = bot jadi wasit dealnya: pembeli & penjual konfirmasi masing-masing, midman lepaskan dana, fee tercatat otomatis.**',
             '**Setup (sekali):**',
             '• `/set-role tipe:midman role:@Midman` — WAJIB sebelum deal bisa dibuka. Staf yang punya role ini jadi petugas rekber.',
-            '• `/set-midman-fee mode value` — fee-nya: `mode:Persen value:5` (5%) atau `mode:Flat value:5000` (Rp 5.000). `0` = gratis.',
+            '• `/set-midman-fee mode value` — fee-nya: `mode:Persen value:5` (5%) atau `mode:Flat value:5000` (flat 5.000). `0` = gratis.',
             '• `/midman-deals` — semua deal aktif dalam satu halaman (pembeli, penjual, midman, nominal, status).',
             '',
             '**Alur deal**',
@@ -263,7 +263,7 @@ const HELP_CATEGORIES = [
             '2️⃣ Pembeli & penjual masing-masing tekan **Setuju** — bot mengunci edit setelah keduanya setuju (total 3 langkah).',
             '3️⃣ Midman menyelesaikan: **Complete** (dana dilepas + fee tercatat) atau **Cancel** (semua dibebaskan).',
             '❓ **Deal macet?** `/midman-deals` menunjukkan statusnya; deal yang channelnya terhapus direkonsiliasi otomatis saat startup + harian.',
-            '❓ **Fee masuk stats?** Deal yang selesai tercatat di stats transaksi (Rupiah).'
+            '❓ **Fee masuk stats?** Deal yang selesai tercatat di stats transaksi (nominal deal — mata uang apapun bisa).'
         ]
     },
     {

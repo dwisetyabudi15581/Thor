@@ -157,14 +157,29 @@ test('parsePrice v3.9.50: dual-currency — the Rp half is recorded', () => {
     assert.strictEqual(parsePrice('$5 USD | Rp 150rb'), 150000); // plus suffix
 });
 
-test('parsePrice v3.9.50: USD-only is unparseable (stats are in Rupiah)', () => {
-    // Nominal USD tidak bisa dikonversi andal → 0 → priceValidationError
-    // meminta bagian Rupiah, bukan senyap mencatat jumlah yang salah.
-    assert.strictEqual(parsePrice('3$'), 0);
-    assert.strictEqual(parsePrice('$3'), 0);
-    assert.strictEqual(parsePrice('3 usd'), 0);
-    assert.strictEqual(parsePrice('USD 3'), 0);
-    assert.strictEqual(parsePrice('3$ USD'), 0);
+test('parsePrice v3.9.54: penanda mata uang APA SAJA diterima (internasional)', () => {
+    // Permintaan user: "bot akan dipakai orang di luar Indonesia juga".
+    // Bot currency-AGNOSTIC — mencatat nominal angka dalam mata uang apapun
+    // yang dipakai admin untuk harga produknya (tanpa konversi, tanpa penolakan).
+    assert.strictEqual(parsePrice('$3'), 3);
+    assert.strictEqual(parsePrice('3$'), 3);
+    assert.strictEqual(parsePrice('3 usd'), 3);
+    assert.strictEqual(parsePrice('USD 3'), 3);
+    assert.strictEqual(parsePrice('3$ USD'), 3);
+    assert.strictEqual(parsePrice('€25'), 25);
+    assert.strictEqual(parsePrice('£ 20'), 20);
+    assert.strictEqual(parsePrice('¥1000'), 1000);
+    assert.strictEqual(parsePrice('₩25.000'), 25000);
+    assert.strictEqual(parsePrice('₱500'), 500);
+    assert.strictEqual(parsePrice('25 eur'), 25);
+    assert.strictEqual(parsePrice('IDR 30.000'), 30000);
+    // Nominal PERTAMA yang menang kalau tidak ada bagian Rp ("$3 | €2" → 3).
+    assert.strictEqual(parsePrice('$3 | €2'), 3);
+    // Ada penanda tapi tanpa nominal tetap tidak terbaca.
+    assert.strictEqual(parsePrice('usd'), 0);
+    // Word safety: suffix k/m harus MENEMPEL supaya dihitung
+    // ("beli 3 monyet buat $5" → 3, bukan "3 m" → 3000).
+    assert.strictEqual(parsePrice('beli 3 monyet buat $5'), 3);
 });
 
 test('parsePrice v3.9.50: Rp formats keep working (no regression)', () => {
@@ -179,27 +194,39 @@ test('parsePriceNumber v3.9.50 (midman): dual-currency accepted, strictness kept
     const mm = require('../../src/data/midmanManager');
     assert.strictEqual(mm.parsePriceNumber('3$ USD | Rp. 25.000'), 25000);
     assert.strictEqual(mm.parsePriceNumber('$3 | Rp 25.000'), 25000);
-    // USD-only → 0 (rekber berdenominasi Rupiah).
-    assert.strictEqual(mm.parsePriceNumber('3$'), 0);
-    assert.strictEqual(mm.parsePriceNumber('3 usd'), 0);
+    // v3.9.54: USD-only kini terparse juga (rekber currency-agnostic).
+    assert.strictEqual(mm.parsePriceNumber('3$'), 3);
+    assert.strictEqual(mm.parsePriceNumber('3 usd'), 3);
     // Guard ketat tetap: desimal + suffix di bagian Rp tetap ditolak.
     assert.strictEqual(mm.parsePriceNumber('3$ | Rp 1.5rb'), 0);
     // Strictness legacy tidak berubah.
     assert.strictEqual(mm.parsePriceNumber('1.5rb'), 0);
 });
 
-test('priceValidationError v3.9.50 (products): dual OK, USD-only gets a hint', () => {
+test('parsePriceNumber v3.9.54 (midman): mata uang internasional, angka bulat', () => {
+    const mm = require('../../src/data/midmanManager');
+    assert.strictEqual(mm.parsePriceNumber('$25,000'), 25000);
+    assert.strictEqual(mm.parsePriceNumber('€2.500'), 2500); // titik ribuan gaya ID (grup konsisten)
+    assert.strictEqual(mm.parsePriceNumber('¥1000'), 1000);
+    // Rekber tetap ketat: desimal seperti "2.5" ambigu → ditolak.
+    assert.strictEqual(mm.parsePriceNumber('$2.5'), 0);
+    // Ada penanda tapi tanpa nominal → invalid.
+    assert.strictEqual(mm.parsePriceNumber('usd'), 0);
+});
+
+test('priceValidationError v3.9.54 (products): mata uang apa saja diterima', () => {
     const products = require('../../src/commands/products');
-    // Harga ganda dua mata uang & Rupiah polos valid (null = tidak ada error).
+    // Harga ganda dua mata uang, Rupiah polos, dan harga internasional semua valid.
     assert.strictEqual(products.priceValidationError('3$ USD | Rp. 25.000'), null);
     assert.strictEqual(products.priceValidationError('Rp 25rb'), null);
     assert.strictEqual(products.priceValidationError('25.000'), null);
     assert.strictEqual(products.priceValidationError('gratis'), null);
-    // USD-only: pesan khusus menyuruh admin mencantumkan nominal Rupiah.
-    const usdErr = products.priceValidationError('3$ USD');
-    assert.ok(typeof usdErr === 'string' && usdErr.includes('Rupiah'), 'error USD-only menyebut Rupiah');
-    assert.ok(usdErr.includes('Rp 25.000'), 'error USD-only menampilkan contoh harga ganda');
+    // v3.9.54: USD-only tidak lagi ditolak — bot currency-agnostic.
+    assert.strictEqual(products.priceValidationError('3$ USD'), null);
+    assert.strictEqual(products.priceValidationError('$3'), null);
+    assert.strictEqual(products.priceValidationError('€25'), null);
     // String sampah tetap ditolak dengan daftar format.
     const junkErr = products.priceValidationError('murah');
-    assert.ok(typeof junkErr === 'string' && junkErr.includes('Rp 0'));
+    assert.ok(typeof junkErr === 'string' && junkErr.includes('tidak bisa dibaca'));
+    assert.ok(junkErr.includes('$3'), 'daftar format menampilkan contoh internasional');
 });

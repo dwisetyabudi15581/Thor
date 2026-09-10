@@ -179,7 +179,7 @@ test('USER REPORT /my-stats: tanggal gabung ASLI + label transaksi', async () =>
     assert.strictEqual(fields['📅 Gabung Server Ini'], `<t:${Math.floor(REAL_JOINED_TS / 1000)}:R>`);
     assert.strictEqual(fields['💬 Pesan'], '3');
     assert.strictEqual(fields['🛒 Transaksi'], '2');
-    assert.strictEqual(fields['💰 Total Belanja'], 'Rp 20.000');
+    assert.strictEqual(fields['💰 Total Belanja'], '20.000'); // v3.9.54: angka polos, currency-agnostic
 
     const names = (embed.data.fields || []).map(f => f.name);
     assert.ok(!names.some(n => /VIP/i.test(n)), 'my-stats juga tidak boleh menyebut "VIP"');

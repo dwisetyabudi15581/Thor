@@ -5,6 +5,16 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 Legend: 🔴 critical · 🟠 high · 🟡 medium · 🟢 improvement
 
+## [3.9.54] — 2026-09-10
+
+### Changed — 🌍 permintaan user: "bot bakal dipakai orang di luar Indonesia juga — hapus saja yang Rupiah-only (atau pakai ide kamu)"
+
+- 🟢 **Harga kini currency-AGNOSTIC: penanda mata uang APA SAJA diterima** — `$3`, `€25`, `£ 20`, `¥1000`, `₩25.000`, `₱500`, `₹99`, `25 usd`, `IDR 30.000`, `3 eur`, … plus semua format lama (`25000`, `25.000`, `25,000`, `Rp 30.000`, `30rb`, `3jt`). Bot mencatat **nominal angkanya** dalam mata uang apapun yang admin pakai untuk harga produknya — tanpa konversi, tanpa penolakan. Harga dua mata uang (`3$ USD | Rp 25.000`) tetap mencatat **bagian Rp** (perilaku v3.9.50 tidak berubah); kalau tidak ada bagian Rp, nominal PERTAMA yang menang (`$3 | €2` → 3). Berlaku untuk KEDUA parser harga: `statsManager.parsePrice` (produk/stats) dan `midmanManager.parsePriceNumber` (deal rekber — cabang v3.9.50 "USD-only → ditolak" dihapus). Pilihan desain (alih-alih menghapus harga total): menghapus sistem harga ikut mematikan stats 💰 Total Belanja / Top Spender — jadi dibuat currency-agnostic supaya semua fitur tetap jalan untuk semua negara.
+- 🟢 **Harga USD-only tidak lagi ditolak /add-product & /update-product** — `priceValidationError` kini menerima mata uang apapun; pesan error (untuk string yang benar-benar tak terbaca) mencantumkan contoh internasional (`$3` · `€25` · `Rp 30.000` · `30rb`). Konfirmasi menampilkan `💰 Tercatat di stats: **25.000** per penjualan` — angka polos tanpa prefiks `Rp`.
+- 🟢 **/my-stats "Total Belanja" dan /leaderboard "Top Spender" tampil sebagai angka locale polos** (tanpa prefiks `Rp` yang di-hardcode) — benar untuk server yang memakai mata uang APA PUN. Pembeli tetap melihat teks `label` + `price` persis seperti yang ditulis admin di panel tiket (sudah currency-agnostic sejak awal).
+- 🟢 **Tampilan rekber currency-agnostic:** `midmanManager.formatRupiah` di-rename jadi **`formatMoney`** (angka locale polos, mis. `95.000` alih-alih `Rp95.000`) — semua ~20 situs tampilan (deal board, instruksi WAITING_PAYMENT, contoh fee, detail audit) diperbarui. Rekber tetap ketat soal angka bulat (`$2.5` → ditolak karena ambigu; `$25,000` / `€2.500` → sah).
+- 🟢 **FAQ /help ditulis ulang (kategori Produk & Rekber):** "Format harga?" kini menjawab "mata uang APA SAJA bisa" dengan contoh internasional, bukan "USD-only ditolak: stats dalam Rupiah"; FAQ fee rekber tidak lagi bilang stats dalam Rupiah. Deskripsi opsi slash (`/add-product price`, `/update-product price`, `/set-midman-fee`) kini menampilkan contoh campuran mata uang.
+
 ## [3.9.53] — 2026-09-10
 
 ### Added — ⚙️ permintaan user: "fitur /serverstats kasih opsi apa saja yang mau di munculin"

@@ -383,7 +383,8 @@ test('PRODUCT PRICE GUARD: /add-product rejects unparseable price, shows the par
     // 1. Unparseable price → rejected with the formats hint.
     await productsCommand(makeInteraction('murah banget'));
     assert.match(replies[0].content, /tidak bisa dibaca sebagai angka/);
-    assert.match(replies[0].content, /25rb/);
+    assert.match(replies[0].content, /30rb/); // v3.9.54: daftar format internasional ($3 · €25 · Rp 30.000 · 30rb)
+    assert.match(replies[0].content, /\$3/);
     const configAfterReject = require('../../src/data/configManager').getConfig();
     assert.strictEqual(configAfterReject.products.length, 0, 'tidak ada yang tersimpan');
 
@@ -391,7 +392,7 @@ test('PRODUCT PRICE GUARD: /add-product rejects unparseable price, shows the par
     replies.length = 0;
     await productsCommand(makeInteraction('25rb'));
     assert.match(replies[0].content, /✅ Produk ditambahkan/);
-    assert.match(replies[0].content, /Rp 25\.000/);
+    assert.match(replies[0].content, /Tercatat di stats: \*\*25\.000\*\*/); // v3.9.54: tanpa prefiks "Rp"
     const configAfterAdd = require('../../src/data/configManager').getConfig();
     assert.strictEqual(configAfterAdd.products.length, 1);
     assert.strictEqual(configAfterAdd.products[0].price, '25rb');

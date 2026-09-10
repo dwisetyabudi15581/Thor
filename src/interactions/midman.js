@@ -91,7 +91,7 @@ const STATE_DESCRIPTIONS = {
         'Membatalkan sekarang aman (dana belum berpindah).',
     WAITING_PAYMENT: deal =>
         '**🛒 Pembeli** — transfer **Total Pembayaran** ke midman, lalu kirim bukti transfer di channel ini.\n' +
-        `💳 Total: **${mm.formatRupiah(deal.priceNum + deal.fee)}** (harga ${mm.formatRupiah(deal.priceNum)} + fee ${mm.formatRupiah(deal.fee)}).\n` +
+        `💳 Total: **${mm.formatMoney(deal.priceNum + deal.fee)}** (harga ${mm.formatMoney(deal.priceNum)} + fee ${mm.formatMoney(deal.fee)}).\n` +
         '**🛡️ Midman** — verifikasi dana benar-benar masuk, baru klik **✅ Dana Masuk**.\n' +
         'Setelah ini penjual baru boleh kirim barang.',
     WAITING_DELIVERY:
@@ -99,7 +99,7 @@ const STATE_DESCRIPTIONS = {
         '**🛒 Pembeli** — cek barang, kalau sudah sesuai klik **✅ Barang Diterima**.',
     WAITING_RELEASE: deal =>
         '**🛡️ Midman** — transfer **PENUH** ke penjual (JANGAN dipotong), lalu klik **💸 Cairkan ke Penjual**.\n' +
-        `🏷️ Penjual menerima: **${mm.formatRupiah(deal.priceNum)}** • 🧾 Fee midman (sisa di tanganmu): **${mm.formatRupiah(deal.fee)}**.\n` +
+        `🏷️ Penjual menerima: **${mm.formatMoney(deal.priceNum)}** • 🧾 Fee midman (sisa di tanganmu): **${mm.formatMoney(deal.fee)}**.\n` +
         'Invoice & transcript otomatis tersimpan saat deal ditutup.',
     DISPUTE:
         '**🚨 Deal DIBEKUKAN** — tidak ada dana/barang yang boleh berpindah.\n' +
@@ -120,18 +120,18 @@ function boardEmbed(deal, config) {
     const totals = mm.calcTotals(deal.priceNum, deal.fee);
     const feeLabel =
         deal.feeMode === 'percent'
-            ? `${mm.formatRupiah(deal.fee)} (${deal.feeValue}%)`
-            : mm.formatRupiah(deal.fee);
+            ? `${mm.formatMoney(deal.fee)} (${deal.feeValue}%)`
+            : mm.formatMoney(deal.fee);
     return new EmbedBuilder()
         .setTitle('🤝 DEAL BOARD — REKBER')
         .setDescription(desc)
         .setColor(mm.STATES[deal.state]?.color || 0x2ecc71)
         .addFields(
             { name: '📦 Item', value: String(deal.item).slice(0, 1000), inline: false },
-            { name: '💰 Harga Deal', value: mm.formatRupiah(deal.priceNum), inline: true },
+            { name: '💰 Harga Deal', value: mm.formatMoney(deal.priceNum), inline: true },
             { name: '🧾 Fee Midman', value: feeLabel, inline: true },
-            { name: '💳 Total Dibayar Pembeli', value: `**${mm.formatRupiah(totals.buyerPays)}** (harga + fee)`, inline: true },
-            { name: '🏷️ Diterima Penjual', value: `${mm.formatRupiah(totals.sellerGets)} — penuh, tanpa potongan`, inline: true },
+            { name: '💳 Total Dibayar Pembeli', value: `**${mm.formatMoney(totals.buyerPays)}** (harga + fee)`, inline: true },
+            { name: '🏷️ Diterima Penjual', value: `${mm.formatMoney(totals.sellerGets)} — penuh, tanpa potongan`, inline: true },
             { name: '🛒 Pembeli', value: `<@${deal.buyerId}>`, inline: true },
             { name: '🏷️ Penjual', value: `<@${deal.sellerId}>`, inline: true },
             { name: '🛡️ Midman', value: config.roles.midman ? `<@&${config.roles.midman}>` : '_belum di-set_', inline: true },
@@ -426,7 +426,7 @@ function memberSelectRow() {
 /** Ringkasan item+harga untuk header pesan ephemeral tiap langkah. */
 function pendingSummary(pending) {
     const buyerPart = pending.buyerId ? `\n🛒 Pembeli: **<@${pending.buyerId}>**` : '';
-    return `🧾 Item: **${pending.item}** • 💰 Harga: **${mm.formatRupiah(pending.priceNum)}**${buyerPart}`;
+    return `🧾 Item: **${pending.item}** • 💰 Harga: **${mm.formatMoney(pending.priceNum)}**${buyerPart}`;
 }
 
 /**
@@ -719,7 +719,7 @@ async function handlePickSeller(interaction) {
         observers: [],
         item,
         priceNum,
-        priceText: mm.formatRupiah(priceNum),
+        priceText: mm.formatMoney(priceNum),
         fee,
         // v3.9.33: snapshot fee saat deal dibuat (tampilan board & konsistensi
         // riwayat — config berubah tidak mengubah deal berjalan).
@@ -843,7 +843,7 @@ async function handlePickSeller(interaction) {
         actorId: creator.id,
         actorTag: creator.tag,
         details:
-            `Deal rekber dibuat oleh <@${creator.id}> — Item: **${item}** • Harga: ${mm.formatRupiah(priceNum)} • Fee: ${mm.formatRupiah(fee)} • Total dibayar pembeli: ${mm.formatRupiah(priceNum + fee)} • Pembeli: <@${buyerId}> • Penjual: <@${sellerId}>`,
+            `Deal rekber dibuat oleh <@${creator.id}> — Item: **${item}** • Harga: ${mm.formatMoney(priceNum)} • Fee: ${mm.formatMoney(fee)} • Total dibayar pembeli: ${mm.formatMoney(priceNum + fee)} • Pembeli: <@${buyerId}> • Penjual: <@${sellerId}>`,
         guildId: guild.id
     });
 
@@ -893,9 +893,9 @@ async function finalizeDeal(channel, deal, closer, endState, config) {
                     userId: deal.buyerId,
                     productName: `🤝 Rekber: ${deal.item}`,
                     // v3.9.33: rincian fee additive ikut terekam di transcript.
-                    price: `${mm.formatRupiah(deal.priceNum + deal.fee)} (harga ${mm.formatRupiah(
+                    price: `${mm.formatMoney(deal.priceNum + deal.fee)} (harga ${mm.formatMoney(
                         deal.priceNum
-                    )} + fee ${mm.formatRupiah(deal.fee)})`,
+                    )} + fee ${mm.formatMoney(deal.fee)})`,
                     category: 'midman'
                 },
                 closer,
@@ -914,7 +914,7 @@ async function finalizeDeal(channel, deal, closer, endState, config) {
                 channel,
                 deal.buyerId,
                 `🤝 Rekber: ${deal.item}`,
-                mm.formatRupiah(deal.priceNum + deal.fee),
+                mm.formatMoney(deal.priceNum + deal.fee),
                 closer
             );
         } catch (invoiceErr) {
@@ -1060,17 +1060,17 @@ async function handleEvent(interaction, event) {
             if (event === 'join') {
                 await channel.send(
                     '🤝 **Pembeli & penjual DUA-DUANYA sudah setuju** — item & harga **TERKUNCI**.\n' +
-                        `🛒 <@${deal.buyerId}> — transfer **${mm.formatRupiah(deal.priceNum + deal.fee)}** ke midman, lalu kirim bukti transfer di channel ini.`
+                        `🛒 <@${deal.buyerId}> — transfer **${mm.formatMoney(deal.priceNum + deal.fee)}** ke midman, lalu kirim bukti transfer di channel ini.`
                 );
             }
             if (event === 'fundin') {
                 await channel.send(
-                    `💰 Dana **${mm.formatRupiah(deal.priceNum + deal.fee)}** (harga + fee) dikonfirmasi masuk oleh **${interaction.user.tag}**.\n🏷️ <@${deal.sellerId}>, silakan kirim barang. Chat di channel ini menjadi bukti pengiriman.`
+                    `💰 Dana **${mm.formatMoney(deal.priceNum + deal.fee)}** (harga + fee) dikonfirmasi masuk oleh **${interaction.user.tag}**.\n🏷️ <@${deal.sellerId}>, silakan kirim barang. Chat di channel ini menjadi bukti pengiriman.`
                 );
             }
             if (event === 'release') {
                 await channel.send(
-                    `💸 **${interaction.user.tag}** mencairkan **${mm.formatRupiah(deal.priceNum)}** ke <@${deal.sellerId}> (penuh, tanpa potongan).\n🧾 Fee midman **${mm.formatRupiah(deal.fee)}** tetap milik midman.`
+                    `💸 **${interaction.user.tag}** mencairkan **${mm.formatMoney(deal.priceNum)}** ke <@${deal.sellerId}> (penuh, tanpa potongan).\n🧾 Fee midman **${mm.formatMoney(deal.fee)}** tetap milik midman.`
                 );
             }
             if (event === 'received') {
@@ -1101,7 +1101,7 @@ async function handleEvent(interaction, event) {
             action: `MIDMAN_${event.toUpperCase()}`,
             actorId: interaction.user.id,
             actorTag: interaction.user.tag,
-            details: `Deal <#${deal.channelId}> (${deal.item} — ${mm.formatRupiah(deal.priceNum)}) → ${mm.STATES[deal.state]?.label || deal.state}`,
+            details: `Deal <#${deal.channelId}> (${deal.item} — ${mm.formatMoney(deal.priceNum)}) → ${mm.STATES[deal.state]?.label || deal.state}`,
             guildId: deal.guildId
         }).catch(() => {});
 

@@ -9,7 +9,7 @@
  *   3. calcFee: persen / flat / 0 / mode invalid (v3.9.33: additive, tanpa cap).
  *   4. calcTotals: fee ditambah di atas harga — penjual menerima harga PENUH.
  *   5. parsePriceNumber: "100000" / "100.000" / "100k" / "1m" / invalid.
- *   6. formatRupiah.
+ *   6. formatMoney.
  *   7. Persistensi deals.json: setDeal/getDeal/removeDeal/hasActiveDealFor.
  *   8. Config: DEFAULTS midman + migration kategori 'midman' ke config lama
  *      (sekali saja — flag midmanCategoryDismissed mencegah re-add).
@@ -270,10 +270,11 @@ test('parsePriceNumber: input tidak valid → 0', () => {
     assert.strictEqual(mm.parsePriceNumber(null), 0);
 });
 
-test('formatRupiah: locale id-ID', () => {
-    assert.strictEqual(mm.formatRupiah(95000), 'Rp95.000');
-    assert.strictEqual(mm.formatRupiah(1000000), 'Rp1.000.000');
-    assert.strictEqual(mm.formatRupiah(0), 'Rp0');
+// v3.9.54: formatMoney currency-AGNOSTIC — angka locale polos, tanpa prefiks "Rp".
+test('formatMoney: angka locale id-ID polos (v3.9.54, currency-agnostic)', () => {
+    assert.strictEqual(mm.formatMoney(95000), '95.000');
+    assert.strictEqual(mm.formatMoney(1000000), '1.000.000');
+    assert.strictEqual(mm.formatMoney(0), '0');
 });
 
 // ====================================================

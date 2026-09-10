@@ -342,6 +342,11 @@ function getServerStats(guildId) {
 
 /**
  * Parse price string ke number. Handle "Rp 25.000", "25000", "25.000", "25k", "2.5M"
+ * dan — sejak v3.9.54 — penanda mata uang APA SAJA: "$3", "€25", "¥1000", "₩25.000",
+ * "25 usd", "IDR 30.000"... Bot sekarang currency-AGNOSTIC: yang dicatat adalah
+ * nominal angka dalam mata uang apapun yang admin pakai untuk harga produknya.
+ * Harga ganda dua mata uang ("3$ USD | Rp. 25.000") tetap mencatat bagian Rupiah
+ * (perilaku v3.9.50 dipertahankan).
  *
  * P2-13 FIX: sebelumnya `.replace(/\./g, '').replace(/,/g, '.')` ambigu:
  *   - "25,000" (US thousand) → "25.000" → parseFloat → 25 (SALAH, harusnya 25000)
@@ -358,10 +363,8 @@ function parsePrice(priceStr) {
     // v3.9.50 FIX (laporan user: harga diisi "3$ USD | Rp. 25.000" — format
     // harga produk asli user). parseFloat berhenti di '$', jadi harga ganda itu
     // tercatat **Rp 3** per penjualan dan revenue kembali terlihat beku.
-    // Stats berdenominasi Rupiah: kalau ada penanda 'rp', baca nominal yang
-    // menempel langsung padanya (pipe, pemisah, dan bagian USD diabaikan).
-    // String USD-only (tanpa 'rp') tidak bisa dikonversi andal → 0
-    // (priceValidationError menjelaskan format yang diterima).
+    // Kalau ada penanda 'rp', baca nominal yang menempel langsung padanya
+    // (pipe, pemisah, dan bagian USD diabaikan).
     if (/rp/.test(s)) {
         const m = s.match(/rp\.?\s*([0-9][0-9.,]*\s*(?:juta|jt|rb|k|m)?)/);
         if (m) {
@@ -371,10 +374,21 @@ function parsePrice(priceStr) {
             // buang penandanya lalu parse sisanya.
             s = s.replace(/rp\.?/g, '');
         }
-    } else if (/\$|usd/.test(s)) {
-        // USD-only ("$3", "3 usd"): tidak ada nominal Rupiah yang bisa dicatat —
-        // return 0 supaya lapisan validasi meminta bagian Rp-nya.
-        return 0;
+    } else if (/[|$€£¥₩₱₹₫฿]|\b(?:usd|eur|gbp|jpy|krw|php|inr|vnd|thb|myr|sgd|idr|aud|cad|chf)\b/.test(s)) {
+        // v3.9.54 (permintaan user: "bot akan dipakai orang di luar Indonesia
+        // juga"): penanda mata uang APA SAJA kini diterima, bukan cuma Rp.
+        // Bot mencatat NOMINAL ANGKA dalam mata uang apapun yang admin pakai
+        // (tanpa konversi). Penanda dibuang dan nominal PERTAMA yang menang
+        // ("$3 | €2" → 3); Rp tetap punya cabang khusus di atas supaya harga
+        // ganda dua mata uang tetap mencatat bagian Rupiah (v3.9.50).
+        s = s
+            .replace(/[|$€£¥₩₱₹₫฿]/g, ' ')
+            .replace(/\b(?:usd|eur|gbp|jpy|krw|php|inr|vnd|thb|myr|sgd|idr|aud|cad|chf)\b/g, ' ');
+        // Nominal pertama (suffix k/m harus MENEMPEL supaya tidak melahap kata:
+        // "beli 3 monyet buat $5" → 3, bukan "3 m" → 3000).
+        const m = s.match(/[0-9][0-9.,]*(?:\s*(?:juta|jt|rb)|[km])?/);
+        if (!m) return 0; // ada penanda tapi tanpa nominal ("usd") → tidak terbaca
+        s = m[0];
     }
     s = s.replace(/\s/g, '');
     let multiplier = 1;
