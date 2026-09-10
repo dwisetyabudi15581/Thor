@@ -1,4 +1,4 @@
-# 📖 Admin Guide — Thor Bot v3.9.51
+# 📖 Admin Guide — Thor Bot v3.9.52
 
 Panduan lengkap untuk admin server Discord yang menjalankan bot ini — cocok untuk admin baru yang pertama kali setup, maupun admin yang sudah berjalan sebagai referensi harian.
 
@@ -47,10 +47,10 @@ npm start
 
 - Console menampilkan: `✅ Bot online sebagai NamaBot`
 - Console menampilkan: `✅ Slash Commands terdaftar ke guild: Nama Server (instan!)`
-- Di Discord, ketik `/` — semua **90 slash command** harus muncul
+- Di Discord, ketik `/` — semua **91 slash command** harus muncul
 - Jika command tidak muncul, pastikan `GUILD_ID` di `.env` benar
 
-> 💡 **Lupa command apa namanya?** Ketik `/help` — sejak v3.9.39 ini **navigator interaktif** (bukan lagi satu embed panjang yang harus di-scroll), dan sejak **v3.9.44** katalognya disusun ulang jadi **20 kategori diurut prioritas pemakaian**: 🏠 home kini membuka dengan seksi **"Butuh apa sekarang?"** (member nakal? → Moderasi · mau jualan? → Panduan Cepat · mau pantau? → Log & Channel · server sepi? → Giveaway & Leveling), 📂 **dropdown kategori** untuk melompat (kategori **🚀 Panduan Cepat** berisi urutan setup server baru 5 langkah), 🔍 **Cari Command** untuk kata kunci bebas (`key`, `panel`, `warn`...), atau langsung `/help search:<kata kunci>`. Semua navigasi terjadi di satu pesan ephemeral — tidak memenuhi channel.
+> 💡 **Lupa command apa namanya?** Ketik `/help` — sejak v3.9.39 ini **navigator interaktif** (bukan lagi satu embed panjang yang harus di-scroll), dan sejak **v3.9.44** katalognya disusun ulang jadi **20 kategori diurut prioritas pemakaian**: 🏠 home kini membuka dengan seksi **"Butuh apa sekarang?"** (member nakal? → Moderasi · mau jualan? → Panduan Cepat · mau pantau? → Log & Channel · server sepi? → Giveaway & Leveling), 📂 **dropdown kategori** untuk melompat (kategori **🚀 Panduan Cepat** berisi urutan setup server baru 5 langkah), 🔍 **Cari Command** untuk kata kunci bebas (`key`, `panel`, `warn`...), atau langsung `/help search:<kata kunci>`. Sejak **v3.9.52** tampilan kategori 📂 bisa membawa **dokumentasi `detail` yang lebih panjang** (mis. Statistik menjelaskan cara pakai `/serverstats setup`/`remove`/`refresh` + alur notifikasi boost) — daftar 📖 Semua Command tetap ringkas supaya selalu muat dalam satu embed. Semua navigasi terjadi di satu pesan ephemeral — tidak memenuhi channel.
 
 ---
 
@@ -1009,10 +1009,11 @@ Cooldown bersifat **per-user** — user A memicu tidak memengaruhi user B.
 
 ## 11. Riwayat Versi
 
-Riwayat lengkap semua versi (v3.9.0 – v3.9.51) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
+Riwayat lengkap semua versi (v3.9.0 – v3.9.52) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
 
 Ringkasan 3 versi terbaru:
 
+- **v3.9.52** (2026-09-10) — 📖 **permintaan user: "Tolong update juga di /help biar sync semua"**. Kategori di `/help` kini bisa membawa **blok `detail`** — dokumentasi pakai yang lebih panjang yang **hanya tampil di tampilan detail kategori 📂** (embed 📖 Semua Command dan 🔍 Pencarian tetap memakai baris ringkas, jadi budget daftar lengkap — slack 24 karakter — tidak tersentuh dan tidak ada kategori yang ter-drop diam-diam). **Statistik** kini menjelaskan counter live dengan benar: `/serverstats setup` / `remove` / `refresh`, pemicu update otomatis (join/left, boost, perubahan channel & role), keamanan rate limit, peringatan counter terhapus + auto-disable, dan alur notifikasi boost (`/set-channel tipe:server-booster #ch` → embed pink + log server + riwayat `/boosters`). **Panduan Cepat** dapat baris tambahan opsional (`/serverstats setup` + channel boost) dan **Log & Channel** menjelaskan pengumuman boost otomatis. +8 unit test (total **549**).
 - **v3.9.51** (2026-09-10) — ✨ **permintaan user: stats server secara live seperti bot server stats** + ✂️ **permintaan user: "fitur total revenue di hapus saja"**. Command BARU **`/serverstats`** (total 91, admin): `setup` membuat kategori `📊 STATISTIK SERVER` di paling atas daftar channel berisi 5 channel display-only yang NAMANYA counter live (`👥 Member`, `🤖 Bot`, `🚀 Boost`, `🎭 Role`, `📺 Channel` — @everyone denied Connect), `remove` menghapus semuanya, `refresh` memaksa update. Auto-update saat perubahan member/boost/role/channel (4 file event baru) lewat scheduler 60 detik, aman rate-limit (change detection = nol panggilan API saat tidak berubah; cooldown 5 menit per-channel = pas limit Discord 2 rename/10 menit; dirty-driven jadi burst join = 1 refresh); tick catch-up 5 menit menyembuhkan event terlewat; channel terhapus memberi warning + perintah solusi dan auto-disable saat semua hilang; rollback gagal parsial; sinkronisasi startup untuk perubahan offline; `serverstats.json` di-backup + restore. `/stats`: **Total Revenue DIHAPUS** (kebingungan berulang — belanja pribadi tetap di `/my-stats` + `/leaderboard`). +18 unit test (total **541**).
 
 - **v3.9.50** (2026-09-10) — 🐛 **laporan user: "saya kasih harga 3$ USD | Rp. 25.000" — revenue masih nyaris tak bergerak**. 🔴 Harga dua mata uang tercatat **Rp 3** per penjualan: `parseFloat` berhenti di `$` dan bagian Rupiah tidak pernah dibaca. Kedua parser harga kini membaca nominal yang menempel langsung ke penanda `Rp` — `3$ USD | Rp. 25.000` → **Rp 25.000** per penjualan (ada pipe/tanpa pipe, Rp duluan atau USD duluan, dengan suffix pun tetap benar). 🟡 Harga USD-only (`$3`, `3 usd`) kini **ditolak** dengan penjelasan agar mencantumkan nominal Rupiah (revenue dalam Rupiah; tidak ada konversi mata uang). 🟢 `/update-product` kini menampilkan `💰 tercatat di stats: Rp 25.000 per penjualan` saat harga berubah (visibilitas yang sama dengan `/add-product`). Strictness rekber tetap terjaga (`3$ | Rp 1.5rb` tetap ditolak). +5 unit test (total **523**).
@@ -1053,6 +1054,6 @@ Jika ada masalah yang tidak ada di Troubleshooting:
 
 ---
 
-**Versi dokumen:** v3.9.51
+**Versi dokumen:** v3.9.52
 **Last updated:** 10 September 2026
-**Bot version:** 3.9.51 · 91 slash command · 541 unit test
+**Bot version:** 3.9.52 · 91 slash command · 549 unit test

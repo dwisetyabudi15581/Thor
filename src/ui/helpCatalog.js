@@ -88,6 +88,12 @@ const HELP_CATEGORIES = [
             '4️⃣ `/setup-verify` — verifikasi member baru',
             '5️⃣ `/set-channel server-log #log` — aktifkan log',
             '💡 Lanjut eksplor kategori lain lewat dropdown 📂.'
+        ],
+        // v3.9.52: tambahan opsional hanya di tampilan detail kategori —
+        // BUKAN di `lines` (slack embed Semua Command tinggal ~24 karakter).
+        detail: [
+            '',
+            '🎯 Tambahan bagus setelah dasarnya jalan: `/serverstats setup` — counter member/boost live di paling atas daftar channel · `/set-channel tipe:server-booster #ch` — notifikasi boost.'
         ]
     },
     {
@@ -176,6 +182,11 @@ const HELP_CATEGORIES = [
             '• `/test-welcome` — diagnosis kenapa welcome tidak muncul + preview',
             '• `/remove-channel tipe` — matikan salah satu',
             'ℹ️ Tanpa `server-log`, event server tidak dicatat.'
+        ],
+        // v3.9.52: penjelasan pengumuman boost (hanya di tampilan detail kategori).
+        detail: [
+            '',
+            '🚀 Boost mulai/berhenti diumumkan otomatis ke channel `server-booster` sebagai embed pink, dan SELALU tercatat di log server (BOOST_ADD / BOOST_REMOVE) + riwayat boost — walau channel belum diatur.'
         ]
     },
     {
@@ -303,6 +314,18 @@ const HELP_CATEGORIES = [
             '• `/boosters` — booster saat ini + riwayat',
             '• `/leaderboard` — peringkat (pesan/belanja/menang)',
             '• `/my-stats` — pesan & transaksi kamu'
+        ],
+        // v3.9.52 (permintaan user: "update juga di /help biar sync semua"):
+        // panduan pakai untuk fitur stats BARU — hanya di tampilan detail kategori.
+        detail: [
+            '',
+            '**Channel counter live (kayak bot ServerStats):**',
+            '• `/serverstats setup` — bikin kategori "📊 STATISTIK SERVER" di PALING ATAS daftar channel + 5 channel voice khusus tampilan: 👥 Member · 🤖 Bot · 🚀 Boost · 🎭 Role · 📺 Channel — angka di NAMA channel update live',
+            '• `/serverstats remove` — hapus semuanya · `/serverstats refresh` — paksa update sekarang',
+            '💡 Update otomatis saat member join/left, boost mulai/berhenti, channel & role dibuat/dihapus — aman rate limit (Discord hanya izinkan 2x ganti nama per channel / 10 menit, jadi update di-throttle + self-heal tiap ±5 menit). Counter yang dihapus akan dikasih peringatan; kalau SEMUA counter terhapus, fitur mati otomatis.',
+            '',
+            '**Notifikasi boost:**',
+            '• Member mulai/berhenti boost → embed pink dikirim otomatis ke channel server-booster (`/set-channel tipe:server-booster #ch`) dan selalu tercatat di log server + riwayat `/boosters`'
         ]
     },
     {
@@ -382,9 +405,13 @@ function buildHomeEmbed(client, user) {
 function buildCategoryEmbed(client, categoryId) {
     const cat = findCategory(categoryId);
     if (!cat) return null;
+    // v3.9.52: baris `detail` opsional HANYA tampil di tampilan kategori ini —
+    // dokumentasi pakai yang lebih kaya tanpa menyentuh embed Semua Command
+    // yang budget-critical (hanya merender `lines` yang ringkas) maupun Pencarian.
+    const description = [...cat.lines, ...(cat.detail || [])].join('\n');
     return baseEmbed()
         .setTitle(`${cat.emoji} ${cat.name}`)
-        .setDescription(cat.lines.join('\n'))
+        .setDescription(description)
         .addFields({
             name: '↩️ Navigasi',
             value: 'Ganti kategori lewat dropdown 📂 · Klik **🏠 Menu Utama** untuk kembali · **🔍 Cari Command** untuk pencarian.'

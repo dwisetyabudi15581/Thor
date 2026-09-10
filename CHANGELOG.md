@@ -5,6 +5,15 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 Legend: 🔴 critical · 🟠 high · 🟡 medium · 🟢 improvement
 
+## [3.9.52] — 2026-09-10
+
+### Changed — 📖 permintaan user: "Tolong update juga di /help biar sync semua"
+
+- 🟢 **`/help` sekarang mendokumentasikan fitur stats baru di tampilan detail kategori.** Sebuah kategori bisa punya blok `detail` opsional yang HANYA tampil di tampilan kategori 📂 — dokumentasi pakai yang lebih kaya tanpa menyentuh embed 📖 Semua Command (slack budget-nya cuma 24 karakter — 5.776/5.800 — kebocoran detail akan diam-diam meng-drop kategori terakhir dari daftar lengkap) maupun indeks 🔍 Pencarian (yang memindai `lines` ringkas). Kategori tanpa blok `detail` render identik byte-per-byte seperti sebelumnya.
+- 🟢 **Kategori Statistik:** cara pakai counter live v3.9.51 — `/serverstats setup` (bikin kategori "📊 STATISTIK SERVER" di paling atas + 5 channel voice khusus tampilan), `remove` / `refresh`, pemicu update otomatis (join/left, boost mulai/berhenti, channel & role dibuat/dihapus), keamanan rate limit (2x ganti nama per channel per 10 menit — throttled + self-heal), peringatan counter terhapus + auto-disable, dan alur notifikasi boost (embed pink → `/set-channel tipe:server-booster #ch`, selalu tercatat di log server + riwayat `/boosters`).
+- 🟢 **Panduan Cepat:** baris tambahan opsional menunjuk setup baru ke `/serverstats setup` dan channel notifikasi boost. **Log & Channel:** baris `server-booster` sekarang menjelaskan perilaku pengumuman otomatis.
+- 🟢 +8 unit test (total **549**): `helpDetail.test.js` — detail stats mendokumentasikan setup/remove/refresh + counter + rate limit + panduan boost, detail quickstart/logging ada, embed Semua Command mengecualikan teks detail dan mempertahankan 20 kategori dalam budget 5800, kategori tanpa detail render persis seperti sebelumnya, deskripsi tiap kategori ≤ 4096, pencarian hanya memindai lines (command ketemu, frasa khusus detail tidak pernah bocor).
+
 ## [3.9.51] — 2026-09-10
 
 ### Added — ✨ permintaan user: "fitur stats server secara live yang mirip seperti bot server stats"
