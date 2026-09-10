@@ -5,6 +5,17 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 Legend: 🔴 critical · 🟠 high · 🟡 medium · 🟢 improvement
 
+## [3.9.53] — 2026-09-10
+
+### Added — ⚙️ permintaan user: "fitur /serverstats kasih opsi apa saja yang mau di munculin"
+
+- 🟢 **`/serverstats setup` kini punya 5 opsi boolean — `members`, `bots`, `boosts`, `roles`, `channels`.** Semua counter AKTIF default; set ke **False** untuk melewatinya (mis. `/serverstats setup bots:false channels:false` hanya membuat 👥 · 🚀 · 🎭). Mematikan SEMUA-nya ditolak dengan penjelasan ramah. Hanya counter terpilih yang dibuat, disimpan di `serverstats.json`, dan di-refresh — embed konfirmasi dapat field **"Tidak dibuat"** berisi daftar yang dilewati. `/serverstats refresh` kini menampilkan persis counter yang TER-CONFIG (bentuk yang sama dengan konfirmasi setup). Ganti pilihan: `remove` dulu lalu `setup` lagi (terdokumentasi di footer embed konfirmasi).
+
+### Changed — 📖 permintaan user: "tulis ulang /help jadi setiap kategori perintah slash command kasih penjelasan biar member tidak bertanya tanya"
+
+- 🟢 **SEMUA 20 kategori `/help` kini menjadi panduan lengkap mandiri.** Mekanisme `detail` v3.9.52 menjadi tampilan kategori itu sendiri: kalau kategori punya panduan, ITU yang dirender dropdown 📂 — sintaks per-command, perilaku, contoh, dan jawaban ❓ untuk pertanyaan yang paling sering (kenapa member itu tidak bisa dimoderasi, kenapa panel tidak update, kenapa XP tidak dihitung…). Baris `lines` ringkas tetap jadi konten embed 📖 Semua Command yang budget-critical (5.776/5.800 — tidak tersentuh) dan indeks 🔍 Pencarian — tidak ada kategori yang ter-drop, tidak ada yang overflow. Panduan terpanjang: Statistik 1.558/4.096 karakter.
+- 🟢 +3 unit test (total **551**): `/serverstats setup` pemilihan counter end-to-end (opsi False dilewati — hanya channel terpilih yang dibuat, key config mengikuti pilihan, field "Tidak dibuat" mencantumkan yang dilewati), penolakan semua-False (tidak ada yang dibuat, config tidak tersimpan, pesan ramah), refresh dengan pilihan parsial hanya menampilkan counter ter-config; helpDetail.test.js re-pin untuk rewrite (semua kategori punya panduan, tampilan kategori merender panduan persis, panduan mendokumentasikan command nyata dari `lines`, embed Semua Command mengecualikan teks panduan + budget + 20 kategori, panduan stats mendokumentasikan opsi pemilihan baru); kontrak registry mem-pin 5 opsi boolean (nama, type 5, opsional, deskripsi ≤100).
+
 ## [3.9.52] — 2026-09-10
 
 ### Changed — 📖 permintaan user: "Tolong update juga di /help biar sync semua"

@@ -1,23 +1,26 @@
 /**
- * Unit tests untuk blok `detail` kategori /help (v3.9.52).
+ * Unit tests untuk panduan `detail` kategori /help (v3.9.52 → v3.9.53).
  *
- * v3.9.52 (permintaan user: "Tolong update juga di /help biar sync semua")
- * menambah array `detail` opsional per kategori help: dokumentasi pakai yang
- * lebih kaya yang HANYA tampil di tampilan detail kategori 📂. Embed 📖 Semua
- * Command dan 🔍 Pencarian tetap merender `lines` yang ringkas — slack budget
- * Semua Command cuma ~24 karakter (5776/5800), jadi kebocoran detail akan
- * diam-diam meng-drop kategori terakhir dari daftar lengkap.
+ * v3.9.52 menambah array `detail` opsional per kategori. v3.9.53 (permintaan
+ * user: "tulis ulang /help jadi setiap kategori perintah slash command kasih
+ * penjelasan biar member tidak bertanya tanya") menjadikan `detail` TAMPILAN
+ * kategori itu sendiri: kalau ada, dialah deskripsinya (panduan per-command
+ * mandiri dengan sintaks + perilaku + FAQ), sementara `lines` yang ringkas
+ * tetap jadi konten embed 📖 Semua Command (5776/5800 — slack cuma 24
+ * karakter; kebocoran panduan akan diam-diam meng-drop kategori terakhir)
+ * dan indeks 🔍 Pencarian.
  *
  * Memverifikasi:
- *   - Detail kategori Statistik: cara pakai /serverstats setup/remove/refresh,
- *     penjelasan auto-update + rate limit, panduan notifikasi boost.
- *   - Blok detail Panduan Cepat + Log & Channel ada.
- *   - Embed Semua Command TIDAK berisi teks detail, tetap dalam budget 5800,
- *     dan mempertahankan SEMUA 20 kategori (tidak ada drop diam-diam).
- *   - Kategori tanpa `detail` render persis seperti sebelumnya (backward compat).
+ *   - SEMUA kategori punya panduan `detail` tidak kosong (rewrite-nya).
+ *   - Tampilan kategori merender panduan (bukan baris ringkas).
+ *   - Panduan mendokumentasikan command nyata: tiap panduan menyebut
+ *     minimal satu `/command` yang juga ada di `lines` kategori itu.
+ *   - Embed Semua Command mengecualikan teks panduan, tetap dalam budget
+ *     5800, dan mempertahankan SEMUA 20 kategori (tidak ada drop senyap).
+ *   - Panduan Statistik mendokumentasikan opsi pemilihan counter v3.9.53.
  *   - Deskripsi tiap tampilan kategori tetap ≤ 4096 (limit Discord).
- *   - Pencarian hanya memindai `lines`: nama command ketemu, frasa khusus
- *     detail ("self-heal") tidak pernah bocor ke hasil pencarian.
+ *   - Pencarian hanya memindai `lines` (command ketemu; frasa khusus
+ *     panduan tidak pernah bocor ke hasil).
  */
 
 const test = require('node:test');
@@ -38,90 +41,72 @@ function findCat(id) {
 }
 
 // ====================================================
-// === 1. Kategori Statistik — dokumentasi pakai ===
+// === 1. Setiap kategori adalah panduan lengkap ===
 // ====================================================
 
-test('helpDetail: kategori stats punya blok detail yang mendokumentasikan /serverstats', () => {
-    const cat = findCat('stats');
-    assert.ok(cat, 'kategori stats harus ada');
-    assert.ok(Array.isArray(cat.detail) && cat.detail.length > 0, 'kategori stats butuh array detail');
-    const text = cat.detail.join('\n');
-
-    // Cara pakai /serverstats: setup + remove + refresh (3 subcommand).
-    assert.match(text, /\/serverstats setup/, 'detail harus mendokumentasikan `setup`');
-    assert.match(text, /\/serverstats remove/, 'detail harus mendokumentasikan `remove`');
-    assert.match(text, /\/serverstats refresh/, 'detail harus mendokumentasikan `refresh`');
-
-    // Janji counter live (permintaan user — kayak bot ServerStats).
-    assert.match(text, /Member/, 'detail harus menyebut counter Member');
-    assert.match(text, /Boost/, 'detail harus menyebut counter Boost');
-    assert.match(text, /rate limit/i, 'detail harus menjelaskan keamanan rate limit');
-
-    // Panduan notifikasi boost → channel server-booster.
-    assert.match(text, /server-booster/, 'detail harus menyebut channel server-booster');
+test('helpDetail: SEMUA kategori punya panduan detail tidak kosong (rewrite v3.9.53)', () => {
+    assert.strictEqual(HELP_CATEGORIES.length, 20, 'katalog harus 20 kategori');
+    for (const cat of HELP_CATEGORIES) {
+        assert.ok(
+            Array.isArray(cat.detail) && cat.detail.length >= 3,
+            `kategori ${cat.id} butuh panduan detail lengkap (dapat ${cat.detail ? cat.detail.length : 'tidak ada'} baris)`
+        );
+    }
 });
 
-test('helpDetail: detail kategori stats tampil di tampilan kategori', () => {
-    const embed = buildCategoryEmbed(null, 'stats');
-    assert.ok(embed, 'embed kategori harus terbentuk');
-    const desc = embed.toJSON().description;
-    // Daftar command ringkas dulu…
-    assert.match(desc, /• `\/stats` — statistik live server/);
-    // …lalu detail lengkapnya.
-    assert.match(desc, /\/serverstats setup/);
-    assert.match(desc, /Notifikasi boost/);
+test('helpDetail: tampilan kategori merender panduan, bukan baris ringkas', () => {
+    for (const cat of HELP_CATEGORIES) {
+        const desc = buildCategoryEmbed(null, cat.id).toJSON().description;
+        assert.strictEqual(desc, cat.detail.join('\n'), `tampilan kategori ${cat.id} harus persis panduannya`);
+    }
 });
 
-// ====================================================
-// === 2. Blok detail Panduan Cepat + Log & Channel ===
-// ====================================================
-
-test('helpDetail: detail quickstart menyarankan /serverstats setup sebagai opsional', () => {
-    const cat = findCat('quickstart');
-    const text = (cat.detail || []).join('\n');
-    assert.match(text, /\/serverstats setup/, 'detail quickstart harus menunjuk counter live');
-    // 5 langkah bernomor itu sendiri tidak boleh berubah (budget Semua Command).
-    assert.strictEqual(
-        cat.lines.length,
-        7,
-        'jumlah lines quickstart berubah — budget Semua Command kritis'
-    );
-});
-
-test('helpDetail: detail logging menjelaskan pengumuman boost otomatis', () => {
-    const cat = findCat('logging');
-    const text = (cat.detail || []).join('\n');
-    assert.match(text, /server-booster/, 'detail logging harus menyebut channel server-booster');
-    assert.match(text, /BOOST_ADD/, 'detail logging harus menyebut tipe event log server');
+test('helpDetail: tiap panduan mendokumentasikan command nyata yang juga ada di lines', () => {
+    for (const cat of HELP_CATEGORIES) {
+        const guide = cat.detail.join('\n');
+        const commands = [...cat.lines.join('\n').matchAll(/`\/([a-z-]+)/g)].map(m => m[1]);
+        const documented = commands.filter(cmd => guide.includes(`/${cmd}`));
+        assert.ok(
+            documented.length >= Math.min(1, commands.length),
+            `panduan ${cat.id} harus menyebut minimal satu command nyata`
+        );
+    }
 });
 
 // ====================================================
-// === 3. Embed Semua Command — detail tidak boleh bocor ===
+// === 2. Embed Semua Command — panduan tidak boleh bocor ===
 // ====================================================
 
-test('helpDetail: embed Semua Command mengecualikan teks detail dan mempertahankan 20 kategori', () => {
+test('helpDetail: embed Semua Command mengecualikan teks panduan dan mempertahankan 20 kategori', () => {
     const embeds = buildAllEmbeds();
     assert.strictEqual(embeds.length, 1, 'Semua Command adalah satu embed');
     const total = embedTotalChars(embeds[0]);
     const json = embeds[0].toJSON();
 
-    // Kontrak budget — alasan persis `detail` dibuat (slack ~24 karakter!).
+    // Kontrak budget — alasan persis panduan disimpan di `detail` (24 karakter!).
     assert.ok(total <= 5800, `total Semua Command ${total} melebihi budget 5800`);
     assert.strictEqual(json.fields.length, HELP_CATEGORIES.length, 'semua kategori harus tetap di daftar lengkap');
 
-    // Frasa khusus detail tidak boleh muncul di daftar lengkap.
+    // Frasa khusus panduan tidak boleh muncul di daftar lengkap.
     const all = JSON.stringify(json);
-    assert.ok(!all.includes('/serverstats setup'), 'detail bocor ke Semua Command');
-    assert.ok(!all.includes('Notifikasi boost'), 'detail bocor ke Semua Command');
-    assert.ok(!all.includes('self-heal'), 'detail bocor ke Semua Command');
+    assert.ok(!all.includes('Pilih counter'), 'panduan bocor ke Semua Command');
+    assert.ok(!all.includes('self-heal'), 'panduan bocor ke Semua Command');
+    assert.ok(!all.includes('Kenapa'), 'frasa FAQ bocor ke Semua Command');
 });
 
-test('helpDetail: kategori tanpa detail render persis seperti sebelumnya', () => {
-    for (const cat of HELP_CATEGORIES) {
-        if (cat.detail) continue;
-        const desc = buildCategoryEmbed(null, cat.id).toJSON().description;
-        assert.strictEqual(desc, cat.lines.join('\n'), `kategori ${cat.id} tanpa detail harus render lines saja`);
-    }
+// ====================================================
+// === 3. Panduan Statistik — opsi v3.9.53 ===
+// ====================================================
+
+test('helpDetail: panduan stats mendokumentasikan opsi pemilihan counter', () => {
+    const guide = findCat('stats').detail.join('\n');
+    assert.match(guide, /\/serverstats setup/, 'harus mendokumentasikan setup');
+    assert.match(guide, /\/serverstats remove/, 'harus mendokumentasikan remove');
+    assert.match(guide, /\/serverstats refresh/, 'harus mendokumentasikan refresh');
+    assert.match(guide, /bots/, 'harus menyebut opsi bots');
+    assert.match(guide, /False/, 'harus menjelaskan False = lewati');
+    assert.match(guide, /rate limit/i, 'harus menjelaskan keamanan rate limit');
+    assert.match(guide, /server-booster/, 'harus menyebut channel boost');
 });
 
 // ====================================================
@@ -140,7 +125,7 @@ test('helpDetail: deskripsi tiap tampilan kategori tetap dalam 4096', () => {
     }
 });
 
-test('helpDetail: pencarian memindai lines saja — command ketemu, frasa detail tidak', () => {
+test('helpDetail: pencarian memindai lines saja — command ketemu, frasa panduan tidak', () => {
     // Nama command tetap ketemu di baris ringkas.
     const result = searchHelp('serverstats');
     assert.ok(result.totalBlocks >= 1, 'mencari "serverstats" harus menemukan command');
@@ -148,7 +133,7 @@ test('helpDetail: pencarian memindai lines saja — command ketemu, frasa detail
     assert.ok(stats, 'kategori stats harus ada di hasil');
     assert.match(stats.blocks.map(b => b.join('\n')).join('\n'), /\/serverstats/);
 
-    // Frasa khusus detail TIDAK boleh bocor ke hasil pencarian.
+    // Frasa khusus panduan TIDAK boleh bocor ke hasil pencarian.
     const leak = searchHelp('self-heal');
-    assert.strictEqual(leak.totalBlocks, 0, 'frasa khusus detail tidak boleh bisa dicari');
+    assert.strictEqual(leak.totalBlocks, 0, 'frasa khusus panduan tidak boleh bisa dicari');
 });

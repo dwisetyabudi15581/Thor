@@ -155,12 +155,16 @@ function makeStubGuild({ withCounters = false, botPermissions = true } = {}) {
     return guild;
 }
 
-/** Stub interaction untuk command /serverstats. */
-function makeStubInteraction(sub, guild) {
+/** Stub interaction untuk command /serverstats. `booleanOptions` mengisi
+ *  getBoolean (flag pemilihan counter v3.9.53 — undefined = default aktif). */
+function makeStubInteraction(sub, guild, booleanOptions = {}) {
     const replies = [];
     const interaction = {
         commandName: 'serverstats',
-        options: { getSubcommand: () => sub },
+        options: {
+            getSubcommand: () => sub,
+            getBoolean: name => booleanOptions[name]
+        },
         deferReply: async () => {},
         editReply: async opts => {
             replies.push(opts);
@@ -365,7 +369,11 @@ test('/serverstats setup: bikin kategori + 5 counter dengan nilai live, @everyon
     assert.strictEqual(interaction.__replies.length, 1, 'tepat satu balasan');
     const embed = interaction.__replies[0].embeds[0];
     assert.match(embed.data.title, /counter live berhasil dibuat/);
-    assert.strictEqual(embed.data.fields.length, 5, 'satu field per counter');
+    // v3.9.53: 5 field counter + 1 field "Tidak dibuat" (= semua aktif).
+    assert.strictEqual(embed.data.fields.length, 6);
+    const notCreated = embed.data.fields[5];
+    assert.match(notCreated.name, /Tidak dibuat/);
+    assert.match(notCreated.value, /semua counter aktif/);
 
     // 6 pembuatan: 1 kategori + 5 counter.
     assert.strictEqual(guild.__created.length, 6);
@@ -403,6 +411,67 @@ test('/serverstats setup: bikin kategori + 5 counter dengan nilai live, @everyon
     for (const c of counters) {
         assert.ok(Object.values(cfg.counters).includes(c.id));
     }
+});
+
+test('/serverstats setup: PEMILIHAN COUNTER (v3.9.53) — opsi False dilewati, config + embed mengikuti pilihan', async () => {
+    resetManager();
+    const guild = makeStubGuild();
+    // Hanya boost/role/channel — members + bots dimatikan.
+    const interaction = makeStubInteraction('setup', guild, { members: false, bots: false });
+
+    await serverstatsCommand(interaction);
+
+    assert.strictEqual(guild.__created.length, 4, '1 kategori + 3 counter terpilih');
+    const [category, ...counters] = guild.__created;
+    assert.deepStrictEqual(
+        counters.map(c => c.__opts.name),
+        ['🚀 Boost: 2', '🎭 Role: 9', '📺 Channel: 7']
+    );
+
+    // Config hanya menyimpan counter TERPILIH — refresh iterasi itu saja.
+    const cfg = manager.getConfig();
+    assert.deepStrictEqual(Object.keys(cfg.counters).sort(), ['boosts', 'channels', 'roles']);
+
+    // Konfirmasi mencantumkan counter yang dilewati.
+    const embed = interaction.__replies[0].embeds[0];
+    const notCreated = embed.data.fields.find(f => /Tidak dibuat/.test(f.name));
+    assert.ok(notCreated, 'field "Tidak dibuat" harus ada');
+    assert.match(notCreated.value, /Member/);
+    assert.match(notCreated.value, /Bot/);
+    assert.ok(!notCreated.value.includes('Boost'), 'counter terpilih tidak boleh muncul sebagai dilewati');
+});
+
+test('/serverstats setup: SEMUA counter False → penolakan ramah, tidak ada yang dibuat', async () => {
+    resetManager();
+    const guild = makeStubGuild();
+    const interaction = makeStubInteraction('setup', guild, {
+        members: false, bots: false, boosts: false, roles: false, channels: false
+    });
+
+    await serverstatsCommand(interaction);
+
+    assert.strictEqual(guild.__created.length, 0, 'tidak ada yang dibuat');
+    assert.strictEqual(manager.isEnabled(), false, 'config tidak tersimpan');
+    const reply = interaction.__replies[0];
+    assert.match(reply.content, /mematikan SEMUA counter/);
+    assert.match(reply.content, /minimal satu/i);
+});
+
+test('/serverstats refresh: hanya mencantumkan counter yang ter-config saat pilihannya parsial', async () => {
+    resetManager();
+    const guild = makeStubGuild();
+    // Setup parsial (3 counter, seperti /serverstats setup members:false bots:false).
+    const interaction = makeStubInteraction('setup', guild, { members: false, bots: false });
+    await serverstatsCommand(interaction);
+
+    const refreshInteraction = makeStubInteraction('refresh', guild);
+    await serverstatsCommand(refreshInteraction);
+
+    const desc = refreshInteraction.__replies[0].embeds[0].data.description;
+    assert.match(desc, /Boost/);
+    assert.match(desc, /Role/);
+    assert.ok(!/Member: /.test(desc), 'counter tidak terpilih tidak boleh dicantumkan');
+    assert.ok(!/Bot: /.test(desc), 'counter tidak terpilih tidak boleh dicantumkan');
 });
 
 test('/serverstats setup: menolak saat sudah di-setup; auto-heal saat semua channel lama hilang', async () => {
@@ -552,6 +621,20 @@ test('KONTRAK registry/router: /serverstats terdaftar dengan 3 subcommand, admin
     for (const o of cmd.options) {
         assert.strictEqual(o.type, 1, 'opsi subcommand');
         assert.ok(o.description.length <= 100, 'deskripsi subcommand ≤ 100');
+    }
+
+    // v3.9.53: setup membawa 5 boolean pemilihan counter (default aktif).
+    const setup = cmd.options.find(o => o.name === 'setup');
+    const selOpts = setup.options || [];
+    assert.deepStrictEqual(
+        selOpts.map(o => o.name),
+        ['members', 'bots', 'boosts', 'roles', 'channels'],
+        'setup memaparkan satu boolean per counter'
+    );
+    for (const o of selOpts) {
+        assert.strictEqual(o.type, 5, 'opsi pemilihan counter adalah boolean');
+        assert.strictEqual(o.required, false, 'opsi pemilihan opsional (default aktif)');
+        assert.ok(o.description.length <= 100, 'deskripsi opsi ≤ 100');
     }
 
     const routeCommand = require('../../src/commands/index');

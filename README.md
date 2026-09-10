@@ -2,7 +2,7 @@
 
 Bot Discord serbaguna untuk komunitas apa pun — server jualan, gaming, content creator, hingga komunitas umum. Semua konfigurasi dapat diatur langsung dari Discord melalui slash command, tanpa mengedit file.
 
-> **v3.9.52** · 91 slash command · 549 unit test · discord.js v14 · Node.js 18+ · single-guild
+> **v3.9.53** · 91 slash command · 551 unit test · discord.js v14 · Node.js 18+ · single-guild
 >
 > 📖 **[Panduan Admin Lengkap](./docs/ADMIN_GUIDE.md)** — setup, operasional harian, troubleshooting
 > 📜 **[Changelog](./CHANGELOG.md)** — riwayat semua versi
@@ -48,7 +48,7 @@ Bot Discord serbaguna untuk komunitas apa pun — server jualan, gaming, content
 ### 📊 Leveling & Stats
 
 - XP per pesan (cooldown anti-spam) + role reward per level + `/rank` + `/leaderboard-level`.
-- Stats server: jumlah member live, boost, tiket terbuka (langsung dari Discord) + aktivitas terlacak & transaksi. **Channel counter live** (`/serverstats`) — nama channelnya sendiri adalah counter yang ter-update otomatis (member, bot, boost, role, channel), aman rate-limit. Leaderboard messages/purchases/spending/wins; `/my-stats` menampilkan tanggal gabung asli.
+- Stats server: jumlah member live, boost, tiket terbuka (langsung dari Discord) + aktivitas terlacak & transaksi. **Channel counter live** (`/serverstats`) — nama channelnya sendiri adalah counter yang ter-update otomatis (member, bot, boost, role, channel — **pilih mana yang mau ditampilkan** lewat opsi boolean), aman rate-limit. **Tampilan kategori `/help` adalah panduan lengkap per-command** — sintaks, perilaku + jawaban pertanyaan yang paling sering, biar member berhenti bertanya-tanya. Leaderboard messages/purchases/spending/wins; `/my-stats` menampilkan tanggal gabung asli.
 - **Server Booster:** notifikasi boost tambah/hilang ke channel booster khusus + catch-up offline + daftar `/boosters` publik (roster live + riwayat boost terbaru).
 
 ### 🎭 Lainnya
@@ -137,7 +137,7 @@ Registrasi slash command berlangsung instan ke guild yang ditentukan `GUILD_ID`.
 8. `/set-channel audit-log #channel` — channel audit log
 9. `/set-channel transcript #channel` — channel arsip transcript tiket (opsional)
 10. `/set-channel server-booster #channel` — notifikasi boost (opsional — `/boosters` tetap jalan tanpa ini)
-11. `/serverstats setup` — channel counter live (opsional — counter gaya `👥 Member: 123` di paling atas daftar channel, ter-update otomatis)
+11. `/serverstats setup` — channel counter live (opsional — counter gaya `👥 Member: 123` di paling atas daftar channel, ter-update otomatis; pilih counter mana yang mau ditampilkan lewat opsi boolean `members`/`bots`/`boosts`/`roles`/`channels`)
 12. `/setup-verify` — pasang panel verifikasi
 13. `/setup-ticket` — pasang panel tiket
 14. `/config-show` — verifikasi semua setting

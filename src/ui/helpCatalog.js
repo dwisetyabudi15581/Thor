@@ -89,11 +89,23 @@ const HELP_CATEGORIES = [
             '5️⃣ `/set-channel server-log #log` — aktifkan log',
             '💡 Lanjut eksplor kategori lain lewat dropdown 📂.'
         ],
-        // v3.9.52: tambahan opsional hanya di tampilan detail kategori —
-        // BUKAN di `lines` (slack embed Semua Command tinggal ~24 karakter).
+        // v3.9.53: panduan lengkap mandiri (tampilan kategori = detail saja).
         detail: [
+            '**Baru pakai bot ini? Setup server dengan urutan ini (sekali saja):**',
+            '1️⃣ `/set-role tipe:verified role:@Verified` — role yang didapat member setelah verifikasi',
+            '2️⃣ `/add-category` + `/add-product` — siapkan produk jualan (lihat kategori Produk)',
+            '3️⃣ `/setup-ticket-panel` — pasang panel order yang diklik member untuk beli',
+            '4️⃣ `/setup-verify` — gerbang verifikasi: member baru klik tombol untuk dapat role verified',
+            '5️⃣ `/set-channel tipe:server-log channel:#log` — catat join/left, pesan dihapus, ban',
             '',
-            '🎯 Tambahan bagus setelah dasarnya jalan: `/serverstats setup` — counter member/boost live di paling atas daftar channel · `/set-channel tipe:server-booster #ch` — notifikasi boost.'
+            '**Tambahan bagus setelah dasarnya jalan (semuanya opsional):**',
+            '• `/serverstats setup` — counter member/boost live di paling atas daftar channel (pilih counter mana yang mau ditampilkan)',
+            '• `/set-channel tipe:server-booster channel:#boost` — embed pink tiap ada yang boost',
+            '• `/setup-leveling` — XP per pesan + role per level',
+            '• `/setup-tempvoice` — voice pribadi yang dibuat sendiri oleh member',
+            '• `/add-responder` — auto-reply untuk pertanyaan yang sering ditanya',
+            '',
+            '💡 Semua langkah ini tidak destruktif, dan **tidak ada apa pun yang dikirim ke member** sampai kamu memasang panel — aman untuk dieksplor. Setiap command dijelaskan lengkap di kategorinya lewat dropdown 📂.'
         ]
     },
     {
@@ -110,6 +122,22 @@ const HELP_CATEGORIES = [
             '• `/kick` keluarkan · `/ban` blokir · `/unban` buka blokir',
             '• `/purge amount:100 user?` — hapus massal pesan (1-100)',
             '💡 Tercatat otomatis di `/warn-list` + log server. Role lebih tinggi kebal tindakan.'
+        ],
+        // v3.9.53: panduan lengkap mandiri (tampilan kategori = detail saja).
+        detail: [
+            '**Warn & riwayat**',
+            '• `/warn user reason` — beri peringatan. Sanksi jalan OTOMATIS: 3 warn = mute 1 jam · 5 = mute 1 hari · 7 = kick. Member di-DM saat memungkinkan.',
+            '• `/warn-list user` — satu halaman: warn aktif + semua sanksi lampau (mute/kick/ban dengan tanggal + alasan).',
+            '• `/warn-remove user warn_id` — hapus satu warn (warn yang tidak adil hilang dari hitungan). `/warn-clear user` — hapus semuanya.',
+            '',
+            '**Tindakan langsung**',
+            '• `/timeout user duration reason` — mute 1–40320 menit (maks 28 hari); `/untimeout user` untuk buka lebih awal.',
+            '• `/kick user reason` — keluarkan dari server (bisa join lagi dengan invite baru).',
+            '• `/ban user reason` — blokir permanen, bisa sekalian hapus pesan terakhirnya (`delete_days` 0–7). `/unban user_id` — buka blokir via ID (tetap bisa walau orangnya sudah keluar).',
+            '• `/purge amount user?` — hapus massal 1–100 pesan terbaru di channel SEKARANG; tambah `user` untuk hapus pesan member itu saja.',
+            '',
+            '❓ **Kenapa member itu tidak bisa dimoderasi?** Role-nya LEBIH TINGGI dari role bot — naikkan role bot di Server Settings → Roles.',
+            '❓ **Semua tindakan tercatat di mana?** Di channel server-log + riwayat warn member — tidak ada yang senyap.'
         ]
     },
     {
@@ -122,6 +150,22 @@ const HELP_CATEGORIES = [
             '• `/add-product ... requires_key:false` — jasa/akun (detail dikirim DM pembeli)',
             '• `/update-product value:vip30 label:"..."` — edit · `/remove-product` · `/list-products`',
             '• `/set-product-role` — role otomatis saat beli (+ expire) · `/remove-product-role` `/list-product-roles`'
+        ],
+        // v3.9.53: panduan lengkap mandiri (tampilan kategori = detail saja).
+        detail: [
+            '**Produk = barang yang kamu jual. Tiap produk punya `value` (ID unik), `label` (yang dilihat pembeli) dan `price`.**',
+            '• `/add-product label value price` — tambah produk, mis. `/add-product value:vip30 label:"VIP 30 Hari" price:"Rp 30.000"`. Opsional `duration` (hari), `category`, `requires_key`.',
+            '• `requires_key:true` (default) — pembeli menerima KEY produk yang diserahkan ke staf, staf menjalankan `/set-key` untuk kasih role. Cocok untuk produk role VIP.',
+            '• `requires_key:false` — produk teks/DM: panel mengumpulkan catatan pembeli, detail dikirim manual (akun, jasa, hadiah).',
+            '• `/update-product value` — edit label/price/duration/category/requires_key tanpa hapus+tambah ulang. Konfirmasinya menampilkan nominal yang tercatat di stats per penjualan.',
+            '• `/remove-product value` · `/list-products` — hapus / lihat katalog.',
+            '',
+            '**Auto-role saat beli**',
+            '• `/set-product-role value role days` — role pembeli diberikan OTOMATIS saat deal selesai, dan dihapus otomatis setelah `days` hari (kosong = permanen).',
+            '• `/remove-product-role value` — berhenti memberikan · `/list-product-roles` — lihat semua.',
+            '',
+            '❓ **Format harga?** Rupiah, dengan/tanpa titik/suffix: `Rp 30.000`, `30000`, `30rb`. Dua mata uang juga bisa (`3$ USD | Rp 25.000` — nominal Rp yang tercatat di stats). USD-only ditolak: stats dalam Rupiah.',
+            '❓ **Pembeli lihat harganya?** Ya — daftar harga di panel tiket memakai `label` + `price` persis seperti yang kamu tulis.'
         ]
     },
     {
@@ -132,6 +176,16 @@ const HELP_CATEGORIES = [
         lines: [
             '• `/set-key user:@user value:vip30 key:ABCDE-12345` — set key produk',
             '• `/list-keys user:@user` — key member · `/clear-schedule user clear_keys:true` — bersihkan'
+        ],
+        // v3.9.53: panduan lengkap mandiri (tampilan kategori = detail saja).
+        detail: [
+            '**Key = bukti pembelian. Pembeli tunjukkan key, staf verifikasi SEKALI, role + jadwal expire urus sendiri.**',
+            '• `/set-key user value key` — daftarkan key, mis. `/set-key value:vip30 key:ABCDE-12345`. Pembeli langsung dapat role produknya, dan jadwal expire diperpanjang sesuai durasi produk (tidak pernah dobel — MAX EXTEND).',
+            '• `/list-keys user` — semua key milik member, aktif MAUPUN expired, lengkap dengan tanggalnya.',
+            '• `/clear-schedule user` — hapus semua jadwal expire role member; `clear_keys:true` sekalian hapus key-nya + lepas role VIP — bersih total untuk refund/chargeback.',
+            '',
+            '❓ **Key sudah terpakai?** Tiap key hanya bisa dipakai SEKALI — statusnya kelihatan di `/list-keys`.',
+            '❓ **Pembeli kehilangan key?** `/list-keys user` menunjukkan key-nya — tidak perlu cari-cari di DM.'
         ]
     },
     {
@@ -144,6 +198,22 @@ const HELP_CATEGORIES = [
             '• `/list-panels` `/update-panel` `/refresh-panel` `/delete-panel` — kelola panel',
             '• `/setup-verify` — verifikasi member baru · `/set-verify-button` — kustom tombol',
             '• `/setup-ticket` — panel legacy 1 kategori'
+        ],
+        // v3.9.53: panduan lengkap mandiri (tampilan kategori = detail saja).
+        detail: [
+            '**Panel = etalase toko: satu embed dengan tombol — member klik, tiket pribadi dibuka.**',
+            '• `/setup-ticket-panel` — pasang. Kustom penuh: `title`, `body`, `categories` (kategori tiket mana yang tampil), `color`, `image`, `thumbnail`, `footer`, `channel`, `use_dropdown:true` (dropdown ringkas pengganti tombol).',
+            '• `/list-panels` — semua panel + ID-nya · `/update-panel id field` — edit title/body/color/image/footer lewat modal (tanpa setup ulang).',
+            '• `/refresh-panel id` — render ulang dengan kategori/produk TERBARU (jalankan ini setelah tambah produk — kalau tidak, embed masih memakai daftar lama).',
+            '• `/delete-panel id` — hapus panel (pesan + config).',
+            '',
+            '**Verifikasi member baru**',
+            '• `/setup-verify` — pasang panel verifikasi: member yang join klik tombol untuk dapat role verified (dan lepas role unverified).',
+            '• `/set-verify-button label emoji style` — kustom tampilan tombolnya.',
+            '• `/setup-ticket` — panel legacy 1 kategori (dipertahankan untuk setup lama; utamakan `/setup-ticket-panel`).',
+            '',
+            '❓ **Panel masih menampilkan harga lama?** Jalankan `/refresh-panel id` — atau `/update-panel` untuk teksnya.',
+            '❓ **Tidak terjadi apa-apa saat member klik?** Cek permission bot untuk bikin channel + melihat channel di kategori tiket.'
         ]
     },
     {
@@ -156,6 +226,17 @@ const HELP_CATEGORIES = [
             '• `/update-category id:jasa label:...` — edit · `/remove-category` · `/list-categories`',
             '💡 Berproduk → dropdown; tanpa produk → langsung buat tiket.',
             '**Auto-Split** 3 kategori: 🎫 TRANSAKSI (produk) · 🎫 BANTUAN (help/report) · 🤝 REKBER (deal). Nama custom: `ticketCategoryKey` `ticketCategoryNoKey` `midman.category`'
+        ],
+        // v3.9.53: panduan lengkap mandiri (tampilan kategori = detail saja).
+        detail: [
+            '**Kategori = pintu di panel. Tiap kategori punya `id`, `label` (yang dilihat member), `emoji` dan `style` tombol (warna).**',
+            '• `/add-category id label emoji style requires_key` — mis. `/add-category id:jasa label:"Jasa" emoji:🎮 style:Success requires_key:false`.',
+            '• `requires_key:true` — kategori ini jualan produk: member dapat dropdown produk + daftar harga. `requires_key:false` — tiket bantuan/report biasa.',
+            '• `/update-category id` — edit label/emoji/style/requires_key tanpa hapus+tambah ulang · `/remove-category id` · `/list-categories`.',
+            '💡 Kategori BERPRODUK menampilkan dropdown; TANPA produk, klik langsung membuka tiket.',
+            '',
+            '**Auto-Split (default): tiket terorganisir ke 3 kategori** — 🎫 TRANSAKSI (order produk) · 🎫 BANTUAN (help/report) · 🤝 REKBER (deal midman). Ganti namanya lewat tipe `/edit-message` `ticketCategoryKey`, `ticketCategoryNoKey`, `midman.category`.',
+            '❓ **Sudah tambah produk tapi dropdown-nya tidak muncul?** Jalankan `/refresh-panel id` — embed panel di-render ulang dengan daftar baru.'
         ]
     },
     {
@@ -168,6 +249,21 @@ const HELP_CATEGORIES = [
             '• `/set-midman-fee mode:Persen value:5` — fee per deal (persen/flat, 0=gratis)',
             '• `/midman-deals` — semua deal aktif',
             '💡 Escrow 3-pihak: pembeli ⇄ penjual, midman pegang dana. Buka lewat tombol **🤝 Rekber** di panel — 3 langkah sampai kedua pihak **Setuju Deal**.'
+        ],
+        // v3.9.53: panduan lengkap mandiri (tampilan kategori = detail saja).
+        detail: [
+            '**Rekber = bot jadi wasit dealnya: pembeli & penjual konfirmasi masing-masing, midman lepaskan dana, fee tercatat otomatis.**',
+            '**Setup (sekali):**',
+            '• `/set-role tipe:midman role:@Midman` — WAJIB sebelum deal bisa dibuka. Staf yang punya role ini jadi petugas rekber.',
+            '• `/set-midman-fee mode value` — fee-nya: `mode:Persen value:5` (5%) atau `mode:Flat value:5000` (Rp 5.000). `0` = gratis.',
+            '• `/midman-deals` — semua deal aktif dalam satu halaman (pembeli, penjual, midman, nominal, status).',
+            '',
+            '**Alur deal**',
+            '1️⃣ Member klik **🤝 Rekber** di panel tiket lalu isi pembeli/penjual/harga → channel deal dibuat berisi ketiganya.',
+            '2️⃣ Pembeli & penjual masing-masing tekan **Setuju** — bot mengunci edit setelah keduanya setuju (total 3 langkah).',
+            '3️⃣ Midman menyelesaikan: **Complete** (dana dilepas + fee tercatat) atau **Cancel** (semua dibebaskan).',
+            '❓ **Deal macet?** `/midman-deals` menunjukkan statusnya; deal yang channelnya terhapus direkonsiliasi otomatis saat startup + harian.',
+            '❓ **Fee masuk stats?** Deal yang selesai tercatat di stats transaksi (Rupiah).'
         ]
     },
     {
@@ -183,10 +279,18 @@ const HELP_CATEGORIES = [
             '• `/remove-channel tipe` — matikan salah satu',
             'ℹ️ Tanpa `server-log`, event server tidak dicatat.'
         ],
-        // v3.9.52: penjelasan pengumuman boost (hanya di tampilan detail kategori).
+        // v3.9.53: panduan lengkap mandiri (tampilan kategori = detail saja).
         detail: [
-            '',
-            '🚀 Boost mulai/berhenti diumumkan otomatis ke channel `server-booster` sebagai embed pink, dan SELALU tercatat di log server (BOOST_ADD / BOOST_REMOVE) + riwayat boost — walau channel belum diatur.'
+            '**Semua channel opsional — set yang kamu perlukan saja. Satu command untuk semua tipe: `/set-channel tipe:... channel:#ch`.**',
+            '• `tipe:server-log` — pesan dihapus/diedit, join/leave, ban, event boost — kotak hitam server.',
+            '• `tipe:audit-log` — aksi admin (perubahan config, produk, moderasi).',
+            '• `tipe:transcript` — tiket yang ditutup diarsipkan ke sini sebagai file teks.',
+            '• `tipe:welcome` / `tipe:goodbye` — embed join/leave. Tes + diagnosa dengan `/test-welcome tipe:welcome` (cek config, channel, permission, dan kirim preview live).',
+            '• `tipe:invoice` — invoice pembelian (satu per order selesai).',
+            '• `tipe:server-booster` — 🚀 boost mulai/berhenti diumumkan otomatis sebagai embed pink, dan SELALU tercatat di log server + riwayat boost walau channel ini belum diatur.',
+            '• `/remove-channel tipe` — matikan salah satu (event yang relevan tetap mengalir ke server log).',
+            '❓ **Sudah di-set tapi tidak ada yang masuk?** Jalankan `/test-welcome` untuk welcome/goodbye, atau cek permission View + Send + Embed bot di channel itu.',
+            '❓ **Channelnya terhapus?** Set ulang dengan `/set-channel` — ID channel mati terdeteksi dan dilaporkan saat startup.'
         ]
     },
     {
@@ -200,6 +304,22 @@ const HELP_CATEGORIES = [
             '• `/remove-word` `/list-words` · `/add-word tipe:Exempt_(kata)` — whitelist',
             '• `/add-link-whitelist` `/remove-link-whitelist` — link diizinkan',
             '💡 Whole-word: "asu" tidak match "asus"'
+        ],
+        // v3.9.53: panduan lengkap mandiri (tampilan kategori = detail saja).
+        detail: [
+            '**Auto-mod mengawasi setiap pesan dan langsung bertindak — kamu yang menentukan aturannya.**',
+            '**Konfigurasi:**',
+            '• `/set-automod` — induk pengaturnya: `spam_threshold` (pesan/ledakan), `spam_action`, `block_links`, `block_words`, `word_action`, `max_mentions`, `mention_action`.',
+            '• `/automod-show` — lihat aturan saat ini · `/automod-toggle enabled:false|true` — on/off sekali klik.',
+            '',
+            '**Blocklist kata:**',
+            '• `/add-word words:kata1,kata2 action:Mute_10_menit` — tambah kata (pisah koma, DITAMBAHKAN — tidak mengganti) + sanksinya. `tipe:Exempt_(kata)` malah meng-whitelist kata tersebut.',
+            '• `/remove-word word tipe` — hapus satu · `/list-words` — lihat blocklist, whitelist + sanksi per kata.',
+            '',
+            '**Link & pengecualian:**',
+            '• `/add-link-whitelist channel|#ch role|@role` — siapa yang boleh kirim link (channel atau role).',
+            '• Pencocokan WHOLE-WORD: "asu" tidak match "asus" — tidak ada alarm palsu karena kata yang lebih panjang.',
+            '❓ **Terpicu tapi tidak ada tindakan?** Cek `/automod-show` — apakah aturannya aktif, dan apakah role bot di atas role member itu?'
         ]
     },
     {
@@ -211,6 +331,16 @@ const HELP_CATEGORIES = [
             '• `/add-responder trigger:beli reply:...` — auto-reply ke pesan yang mengandung "beli"',
             '• `match_mode:contains|exact` — kata di mana saja, atau awal pesan saja',
             '• `/list-responder` · `/remove-responder` — lihat & hapus'
+        ],
+        // v3.9.53: panduan lengkap mandiri (tampilan kategori = detail saja).
+        detail: [
+            '**Auto-responder = mesin FAQ: pesan mengandung trigger → bot langsung balas.**',
+            '• `/add-responder trigger reply` — mis. `/add-responder trigger:beli reply:"Silakan buka tiket 🎫"` — aktif saat pesan MENGANDUNG "beli" sebagai kata utuh, di mana pun posisinya.',
+            '• `match_mode:contains` (default) — kata utuh di mana saja: "cara beli gimana" memicu "beli" — tapi "belian" tidak. `match_mode:exact` — hanya saat pesan DIAWALI trigger (gaya `!sosmed` lama).',
+            '• `reply_type` — balasan biasa atau embed · `cooldown` — detik jeda sebelum trigger yang sama bisa aktif lagi (`0` = selalu).',
+            '• `/list-responder` — semua trigger + balasan + modenya · `/remove-responder trigger` — hapus satu.',
+            '❓ **Dua trigger dalam satu pesan?** Keduanya dibalas — trigger yang cooldown TIDAK memblokir scan (trigger kedua yang match tetap dijawab).',
+            '❓ **Tidak aktif?** Trigger multi-kata bisa ("cara beli"); spasi dobel dirapikan; karakter regex di-escape (tidak error).'
         ]
     },
     {
@@ -223,6 +353,17 @@ const HELP_CATEGORIES = [
             '• `/setup-selfrole title:... type:button` — panel role pilihan member',
             '• `/selfrole-add` `/selfrole-remove` — kelola daftar · `/selfrole-list` `/selfrole-delete`',
             '💡 `requires_role:@Verified` — role terkunci syarat'
+        ],
+        // v3.9.53: panduan lengkap mandiri (tampilan kategori = detail saja).
+        detail: [
+            '**Role sistem (logika bot)** — `/set-role tipe role`:',
+            '• `tipe:verified` — diberikan setelah verifikasi · `tipe:unverified` — disandang sebelum verifikasi · `tipe:admin` — siapa yang boleh pakai command admin · `tipe:midman` — petugas rekber. `/remove-role tipe` menghapus satu.',
+            '',
+            '**Panel self-role (pilihan member)** — member klik sendiri untuk ambil/lepas role:',
+            '• `/setup-selfrole title description type:button|dropdown exclusive` — pasang panelnya. `exclusive:true` = cuma SATU role dari panel itu dalam satu waktu.',
+            '• `/selfrole-add panel_id role label emoji style requires_role` — tambah role ke panel (tampilan tombol + emoji opsional). `requires_role:@Verified` — hanya member yang sudah punya role itu bisa mengambilnya (perk terbatas).',
+            '• `/selfrole-remove panel_id role` — keluarkan satu role · `/selfrole-list` — panel + role · `/selfrole-delete panel_id` — hapus satu panel.',
+            '❓ **Member tidak bisa ambil role?** Cek `requires_role` di entry itu + posisi role bot (harus DI ATAS role yang dikelolanya).'
         ]
     },
     {
@@ -234,6 +375,16 @@ const HELP_CATEGORIES = [
             '• `/setup-leveling` — aktifkan XP per pesan',
             '• `/add-level-role level:5 role:@VIP` — role saat naik level · `/list-level-roles` `/remove-level-role`',
             '• `/rank` — XP sendiri · `/leaderboard-level` — top member'
+        ],
+        // v3.9.53: panduan lengkap mandiri (tampilan kategori = detail saja).
+        detail: [
+            '**Leveling = XP aktivitas: member dapat XP per pesan, role terbuka di level tertentu.**',
+            '• `/setup-leveling enabled:true` — aktifkan. Penyetelan: `xp_per_message`, `cooldown` (detik antar pesan ber-XP — anti-spam), `announce_levelup` (umumkan level-up atau tidak).',
+            '• `/add-level-role level role` — mis. `/add-level-role level:5 role:@Aktif` — diberikan OTOMATIS saat naik level. `/list-level-roles` — semua reward · `/remove-level-role level` — hapus satu.',
+            '• `/rank user?` — level + XP kamu (atau member lain) — command publik.',
+            '• `/leaderboard-level` — top-10 member berdasarkan level (publik).',
+            '❓ **XP tidak dihitung?** Cooldown berlaku — pesan beruntun dalam jendela waktu yang sama tidak mendapat XP (anti-farming).',
+            '❓ **Role tidak diberikan saat naik level?** Role bot harus DI ATAS role reward-nya.'
         ]
     },
     {
@@ -244,6 +395,14 @@ const HELP_CATEGORIES = [
         lines: [
             '• `/afk alasan:...` — set AFK (bot auto-reply saat di-mention)',
             '• `/afk-clear` — kembali aktif · `/afk-list` — siapa saja AFK'
+        ],
+        // v3.9.53: panduan lengkap mandiri (tampilan kategori = detail saja).
+        detail: [
+            '**AFK = "jangan ganggu": selama kamu AFK, siapa pun yang mention kamu langsung dapat auto-reply berisi alasannya.**',
+            '• `/afk alasan` — set AFK, mis. `/afk alasan:"belajar, balik jam 8"`. Bisa dipakai admin MAUPUN member (command publik).',
+            '• `/afk-clear` — kamu kembali; mention tidak dibalas lagi.',
+            '• `/afk-list` — semua yang sedang AFK + alasannya.',
+            '❓ **Pulang otomatis?** Tidak — bersihkan dengan `/afk-clear`, statusnya tidak hangus sendiri.'
         ]
     },
     {
@@ -255,6 +414,18 @@ const HELP_CATEGORIES = [
             '• `/giveaway create channel:#ch prize:... winners:1 duration:60` — mulai',
             '• `/giveaway list` `/giveaway end` `/giveaway reroll` — kelola',
             '• `/poll create` `/poll list` `/poll close` — polling'
+        ],
+        // v3.9.53: panduan lengkap mandiri (tampilan kategori = detail saja).
+        detail: [
+            '**Giveaway**',
+            '• `/giveaway create channel prize duration winners required_role` — mis. `/giveaway create channel:#event prize:"VIP 30 Hari" winners:1 duration:60` (menit). `required_role` — hanya member yang punya role itu yang boleh ikut.',
+            '• `/giveaway list` — giveaway berjalan + ID · `/giveaway end id` — akhiri sekarang (pemenang diundi + diumumkan) · `/giveaway reroll id` — undi pemenang baru untuk yang sudah selesai.',
+            '• Peserta = klik reaksi 🎉 — bot mencatat pesertanya sendiri, mencegah dobel-entry, dan me-render ulang embednya di akhir.',
+            '',
+            '**Poll**',
+            '• `/poll create channel question multiple` — mis. `/poll create channel:#umum question:"Nonton bareng?" multiple:true` (member boleh pilih beberapa opsi). Opsinya diketik di modal (2–10).',
+            '• `/poll list` — poll berjalan + ID · `/poll close id` — kunci voting + tampilkan hasilnya.',
+            '❓ **Jumlah pemenang salah?** Set `winners` saat create; reroll mengundi tepat sebanyak itu lagi.'
         ]
     },
     {
@@ -266,6 +437,15 @@ const HELP_CATEGORIES = [
             '• `/announce channel:#ch title:... description:...` — kirim pengumuman',
             '• `/announce-schedule at:30m recurring:daily` — terjadwal (sekali/berulang)',
             '• `/announce-list` `/announce-cancel` — lihat & batalkan jadwal'
+        ],
+        // v3.9.53: panduan lengkap mandiri (tampilan kategori = detail saja).
+        detail: [
+            '**Dua cara mengumumkan: sekarang, atau terjadwal.**',
+            '• `/announce channel title description color image thumbnail mention` — kirim satu embed rapi langsung sekarang. `mention` — ping role/@everyone bersamanya.',
+            '• `/announce-schedule at recurring` — jadwalkan: `at:30m` (30 menit lagi) atau `at:2026-12-25 09:00`, `recurring:daily|weekly|monthly` atau sekali saja. Pengumuman berulang mengirim sendiri.',
+            '• `/announce-list` — semua jadwal tertunda + ID-nya · `/announce-cancel id` — hapus sebelum jalan.',
+            '❓ **Zona waktu?** Bot memakai offset TZ yang ter-config — coba jadwalkan beberapa menit ke depan dulu untuk memastikan.',
+            '❓ **Edit jadwal?** Batalkan + buat ulang — `/announce-list` menampilkan argumen persisnya untuk dipakai lagi.'
         ]
     },
     {
@@ -277,6 +457,19 @@ const HELP_CATEGORIES = [
             '**Teks sistem:** `/set-message ticketBody teks...` · `/edit-message` (modal) · `/reset-message` · `/list-messages`',
             '**Embed custom:** `/send-message` (form) · `/embed-builder` · `/embed-list` `/embed-cancel`',
             '💡 Vars: `{server}` `{price_header}` `{price_list}` `{price_list:cat}` `{categories_list}`'
+        ],
+        // v3.9.53: panduan lengkap mandiri (tampilan kategori = detail saja).
+        detail: [
+            '**Teks sistem — semua embed yang dikirim bot (body panel, pembuka tiket, welcome…) bisa diganti kata-katanya.**',
+            '• `/edit-message tipe` — pilih teksnya + edit lewat modal (ramah multi-baris). `/list-messages` — lihat semua teks yang bisa dikustom + isinya sekarang.',
+            '• `/reset-message tipe` — kembalikan satu ke default. `/set-message` — varian satu baris.',
+            '• Variabel template terisi otomatis: `{server}` (nama server), `{price_header}` + `{price_list}` / `{price_list:cat}` (daftar harga live), `{categories_list}`.',
+            '',
+            '**Pesan & embed custom**',
+            '• `/send-message channel message mention` — teks biasa (dukung \n + mention) — untuk rules, ping, catatan cepat.',
+            '• `/announce` — satu embed rapi lewat form (title/description/color/image/thumbnail/mention).',
+            '• `/embed-builder` — builder interaktif dengan preview LIVE untuk embed kompleks (banyak field, author, footer). `/embed-list` — sesi kamu · `/embed-cancel session_id` — buang sesi yang macet.',
+            '❓ **Daftar harga kosong di teks?** Variabel hanya terisi kalau produknya ada — tambah produk dulu, lalu `/refresh-panel`.'
         ]
     },
     {
@@ -287,6 +480,15 @@ const HELP_CATEGORIES = [
         lines: [
             '• `/setup-tempvoice` — pasang trigger channel · `/tempvoice-remove` — matikan',
             '💡 Join trigger → otomatis bikin voice pribadi + panel kontrol (rename, lock, transfer)'
+        ],
+        // v3.9.53: panduan lengkap mandiri (tampilan kategori = detail saja).
+        detail: [
+            '**Voice pribadi = member dapat voice channel-nya sendiri sesuai permintaan.**',
+            '• `/setup-tempvoice` — membuat kategori + channel trigger **Join untuk membuat**. Member join ke situ → voice channel miliknya langsung dibuat dengan panel kontrol di dalamnya.',
+            '• Tombol panel kontrol: **rename** channel, **lock/unlock**, **transfer** kepemilikan, **claim** saat pemiliknya pergi, dan auto-delete saat orang terakhir keluar (tidak ada channel zombie).',
+            '• `/tempvoice-remove` — matikan fiturnya (kategori + channel terkait ikut dihapus).',
+            '❓ **Channel tidak dibuat saat join?** Cek permission Manage Channels bot + pastikan trigger channel-nya tidak dihapus orang.',
+            '❓ **Batas?** Discord membatasi jumlah channel per server; server super besar mungkin butuh beberapa trigger channel.'
         ]
     },
     {
@@ -298,6 +500,16 @@ const HELP_CATEGORIES = [
             '• `/backup-now` — backup sekarang (auto 24 jam, maks 7 slot)',
             '• `/backup-list` `/restore-backup` — lihat & pulihkan',
             '• `/reset-config` — ⚠️ HAPUS SEMUA konfigurasi (2-step)'
+        ],
+        // v3.9.53: panduan lengkap mandiri (tampilan kategori = detail saja).
+        detail: [
+            '**Backup melindungi seluruh konfigurasi kamu: produk, key, panel, role, channel, stats, counter server stats, riwayat boost…**',
+            '• `/backup-now` — satu backup manual sekarang. Backup keamanan juga jalan OTOMATIS tiap 24 jam.',
+            '• `/backup-list` — slot backup (maks 7, terlama terdorong keluar) dengan nama + waktunya.',
+            '• `/restore-backup name` — pulihkan semuanya dari satu slot. Backup keamanan baru dibuat DULU sebelum restore — selalu bisa mundur.',
+            '• `/reset-config` — ⚠️ kembalikan SEMUA pengaturan ke awal (role, channel, produk, pesan). Konfirmasi 2 langkah — jalankan `/backup-now` dulu!',
+            '❓ **Cache langsung bersih setelah restore** — bot memuat ulang data yang dipulihkan saat itu juga, tanpa restart.',
+            '❓ **Filennya di mana?** `data/backups/` — jangan diedit manual; pakai command-nya.'
         ]
     },
     {
@@ -315,17 +527,22 @@ const HELP_CATEGORIES = [
             '• `/leaderboard` — peringkat (pesan/belanja/menang)',
             '• `/my-stats` — pesan & transaksi kamu'
         ],
-        // v3.9.52 (permintaan user: "update juga di /help biar sync semua"):
-        // panduan pakai untuk fitur stats BARU — hanya di tampilan detail kategori.
+        // v3.9.53: panduan lengkap mandiri (tampilan kategori = detail saja) —
+        // kini mendokumentasikan opsi pemilihan counter di setup.
         detail: [
-            '',
             '**Channel counter live (kayak bot ServerStats):**',
-            '• `/serverstats setup` — bikin kategori "📊 STATISTIK SERVER" di PALING ATAS daftar channel + 5 channel voice khusus tampilan: 👥 Member · 🤖 Bot · 🚀 Boost · 🎭 Role · 📺 Channel — angka di NAMA channel update live',
-            '• `/serverstats remove` — hapus semuanya · `/serverstats refresh` — paksa update sekarang',
-            '💡 Update otomatis saat member join/left, boost mulai/berhenti, channel & role dibuat/dihapus — aman rate limit (Discord hanya izinkan 2x ganti nama per channel / 10 menit, jadi update di-throttle + self-heal tiap ±5 menit). Counter yang dihapus akan dikasih peringatan; kalau SEMUA counter terhapus, fitur mati otomatis.',
+            '• `/serverstats setup` — bikin kategori "📊 STATISTIK SERVER" di PALING ATAS daftar channel. Voice channel yang NAMANYA counter live — member lihat angkanya sekilas, tidak ada yang bisa join.',
+            '• **Pilih counter mana yang mau ditampilkan** (v3.9.53): `members bots boosts roles channels` — semuanya AKTIF default; set ke **False** untuk melewatinya, mis. `/serverstats setup bots:false channels:false` hanya membuat 👥 · 🚀 · 🎭. Minimal satu harus tetap aktif.',
+            '• `/serverstats remove` — hapus semuanya · `/serverstats refresh` — paksa update sekarang. Untuk GANTI pilihan: `remove` dulu lalu `setup` lagi.',
+            '• Update otomatis: member join/left, boost mulai/berhenti, channel & role dibuat/dihapus. Aman rate limit (Discord izinkan 2 rename per channel / 10 menit — update di-throttle + self-heal tiap ±5 menit). Counter terhapus dikasih peringatan; semua hilang → mati otomatis.',
             '',
-            '**Notifikasi boost:**',
-            '• Member mulai/berhenti boost → embed pink dikirim otomatis ke channel server-booster (`/set-channel tipe:server-booster #ch`) dan selalu tercatat di log server + riwayat `/boosters`'
+            '**Notifikasi boost:** member mulai/berhenti boost → embed pink dikirim otomatis ke channel server-booster (`/set-channel tipe:server-booster #ch`), selalu tercatat di log server + riwayat `/boosters`.',
+            '',
+            '**Angka & peringkat**',
+            '• `/stats` — ringkasan server: member live, boost, tiket terbuka + aktivitas terlacak (pesan, transaksi). Tanpa baris revenue — belanja bersifat pribadi.',
+            '• `/boosters` — daftar booster live + riwayat terbaru (publik).',
+            '• `/leaderboard metric` — top 10 berdasarkan pesan / belanja / kemenangan giveaway (publik).',
+            '• `/my-stats` — pesan, transaksi + total belanja kamu (publik — halamanmu cuma kamu yang lihat).'
         ]
     },
     {
@@ -336,6 +553,17 @@ const HELP_CATEGORIES = [
         lines: [
             '• `/help` — pusat bantuan (atau `/help search:kata kunci`)',
             '• `/config-show` — lihat semua konfigurasi bot sekaligus'
+        ],
+        // v3.9.53: panduan lengkap mandiri (tampilan kategori = detail saja).
+        detail: [
+            '**/help — pusat kendali**',
+            '• `/help` — navigator ini: pilih kategori di dropdown 📂 (semua command dijelaskan), 🔍 **Cari Command** dengan kata kunci, 📖 **Semua Command** untuk daftar lengkap ringkas, atau langsung jalankan `/help search:kata kunci`.',
+            '• Tiap tampilan kategori ADALAH panduan lengkapnya — sintaks, perilaku, dan jawaban pertanyaan yang paling sering ditanya.',
+            '',
+            '**/config-show — satu halaman, semua pengaturan**',
+            '• Role, channel, produk, responder, auto-mod, leveling… seluruh konfigurasi dalam satu embed — cek setelah perubahan besar untuk memastikan semuanya beres.',
+            '❓ **Command tidak muncul?** Slash command terdaftar ke server saat startup — restart bot kalau baru saja update.',
+            '❓ **Permission?** Command admin butuh permission Manage Server; command publik (`/rank`, `/leaderboard`, `/my-stats`, `/boosters`, `/afk`) bisa dipakai siapa saja.'
         ]
     }
 ];
@@ -405,10 +633,15 @@ function buildHomeEmbed(client, user) {
 function buildCategoryEmbed(client, categoryId) {
     const cat = findCategory(categoryId);
     if (!cat) return null;
-    // v3.9.52: baris `detail` opsional HANYA tampil di tampilan kategori ini —
-    // dokumentasi pakai yang lebih kaya tanpa menyentuh embed Semua Command
-    // yang budget-critical (hanya merender `lines` yang ringkas) maupun Pencarian.
-    const description = [...cat.lines, ...(cat.detail || [])].join('\n');
+    // v3.9.53 (permintaan user: "tulis ulang /help jadi setiap kategori
+    // perintah slash command kasih penjelasan biar member tidak bertanya
+    // tanya"): kalau kategori punya panduan `detail`, ITU-lah tampilan
+    // kategorinya — penjelasan per-command yang lengkap dan mandiri. Baris
+    // `lines` yang ringkas tetap jadi konten embed 📖 Semua Command yang
+    // budget-critical (5776/5800 — slack cuma 24 karakter) dan indeks 🔍
+    // Pencarian; kategori tanpa `detail` fallback ke `lines` (perilaku
+    // sama dengan sebelum v3.9.52).
+    const description = (cat.detail || cat.lines).join('\n');
     return baseEmbed()
         .setTitle(`${cat.emoji} ${cat.name}`)
         .setDescription(description)

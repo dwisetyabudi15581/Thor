@@ -4,14 +4,21 @@
  *
  * v3.9.51 (permintaan user: "fitur stats server secara live yang mirip
  * seperti bot server stats"): membuat kategori "📊 STATISTIK SERVER" berisi
- * 5 channel counter auto-update (Member, Bot, Boost, Role, Channel). NAMA
- * channel-nya adalah angka live — ter-update otomatis saat ada perubahan
- * member/boost/role/channel (lihat src/data/serverstatsManager.js untuk
- * strategi rate-limit: change detection + cooldown 5 menit per channel +
- * refresh dirty-driven).
+ * channel counter auto-update. NAMA channel-nya adalah angka live —
+ * ter-update otomatis saat ada perubahan member/boost/role/channel (lihat
+ * src/data/serverstatsManager.js untuk strategi rate-limit: change
+ * detection + cooldown 5 menit per channel + refresh dirty-driven).
  *
- * setup   — membuat kategori + counter (rollback saat gagal di tengah,
- *           anti-orphan, pola yang sama dengan /setup-tempvoice)
+ * v3.9.53 (permintaan user: "fitur /serverstats kasih opsi apa saja yang
+ * mau di munculin"): setup kini punya 5 opsi boolean —
+ * members/bots/boosts/roles/channels. Semuanya default TRUE; set ke False
+ * untuk melewati counter itu. Minimal satu counter harus tetap aktif
+ * (semua-False ditolak dengan pesan ramah). Hanya counter terpilih yang
+ * dibuat, disimpan, dan di-refresh — /serverstats refresh menampilkan
+ * persis counter yang ter-config.
+ *
+ * setup   — membuat kategori + counter terpilih (rollback saat gagal di
+ *           tengah, anti-orphan, pola yang sama dengan /setup-tempvoice)
  * remove  — menghapus semua channel counter + kategori + config
  * refresh — memaksa update langsung (admin, melewati cooldown SEKALI —
  *           aman karena jarang)
@@ -49,6 +56,18 @@ module.exports = async function (interaction) {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         const guild = interaction.guild;
 
+        // v3.9.53: counter mana yang mau dibuat? Setiap opsi default true —
+        // False melewati counter itu. Semua-False ditolak (kategori counter
+        // tanpa counter tidak masuk akal).
+        const selectedDefs = COUNTER_DEFS.filter(def => interaction.options.getBoolean(def.type) !== false);
+        if (selectedDefs.length === 0) {
+            return safeEditReply(interaction, {
+                content:
+                    '⚠️ Kamu mematikan SEMUA counter (member, bot, boost, role DAN channel).\n\n' +
+                    'Pilih minimal satu — biarkan opsi yang kamu mau **aktif** (default True), set yang TIDAK kamu mau ke **False** saja.'
+            });
+        }
+
         // Cek permission bot — SEBELUM membuat apa pun (anti-orphan).
         const me = guild.members?.me;
         const myPerms = me?.permissions || interaction.appPermissions;
@@ -80,7 +99,7 @@ module.exports = async function (interaction) {
             serverstatsManager.clearConfig();
         }
 
-        // === Buat kategori + 5 channel counter ===
+        // === Buat kategori + channel counter TERPILIH ===
         // Pola anti-orphan v3.9.8 (sama dengan /setup-tempvoice): kalau ada
         // langkah yang gagal, semua yang sudah dibuat di-rollback — tanpa
         // channel zombie.
@@ -91,7 +110,7 @@ module.exports = async function (interaction) {
         // yang setengah dibuat (angka self-referential yang loncat lagi
         // di refresh berikutnya).
         const liveValues = {};
-        for (const def of COUNTER_DEFS) {
+        for (const def of selectedDefs) {
             liveValues[def.type] = computeCounterValue(guild, def.type);
         }
 
@@ -114,7 +133,7 @@ module.exports = async function (interaction) {
             created.push(category);
 
             const counters = {};
-            for (const def of COUNTER_DEFS) {
+            for (const def of selectedDefs) {
                 const ch = await guild.channels.create({
                     name: buildCounterName(def.type, liveValues[def.type]),
                     type: ChannelType.GuildVoice,
@@ -140,10 +159,11 @@ module.exports = async function (interaction) {
                 action: 'SETUP_SERVER_STATS',
                 actorId: interaction.user.id,
                 actorTag: interaction.user.tag,
-                details: `Setup counter server stats — kategori: ${CATEGORY_NAME}, ${COUNTER_DEFS.length} channel counter (member/bot/boost/role/channel)`,
+                details: `Setup counter server stats — kategori: ${CATEGORY_NAME}, ${selectedDefs.length} channel counter: ${selectedDefs.map(d => d.type).join('/')}`,
                 guildId: guild.id
             });
 
+            const skipped = COUNTER_DEFS.filter(d => !selectedDefs.includes(d));
             const embed = new EmbedBuilder()
                 .setTitle('📊 Server Stats — counter live berhasil dibuat!')
                 .setDescription(
@@ -151,14 +171,19 @@ module.exports = async function (interaction) {
                 )
                 .setColor(0x5865f2)
                 .addFields(
-                    ...COUNTER_DEFS.map(def => ({
+                    ...selectedDefs.map(def => ({
                         name: `${def.emoji} ${def.label}`,
                         value: `\`${buildCounterName(def.type, liveValues[def.type])}\``,
                         inline: true
-                    }))
+                    })),
+                    {
+                        name: '🧩 Tidak dibuat',
+                        value: skipped.length > 0 ? skipped.map(d => `${d.emoji} ${d.label}`).join(' · ') : '— semua counter aktif —',
+                        inline: false
+                    }
                 )
                 .setFooter({
-                    text: 'Counter ter-refresh otomatis (aman rate-limit) • /serverstats refresh memaksa update sekarang'
+                    text: 'Counter ter-refresh otomatis (aman rate-limit) • /serverstats refresh memaksa update sekarang • /serverstats remove + setup untuk mengubah pilihan'
                 })
                 .setTimestamp();
             return safeEditReply(interaction, { embeds: [embed] });
@@ -252,7 +277,11 @@ module.exports = async function (interaction) {
         // limit Discord 2-rename-per-10-menit).
         const result = await serverstatsManager.refreshServerStats(guild, { force: true });
 
-        const lines = COUNTER_DEFS.map(def => {
+        // v3.9.53: tampilkan persis counter yang TER-CONFIG (setup mungkin
+        // melewatkan beberapa) — bentuk yang sama dengan konfirmasi setup.
+        const cfg = serverstatsManager.getConfig() || {};
+        const activeDefs = COUNTER_DEFS.filter(def => (cfg.counters || {})[def.type]);
+        const lines = activeDefs.map(def => {
             const value = computeCounterValue(guild, def.type);
             return `${def.emoji} ${def.label}: **${value}**`;
         }).join('\n');

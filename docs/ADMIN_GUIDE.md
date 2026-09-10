@@ -1,4 +1,4 @@
-# 📖 Admin Guide — Thor Bot v3.9.52
+# 📖 Admin Guide — Thor Bot v3.9.53
 
 Panduan lengkap untuk admin server Discord yang menjalankan bot ini — cocok untuk admin baru yang pertama kali setup, maupun admin yang sudah berjalan sebagai referensi harian.
 
@@ -50,7 +50,7 @@ npm start
 - Di Discord, ketik `/` — semua **91 slash command** harus muncul
 - Jika command tidak muncul, pastikan `GUILD_ID` di `.env` benar
 
-> 💡 **Lupa command apa namanya?** Ketik `/help` — sejak v3.9.39 ini **navigator interaktif** (bukan lagi satu embed panjang yang harus di-scroll), dan sejak **v3.9.44** katalognya disusun ulang jadi **20 kategori diurut prioritas pemakaian**: 🏠 home kini membuka dengan seksi **"Butuh apa sekarang?"** (member nakal? → Moderasi · mau jualan? → Panduan Cepat · mau pantau? → Log & Channel · server sepi? → Giveaway & Leveling), 📂 **dropdown kategori** untuk melompat (kategori **🚀 Panduan Cepat** berisi urutan setup server baru 5 langkah), 🔍 **Cari Command** untuk kata kunci bebas (`key`, `panel`, `warn`...), atau langsung `/help search:<kata kunci>`. Sejak **v3.9.52** tampilan kategori 📂 bisa membawa **dokumentasi `detail` yang lebih panjang** (mis. Statistik menjelaskan cara pakai `/serverstats setup`/`remove`/`refresh` + alur notifikasi boost) — daftar 📖 Semua Command tetap ringkas supaya selalu muat dalam satu embed. Semua navigasi terjadi di satu pesan ephemeral — tidak memenuhi channel.
+> 💡 **Lupa command apa namanya?** Ketik `/help` — sejak v3.9.39 ini **navigator interaktif** (bukan lagi satu embed panjang yang harus di-scroll), dan sejak **v3.9.44** katalognya disusun ulang jadi **20 kategori diurut prioritas pemakaian**: 🏠 home kini membuka dengan seksi **"Butuh apa sekarang?"** (member nakal? → Moderasi · mau jualan? → Panduan Cepat · mau pantau? → Log & Channel · server sepi? → Giveaway & Leveling), 📂 **dropdown kategori** untuk melompat, 🔍 **Cari Command** untuk kata kunci bebas (`key`, `panel`, `warn`...), atau langsung `/help search:<kata kunci>`. Sejak **v3.9.53 SEMUA tampilan kategori adalah panduan lengkap mandiri** — sintaks + perilaku per-command + jawaban ❓ pertanyaan yang paling sering ditanya member (daftar 📖 Semua Command tetap ringkas supaya selalu muat dalam satu embed). Semua navigasi terjadi di satu pesan ephemeral — tidak memenuhi channel.
 
 ---
 
@@ -93,7 +93,7 @@ Urutan berikut adalah **rekomendasi** untuk server baru. Lewati langkah yang sud
 - `transcript` — channel arsip transcript tiket (chat history tersimpan otomatis setiap tiket di-close)
 - `server-booster` — (v3.9.49, opsional) channel notifikasi boost: embed pink `🚀 BOOST SERVER BARU!` saat member mulai boost, abu-abu `💔 BOOST BERAKHIR` saat berhenti, plus SATU embed catch-up gabungan saat startup untuk perubahan yang terjadi saat bot offline. Boost juga SELALU tercatat di **server log**. Tanpa channel ini `/boosters` tetap jalan — hanya notifikasinya yang mati.
 
-> 📊 **Counter server stats live (v3.9.51, opsional):** `/serverstats setup` membuat kategori `📊 STATISTIK SERVER` di PALING ATAS daftar channel berisi 5 channel display-only yang NAMANYA counter live — `👥 Member: 123`, `🤖 Bot: 2`, `🚀 Boost: 5`, `🎭 Role: 9`, `📺 Channel: 12` — pengalaman "bot ServerStats" tanpa bot lain. Ter-update otomatis saat ada perubahan member/boost/role/channel (aman rate-limit: angka yang tidak berubah = nol panggilan API, dan tiap channel paling banyak di-rename sekali per 5 menit — limit Discord 2x per 10 menit). Kelola dengan `/serverstats refresh` (paksa update sekarang) dan `/serverstats remove` (hapus semuanya). Bot butuh **Manage Channels + Manage Roles** untuk setup-nya.
+> 📊 **Counter server stats live (v3.9.51, opsional):** `/serverstats setup` membuat kategori `📊 STATISTIK SERVER` di PALING ATAS daftar channel berisi channel display-only yang NAMANYA counter live — `👥 Member: 123`, `🤖 Bot: 2`, `🚀 Boost: 5`, `🎭 Role: 9`, `📺 Channel: 12` — pengalaman "bot ServerStats" tanpa bot lain. **v3.9.53: pilih counter mana yang mau ditampilkan** — opsi boolean `members`/`bots`/`boosts`/`roles`/`channels` semuanya AKTIF default; set ke False untuk melewatinya (semua-False ditolak). Ter-update otomatis saat ada perubahan member/boost/role/channel (aman rate-limit: angka yang tidak berubah = nol panggilan API, dan tiap channel paling banyak di-rename sekali per 5 menit — limit Discord 2x per 10 menit). Kelola dengan `/serverstats refresh` (paksa update sekarang) dan `/serverstats remove` (hapus semuanya — lalu `setup` lagi untuk mengubah pilihan). Bot butuh **Manage Channels + Manage Roles** untuk setup-nya.
 
 > 💡 Sejak v3.9.30 semua channel diatur lewat **satu command** `/set-channel` — termasuk transcript (dulu command terpisah `/set-transcript-channel`). Hapus dengan `/remove-channel <tipe>`.
 
@@ -1009,10 +1009,11 @@ Cooldown bersifat **per-user** — user A memicu tidak memengaruhi user B.
 
 ## 11. Riwayat Versi
 
-Riwayat lengkap semua versi (v3.9.0 – v3.9.52) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
+Riwayat lengkap semua versi (v3.9.0 – v3.9.53) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
 
 Ringkasan 3 versi terbaru:
 
+- **v3.9.53** (2026-09-10) — ⚙️ **permintaan user: "fitur /serverstats kasih opsi apa saja yang mau di munculin"** + 📖 **permintaan user: "tulis ulang /help jadi setiap kategori perintah slash command kasih penjelasan"**. `/serverstats setup` kini punya **5 opsi boolean** (`members`/`bots`/`boosts`/`roles`/`channels` — semua AKTIF default, False melewatikan satu, semua-False ditolak): hanya counter terpilih yang dibuat/disimpan/di-refresh, embed konfirmasi mencantumkan **"Tidak dibuat"**, dan `/refresh` menampilkan persis counter ter-config. `/help`: **SEMUA 20 tampilan kategori kini panduan lengkap mandiri** — sintaks + perilaku per-command + jawaban ❓ pertanyaan paling sering (posisi role, refresh panel, cooldown XP, format harga…), sementara embed 📖 Semua Command dan 🔍 Pencarian tetap memakai baris ringkas (budget 5.776/5.800 tidak tersentuh). +3 unit test (total **551**).
 - **v3.9.52** (2026-09-10) — 📖 **permintaan user: "Tolong update juga di /help biar sync semua"**. Kategori di `/help` kini bisa membawa **blok `detail`** — dokumentasi pakai yang lebih panjang yang **hanya tampil di tampilan detail kategori 📂** (embed 📖 Semua Command dan 🔍 Pencarian tetap memakai baris ringkas, jadi budget daftar lengkap — slack 24 karakter — tidak tersentuh dan tidak ada kategori yang ter-drop diam-diam). **Statistik** kini menjelaskan counter live dengan benar: `/serverstats setup` / `remove` / `refresh`, pemicu update otomatis (join/left, boost, perubahan channel & role), keamanan rate limit, peringatan counter terhapus + auto-disable, dan alur notifikasi boost (`/set-channel tipe:server-booster #ch` → embed pink + log server + riwayat `/boosters`). **Panduan Cepat** dapat baris tambahan opsional (`/serverstats setup` + channel boost) dan **Log & Channel** menjelaskan pengumuman boost otomatis. +8 unit test (total **549**).
 - **v3.9.51** (2026-09-10) — ✨ **permintaan user: stats server secara live seperti bot server stats** + ✂️ **permintaan user: "fitur total revenue di hapus saja"**. Command BARU **`/serverstats`** (total 91, admin): `setup` membuat kategori `📊 STATISTIK SERVER` di paling atas daftar channel berisi 5 channel display-only yang NAMANYA counter live (`👥 Member`, `🤖 Bot`, `🚀 Boost`, `🎭 Role`, `📺 Channel` — @everyone denied Connect), `remove` menghapus semuanya, `refresh` memaksa update. Auto-update saat perubahan member/boost/role/channel (4 file event baru) lewat scheduler 60 detik, aman rate-limit (change detection = nol panggilan API saat tidak berubah; cooldown 5 menit per-channel = pas limit Discord 2 rename/10 menit; dirty-driven jadi burst join = 1 refresh); tick catch-up 5 menit menyembuhkan event terlewat; channel terhapus memberi warning + perintah solusi dan auto-disable saat semua hilang; rollback gagal parsial; sinkronisasi startup untuk perubahan offline; `serverstats.json` di-backup + restore. `/stats`: **Total Revenue DIHAPUS** (kebingungan berulang — belanja pribadi tetap di `/my-stats` + `/leaderboard`). +18 unit test (total **541**).
 
@@ -1054,6 +1055,6 @@ Jika ada masalah yang tidak ada di Troubleshooting:
 
 ---
 
-**Versi dokumen:** v3.9.52
+**Versi dokumen:** v3.9.53
 **Last updated:** 10 September 2026
-**Bot version:** 3.9.52 · 91 slash command · 549 unit test
+**Bot version:** 3.9.53 · 91 slash command · 551 unit test

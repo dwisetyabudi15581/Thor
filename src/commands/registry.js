@@ -1152,7 +1152,43 @@ function getCommands() {
                 {
                     type: 1,
                     name: 'setup',
-                    description: 'Buat kategori counter + 5 channel counter live'
+                    description: 'Buat kategori counter + channel counter live',
+                    options: [
+                        // v3.9.53 (permintaan user: "kasih opsi apa saja yang
+                        // mau di munculin"): setiap counter default aktif —
+                        // set ke False untuk MELEWATI-nya. Minimal satu
+                        // counter harus tetap aktif.
+                        {
+                            type: 5,
+                            name: 'members',
+                            description: 'Tampilkan counter 👥 Member (default: ya)',
+                            required: false
+                        },
+                        {
+                            type: 5,
+                            name: 'bots',
+                            description: 'Tampilkan counter 🤖 Bot (default: ya)',
+                            required: false
+                        },
+                        {
+                            type: 5,
+                            name: 'boosts',
+                            description: 'Tampilkan counter 🚀 Boost (default: ya)',
+                            required: false
+                        },
+                        {
+                            type: 5,
+                            name: 'roles',
+                            description: 'Tampilkan counter 🎭 Role (default: ya)',
+                            required: false
+                        },
+                        {
+                            type: 5,
+                            name: 'channels',
+                            description: 'Tampilkan counter 📺 Channel (default: ya)',
+                            required: false
+                        }
+                    ]
                 },
                 {
                     type: 1,
