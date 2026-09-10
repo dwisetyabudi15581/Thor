@@ -119,7 +119,7 @@ Bot mengirim embed + tombol "Verifikasi Saya" ke channel tempat command dijalank
 
 - `label` — nama yang ditampilkan ke member
 - `value` — ID unik (tanpa spasi, mis. `7d`, `30d`, `perm`)
-- `price` — string bebas; bisa format Indonesia (`Rp. 50.000`) atau angka biasa
+- `price` — string bebas: format Indonesia (`Rp. 50.000`), angka biasa (`25000`), suffix (`25rb`, `2jt`), atau dua mata uang (`3$ USD | Rp 25.000` — stats mencatat **bagian Rp**, 25.000). USD-only (`$3`) ditolak — revenue dalam Rupiah
 - `duration` — opsional, hanya keterangan (tidak otomatis menjadi durasi expire role)
 - Maksimal 25 produk (batas dropdown Discord)
 
@@ -881,12 +881,13 @@ Menampilkan semua backup, termasuk safety backup `pre-restore_*` (jika pernah re
 
 Bot membutuhkan akses ke `message.content`. Tanpa intent itu, Discord mengirim content sebagai **string kosong** → trigger tidak pernah match.
 
-### Total revenue tidak bergerak saat jualan (v3.9.49 membenahi penyebabnya)
+### Total revenue tidak bergerak saat jualan (v3.9.49 + v3.9.50 membenahi penyebabnya)
 
 - **Suffix harga Indonesia kini diparse benar:** `25rb` = Rp 25.000, `2jt` / `2juta` = Rp 2.000.000 — sebelum v3.9.49, `25rb` hanya tercatat Rp 25 per penjualan (revenue terlihat beku).
-- **`/add-product` kini menolak harga yang tak terparse** (mis. `murah`, `negosiasi`) beserta daftar format yang diterima, dan menampilkan `💰 Tercatat di stats: Rp 25.000 per penjualan` di konfirmasi — format buruk tidak bisa lagi mencatat Rp 0 senyap.
+- **Harga dua mata uang kini diparse benar (v3.9.50):** `3$ USD | Rp. 25.000` tercatat **Rp 25.000** per penjualan — sebelumnya `parseFloat` berhenti di `$` dan yang terhitung cuma Rp 3. Harga USD-only (`$3`, `3 usd`) **ditolak** dengan pesan agar mencantumkan nominal Rupiah — bot tidak bisa konversi mata uang.
+- **`/add-product` kini menolak harga yang tak terparse** (mis. `murah`, `negosiasi`) beserta daftar format yang diterima, dan menampilkan `💰 Tercatat di stats: Rp 25.000 per penjualan` di konfirmasi — format buruk tidak bisa lagi mencatat Rp 0 senyap. `/update-product` kini juga menampilkan nominal yang dihitung saat harga diubah.
 - Cek produk yang ada dengan `/list-products` — perbaiki harga yang formatnya buruk lewat `/update-product value:... price:25.000`.
-- Revenue menghitung **order tiket + penyelesaian rekber** (harga + fee) yang diproses lewat bot. Penjualan manual di luar tiket/deal tidak terlacak — itulah satu-satunya celah tersisa yang bisa bikin angkanya "tidak cocok" dengan catatanmu.
+- Revenue menghitung **order tiket + penyelesaian rekber** (harga + fee) yang diproses lewat bot. Penjualan manual di luar tiket/deal tidak terlacak — itulah satu-satunya celah tersisa yang bisa bikin angkanya "tidak cocok" dengan catatanmu. Penjualan yang tercatat SEBELUM fix ini tetap menyimpan jumlah historisnya yang kecil di `stats.json` (riwayat tidak dihitung ulang).
 
 **Cara fix:**
 
@@ -997,9 +998,11 @@ Cooldown bersifat **per-user** — user A memicu tidak memengaruhi user B.
 
 ## 11. Riwayat Versi
 
-Riwayat lengkap semua versi (v3.9.0 – v3.9.49) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
+Riwayat lengkap semua versi (v3.9.0 – v3.9.50) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
 
 Ringkasan 3 versi terbaru:
+
+- **v3.9.50** (2026-09-10) — 🐛 **laporan user: "saya kasih harga 3$ USD | Rp. 25.000" — revenue masih nyaris tak bergerak**. 🔴 Harga dua mata uang tercatat **Rp 3** per penjualan: `parseFloat` berhenti di `$` dan bagian Rupiah tidak pernah dibaca. Kedua parser harga kini membaca nominal yang menempel langsung ke penanda `Rp` — `3$ USD | Rp. 25.000` → **Rp 25.000** per penjualan (ada pipe/tanpa pipe, Rp duluan atau USD duluan, dengan suffix pun tetap benar). 🟡 Harga USD-only (`$3`, `3 usd`) kini **ditolak** dengan penjelasan agar mencantumkan nominal Rupiah (revenue dalam Rupiah; tidak ada konversi mata uang). 🟢 `/update-product` kini menampilkan `💰 tercatat di stats: Rp 25.000 per penjualan` saat harga berubah (visibilitas yang sama dengan `/add-product`). Strictness rekber tetap terjaga (`3$ | Rp 1.5rb` tetap ditolak). +5 unit test (total **523**).
 
 - **v3.9.49** (2026-09-10) — ✨ **permintaan user: fitur Server Booster** + 🐛 **laporan user: "stats server masih belum sesuai — revenue gak ke update, member tracked vs member live"**. Booster: tambah/hilangnya boost dideteksi dari diff `premium_since` di `guildMemberUpdate` (Discord tak punya event boost khusus) → embed pink `🚀 BOOST SERVER BARU!` / abu-abu `💔 BOOST BERAKHIR` ke **channel server-booster** baru (`/set-channel tipe:server-booster`), selalu tercatat di server log, riwayat persisten di `boosts.json` (di-backup & bisa di-restore), **catch-up offline** dalam satu embed gabungan saat startup, dan command publik baru **`/boosters`** (total 90) berisi daftar live (pendukung terawal duluan) + riwayat boost terbaru. Fix stats: 🔴 suffix harga Indonesia salah parse senyap — `25rb` tercatat **Rp 25** per penjualan bukannya Rp 25.000 (revenue terlihat beku) — kedua parser harga kini paham `rb`/`jt`/`juta`; `/add-product` & `/update-product` kini **menolak harga tak terparse** dan menampilkan jumlah yang dihitung per penjualan; field dobel "Member (live)" + "Member Terlacak" digabung jadi **satu `👥 Member`** (jumlah live, rata-rata dibagi jumlah itu); `/config-show` kini menampilkan channel server-log (hilang sejak v3.9.43) + channel booster baru. +15 unit test (total **518**).
 - **v3.9.48** (2026-09-09) — 🐛 **laporan user: "ada bug — Welcome tidak muncul"**. Investigasi: jalur kode welcome terbukti JALAN (simulasi end-to-end dengan modul asli — join → role unverified + embed + server log, leave → embed goodbye); bug sebenarnya adalah **diagnosabilitas**: saat channel welcome/goodbye belum di-set / terhapus / ID dari server lain, bot TIDAK mengeluarkan log apa pun saat startup MAUPUN saat member beneran join. Fix: setiap skip kini meninggalkan log penyebab + perintah solusi; **BARU `/test-welcome`** (89 command) diagnosis seluruh rantai (config → channel ada → permission bot) + kirim **preview langsung** dibangun builder yang sama dengan event asli; startup memvalidasi konfigurasi; join dari guild lain (GUILD_ID beda) kini kelihatan. +17 unit test (total **503**).
@@ -1037,6 +1040,6 @@ Jika ada masalah yang tidak ada di Troubleshooting:
 
 ---
 
-**Versi dokumen:** v3.9.49
+**Versi dokumen:** v3.9.50
 **Last updated:** 10 September 2026
-**Bot version:** 3.9.49 · 90 slash command · 518 unit test
+**Bot version:** 3.9.50 · 90 slash command · 523 unit test

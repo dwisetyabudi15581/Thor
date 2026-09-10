@@ -5,6 +5,16 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 Legend: 🔴 critical · 🟠 high · 🟡 medium · 🟢 improvement
 
+## [3.9.50] — 2026-09-10
+
+### Fixed — 🐛 laporan user: "saya kasih harga 3$ USD | Rp. 25.000" (revenue masih nyaris tak bergerak)
+
+- 🔴 **Harga dua mata uang tercatat Rp 3 per penjualan:** format harga produk asli user (`3$ USD | Rp. 25.000`) membuat `parseFloat` berhenti di `$` — bagian Rupiah tidak pernah dibaca, jadi tiap penjualan hanya menambah jumlah nyaris tak terlihat dan revenue TETAP terlihat beku meski fix suffix v3.9.49 sudah terpasang. Kedua parser harga (`parsePrice` toko/tiket/key + `parsePriceNumber` rekber) kini membaca nominal yang menempel langsung ke penanda `Rp`: `3$ USD | Rp. 25.000` → **Rp 25.000** tercatat per penjualan — dengan/tanpa pipe, Rp duluan atau USD duluan, dengan/tanpa suffix `rb`/`jt`.
+- 🟡 **Harga USD-only kini ditolak dengan penjelasan yang jelas:** `$3` / `3 usd` tidak bisa dikonversi ke Rupiah secara andal (dulu `3$` senyap tercatat Rp 3). `/add-product` & `/update-product` kini menjelaskan bahwa revenue dicatat dalam **Rupiah** dan meminta bagian Rp-nya, mis. `3$ USD | Rp 25.000` — daftar format yang diterima juga menampilkan contoh harga ganda itu.
+- 🟢 **`/update-product` kini juga menampilkan nominal yang dicatat:** konfirmasi mencantumkan `💰 tercatat di stats: Rp 25.000 per penjualan` setiap kali harga diubah — visibilitas yang sama dengan `/add-product`, jadi salah ketik harga ganda langsung ketahuan saat update, bukan setelah N penjualan tak terlihat.
+- 🟢 Strictness rekber tetap terjaga: kombinasi suffix + pemisah di bagian Rp (`3$ | Rp 1.5rb`) tetap ditolak — guard harga 10x tetap utuh.
+- 🟢 +5 unit test (total **523**): format persis dari user + varian umum (pipe, tanpa pipe, Rp duluan, suffix), USD-only → 0, no-regression format Rp, rekber dua mata uang + strictness, dan kontrak `priceValidationError` (dual OK / hint USD-only / sampah ditolak).
+
 ## [3.9.49] — 2026-09-10
 
 ### Added — ✨ permintaan user: "server booster — biar tau siapa yang boost + dikirim ke channel server booster"

@@ -140,3 +140,66 @@ test('parsePriceNumber v3.9.49 (midman): escrow now accepts rb/jt/juta', () => {
     assert.strictEqual(mm.parsePriceNumber('100k'), 100000);
     assert.strictEqual(mm.parsePriceNumber('2.5'), 0);
 });
+
+// ============ v3.9.50 — harga dua mata uang (laporan user: "saya kasih harga 3$ USD | Rp. 25.000") ============
+// Mata uang stats adalah Rupiah. Sebelum fix ini parseFloat berhenti di '$',
+// jadi harga ganda itu tercatat **Rp 3** per penjualan — revenue kembali
+// terlihat beku meski fix suffix v3.9.49 sudah terpasang.
+
+test('parsePrice v3.9.50: dual-currency — the Rp half is recorded', () => {
+    // Format persis seperti laporan user + varian umumnya.
+    assert.strictEqual(parsePrice('3$ USD | Rp. 25.000'), 25000);
+    assert.strictEqual(parsePrice('3$ USD | Rp 25.000'), 25000);
+    assert.strictEqual(parsePrice('$3 USD | Rp 25.000'), 25000);
+    assert.strictEqual(parsePrice('3 USD | Rp 25.000'), 25000);
+    assert.strictEqual(parsePrice('Rp 25.000 | $3 USD'), 25000); // Rp duluan
+    assert.strictEqual(parsePrice('3$ usd rp 25.000'), 25000);   // tanpa pipe
+    assert.strictEqual(parsePrice('$5 USD | Rp 150rb'), 150000); // plus suffix
+});
+
+test('parsePrice v3.9.50: USD-only is unparseable (stats are in Rupiah)', () => {
+    // Nominal USD tidak bisa dikonversi andal → 0 → priceValidationError
+    // meminta bagian Rupiah, bukan senyap mencatat jumlah yang salah.
+    assert.strictEqual(parsePrice('3$'), 0);
+    assert.strictEqual(parsePrice('$3'), 0);
+    assert.strictEqual(parsePrice('3 usd'), 0);
+    assert.strictEqual(parsePrice('USD 3'), 0);
+    assert.strictEqual(parsePrice('3$ USD'), 0);
+});
+
+test('parsePrice v3.9.50: Rp formats keep working (no regression)', () => {
+    assert.strictEqual(parsePrice('Rp 25.000'), 25000);
+    assert.strictEqual(parsePrice('Rp. 50.000'), 50000);
+    assert.strictEqual(parsePrice('Rp 25rb'), 25000);
+    assert.strictEqual(parsePrice('25.000 rp'), 25000); // penanda setelah nominal
+    assert.strictEqual(parsePrice('rp'), 0);
+});
+
+test('parsePriceNumber v3.9.50 (midman): dual-currency accepted, strictness kept', () => {
+    const mm = require('../../src/data/midmanManager');
+    assert.strictEqual(mm.parsePriceNumber('3$ USD | Rp. 25.000'), 25000);
+    assert.strictEqual(mm.parsePriceNumber('$3 | Rp 25.000'), 25000);
+    // USD-only → 0 (rekber berdenominasi Rupiah).
+    assert.strictEqual(mm.parsePriceNumber('3$'), 0);
+    assert.strictEqual(mm.parsePriceNumber('3 usd'), 0);
+    // Guard ketat tetap: desimal + suffix di bagian Rp tetap ditolak.
+    assert.strictEqual(mm.parsePriceNumber('3$ | Rp 1.5rb'), 0);
+    // Strictness legacy tidak berubah.
+    assert.strictEqual(mm.parsePriceNumber('1.5rb'), 0);
+});
+
+test('priceValidationError v3.9.50 (products): dual OK, USD-only gets a hint', () => {
+    const products = require('../../src/commands/products');
+    // Harga ganda dua mata uang & Rupiah polos valid (null = tidak ada error).
+    assert.strictEqual(products.priceValidationError('3$ USD | Rp. 25.000'), null);
+    assert.strictEqual(products.priceValidationError('Rp 25rb'), null);
+    assert.strictEqual(products.priceValidationError('25.000'), null);
+    assert.strictEqual(products.priceValidationError('gratis'), null);
+    // USD-only: pesan khusus menyuruh admin mencantumkan nominal Rupiah.
+    const usdErr = products.priceValidationError('3$ USD');
+    assert.ok(typeof usdErr === 'string' && usdErr.includes('Rupiah'), 'error USD-only menyebut Rupiah');
+    assert.ok(usdErr.includes('Rp 25.000'), 'error USD-only menampilkan contoh harga ganda');
+    // String sampah tetap ditolak dengan daftar format.
+    const junkErr = products.priceValidationError('murah');
+    assert.ok(typeof junkErr === 'string' && junkErr.includes('Rp 0'));
+});

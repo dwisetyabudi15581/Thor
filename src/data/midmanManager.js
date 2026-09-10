@@ -332,7 +332,21 @@ function parsePriceNumber(input) {
     if (!input || typeof input !== 'string') return 0;
     let s = String(input)
         .toLowerCase()
-        .trim()
+        .trim();
+    // v3.9.50 FIX: harga ganda ("3$ USD | Rp. 25.000") — baca bagian Rupiahnya
+    // langsung (mata uang stats/rekber). USD-only (tanpa 'rp') → 0: rekber
+    // berdenominasi Rupiah dan tidak ada konversi yang andal.
+    if (/rp/.test(s)) {
+        const m = s.match(/rp\.?\s*([0-9][0-9.,]*\s*(?:juta|jt|rb|k|m)?)/);
+        if (m) {
+            s = m[1];
+        } else {
+            s = s.replace(/rp\.?/g, '');
+        }
+    } else if (/\$|usd/.test(s)) {
+        return 0;
+    }
+    s = s
         .replace(/rp\.?/g, '')
         .replace(/\s/g, '');
     let multiplier = 1;

@@ -354,7 +354,29 @@ function parsePrice(priceStr) {
     // minus (totalSpent/revenue bisa jadi negatif lewat harga produk).
     if (typeof priceStr === 'number') return isNaN(priceStr) ? 0 : Math.max(0, priceStr);
     if (!priceStr) return 0;
-    let s = String(priceStr).toLowerCase().replace(/rp\.?/g, '').replace(/\s/g, '');
+    let s = String(priceStr).toLowerCase().trim();
+    // v3.9.50 FIX (laporan user: harga diisi "3$ USD | Rp. 25.000" — format
+    // harga produk asli user). parseFloat berhenti di '$', jadi harga ganda itu
+    // tercatat **Rp 3** per penjualan dan revenue kembali terlihat beku.
+    // Stats berdenominasi Rupiah: kalau ada penanda 'rp', baca nominal yang
+    // menempel langsung padanya (pipe, pemisah, dan bagian USD diabaikan).
+    // String USD-only (tanpa 'rp') tidak bisa dikonversi andal → 0
+    // (priceValidationError menjelaskan format yang diterima).
+    if (/rp/.test(s)) {
+        const m = s.match(/rp\.?\s*([0-9][0-9.,]*\s*(?:juta|jt|rb|k|m)?)/);
+        if (m) {
+            s = m[1];
+        } else {
+            // Penanda SETELAH nominal ("25.000 rp") atau noise — perilaku lama:
+            // buang penandanya lalu parse sisanya.
+            s = s.replace(/rp\.?/g, '');
+        }
+    } else if (/\$|usd/.test(s)) {
+        // USD-only ("$3", "3 usd"): tidak ada nominal Rupiah yang bisa dicatat —
+        // return 0 supaya lapisan validasi meminta bagian Rp-nya.
+        return 0;
+    }
+    s = s.replace(/\s/g, '');
     let multiplier = 1;
     // v3.9.49 FIX (laporan user: "total revenue gak ke update"): suffix Indonesia
     // dulu salah parse SENYAP — "25rb" menyisakan 'rb' di ekor, parseFloat cuma

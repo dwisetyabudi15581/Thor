@@ -2,7 +2,7 @@
 
 Bot Discord serbaguna untuk komunitas apa pun — server jualan, gaming, content creator, hingga komunitas umum. Semua konfigurasi dapat diatur langsung dari Discord melalui slash command, tanpa mengedit file.
 
-> **v3.9.49** · 90 slash command · 518 unit test · discord.js v14 · Node.js 18+ · single-guild
+> **v3.9.50** · 90 slash command · 523 unit test · discord.js v14 · Node.js 18+ · single-guild
 >
 > 📖 **[Panduan Admin Lengkap](./docs/ADMIN_GUIDE.md)** — setup, operasional harian, troubleshooting
 > 📜 **[Changelog](./CHANGELOG.md)** — riwayat semua versi
@@ -48,7 +48,7 @@ Bot Discord serbaguna untuk komunitas apa pun — server jualan, gaming, content
 ### 📊 Leveling & Stats
 
 - XP per pesan (cooldown anti-spam) + role reward per level + `/rank` + `/leaderboard-level`.
-- Stats server: jumlah member live, boost, tiket terbuka (langsung dari Discord) + aktivitas terlacak, transaksi & revenue (format harga Indonesia `25rb`/`2jt` dipahami, harga produk divalidasi saat setup). Leaderboard messages/purchases/spending/wins; `/my-stats` menampilkan tanggal gabung asli.
+- Stats server: jumlah member live, boost, tiket terbuka (langsung dari Discord) + aktivitas terlacak, transaksi & revenue (format harga Indonesia `25rb`/`2jt` dipahami, harga dua mata uang `3$ USD | Rp 25.000` mencatat bagian Rp, harga produk divalidasi saat setup). Leaderboard messages/purchases/spending/wins; `/my-stats` menampilkan tanggal gabung asli.
 - **Server Booster:** notifikasi boost tambah/hilang ke channel booster khusus + catch-up offline + daftar `/boosters` publik (roster live + riwayat boost terbaru).
 
 ### 🎭 Lainnya
@@ -201,7 +201,7 @@ Jalankan **`/test-welcome tipe:welcome`** — command ini mendiagnosis setiap ma
 
 ### Total revenue tidak bergerak saat jualan
 
-Sejak v3.9.49: parser harga paham suffix Indonesia (`25rb` = 25.000, `2jt`/`2juta` = 2.000.000) dan `/add-product` **menolak** harga yang tidak bisa dibaca (beserta daftar format yang diterima) — format salah tidak bisa lagi mencatat Rp 0 per penjualan secara senyap. Cek produk yang ada dengan `/list-products`: kalau ada harga yang formatnya buruk, perbaiki lewat `/update-product`. Revenue menghitung order tiket + penyelesaian rekber (harga + fee) yang diproses **lewat bot** — penjualan manual di luar tiket/deal tidak terlacak.
+Sejak v3.9.49: parser harga paham suffix Indonesia (`25rb` = 25.000, `2jt`/`2juta` = 2.000.000) dan `/add-product` **menolak** harga yang tidak bisa dibaca (beserta daftar format yang diterima) — format salah tidak bisa lagi mencatat Rp 0 per penjualan secara senyap. Sejak v3.9.50: harga dua mata uang dipahami — `3$ USD | Rp. 25.000` tercatat **Rp 25.000 per penjualan** (bagian Rp-nya; harga USD-only ditolak dengan pesan agar mencantumkan nominal Rupiah). Cek produk yang ada dengan `/list-products`: kalau ada harga yang formatnya buruk, perbaiki lewat `/update-product`. Revenue menghitung order tiket + penyelesaian rekber (harga + fee) yang diproses **lewat bot** — penjualan manual di luar tiket/deal tidak terlacak.
 
 Troubleshooting lengkap (tiket, role, stats, backup, dll): **[docs/ADMIN_GUIDE.md → Section 9](./docs/ADMIN_GUIDE.md)**.
 

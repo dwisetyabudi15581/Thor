@@ -16,15 +16,26 @@ const { MessageFlags, getConfig, saveConfig, Embeds, logAudit, safeEditReply, pa
  * mencatat parsePrice(harga) = Rp 0 ke stats/leaderboard, dan revenue tidak
  * pernah bergerak. Return null kalau valid (harga gratis "0"/"free"/"gratis"
  * diperbolehkan), atau pesan error kalau invalid.
+ * v3.9.50 (laporan user: "saya kasih harga 3$ USD | Rp. 25.000"): harga
+ * ganda dua-mata-uang kini VALID — bagian Rupiah yang dicatat ke stats.
+ * Harga USD-only dapat pesan khusus yang menjelaskan revenue = Rupiah.
+ * Diekspor untuk unit test (tests/unit/parsePrice.test.js).
  */
 function priceValidationError(price) {
     const raw = String(price || '').trim();
     const FREE = ['0', 'free', 'gratis'];
     if (FREE.includes(raw.toLowerCase())) return null; // memang gratis — OK
     if (parsePriceNum(raw) > 0) return null; // terparse jadi jumlah positif — OK
+    // v3.9.50: USD-only ("$3", "3 usd") — stats mencatat Rupiah, tidak ada konversi.
+    if (/\$|usd/i.test(raw) && !/rp/i.test(raw)) {
+        return (
+            `❌ Harga \`${raw}\` hanya USD — revenue dicatat dalam **Rupiah**, dan bot tidak bisa konversi mata uang.\n` +
+            `✅ Cantumkan nominal Rupiah, mis. \`3$ USD | Rp 25.000\` — stats akan mencatat **bagian Rp** (25.000) dari setiap penjualan.`
+        );
+    }
     return (
         `❌ Harga \`${raw}\` tidak bisa dibaca sebagai angka — nanti akan tercatat **Rp 0** di stats/revenue setiap penjualan.\n` +
-        `✅ Format yang diterima: \`25000\` · \`25.000\` · \`Rp 25.000\` · \`25rb\` · \`25k\` · \`2jt\` · \`2juta\` · \`gratis\``
+        `✅ Format yang diterima: \`25000\` · \`25.000\` · \`Rp 25.000\` · \`25rb\` · \`2jt\` · \`3$ USD | Rp 25.000\` (yang dicatat bagian Rp) · \`gratis\``
     );
 }
 
@@ -294,6 +305,13 @@ module.exports = async function (interaction) {
             if (priceErr) return safeEditReply(interaction, { content: priceErr });
             product.price = newPrice;
             changes.push(`price: \`${before.price}\` → \`${newPrice}\``);
+            // v3.9.50: visibilitas yang sama dengan /add-product — tampilkan nominal
+            // yang akan dicatat, supaya salah ketik harga ganda langsung ketahuan
+            // saat update.
+            const newPriceNum = parsePriceNum(newPrice);
+            if (newPriceNum > 0) {
+                changes.push(`💰 tercatat di stats: **Rp ${newPriceNum.toLocaleString('en-US')}** per penjualan`);
+            }
         }
         if (newDuration !== null) {
             // Empty string → hapus field duration
@@ -341,3 +359,7 @@ module.exports = async function (interaction) {
         });
     }
 };
+
+// v3.9.50: ekspos validator harga untuk unit test (dipasang SETELAH assignment
+// handler di atas supaya tidak tertimpa).
+module.exports.priceValidationError = priceValidationError;
