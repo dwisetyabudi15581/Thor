@@ -130,7 +130,14 @@ const eventHandlers = [
     require('./src/bot/events/messageBulkDelete'),
     require('./src/bot/events/guildBanAdd'),
     require('./src/bot/events/guildBanRemove'),
-    require('./src/bot/events/guildMemberUpdate')
+    require('./src/bot/events/guildMemberUpdate'),
+    // v3.9.51: channel counter server stats live — tandai dirty saat channel/role
+    // berubah (perubahan member ditangani di event member di atas). Keempatnya
+    // no-op murah saat /serverstats belum di-setup.
+    require('./src/bot/events/channelCreate'),
+    require('./src/bot/events/channelDelete'),
+    require('./src/bot/events/guildRoleCreate'),
+    require('./src/bot/events/guildRoleDelete')
 ];
 
 for (const handler of eventHandlers) {

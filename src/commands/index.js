@@ -72,6 +72,8 @@ const levelingHandler = require('./leveling');
 const midmanHandler = require('./midman');
 // v3.9.43: paket moderasi (/timeout /untimeout /purge /kick /ban /unban)
 const moderationHandler = require('./moderation');
+// v3.9.51: channel counter server stats live (/serverstats setup|remove|refresh)
+const serverstatsHandler = require('./serverstats');
 
 const DOMAIN_HANDLERS = {
     help: helpHandler,
@@ -101,7 +103,9 @@ const DOMAIN_HANDLERS = {
     // v3.9.32
     midman: midmanHandler,
     // v3.9.43
-    moderation: moderationHandler
+    moderation: moderationHandler,
+    // v3.9.51: channel counter server stats live
+    serverstats: serverstatsHandler
 };
 
 // Mapping commandName → domain key (di DOMAIN_HANDLERS).
@@ -129,6 +133,9 @@ const COMMAND_TO_DOMAIN = {
     // v3.9.32: midman/rekber
     'set-midman-fee': 'midman',
     'midman-deals': 'midman',
+
+    // v3.9.51: channel counter server stats live
+    serverstats: 'serverstats',
 
     // products
     'add-product': 'products',

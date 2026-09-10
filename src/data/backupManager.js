@@ -63,7 +63,12 @@ const FILES_TO_BACKUP = [
     // senyap kehilangan seluruh riwayat boost (siapa boost, streak, totalBoosts)
     // padahal booster live masih ada — seksi "Aktivitas Boost Terbaru" di
     // /boosters jadi kosong untuk event yang bot sendiri pernah umumkan.
-    'boosts.json'
+    'boosts.json',
+    // v3.9.51: serverstats.json — ID channel counter live. Tanpa ini,
+    // restore-backup kehilangan mapping channel counter → counter senyap
+    // berhenti ter-update setelah restore (event menandai config yang sudah
+    // tidak ada). Cache manager juga di-reload setelah restore.
+    'serverstats.json'
 ];
 
 // v3.9.10: helper untuk resolve path file data (ke data/ folder).
@@ -309,6 +314,13 @@ function _restoreBackupImpl(name) {
     try {
         const stats = require('./statsManager');
         if (typeof stats.reload === 'function') stats.reload();
+    } catch (_) {}
+
+    // v3.9.51: fix basi yang sama untuk counter server stats — cache in-memory
+    // harus dibuang supaya ID channel hasil RESTORE langsung dipakai.
+    try {
+        const serverstats = require('./serverstatsManager');
+        if (typeof serverstats.reload === 'function') serverstats.reload();
     } catch (_) {}
 
     // v3.9.4: invalidate permissions admin role cache juga.

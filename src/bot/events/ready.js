@@ -21,7 +21,9 @@ const {
     processScheduledAnnouncement,
     pruneStaleData,
     reconcileZombieDeals,
-    reconcileZombieDealsDaily
+    reconcileZombieDealsDaily,
+    // v3.9.51: channel counter server stats live.
+    processServerStatsTick
 } = require('../../services/schedulerTasks');
 const { getExpired, getAllActive } = require('../../data/roleScheduler');
 const { removeExpiredKeys } = require('../../data/keyManager');
@@ -134,6 +136,33 @@ async function onReady(client) {
         }
     } catch (err) {
         console.warn('⚠️ Rekonsiliasi boost startup gagal:', err.message);
+    }
+
+    // === 1e. v3.9.51: counter server stats — sinkronisasi startup ===
+    // Satu refresh paksa tepat setelah login supaya counter benar walau ada
+    // perubahan saat bot offline (event-nya terlewat). Sekaligus memastikan
+    // setup sehat (channel yang dihapus akan mengeluarkan warning di sini).
+    try {
+        const serverstatsManager = require('../../data/serverstatsManager');
+        if (serverstatsManager.isEnabled()) {
+            const guild = GUILD_ID
+                ? client.guilds.cache.get(GUILD_ID)
+                : client.guilds.cache.size > 0
+                  ? client.guilds.cache.first()
+                  : null;
+            if (guild) {
+                const result = await serverstatsManager.refreshServerStats(guild, { force: true });
+                if (result.disabled) {
+                    console.warn('⚠️ Counter server stats: SEMUA channel hilang — fitur dinonaktifkan. Buat ulang dengan /serverstats setup.');
+                } else {
+                    console.log(
+                        `📊 Counter server stats sinkron (updated ${result.updated}, deferred ${result.deferred}, missing ${result.missing}, errors ${result.errors}).`
+                    );
+                }
+            }
+        }
+    } catch (err) {
+        console.warn('⚠️ Sinkronisasi server stats startup gagal:', err.message);
     }
 
     // === 1. Register slash commands ke guild spesifik (instan) ===
@@ -327,6 +356,15 @@ async function onReady(client) {
                     await reconcileZombieDealsDaily(client);
                 } catch (err) {
                     console.error('Scheduler: reconcileZombieDeals error:', err.message);
+                }
+
+                // v3.9.51: channel counter server stats live — dirty-driven
+                // (ada event) + catch-up 5 menit. Aman rate-limit (change
+                // detection + cooldown per-channel di dalam manager).
+                try {
+                    await processServerStatsTick(client);
+                } catch (err) {
+                    console.error('Scheduler: processServerStats error:', err.message);
                 }
             } catch (err) {
                 console.error('Scheduler tick error:', err);

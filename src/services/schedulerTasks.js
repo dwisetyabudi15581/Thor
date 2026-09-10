@@ -608,6 +608,19 @@ function attachToClient(client) {
     client.isGiveawayProcessing = isGiveawayProcessing;
 }
 
+/**
+ * v3.9.51: channel counter server stats live — dipanggil loop scheduler 60
+ * detik. Refresh saat ada event yang menandai stats dirty (member
+ * join/leave/boost, channel/role dibuat/dihapus) ATAU setiap tick ke-5
+ * (~5 menit) sebagai catch-up supaya event terlewat self-heal. Rename-nya
+ * sendiri aman rate-limit (change detection + cooldown per-channel — lihat
+ * serverstatsManager). No-op murah saat /serverstats belum di-setup.
+ */
+async function processServerStatsTick(client) {
+    const { processSchedulerTick } = require('../data/serverstatsManager');
+    return processSchedulerTick(client);
+}
+
 module.exports = {
     processExpiredRole,
     processGiveawayEnd,
@@ -617,5 +630,7 @@ module.exports = {
     pruneStaleData,
     reconcileZombieDeals,
     reconcileZombieDealsDaily,
+    // v3.9.51: channel counter server stats live
+    processServerStatsTick,
     attachToClient
 };

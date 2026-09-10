@@ -119,6 +119,8 @@ const {
 // v3.9.9 refactor: temp voice UI + data layer dipakai /setup-tempvoice & /tempvoice-remove.
 const { buildGlobalControlPanel } = require('../ui/tempVoiceControlPanel');
 const tempVoiceManager = require('../data/tempVoiceManager');
+// v3.9.51: channel counter server stats live — dipakai /serverstats.
+const serverstatsManager = require('../data/serverstatsManager');
 
 // === Infra ===
 const { isAdmin: checkIsAdmin, invalidateAdminRoleCache } = require('../infra/permissions');
@@ -211,6 +213,7 @@ module.exports = {
     getModLogCount,
     modLogTypeLabel,
     tempVoiceManager,
+    serverstatsManager,
     // UI
     Embeds,
     buildPanelEmbed,

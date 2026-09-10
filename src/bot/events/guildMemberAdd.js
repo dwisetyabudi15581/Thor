@@ -10,6 +10,8 @@
 const { Events } = require('discord.js');
 const { onMemberAdd } = require('../memberHandler');
 const { logServerEvent } = require('../../infra/serverLog');
+// v3.9.51: channel counter server stats live.
+const { markStatsDirty } = require('../../data/serverstatsManager');
 
 async function onEvent(member) {
     try {
@@ -23,6 +25,11 @@ async function onEvent(member) {
             return;
         }
         await onMemberAdd(member);
+
+        // v3.9.51: counter member berubah (memberCount termasuk bot, jadi ini
+        // harus jalan SEBELUM return bot di bawah). No-op murah saat counter
+        // /serverstats belum di-setup.
+        markStatsDirty(member.guild.id);
 
         // v3.9.43: server log join (best effort — tidak boleh gagalkan welcome).
         if (member.user?.bot) return; // bot join = invite integration, bukan member

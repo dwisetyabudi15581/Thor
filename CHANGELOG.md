@@ -5,6 +5,23 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 Legend: 🔴 critical · 🟠 high · 🟡 medium · 🟢 improvement
 
+## [3.9.51] — 2026-09-10
+
+### Added — ✨ permintaan user: "fitur stats server secara live yang mirip seperti bot server stats"
+
+**Channel counter server stats live (baru):**
+
+- 🟢 **Command BARU `/serverstats`** (total 91 command, admin): NAMA channel adalah counter live yang ter-update otomatis — pengalaman "bot ServerStats" tanpa bot lain. `setup` membuat kategori **`📊 STATISTIK SERVER`** di PALING ATAS daftar channel + 5 channel voice counter (`👥 Member`, `🤖 Bot`, `🚀 Boost`, `🎭 Role`, `📺 Channel`) dengan nilai live saat ini; `remove` menghapus semuanya + membersihkan config; `refresh` memaksa update langsung (melewati cooldown SEKALI — panggilan admin, jarang, aman).
+- 🟢 **@everyone di-deny Connect** di setiap channel counter — display-only (member lihat angkanya, tidak ada yang bisa join). Nilai counter dibaca langsung dari objek guild: `memberCount` (eksak), cache member untuk bot, `premiumSubscriptionCount`, ukuran cache role & channel.
+- 🟢 **Auto-update, aman rate-limit:** perubahan member join/leave/boost (`guildMemberAdd/Remove/Update`), pembuatan/penghapusan channel & role (4 file event baru, teregistrasi di index.js) menandai stats *dirty* → tick scheduler 60 detik me-refresh; setiap tick ke-5 (~5 menit) adalah catch-up supaya event terlewat self-heal. Tiga guard menjaga tetap dalam limit Discord **2 rename per channel per 10 menit**: (1) change detection — nama yang tidak berubah = NOL panggilan API, (2) cooldown 5 menit per-channel (rename yang tertunda dicoba ulang di tick berikutnya), (3) refresh dirty-driven — burst join = 1 refresh, bukan 1 rename per join.
+- 🟢 **Self-healing:** channel counter dihapus → warning console menyebut perintah solusi; SEMUA counter hilang → fitur auto-disable (tanpa kerja scheduler sia-sia) — jalankan ulang `/serverstats setup`. Setup menolak sopan saat sudah terkonfigurasi (menunjuk `refresh`/`remove`), auto-heal ke setup baru saat semua channel lama hilang, dan me-rollback channel yang setengah dibuat saat gagal parsial (pola anti-orphan v3.9.8). Satu refresh paksa saat startup mensinkronkan perubahan offline.
+- 🟢 `serverstats.json` di-backup oleh `/backup-now` & bisa di-restore (cache in-memory di-reload setelah restore — pola fix basi yang sama dengan stats.json). Tidak ada counter "member online" — sengaja: butuh intent privileged GuildPresences (tidak diaktifkan — mengaktifkannya tanpa toggle portal bikin login crash; tanpa itu angkanya akan bohong).
+
+### Changed — ✂️ permintaan user: "fitur total revenue di hapus saja, saya ga terlalu memakai fitur itu"
+
+- 🟢 **`/stats` tidak lagi menampilkan "Total Revenue":** angka revenue agregat bikin kebingungan berulang (v3.9.47/49/50 semuanya soal angkanya yang tidak cocok) dan user tidak memakainya — overview server kini menampilkan data live (member, tiket, boost) + aktivitas terlacak (pesan, rata-rata, kemenangan giveaway, jumlah transaksi) TANPA baris revenue. Belanja pribadi tetap ada di tempat yang per-user dan tidak ambigu: `/my-stats` "Total Belanja" dan `/leaderboard` "Top Spender".
+- 🟢 +18 unit test (total **541**): `serverstats.test.js` — builder murni + nilai live, persistensi round-trip + reload, change detection (nol panggilan saat tidak berubah), rename + bypass force + cooldown per-channel, isolasi kegagalan setName, warning channel hilang + auto-disable, scheduler tick dirty-driven + catch-up 5 tick + hardening single-guild, `/serverstats setup` end-to-end (nama live, @everyone terkunci, kategori paling atas, config tersimpan, penolakan, auto-heal, penolakan tanpa permission, rollback gagal parsial), `remove` + `refresh` end-to-end + error ramah saat belum setup, wiring event (guildMemberAdd + channelCreate menandai dirty), kontrak registry 91 + router + TIDAK-public + FILES_TO_BACKUP + help-catalog + budget 5800 + registrasi event index.js; statsDisplay dipasang ulang: TIDAK boleh ada field yang menyebut revenue. Help catalog: baris Statistik dikompak supaya embed Semua Command tetap dalam budget (5.776 / 5.800, 20 kategori utuh).
+
 ## [3.9.50] — 2026-09-10
 
 ### Fixed — 🐛 laporan user: "saya kasih harga 3$ USD | Rp. 25.000" (revenue masih nyaris tak bergerak)

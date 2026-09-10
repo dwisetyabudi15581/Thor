@@ -293,12 +293,16 @@ const HELP_CATEGORIES = [
         id: 'stats',
         emoji: '📈',
         name: 'Statistik',
-        short: 'Statistik live server, booster, leaderboard',
+        short: 'Statistik live, channel counter, booster, leaderboard',
+        // v3.9.51: + /serverstats (channel counter live). Baris dikompak supaya
+        // embed Semua Command tetap dalam budget 5800 dengan 20 kategori utuh
+        // (diukur ulang setiap kali baris berubah).
         lines: [
-            '• `/stats` — statistik live + aktivitas terlacak',
-            '• `/boosters` — siapa yang boost sekarang + riwayat boost',
-            '• `/leaderboard metric:messages|vipPurchases|totalSpent` — peringkat',
-            '• `/my-stats` — pesan, transaksi, kemenangan & tanggal gabung kamu'
+            '• `/stats` — statistik live server + aktivitas terlacak',
+            '• `/serverstats` — channel counter live (member/boost)',
+            '• `/boosters` — booster saat ini + riwayat',
+            '• `/leaderboard` — peringkat (pesan/belanja/menang)',
+            '• `/my-stats` — pesan & transaksi kamu'
         ]
     },
     {

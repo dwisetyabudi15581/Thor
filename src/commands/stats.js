@@ -28,6 +28,14 @@
  * produk tak terparse dulu diterima senyap (lihat products.js +
  * statsManager.parsePrice).
  *
+ * v3.9.51 (permintaan user: "fitur total revenue di hapus saja, saya ga
+ * terlalu memakai fitur itu"): field "Total Revenue" DIHAPUS dari /stats.
+ * Angka revenue agregat bikin kebingungan berulang (v3.9.47/49/50 semuanya
+ * soal angkanya yang tidak cocok) dan user tidak memakainya — /stats kini
+ * menampilkan data live server + aktivitas terlacak TANPA baris revenue.
+ * Statistik belanja pribadi tetap ada di tempat yang per-user dan tidak
+ * ambigu: /my-stats "Total Belanja" dan /leaderboard "Top Spender".
+ *
  * Catatan: permission check untuk /leaderboard & /my-stats (public command)
  *          ada di router (src/commands/index.js). Domain file ini tidak perlu
  *          repeat check tersebut.
@@ -87,12 +95,12 @@ module.exports = async function (interaction) {
                     inline: true
                 },
                 { name: '🎁 Total Giveaway Won', value: `${stats.totalGiveawaysWon}`, inline: true },
-                // Baris 3 — transaksi terlacak (order tiket + deal rekber)
-                { name: '🛒 Total Transaksi', value: `${stats.totalPurchases}`, inline: true },
-                { name: '💰 Total Revenue', value: `Rp ${stats.totalRevenue.toLocaleString('id-ID')}`, inline: true }
+                // Baris 3 — transaksi terlacak (order tiket + deal rekber).
+                // v3.9.51: Total Revenue DIHAPUS (permintaan user — tidak dipakai).
+                { name: '🛒 Total Transaksi', value: `${stats.totalPurchases}`, inline: true }
             )
             .setFooter({
-                text: 'Member/boost/tiket = live dari Discord • pesan & transaksi terlacak sejak v3.2 • revenue = penjualan tiket + rekber'
+                text: 'Member/boost/tiket = live dari Discord • pesan & transaksi terlacak sejak v3.2'
             })
             .setTimestamp();
         // v3.9.47: ikon server kalau ada (null-safe).

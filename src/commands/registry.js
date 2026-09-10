@@ -1140,6 +1140,32 @@ function getCommands() {
             name: 'boosters',
             description: 'Daftar server booster saat ini + riwayat boost terbaru (public)'
         },
+        // v3.9.51: channel counter server stats live (pengalaman "bot
+        // ServerStats"): NAMA channel adalah counter yang ter-update sendiri
+        // (member, bot, boost, role, channel). setup/remove/refresh — lihat
+        // src/data/serverstatsManager.js untuk strategi rate-limitnya.
+        {
+            name: 'serverstats',
+            description: 'Channel counter live (member, boost…) yang ter-update otomatis',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
+            options: [
+                {
+                    type: 1,
+                    name: 'setup',
+                    description: 'Buat kategori counter + 5 channel counter live'
+                },
+                {
+                    type: 1,
+                    name: 'remove',
+                    description: 'Hapus channel counter + kategori dan bersihkan config'
+                },
+                {
+                    type: 1,
+                    name: 'refresh',
+                    description: 'Paksa-refresh semua counter sekarang'
+                }
+            ]
+        },
 
         // === POLL SYSTEM ===
         {

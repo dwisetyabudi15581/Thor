@@ -28,6 +28,9 @@ const { Events } = require('discord.js');
 const { logServerEvent, snip } = require('../../infra/serverLog');
 // v3.9.49: notifikasi boost (channel server-booster + server log + riwayat).
 const { onBoostChange } = require('../boostHandler');
+// v3.9.51: channel counter server stats live (counter Boost berubah saat
+// boost ditambah/dihentikan).
+const { markStatsDirty } = require('../../data/serverstatsManager');
 
 async function onEvent(oldMember, newMember) {
     try {
@@ -94,6 +97,14 @@ async function onEvent(oldMember, newMember) {
     } catch (err) {
         console.error('GuildMemberUpdate log error:', err.message);
     }
+
+    // v3.9.51: perubahan boost (atau update member apa pun yang menggeser
+    // angka) menandai counter server stats dirty. Ditaruh DI LUAR try di atas
+    // supaya kegagalan server-log tidak melewatkan update counter. No-op murah
+    // tanpa /serverstats setup.
+    try {
+        markStatsDirty(newMember?.guild?.id);
+    } catch (_) {}
 }
 
 module.exports = {

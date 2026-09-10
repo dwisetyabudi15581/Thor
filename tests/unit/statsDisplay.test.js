@@ -69,7 +69,9 @@ function seedTestData() {
     const statsManager = require('../../src/data/statsManager');
     // 3 messages for the test user (also seeds "members tracked").
     for (let i = 0; i < 3; i++) statsManager.incrementMessages(GUILD_ID, USER_ID);
-    // 2 transactions × Rp 10.000 → revenue Rp 20.000.
+    // 2 transactions × Rp 10.000 (tetap tampil sebagai counter "Total
+    // Transaksi" — tampilan revenue agregat dihapus di v3.9.51, tapi jumlah
+    // per transaksi tetap, jadi pembelian tetap perlu di-seed).
     statsManager.recordPurchase(GUILD_ID, USER_ID, 10000);
     statsManager.recordPurchase(GUILD_ID, USER_ID, 10000);
 
@@ -108,7 +110,14 @@ test('USER REPORT /stats: jumlah member live, boost, tiket + aktivitas terlacak'
     // Aktivitas terlacak dari stats.json — di-seed di atas.
     assert.strictEqual(fields['💬 Total Pesan Terlacak'], '3');
     assert.strictEqual(fields['🛒 Total Transaksi'], '2');
-    assert.strictEqual(fields['💰 Total Revenue'], 'Rp 20.000');
+    // v3.9.51 (permintaan user: "fitur total revenue di hapus saja"): baris
+    // revenue agregat HILANG dari /stats — field-nya tidak boleh dirender
+    // sama sekali (belanja pribadi tetap di /my-stats & /leaderboard).
+    const fieldNames = (embed.data.fields || []).map(f => f.name);
+    assert.ok(
+        !fieldNames.some(n => /revenue/i.test(n)),
+        `tidak boleh ada field yang menyebut revenue: ${fieldNames.join(' | ')}`
+    );
 
     // v3.9.49 (laporan user: "member tracked & member live — kalau fungsinya
     // sama bikin satu aja"): TEPAT SATU field member (jumlah live) + rata-rata

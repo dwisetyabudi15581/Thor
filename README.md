@@ -2,7 +2,7 @@
 
 Bot Discord serbaguna untuk komunitas apa pun — server jualan, gaming, content creator, hingga komunitas umum. Semua konfigurasi dapat diatur langsung dari Discord melalui slash command, tanpa mengedit file.
 
-> **v3.9.50** · 90 slash command · 523 unit test · discord.js v14 · Node.js 18+ · single-guild
+> **v3.9.51** · 91 slash command · 541 unit test · discord.js v14 · Node.js 18+ · single-guild
 >
 > 📖 **[Panduan Admin Lengkap](./docs/ADMIN_GUIDE.md)** — setup, operasional harian, troubleshooting
 > 📜 **[Changelog](./CHANGELOG.md)** — riwayat semua versi
@@ -48,7 +48,7 @@ Bot Discord serbaguna untuk komunitas apa pun — server jualan, gaming, content
 ### 📊 Leveling & Stats
 
 - XP per pesan (cooldown anti-spam) + role reward per level + `/rank` + `/leaderboard-level`.
-- Stats server: jumlah member live, boost, tiket terbuka (langsung dari Discord) + aktivitas terlacak, transaksi & revenue (format harga Indonesia `25rb`/`2jt` dipahami, harga dua mata uang `3$ USD | Rp 25.000` mencatat bagian Rp, harga produk divalidasi saat setup). Leaderboard messages/purchases/spending/wins; `/my-stats` menampilkan tanggal gabung asli.
+- Stats server: jumlah member live, boost, tiket terbuka (langsung dari Discord) + aktivitas terlacak & transaksi. **Channel counter live** (`/serverstats`) — nama channelnya sendiri adalah counter yang ter-update otomatis (member, bot, boost, role, channel), aman rate-limit. Leaderboard messages/purchases/spending/wins; `/my-stats` menampilkan tanggal gabung asli.
 - **Server Booster:** notifikasi boost tambah/hilang ke channel booster khusus + catch-up offline + daftar `/boosters` publik (roster live + riwayat boost terbaru).
 
 ### 🎭 Lainnya
@@ -137,9 +137,10 @@ Registrasi slash command berlangsung instan ke guild yang ditentukan `GUILD_ID`.
 8. `/set-channel audit-log #channel` — channel audit log
 9. `/set-channel transcript #channel` — channel arsip transcript tiket (opsional)
 10. `/set-channel server-booster #channel` — notifikasi boost (opsional — `/boosters` tetap jalan tanpa ini)
-11. `/setup-verify` — pasang panel verifikasi
-12. `/setup-ticket` — pasang panel tiket
-13. `/config-show` — verifikasi semua setting
+11. `/serverstats setup` — channel counter live (opsional — counter gaya `👥 Member: 123` di paling atas daftar channel, ter-update otomatis)
+12. `/setup-verify` — pasang panel verifikasi
+13. `/setup-ticket` — pasang panel tiket
+14. `/config-show` — verifikasi semua setting
 
 Panduan lengkap termasuk contoh produk, kategori custom, dan operasional harian: **[docs/ADMIN_GUIDE.md](./docs/ADMIN_GUIDE.md)**.
 
@@ -201,7 +202,7 @@ Jalankan **`/test-welcome tipe:welcome`** — command ini mendiagnosis setiap ma
 
 ### Total revenue tidak bergerak saat jualan
 
-Sejak v3.9.49: parser harga paham suffix Indonesia (`25rb` = 25.000, `2jt`/`2juta` = 2.000.000) dan `/add-product` **menolak** harga yang tidak bisa dibaca (beserta daftar format yang diterima) — format salah tidak bisa lagi mencatat Rp 0 per penjualan secara senyap. Sejak v3.9.50: harga dua mata uang dipahami — `3$ USD | Rp. 25.000` tercatat **Rp 25.000 per penjualan** (bagian Rp-nya; harga USD-only ditolak dengan pesan agar mencantumkan nominal Rupiah). Cek produk yang ada dengan `/list-products`: kalau ada harga yang formatnya buruk, perbaiki lewat `/update-product`. Revenue menghitung order tiket + penyelesaian rekber (harga + fee) yang diproses **lewat bot** — penjualan manual di luar tiket/deal tidak terlacak.
+**Baris "Total Revenue" agregat DIHAPUS dari `/stats` di v3.9.51** (permintaan user — toh angkanya tidak akan pernah cocok dengan pembukuan manual). Belanja pribadi per member tetap dilacak dan terlihat di `/my-stats` ("Total Belanja") dan `/leaderboard` ("Top Spender"). Sejak v3.9.49/50 parser harga paham suffix Indonesia (`25rb` = 25.000, `2jt`/`2juta` = 2.000.000), harga dua mata uang (`3$ USD | Rp. 25.000` tercatat **Rp 25.000 per penjualan**), dan `/add-product` **menolak** harga yang tidak bisa dibaca (beserta daftar format yang diterima) — jadi yang terlacak tercatat dengan benar. Belanja pribadi menghitung order tiket + penyelesaian rekber (harga + fee) yang diproses **lewat bot** — penjualan manual di luar tiket/deal tidak terlacak.
 
 Troubleshooting lengkap (tiket, role, stats, backup, dll): **[docs/ADMIN_GUIDE.md → Section 9](./docs/ADMIN_GUIDE.md)**.
 

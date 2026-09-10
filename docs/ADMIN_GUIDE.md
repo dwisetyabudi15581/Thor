@@ -1,4 +1,4 @@
-# 📖 Admin Guide — Thor Bot v3.9.49
+# 📖 Admin Guide — Thor Bot v3.9.51
 
 Panduan lengkap untuk admin server Discord yang menjalankan bot ini — cocok untuk admin baru yang pertama kali setup, maupun admin yang sudah berjalan sebagai referensi harian.
 
@@ -92,6 +92,8 @@ Urutan berikut adalah **rekomendasi** untuk server baru. Lewati langkah yang sud
 - `audit-log` — channel tempat bot mencatat SEMUA admin action (63 action types; dikirim ulang 1x otomatis bila gagal karena rate limit/network)
 - `transcript` — channel arsip transcript tiket (chat history tersimpan otomatis setiap tiket di-close)
 - `server-booster` — (v3.9.49, opsional) channel notifikasi boost: embed pink `🚀 BOOST SERVER BARU!` saat member mulai boost, abu-abu `💔 BOOST BERAKHIR` saat berhenti, plus SATU embed catch-up gabungan saat startup untuk perubahan yang terjadi saat bot offline. Boost juga SELALU tercatat di **server log**. Tanpa channel ini `/boosters` tetap jalan — hanya notifikasinya yang mati.
+
+> 📊 **Counter server stats live (v3.9.51, opsional):** `/serverstats setup` membuat kategori `📊 STATISTIK SERVER` di PALING ATAS daftar channel berisi 5 channel display-only yang NAMANYA counter live — `👥 Member: 123`, `🤖 Bot: 2`, `🚀 Boost: 5`, `🎭 Role: 9`, `📺 Channel: 12` — pengalaman "bot ServerStats" tanpa bot lain. Ter-update otomatis saat ada perubahan member/boost/role/channel (aman rate-limit: angka yang tidak berubah = nol panggilan API, dan tiap channel paling banyak di-rename sekali per 5 menit — limit Discord 2x per 10 menit). Kelola dengan `/serverstats refresh` (paksa update sekarang) dan `/serverstats remove` (hapus semuanya). Bot butuh **Manage Channels + Manage Roles** untuk setup-nya.
 
 > 💡 Sejak v3.9.30 semua channel diatur lewat **satu command** `/set-channel` — termasuk transcript (dulu command terpisah `/set-transcript-channel`). Hapus dengan `/remove-channel <tipe>`.
 
@@ -881,14 +883,6 @@ Menampilkan semua backup, termasuk safety backup `pre-restore_*` (jika pernah re
 
 Bot membutuhkan akses ke `message.content`. Tanpa intent itu, Discord mengirim content sebagai **string kosong** → trigger tidak pernah match.
 
-### Total revenue tidak bergerak saat jualan (v3.9.49 + v3.9.50 membenahi penyebabnya)
-
-- **Suffix harga Indonesia kini diparse benar:** `25rb` = Rp 25.000, `2jt` / `2juta` = Rp 2.000.000 — sebelum v3.9.49, `25rb` hanya tercatat Rp 25 per penjualan (revenue terlihat beku).
-- **Harga dua mata uang kini diparse benar (v3.9.50):** `3$ USD | Rp. 25.000` tercatat **Rp 25.000** per penjualan — sebelumnya `parseFloat` berhenti di `$` dan yang terhitung cuma Rp 3. Harga USD-only (`$3`, `3 usd`) **ditolak** dengan pesan agar mencantumkan nominal Rupiah — bot tidak bisa konversi mata uang.
-- **`/add-product` kini menolak harga yang tak terparse** (mis. `murah`, `negosiasi`) beserta daftar format yang diterima, dan menampilkan `💰 Tercatat di stats: Rp 25.000 per penjualan` di konfirmasi — format buruk tidak bisa lagi mencatat Rp 0 senyap. `/update-product` kini juga menampilkan nominal yang dihitung saat harga diubah.
-- Cek produk yang ada dengan `/list-products` — perbaiki harga yang formatnya buruk lewat `/update-product value:... price:25.000`.
-- Revenue menghitung **order tiket + penyelesaian rekber** (harga + fee) yang diproses lewat bot. Penjualan manual di luar tiket/deal tidak terlacak — itulah satu-satunya celah tersisa yang bisa bikin angkanya "tidak cocok" dengan catatanmu. Penjualan yang tercatat SEBELUM fix ini tetap menyimpan jumlah historisnya yang kecil di `stats.json` (riwayat tidak dihitung ulang).
-
 **Cara fix:**
 
 1. Buka https://discord.com/developers/applications
@@ -903,6 +897,23 @@ Bot membutuhkan akses ke `message.content`. Tanpa intent itu, Discord mengirim c
 7. **Restart bot** (`npm start`)
 
 Cek juga `/list-responder` untuk memastikan responder terdaftar. Trigger bersifat case-insensitive. Default (`match_mode:contains`) trigger cocok sebagai kata utuh di mana saja dalam pesan — `beli` menjawab "bagaimana cara beli" tapi TIDAK "belian"; pilih `match_mode:exact` kalau pesan harus diawali trigger (`!sosmed` cocok `!sosmed halo`, tidak cocok `halo !sosmed`).
+
+### Belanja pribadi tidak bergerak saat jualan ("Total Revenue" dihapus di v3.9.51)
+
+- **Baris "Total Revenue" agregat DIHAPUS dari `/stats` di v3.9.51** (permintaan user — tidak pernah cocok dengan pembukuan manual dan bikin kebingungan tiga kali). Belanja per member tetap dilacak: lihat di `/my-stats` ("Total Belanja") dan `/leaderboard` ("Top Spender").
+- **Suffix harga Indonesia diparse benar (v3.9.49):** `25rb` = Rp 25.000, `2jt` / `2juta` = Rp 2.000.000 — sebelum v3.9.49, `25rb` hanya tercatat Rp 25 per penjualan.
+- **Harga dua mata uang diparse benar (v3.9.50):** `3$ USD | Rp. 25.000` tercatat **Rp 25.000** per penjualan. Harga USD-only (`$3`, `3 usd`) **ditolak** dengan pesan agar mencantumkan nominal Rupiah — bot tidak bisa konversi mata uang.
+- **`/add-product` menolak harga yang tak terparse** (mis. `murah`, `negosiasi`) beserta daftar format yang diterima, dan menampilkan `💰 Tercatat di stats: Rp 25.000 per penjualan` di konfirmasi — format buruk tidak bisa lagi mencatat Rp 0 senyap. `/update-product` juga menampilkan nominal yang dihitung saat harga diubah. Perbaiki harga yang formatnya buruk lewat `/update-product value:... price:25.000`.
+- Belanja pribadi menghitung **order tiket + penyelesaian rekber** (harga + fee) yang diproses lewat bot. Penjualan manual di luar tiket/deal tidak terlacak. Penjualan yang tercatat SEBELUM fix ini tetap menyimpan jumlah historisnya yang kecil di `stats.json` (riwayat tidak dihitung ulang).
+
+### Counter server stats tidak ter-update (v3.9.51)
+
+- Jalankan **`/serverstats refresh`** — memaksa update langsung dan melaporkan hasil per counter (di-update / tertunda / hilang / error).
+- **Tidak terjadi apa-apa tepat setelah ada perubahan?** Itu rate limit yang bekerja sesuai desain: tiap channel paling banyak di-rename sekali per 5 menit (Discord mengizinkan 2 rename per channel per 10 menit) — rename yang tertunda dicoba ulang di tick scheduler berikutnya (maksimal ~5 menit). Angka yang tidak berubah = NOL panggilan API.
+- **Channel counter dihapus admin:** console memberi warning di refresh berikutnya; begitu SEMUA counter hilang fitur auto-disable — buat ulang semuanya dengan `/serverstats setup`.
+- **Angka counter salah tepat setelah `/serverstats setup`?** Counter "Channel" menghitung channel counter itu sendiri (mereka channel sungguhan) — refresh berikutnya membetulkannya.
+- Counter **Bot** membaca cache member — tepat setelah cold start (atau kalau fetch roster gagal) bisa tertinggal beberapa bot; sinkronisasi startup me-refresh-nya.
+- Tidak ada counter **"member online"** — sengaja: butuh intent privileged GuildPresences (tidak diaktifkan — mengaktifkannya tanpa toggle portal bikin login crash; tanpa itu angkanya tidak akurat).
 
 ### Cooldown auto-responder terasa lama
 
@@ -923,10 +934,10 @@ Cooldown bersifat **per-user** — user A memicu tidak memengaruhi user B.
 
 ### Stats tidak update / angkanya gak sesuai
 
-- `/stats` menampilkan **data live dulu** (member, boost, tiket terbuka — langsung dari Discord, selalu mutakhir), baru aktivitas terlacak (pesan, transaksi, revenue). Bagian terlacak di-cache di memory dan di-flush tiap 30 detik — tunggu sebentar lalu cek lagi
+- `/stats` menampilkan **data live dulu** (member, boost, tiket terbuka — langsung dari Discord, selalu mutakhir), baru aktivitas terlacak (pesan, rata-rata per member, kemenangan giveaway, transaksi). Bagian terlacak di-cache di memory dan di-flush tiap 30 detik — tunggu sebentar lalu cek lagi
 - Jika bot baru restart, stats lama tetap ada di `stats.json`
 - Setelah restore backup, stats cache otomatis di-reload
-- "Member Terlacak" hanya menghitung member yang sempat tercatat bot (tracking v3.2+) — jumlah member ASLI ada di field "Member (live)"
+- "Member" adalah jumlah live ASLI dari Discord (satu field sejak v3.9.49 — duplikat "Member Terlacak" yang lama sudah dihapus)
 - Cek `/stats` untuk overview server, `/my-stats` untuk statistik pribadi (pesan, transaksi, kemenangan, tanggal gabung asli)
 
 ### Tiket tidak bisa dibuat
@@ -998,9 +1009,11 @@ Cooldown bersifat **per-user** — user A memicu tidak memengaruhi user B.
 
 ## 11. Riwayat Versi
 
-Riwayat lengkap semua versi (v3.9.0 – v3.9.50) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
+Riwayat lengkap semua versi (v3.9.0 – v3.9.51) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
 
 Ringkasan 3 versi terbaru:
+
+- **v3.9.51** (2026-09-10) — ✨ **permintaan user: stats server secara live seperti bot server stats** + ✂️ **permintaan user: "fitur total revenue di hapus saja"**. Command BARU **`/serverstats`** (total 91, admin): `setup` membuat kategori `📊 STATISTIK SERVER` di paling atas daftar channel berisi 5 channel display-only yang NAMANYA counter live (`👥 Member`, `🤖 Bot`, `🚀 Boost`, `🎭 Role`, `📺 Channel` — @everyone denied Connect), `remove` menghapus semuanya, `refresh` memaksa update. Auto-update saat perubahan member/boost/role/channel (4 file event baru) lewat scheduler 60 detik, aman rate-limit (change detection = nol panggilan API saat tidak berubah; cooldown 5 menit per-channel = pas limit Discord 2 rename/10 menit; dirty-driven jadi burst join = 1 refresh); tick catch-up 5 menit menyembuhkan event terlewat; channel terhapus memberi warning + perintah solusi dan auto-disable saat semua hilang; rollback gagal parsial; sinkronisasi startup untuk perubahan offline; `serverstats.json` di-backup + restore. `/stats`: **Total Revenue DIHAPUS** (kebingungan berulang — belanja pribadi tetap di `/my-stats` + `/leaderboard`). +18 unit test (total **541**).
 
 - **v3.9.50** (2026-09-10) — 🐛 **laporan user: "saya kasih harga 3$ USD | Rp. 25.000" — revenue masih nyaris tak bergerak**. 🔴 Harga dua mata uang tercatat **Rp 3** per penjualan: `parseFloat` berhenti di `$` dan bagian Rupiah tidak pernah dibaca. Kedua parser harga kini membaca nominal yang menempel langsung ke penanda `Rp` — `3$ USD | Rp. 25.000` → **Rp 25.000** per penjualan (ada pipe/tanpa pipe, Rp duluan atau USD duluan, dengan suffix pun tetap benar). 🟡 Harga USD-only (`$3`, `3 usd`) kini **ditolak** dengan penjelasan agar mencantumkan nominal Rupiah (revenue dalam Rupiah; tidak ada konversi mata uang). 🟢 `/update-product` kini menampilkan `💰 tercatat di stats: Rp 25.000 per penjualan` saat harga berubah (visibilitas yang sama dengan `/add-product`). Strictness rekber tetap terjaga (`3$ | Rp 1.5rb` tetap ditolak). +5 unit test (total **523**).
 
@@ -1040,6 +1053,6 @@ Jika ada masalah yang tidak ada di Troubleshooting:
 
 ---
 
-**Versi dokumen:** v3.9.50
+**Versi dokumen:** v3.9.51
 **Last updated:** 10 September 2026
-**Bot version:** 3.9.50 · 90 slash command · 523 unit test
+**Bot version:** 3.9.51 · 91 slash command · 541 unit test
