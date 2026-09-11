@@ -50,11 +50,13 @@ test('parsePrice: v3.9.8 FIX — ID format with 2-digit suffix', () => {
 
 test('parsePrice: actual decimal (only int < 10 + 1-digit fractional)', () => {
     // v3.9.9: only int part < 10 AND a 1-digit fractional part → decimal.
-    // E.g. "2.5" → 2.5 (rounded 3), "9.9" → 9.9 (rounded 10).
-    assert.strictEqual(parsePrice('2.5'), 3);
-    assert.strictEqual(parsePrice('9.9'), 10);
-    // "9.99" now → 999 (thousand), not 9.99 (decimal).
-    // (Rupiah prices under 10 with a 2-digit decimal are very rare.)
+    // v3.9.55: cents DIPERTAHANKAN (stats currency-agnostic) — "2.5" → 2.5
+    // dan "9.9" → 9.9, tidak lagi dibulatkan ke 3 / 10.
+    assert.strictEqual(parsePrice('2.5'), 2.5);
+    assert.strictEqual(parsePrice('9.9'), 9.9);
+    // "9.99" tetap → 999 (ribuan), bukan 9.99 (desimal) — tanpa penanda, jadi
+    // heuristic sentris-Rupiah yang berlaku (harga Rupiah < 10 dengan 2 digit
+    // desimal sangat jarang). Dengan penanda, "$9.99" → 9.99 (v3.9.55 di bawah).
     assert.strictEqual(parsePrice('9.99'), 999);
 });
 
@@ -64,8 +66,8 @@ test('parsePrice: comma as thousand separator', () => {
 });
 
 test('parsePrice: comma as decimal (ID/EU)', () => {
-    // "2,5" → decimal 2.5 → rounded to 3 (Rupiah)
-    assert.strictEqual(parsePrice('2,5'), 3);
+    // "2,5" → decimal 2.5 → 2.5 (v3.9.55: cents dipertahankan, tadinya dibulatkan ke 3)
+    assert.strictEqual(parsePrice('2,5'), 2.5);
 });
 
 test('parsePrice: k/m suffix', () => {
@@ -86,14 +88,14 @@ test('parsePrice: invalid string returns 0', () => {
 });
 
 test('parsePrice: mixed dot + comma (US format)', () => {
-    // "1,234.56" → US format → 1234.56 → Math.round → 1235
-    // (parsePrice always rounds to an integer because Rupiah doesn't use cents)
-    assert.strictEqual(parsePrice('1,234.56'), 1235);
+    // "1,234.56" → format US → 1234.56 (v3.9.55: cents dipertahankan — tadinya
+    // dibulatkan ke 1235; stats sudah currency-AGNOSTIC sejak v3.9.54)
+    assert.strictEqual(parsePrice('1,234.56'), 1234.56);
 });
 
 test('parsePrice: mixed dot + comma (EU/ID format)', () => {
-    // "1.234,56" → EU format → 1234.56 → Math.round → 1235
-    assert.strictEqual(parsePrice('1.234,56'), 1235);
+    // "1.234,56" → format EU → 1234.56 (v3.9.55: cents dipertahankan, tadinya 1235)
+    assert.strictEqual(parsePrice('1.234,56'), 1234.56);
 });
 
 // ============ v3.9.49 — Indonesian suffixes (user report: "total revenue doesn't update") ============
@@ -229,4 +231,68 @@ test('priceValidationError v3.9.54 (products): mata uang apa saja diterima', () 
     const junkErr = products.priceValidationError('murah');
     assert.ok(typeof junkErr === 'string' && junkErr.includes('tidak bisa dibaca'));
     assert.ok(junkErr.includes('$3'), 'daftar format menampilkan contoh internasional');
+});
+
+// ============ v3.9.55 — DESIMAL internasional (pertanyaan user: "angka itu support desimal misal $2.5 USD?") ============
+// Heuristic dot sentris-Rupiah dulu membaca "$2.50" sebagai 250 dan "$9.99"
+// sebagai 999 (kesalahan senyap 100x untuk server yang pakai USD/EUR), dan
+// Math.round di akhir membuang cents ("$2.5" → 3). Kalau ada penanda mata uang
+// NON-Rp, harga kini di-parse dengan aturan internasional: satu dot dengan
+// pecahan 1-2 digit adalah DECIMAL, pecahan 3 digit adalah grup ribuan, dan
+// cents DIPERTAHANKAN di nominal yang tercatat.
+
+test('parsePrice v3.9.55: desimal dengan penanda mata uang mempertahankan cents', () => {
+    // Format persis yang ditanyakan user.
+    assert.strictEqual(parsePrice('$2.5 USD'), 2.5);
+    assert.strictEqual(parsePrice('$2.5'), 2.5);
+    assert.strictEqual(parsePrice('$2.50'), 2.5);
+    assert.strictEqual(parsePrice('$9.99'), 9.99);
+    assert.strictEqual(parsePrice('$12.99'), 12.99);
+    assert.strictEqual(parsePrice('$0.99'), 0.99);
+    assert.strictEqual(parsePrice('$2.0'), 2);
+    assert.strictEqual(parsePrice('£ 2.99'), 2.99);
+    // Koma desimal EU juga mempertahankan cents (tadinya 9,99 dibulatkan ke 10).
+    assert.strictEqual(parsePrice('€9,99'), 9.99);
+});
+
+test('parsePrice v3.9.55: grup dot 3 digit dengan penanda tetap RIBUAN', () => {
+    // Ribuan gaya Jerman: "$50.000" adalah 50000, BUKAN 50.000 cents.
+    assert.strictEqual(parsePrice('$50.000'), 50000);
+    assert.strictEqual(parsePrice('$1.234.567'), 1234567);
+    // Pemisah campuran tetap jalan — cents dipertahankan (tadinya dibulatkan ke 1235).
+    assert.strictEqual(parsePrice('$1,234.56'), 1234.56);
+    assert.strictEqual(parsePrice('$1.234,56'), 1234.56);
+    // Suffix + desimal: "$2.5k" → 2.5 × 1000.
+    assert.strictEqual(parsePrice('$2.5k'), 2500);
+});
+
+test('parsePrice v3.9.55: format Rp & lama tanpa penanda tidak berubah (no regression)', () => {
+    // Cabang Rp tidak pernah men-set intl — heuristic dot tetap sentris-Rupiah.
+    assert.strictEqual(parsePrice('Rp 2.5rb'), 2500);
+    assert.strictEqual(parsePrice('Rp 25.000'), 25000);
+    assert.strictEqual(parsePrice('50.000'), 50000);
+    assert.strictEqual(parsePrice('1.50'), 150);
+    assert.strictEqual(parsePrice('9.99'), 999);
+    // Harga ganda dua mata uang tetap mencatat bagian Rp (v3.9.50, tidak berubah).
+    assert.strictEqual(parsePrice('$2.5 USD | Rp 25.000'), 25000);
+});
+
+test('parsePriceNumber v3.9.55 (midman): rekber tetap wajib angka bulat', () => {
+    const mm = require('../../src/data/midmanManager');
+    // Desain SENGAJA: nominal deal rekber harus angka bulat — "$2.5" ambigu
+    // antara 2.5 dan salah-ketik 2500, dan deal menggerakkan uang sungguhan.
+    assert.strictEqual(mm.parsePriceNumber('$2.5'), 0);
+    assert.strictEqual(mm.parsePriceNumber('$2.50'), 0);
+    assert.strictEqual(mm.parsePriceNumber('€2,50'), 0);
+    assert.strictEqual(mm.parsePriceNumber('$25,000'), 25000); // tetap sah
+});
+
+test('priceValidationError v3.9.55 (products): harga desimal valid', () => {
+    const products = require('../../src/commands/products');
+    assert.strictEqual(products.priceValidationError('$2.5 USD'), null);
+    assert.strictEqual(products.priceValidationError('$2.50'), null);
+    assert.strictEqual(products.priceValidationError('€9.99'), null);
+    // Daftar format kini menampilkan contoh desimal.
+    const junkErr = products.priceValidationError('murah');
+    assert.ok(junkErr.includes('$2.50'), 'daftar format menampilkan contoh desimal');
 });

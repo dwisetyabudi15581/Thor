@@ -443,7 +443,7 @@ function getCommands() {
                 {
                     type: 3,
                     name: 'price',
-                    description: 'Harga (mis. Rp 50.000 / $3 / 25rb — maks 100 char)',
+                    description: 'Harga (mis. Rp 50.000 / $3 / $2.50 / 25rb — maks 100 char)',
                     required: true,
                     max_length: 100
                 },
@@ -508,7 +508,7 @@ function getCommands() {
                 {
                     type: 3,
                     name: 'price',
-                    description: 'Harga baru (mis. "Rp 25.000" / "$3")',
+                    description: 'Harga baru (mis. "Rp 25.000" / "$3" / "$2.50")',
                     required: false,
                     min_length: 1,
                     max_length: 100

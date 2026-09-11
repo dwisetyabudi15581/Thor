@@ -25,6 +25,9 @@ const { MessageFlags, getConfig, saveConfig, Embeds, logAudit, safeEditReply, pa
  * sekarang currency-AGNOSTIC, mencatat nominal angka dalam mata uang apapun
  * yang admin pakai. Harga USD-only tidak lagi ditolak. Harga ganda dua mata
  * uang tetap mencatat bagian Rp (v3.9.50, tidak berubah).
+ * v3.9.55 (pertanyaan user: "angka itu support desimal misal $2.5 USD?"):
+ * harga DESIMAL dengan penanda non-Rp kini valid ("$2.5", "$2.50", "€9.99") —
+ * cents ikut tercatat di stats (2.5, bukan 3).
  * Diekspor untuk unit test (tests/unit/parsePrice.test.js).
  */
 function priceValidationError(price) {
@@ -34,7 +37,7 @@ function priceValidationError(price) {
     if (parsePriceNum(raw) > 0) return null; // terparse jadi jumlah positif — OK
     return (
         `❌ Harga \`${raw}\` tidak bisa dibaca sebagai angka — nanti akan tercatat **0** di stats setiap penjualan.\n` +
-        `✅ Format yang diterima: \`25000\` · \`25.000\` · \`25,000\` · \`$3\` · \`€25\` · \`Rp 30.000\` · \`30rb\` · \`3jt\` · \`3$ USD | Rp 25.000\` (yang dicatat bagian Rp) · \`gratis\``
+        `✅ Format yang diterima: \`25000\` · \`25.000\` · \`25,000\` · \`$3\` · \`$2.50\` · \`€25\` · \`Rp 30.000\` · \`30rb\` · \`3jt\` · \`3$ USD | Rp 25.000\` (yang dicatat bagian Rp) · \`gratis\``
     );
 }
 

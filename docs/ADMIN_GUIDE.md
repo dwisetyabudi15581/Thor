@@ -1,4 +1,4 @@
-# 📖 Admin Guide — Thor Bot v3.9.54
+# 📖 Admin Guide — Thor Bot v3.9.55
 
 Panduan lengkap untuk admin server Discord yang menjalankan bot ini — cocok untuk admin baru yang pertama kali setup, maupun admin yang sudah berjalan sebagai referensi harian.
 
@@ -121,7 +121,7 @@ Bot mengirim embed + tombol "Verifikasi Saya" ke channel tempat command dijalank
 
 - `label` — nama yang ditampilkan ke member
 - `value` — ID unik (tanpa spasi, mis. `7d`, `30d`, `perm`)
-- `price` — string bebas, mata uang APA SAJA (v3.9.54): `$3`, `€25`, `¥1000`, `₩25.000`, `25 usd`, `IDR 30.000`, format Indonesia (`Rp. 50.000`), angka polos (`25000`, `25,000`), suffix (`25rb`, `2jt`), atau dua mata uang (`3$ USD | Rp 25.000` — stats mencatat **bagian Rp**, 25.000; tanpa bagian Rp, nominal PERTAMA yang tercatat). Bot currency-agnostic: pakai SATU mata uang konsisten — stats menampilkan angka polos
+- `price` — string bebas, mata uang APA SAJA (v3.9.54): `$3`, `€25`, `¥1000`, `₩25.000`, `25 usd`, `IDR 30.000`, format Indonesia (`Rp. 50.000`), angka polos (`25000`, `25,000`), suffix (`25rb`, `2jt`), atau dua mata uang (`3$ USD | Rp 25.000` — stats mencatat **bagian Rp**, 25.000; tanpa bagian Rp, nominal PERTAMA yang tercatat). **Desimal mempertahankan cents (v3.9.55):** dengan penanda non-Rp, `$2.5` / `$2.50` → 2.5 dan `$9.99` → 9.99, sementara grup dot 3 digit tetap ribuan (`$50.000` → 50.000). Bot currency-agnostic: pakai SATU mata uang konsisten — stats menampilkan angka polos
 - `duration` — opsional, hanya keterangan (tidak otomatis menjadi durasi expire role)
 - Maksimal 25 produk (batas dropdown Discord)
 
@@ -904,6 +904,7 @@ Cek juga `/list-responder` untuk memastikan responder terdaftar. Trigger bersifa
 - **Suffix harga Indonesia diparse benar (v3.9.49):** `25rb` = Rp 25.000, `2jt` / `2juta` = Rp 2.000.000 — sebelum v3.9.49, `25rb` hanya tercatat Rp 25 per penjualan.
 - **Harga dua mata uang diparse benar (v3.9.50):** `3$ USD | Rp. 25.000` tercatat **Rp 25.000** per penjualan.
 - **Mata uang apa saja bisa (v3.9.54):** USD-only dan penanda lain apapun (`$3`, `€25`, `¥1000`, `25 usd`…) diterima — bot currency-AGNOSTIC, mencatat nominal angka dalam mata uang harga kamu (tanpa konversi). Stats & embed rekber menampilkan angka locale polos (tanpa prefiks `Rp`).
+- **Harga desimal mempertahankan cents (v3.9.55):** dengan penanda mata uang non-Rp, `$2.5` / `$2.50` tercatat **2.5** dan `$9.99` tercatat **9.99** per penjualan — satu dot dengan pecahan 1-2 digit adalah desimal, grup 3 digit tetap ribuan (`$50.000` → 50.000). Sebelum v3.9.55, `$2.50` senyap tercatat 250 (salah 100x) dan `$2.5` dibulatkan jadi 3. Nominal deal rekber tetap **wajib angka bulat** (keamanan deal, memang didesain begitu).
 - **`/add-product` menolak harga yang tak terparse** (mis. `murah`, `negosiasi`) beserta daftar format yang diterima, dan menampilkan `💰 Tercatat di stats: 25.000 per penjualan` di konfirmasi — format buruk tidak bisa lagi mencatat 0 senyap. `/update-product` juga menampilkan nominal yang dihitung saat harga diubah. Perbaiki harga yang formatnya buruk lewat `/update-product value:... price:25.000`.
 - Belanja pribadi menghitung **order tiket + penyelesaian rekber** (harga + fee) yang diproses lewat bot. Penjualan manual di luar tiket/deal tidak terlacak. Penjualan yang tercatat SEBELUM fix ini tetap menyimpan jumlah historisnya yang kecil di `stats.json` (riwayat tidak dihitung ulang).
 
@@ -1010,9 +1011,11 @@ Cooldown bersifat **per-user** — user A memicu tidak memengaruhi user B.
 
 ## 11. Riwayat Versi
 
-Riwayat lengkap semua versi (v3.9.0 – v3.9.54) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
+Riwayat lengkap semua versi (v3.9.0 – v3.9.55) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
 
 Ringkasan 3 versi terbaru:
+
+- **v3.9.55** (2026-09-11) — 💬 **pertanyaan user: "angka itu support desimal misal $2.5 USD?"**. Harga desimal internasional kini terbaca BENAR — heuristic dot era Rupiah dulu membaca `$2.50` sebagai 250 dan `$9.99` sebagai 999 (kesalahan senyap 100x), dan `Math.round` membuang cents (`$2.5` → 3). Dengan penanda mata uang non-Rp: satu dot dengan pecahan 1-2 digit adalah **desimal** (`$2.5 USD` → 2.5, `$2.50` → 2.5, `$9.99` → 9.99, `$12.99` → 12.99, `$0.99` → 0.99, `€9,99` → 9.99), pecahan 3 digit tetap **grup ribuan** (`$50.000` → 50000), dan **cents dipertahankan** (maksimal 2 desimal). Format lama tanpa penanda, cabang Rp, dan pencatatan dua mata uang tidak berubah. `/add-product` / `/update-product` menerima harga desimal (daftar format menampilkan `$2.50`); FAQ `/help` mendokumentasikan desimal; rekber tetap ketat angka-bulat. +5 unit test (total **557**).
 
 - **v3.9.54** (2026-09-10) — 🌍 **permintaan user: "bot bakal dipakai untuk semua orang yang mau pake bukan dari negara Indonesia saja"**. Harga kini **currency-AGNOSTIC**: penanda mata uang APA SAJA diterima (`$3`, `€25`, `£ 20`, `¥1000`, `₩25.000`, `₱500`, `25 usd`, `IDR 30.000`… plus semua format lama) — bot mencatat nominal angka dalam mata uang apapun yang dipakai admin, tanpa konversi dan tanpa penolakan. Harga dua mata uang tetap mencatat **bagian Rp** (perilaku v3.9.50 dipertahankan); tanpa bagian Rp, nominal pertama yang menang. USD-only tidak lagi ditolak `/add-product` / `/update-product`; `/my-stats` "Total Belanja" + `/leaderboard` "Top Spender" + semua nominal rekber kini tampil sebagai angka locale polos (helper `formatRupiah` menjadi **`formatMoney`** — ~20 situs tampilan diperbarui; ketat angka-bulat di rekber tetap). FAQ harga di `/help` kini mendokumentasikan format internasional. +1 unit test (total **552**).
 - **v3.9.53** (2026-09-10) — ⚙️ **permintaan user: "fitur /serverstats kasih opsi apa saja yang mau di munculin"** + 📖 **permintaan user: "tulis ulang /help jadi setiap kategori perintah slash command kasih penjelasan"**. `/serverstats setup` kini punya **5 opsi boolean** (`members`/`bots`/`boosts`/`roles`/`channels` — semua AKTIF default, False melewatikan satu, semua-False ditolak): hanya counter terpilih yang dibuat/disimpan/di-refresh, embed konfirmasi mencantumkan **"Tidak dibuat"**, dan `/refresh` menampilkan persis counter ter-config. `/help`: **SEMUA 20 tampilan kategori kini panduan lengkap mandiri** — sintaks + perilaku per-command + jawaban ❓ pertanyaan paling sering (posisi role, refresh panel, cooldown XP, format harga…), sementara embed 📖 Semua Command dan 🔍 Pencarian tetap memakai baris ringkas (budget 5.776/5.800 tidak tersentuh). +3 unit test (total **551**).

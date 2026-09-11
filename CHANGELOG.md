@@ -5,6 +5,16 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 Legend: 🔴 critical · 🟠 high · 🟡 medium · 🟢 improvement
 
+## [3.9.55] — 2026-09-11
+
+### Fixed — 💬 pertanyaan user: "angka itu support desimal misal $2.5 USD?"
+
+- 🟠 **Harga desimal internasional kini terbaca BENAR — kesalahan senyap 100x hilang.** Heuristic dot di `statsManager.parsePrice` ditulis di era Rupiah (integer currency, tanpa cents), jadi bahkan setelah v3.9.54 harga berpenanda seperti `$2.50` terbaca **250**, `$9.99` terbaca **999**, `$12.99` terbaca **1299** (dot = ribuan), dan `Math.round` di ekor membuang cents (`$2.5` → **3**, `$1,234.56` → **1235**). Sekarang, kalau ada penanda mata uang NON-Rp: satu dot dengan **pecahan 1-2 digit adalah DECIMAL** (`$2.5 USD` → 2.5, `$2.50` → 2.5, `$9.99` → 9.99, `$12.99` → 12.99, `$0.99` → 0.99, `£ 2.99` → 2.99, koma EU `€9,99` → 9.99, `$2.5k` → 2500), **pecahan 3 digit tetap grup ribuan** (`$50.000` gaya Jerman → 50000, `$1.234.567` → 1234567), dan **cents DIPERTAHANKAN** di nominal yang tercatat (dibulatkan maksimal 2 desimal). Input lama tanpa penanda tidak berubah (`50.000` → 50000, `1.50` → 150, `9.99` → 999); cabang Rp dan pencatatan dua mata uang (`$2.5 USD | Rp 25.000` → 25000) tidak tersentuh.
+- 🟢 **`/add-product` & `/update-product` menerima harga desimal** (`$2.5 USD` → valid, `💰 Tercatat di stats: 2.5 per penjualan`) dan daftar format yang diterima kini menampilkan contoh desimal (`$2.50`). Deskripsi opsi slash (`/add-product price`, `/update-product price`) juga menampilkan `$2.50`.
+- 🟢 **FAQ `/help` mendokumentasikan desimal (kategori Produk & Rekber):** baris baru "❓ Desimal?" — "Bisa — `$2.5`, `$2.50`, `€9.99` tercatat lengkap dengan cents; grup dot 3 digit tetap ribuan (`$50.000` → 50.000)" — plus FAQ rekber baru "Format nominal deal? Wajib angka bulat — desimal seperti `$2.5` ditolak karena ambigu SENGAJA (keamanan deal)."
+- 🟢 **Rekber tetap ketat angka-bulat SENGAJA** (`$2.5` / `$2.50` / `€2,50` → tetap ditolak; `$25,000` / `€2.500` tidak berubah): desimal salah-ketik di deal yang menggerakkan uang sungguhan antar-user lebih mahal konsekuensinya daripada kenyamanannya. Harga produk boleh pakai cents; nominal deal rekber tidak.
+- 🟢 Tests: 5 pin lama dipasang ulang ke nilai yang mempertahankan cents (`2.5` → 2.5 tadinya 3, `9.9` → 9.9 tadinya 10, `2,5` → 2.5 tadinya 3, `1,234.56` → 1234.56 tadinya 1235, `1.234,56` → 1234.56 tadinya 1235) + **5 test baru** (matriks cents desimal, grup 3 digit tetap ribuan, no-regression Rp/tanpa-penanda, rekber angka-bulat, `priceValidationError` desimal). Total **557**.
+
 ## [3.9.54] — 2026-09-10
 
 ### Changed — 🌍 permintaan user: "bot bakal dipakai orang di luar Indonesia juga — hapus saja yang Rupiah-only (atau pakai ide kamu)"

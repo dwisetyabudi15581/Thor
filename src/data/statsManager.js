@@ -348,6 +348,18 @@ function getServerStats(guildId) {
  * Harga ganda dua mata uang ("3$ USD | Rp. 25.000") tetap mencatat bagian Rupiah
  * (perilaku v3.9.50 dipertahankan).
  *
+ * v3.9.55 FIX (pertanyaan user: "angka itu support desimal misal $2.5 USD?"):
+ * mata uang internasional PAKAI cents, jadi kalau ada penanda mata uang NON-Rp,
+ * satu dot dengan pecahan 1-2 digit kini dibaca sebagai DECIMAL ("$2.5" → 2.5,
+ * "$2.50" → 2.5, "$9.99" → 9.99, "$12.99" → 12.99 — heuristic Rupiah dulu
+ * membacanya sebagai ribuan: 250 / 999 / 1299, kesalahan senyap 100x), sementara
+ * pecahan 3 digit tetap grup ribuan ("$50.000" gaya Jerman → 50000,
+ * "$1.234.567" → 1234567). Cents DIPERTAHANKAN di hasil (dibulatkan maksimal
+ * 2 desimal) alih-alih Math.round ke bilangan bulat ("$1,234.56" → 1234.56,
+ * bukan 1235). Cabang Rp dan input lama tanpa penanda tidak berubah.
+ * Rekber (midmanManager.parsePriceNumber) tetap ketat angka-bulat — "$2.5"
+ * ditolak di sana SENGAJA (keamanan deal, lihat docs-nya sendiri).
+ *
  * P2-13 FIX: sebelumnya `.replace(/\./g, '').replace(/,/g, '.')` ambigu:
  *   - "25,000" (US thousand) → "25.000" → parseFloat → 25 (SALAH, harusnya 25000)
  *   - "Rp. 50.000" (ID thousand) → 50000 → OK
@@ -360,6 +372,10 @@ function parsePrice(priceStr) {
     if (typeof priceStr === 'number') return isNaN(priceStr) ? 0 : Math.max(0, priceStr);
     if (!priceStr) return 0;
     let s = String(priceStr).toLowerCase().trim();
+    // v3.9.55: di-set kalau ada penanda mata uang NON-Rp — aturan decimal di
+    // bawah lalu mengikuti konvensi internasional (cents) alih-alih heuristic
+    // sentris-Rupiah "dot selalu ribuan".
+    let intl = false;
     // v3.9.50 FIX (laporan user: harga diisi "3$ USD | Rp. 25.000" — format
     // harga produk asli user). parseFloat berhenti di '$', jadi harga ganda itu
     // tercatat **Rp 3** per penjualan dan revenue kembali terlihat beku.
@@ -389,6 +405,7 @@ function parsePrice(priceStr) {
         const m = s.match(/[0-9][0-9.,]*(?:\s*(?:juta|jt|rb)|[km])?/);
         if (!m) return 0; // ada penanda tapi tanpa nominal ("usd") → tidak terbaca
         s = m[0];
+        intl = true; // v3.9.55: aturan decimal internasional berlaku dari sini
     }
     s = s.replace(/\s/g, '');
     let multiplier = 1;
@@ -459,14 +476,24 @@ function parsePrice(priceStr) {
         // heuristic v3.9.9 untuk angka kecil (< 10) supaya test lama gak break.
         // Dokumentasi: kalau admin mau input harga < 10 Rupiah dengan decimal
         // (sangat jarang), pakai format "0.5" atau "5" saja.
+        //
+        // v3.9.55 FIX: aturan di atas SENTRIS-RUPIAH — tapi kalau ada penanda mata
+        // uang non-Rp (intl), mata uangnya hampir pasti pakai cents, dan pecahan
+        // 1-2 digit setelah satu dot adalah decimal: "$2.5" → 2.5, "$2.50" → 2.5,
+        // "$9.99" → 9.99, "$12.99" → 12.99, "$0.99" → 0.99 ("$2.0" → 2).
+        // Pecahan 3 digit adalah grup ribuan: "$50.000" (gaya Jerman) → 50000.
+        // Multi-dot di bawah ("$1.234.567") adalah ribuan yang tak ambigu di
+        // konvensi manapun.
         const parts = s.split('.');
         if (parts.length === 2 && parts[0] !== '' && parts[1].length > 0) {
             const intPart = parseInt(parts[0], 10);
-            // Treat sebagai decimal HANYA kalau:
-            //   - int part < 10 (sangat kecil — harga Rupiah jarang < 10)
-            //   - fractional part exactly 1 digit (bukan 2 yang bisa ambiguous)
-            //   - bukan "0" (mis. "1.0" → 10, bukan 1.0)
-            if (!isNaN(intPart) && intPart < 10 && parts[1].length === 1 && parts[1] !== '0') {
+            if (intl) {
+                // v3.9.55: aturan decimal internasional (lihat di atas).
+                if (parts[1].length >= 3) {
+                    s = s.replace(/\./g, ''); // grup ribuan ("$50.000")
+                }
+                // else: biarkan dot → decimal ("$2.50", "$9.99")
+            } else if (!isNaN(intPart) && intPart < 10 && parts[1].length === 1 && parts[1] !== '0') {
                 // Dot sebagai decimal (mis. "2.5", "9.9")
                 // biarkan
             } else {
@@ -482,7 +509,11 @@ function parsePrice(priceStr) {
     const n = parseFloat(s);
     // v3.9.38 FIX: hasil negatif di-clamp ke 0 — string harga "-5000" /
     // "Rp -25k" tidak boleh bikin totalSpent/revenue jadi minus.
-    return isNaN(n) ? 0 : Math.max(0, Math.round(n * multiplier));
+    // v3.9.55 FIX: stats sudah currency-AGNOSTIC (v3.9.54), jadi cents kini
+    // DIPERTAHANKAN — bulatkan ke maksimal 2 desimal alih-alih ke bilangan bulat
+    // ("$2.5" → 2.5, bukan 3; "$1,234.56" → 1234.56, bukan 1235). Input integer
+    // (semua harga Rupiah) menghasilkan nilai yang persis sama seperti sebelumnya.
+    return isNaN(n) ? 0 : Math.max(0, Math.round(n * multiplier * 100) / 100);
 }
 
 module.exports = {

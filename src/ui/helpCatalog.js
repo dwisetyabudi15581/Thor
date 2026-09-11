@@ -165,6 +165,7 @@ const HELP_CATEGORIES = [
             '• `/remove-product-role value` — berhenti memberikan · `/list-product-roles` — lihat semua.',
             '',
             '❓ **Format harga?** Mata uang APA SAJA: `30000`, `30.000`, `$3`, `€25`, `¥1000`, `Rp 30.000`, `30rb`, `3jt`. Dua mata uang juga bisa (`3$ USD | Rp 25.000` — nominal Rp yang tercatat). Stats mencatat ANGKANYA (currency-agnostic) — pakai SATU mata uang yang konsisten.',
+            '❓ **Desimal?** Bisa — `$2.5`, `$2.50`, `€9.99` tercatat lengkap dengan cents (stats menampilkan `2.5` / `9.99`). Grup dot 3 digit tetap ribuan: `$50.000` → 50.000. Nominal deal rekber wajib angka bulat.',
             '❓ **Pembeli lihat harganya?** Ya — daftar harga di panel tiket memakai `label` + `price` persis seperti yang kamu tulis.'
         ]
     },
@@ -263,6 +264,7 @@ const HELP_CATEGORIES = [
             '2️⃣ Pembeli & penjual masing-masing tekan **Setuju** — bot mengunci edit setelah keduanya setuju (total 3 langkah).',
             '3️⃣ Midman menyelesaikan: **Complete** (dana dilepas + fee tercatat) atau **Cancel** (semua dibebaskan).',
             '❓ **Deal macet?** `/midman-deals` menunjukkan statusnya; deal yang channelnya terhapus direkonsiliasi otomatis saat startup + harian.',
+            '❓ **Format nominal deal?** Wajib angka bulat (`$25,000`, `€2.500`, `Rp 150.000`) — desimal seperti `$2.5` ditolak karena ambigu SENGAJA (keamanan deal). Harga produk boleh pakai cents; nominal rekber tidak.',
             '❓ **Fee masuk stats?** Deal yang selesai tercatat di stats transaksi (nominal deal — mata uang apapun bisa).'
         ]
     },
