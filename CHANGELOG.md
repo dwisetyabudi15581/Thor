@@ -5,6 +5,12 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 Legend: 🔴 critical · 🟠 high · 🟡 medium · 🟢 improvement
 
+## [3.9.56] — 2026-09-12
+
+### Added — 🧪 permintaan user: "tambah untuk test booster sekalian"
+
+- 🟢 **+6 unit test untuk fitur SERVER BOOSTER (v3.9.49) — total 563.** Lima jalur `boostManager.reconcileBoosters` yang belum pernah ter-pin kini diverifikasi: **streak putus & restart saat bot offline** (boostedAt di-refresh ke premium_since baru TANPA menggelembungkan totalBoosts — gap boost tidak teramati Discord, jadi tidak boleh dihitung sebagai event baru), **anggota bot di-skip** (premium_since milik bot tidak pernah dihitung sebagai booster), **guard guild null/rusak** (reconcile pulang kosong tanpa crash), **add saat offline mem-pin boostedAt ke premium_since ASLI** (durasi streak tetap akurat, bukan jam reconcile), dan **getRecentEvents** (limit dihormati, terbaru duluan, bentuk event `{userId, event, at, boostedAt}` lengkap). Plus satu test price-guard level-command untuk desimal internasional v3.9.55: `/add-product price:$5.88` → tersimpan + konfirmasi `💰 Tercatat di stats: **5,88** per penjualan` — memverifikasi jalur command PENUH, bukan cuma parser di parsePrice.test.js. Tanpa perubahan runtime: 563/563 test hijau terhadap perilaku yang sudah ada (prinsip: test mem-pin kontrak, bukan mengubahnya).
+
 ## [3.9.55] — 2026-09-11
 
 ### Fixed — 💬 pertanyaan user: "angka itu support desimal misal $2.5 USD?"

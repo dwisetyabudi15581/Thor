@@ -16,6 +16,13 @@
  *      public command list, help catalog line.
  *   6. products price guard: /add-product rejects an unparseable price,
  *      /update-product rejects it too, valid prices pass with the revenue note.
+ *
+ * v3.9.56 (permintaan user: "tambah untuk test booster sekalian"): +6 test —
+ * (a) reconcile streak putus-&-restart saat offline: boostedAt di-refresh ke
+ * premium_since baru TANPA menggelembungkan totalBoosts; (b) anggota bot
+ * di-skip reconcile; (c) guard guild null/rusak; (d) add-offline mem-pin
+ * boostedAt ke premium_since ASLI (bukan waktu reconcile); (e) getRecentEvents
+ * limit + bentuk event; (f) price guard desimal $5.88 (cents v3.9.55).
  */
 
 const test = require('node:test');
@@ -169,6 +176,93 @@ test('boostManager: reconcile — boost stopped while offline is detected', () =
     const res = boostManager.reconcileBoosters(guild);
     assert.deepStrictEqual(res.removed, [USER_ID], 'stopped while offline detected');
     assert.strictEqual(boostManager.getRecentEvents(GUILD_ID, 1)[0].event, 'remove');
+});
+
+test('boostManager: reconcile — streak putus & RESTART saat offline → boostedAt di-refresh, totalBoosts TIDAK digelembungkan', () => {
+    cleanBoostsFile();
+    const boostManager = require('../../src/data/boostManager');
+    boostManager.reload();
+
+    // Bot terakhir melihat user mulai boost di t0 (state masih 'add' saat bot mati).
+    const t0 = 1700000000000;
+    boostManager.recordBoostStart(GUILD_ID, USER_ID, t0);
+    assert.strictEqual(boostManager.getBoostHistory(GUILD_ID)[0].totalBoosts, 1);
+
+    // Selama bot offline: boost sempat berhenti lalu user RE-BOOST → premium_since BARU (t1).
+    const t1 = 1700009000000;
+    const { guild } = makeStubMember({ premiumSinceTimestamp: t1 });
+
+    const res = boostManager.reconcileBoosters(guild);
+    assert.deepStrictEqual(res.added, [], 'tercatat aktif + masih boost live → bukan add baru');
+    assert.deepStrictEqual(res.removed, [], 'masih boost live → bukan remove');
+
+    const entry = boostManager.getBoostHistory(GUILD_ID)[0];
+    assert.strictEqual(entry.boostedAt, t1, 'awal streak di-refresh ke premium_since terbaru');
+    assert.strictEqual(entry.lastEvent, 'add');
+    assert.strictEqual(entry.totalBoosts, 1, 'totalBoosts TIDAK digelembungkan (gap tak teramati)');
+
+    // Run kedua: sudah sinkron — idempoten.
+    boostManager.reconcileBoosters(guild);
+    const entry2 = boostManager.getBoostHistory(GUILD_ID)[0];
+    assert.strictEqual(entry2.totalBoosts, 1, 'tetap 1 setelah reconcile ulang');
+    assert.strictEqual(entry2.boostedAt, t1);
+});
+
+test('boostManager: reconcile — anggota BOT tidak pernah dihitung sebagai booster', () => {
+    cleanBoostsFile();
+    const boostManager = require('../../src/data/boostManager');
+    boostManager.reload();
+
+    const { guild } = makeStubMember({ premiumSinceTimestamp: null });
+    guild.members.cache.set('bot_booster', { id: 'bot_booster', user: { id: 'bot_booster', bot: true }, premiumSinceTimestamp: 1700007000000 });
+
+    const res = boostManager.reconcileBoosters(guild);
+    assert.deepStrictEqual(res.added, [], 'anggota bot dengan premium_since di-skip');
+    assert.deepStrictEqual(res.removed, []);
+    assert.strictEqual(boostManager.getBoostHistory(GUILD_ID).length, 0, 'tidak ada baris riwayat untuk bot');
+});
+
+test('boostManager: reconcile — guild null/rusak → perubahan kosong, tanpa crash', () => {
+    const boostManager = require('../../src/data/boostManager');
+    assert.deepStrictEqual(boostManager.reconcileBoosters(null), { added: [], removed: [] });
+    assert.deepStrictEqual(boostManager.reconcileBoosters(undefined), { added: [], removed: [] });
+    assert.deepStrictEqual(boostManager.reconcileBoosters({}), { added: [], removed: [] }, 'objek tanpa id');
+    assert.deepStrictEqual(boostManager.reconcileBoosters({ id: 'g1', members: {} }), { added: [], removed: [] }, 'members tanpa cache');
+});
+
+test('boostManager: reconcile — add saat offline MEM-PIN boostedAt ke premium_since ASLI (bukan waktu reconcile)', () => {
+    cleanBoostsFile();
+    const boostManager = require('../../src/data/boostManager');
+    boostManager.reload();
+
+    const since = 1700005000000;
+    const { guild } = makeStubMember({ premiumSinceTimestamp: null });
+    guild.members.cache.set('late_booster', { id: 'late_booster', user: { id: 'late_booster', bot: false }, premiumSinceTimestamp: since });
+
+    const res = boostManager.reconcileBoosters(guild);
+    assert.deepStrictEqual(res.added, ['late_booster']);
+    const entry = boostManager.getBoostHistory(GUILD_ID).find(e => e.userId === 'late_booster');
+    assert.ok(entry, 'baris riwayat dibuat');
+    assert.strictEqual(entry.boostedAt, since, 'boostedAt = premium_since asli → durasi streak akurat');
+    assert.strictEqual(entry.totalBoosts, 1);
+});
+
+test('boostManager: getRecentEvents — limit dihormati, terbaru duluan, bentuk event lengkap', () => {
+    cleanBoostsFile();
+    const boostManager = require('../../src/data/boostManager');
+    boostManager.reload();
+
+    boostManager.recordBoostStart(GUILD_ID, 'u1', 1700001000000);
+    boostManager.recordBoostStart(GUILD_ID, 'u2', 1700002000000);
+    boostManager.recordBoostStart(GUILD_ID, 'u3', 1700003000000);
+
+    assert.strictEqual(boostManager.getRecentEvents(GUILD_ID, 10).length, 3, 'semua event kalau limit longgar');
+    const two = boostManager.getRecentEvents(GUILD_ID, 2);
+    assert.strictEqual(two.length, 2, 'limit dipotong');
+    assert.strictEqual(two[0].userId, 'u3', 'lastEventAt terbaru duluan');
+    assert.strictEqual(two[0].event, 'add');
+    assert.strictEqual(two[0].at, 1700003000000, 'field at = lastEventAt');
+    assert.strictEqual(two[0].boostedAt, 1700003000000, 'field boostedAt ikut dibawa');
 });
 
 test('boostHandler: pure embed builders — boost add/remove', () => {
@@ -409,6 +503,40 @@ test('PRODUCT PRICE GUARD: /add-product rejects unparseable price, shows the par
     assert.match(replies[0].content, /tidak bisa dibaca sebagai angka/);
     const configAfterUpdate = require('../../src/data/configManager').getConfig();
     assert.strictEqual(configAfterUpdate.products[0].price, '25rb', 'harga tidak berubah setelah penolakan');
+});
+
+test('PRODUCT PRICE GUARD v3.9.55: /add-product menerima desimal $5.88 → stats mencatat 5,88 (cents dipertahankan)', async () => {
+    // Lanjutan diskusi user soal harga desimal internasional — dipin di sini
+    // (file yang sama dengan price guard booster v3.9.49) supaya jalur
+    // command-level ikut terverifikasi, bukan cuma parser di parsePrice.test.js.
+    writeTestConfig({});
+    const replies = [];
+    const interaction = {
+        commandName: 'add-product',
+        deferReply: async () => {},
+        editReply: async opts => {
+            replies.push(opts);
+            return {};
+        },
+        guild: { id: GUILD_ID, name: 'Boost Test Server' },
+        user: { id: 'admin_1', tag: 'Admin#0001' },
+        client: { channels: { cache: new Map() } },
+        options: {
+            getString: name => (name === 'price' ? '$5.88' : name === 'label' ? 'Decimal Product' : name === 'value' ? 'tp_decimal' : null),
+            getBoolean: () => null
+        }
+    };
+
+    const productsCommand = require('../../src/commands/products');
+    await productsCommand(interaction);
+
+    assert.match(replies[0].content, /✅ Produk ditambahkan/);
+    // id-ID memakai koma desimal: 5.88 → "5,88" — BUKAN "588" (salah 100x di
+    // era pra-v3.9.55 saat dot selalu dianggap pemisah ribuan).
+    assert.match(replies[0].content, /Tercatat di stats: \*\*5,88\*\*/);
+    const configAfter = require('../../src/data/configManager').getConfig();
+    assert.strictEqual(configAfter.products.length, 1, 'produk tersimpan');
+    assert.strictEqual(configAfter.products[0].price, '$5.88', 'harga tersimpan persis seperti input admin');
 });
 
 // ============ CLEANUP ============

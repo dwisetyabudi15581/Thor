@@ -1,8 +1,8 @@
-# 📖 Admin Guide — Thor Bot v3.9.55
+# 📖 Admin Guide — Thor Bot v3.9.56
 
 Panduan lengkap untuk admin server Discord yang menjalankan bot ini — cocok untuk admin baru yang pertama kali setup, maupun admin yang sudah berjalan sebagai referensi harian.
 
-> 📜 Riwayat lengkap semua versi: [CHANGELOG.md](../CHANGELOG.md) · Ringkasan 3 versi terakhir ada di [Section 11](#11-riwayat-versi).
+> 📜 Riwayat lengkap semua versi: [CHANGELOG.md](../CHANGELOG.md) · Ringkasan semua versi ada di [Section 11](#11-riwayat-versi).
 
 ---
 
@@ -1011,9 +1011,11 @@ Cooldown bersifat **per-user** — user A memicu tidak memengaruhi user B.
 
 ## 11. Riwayat Versi
 
-Riwayat lengkap semua versi (v3.9.0 – v3.9.55) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
+Riwayat lengkap semua versi (v3.9.0 – v3.9.56) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
 
-Ringkasan 3 versi terbaru:
+Ringkasan semua versi:
+
+- **v3.9.56** (2026-09-12) — 🧪 **permintaan user: "tambah untuk test booster sekalian"**. +6 unit test untuk fitur SERVER BOOSTER (total **563**): lima jalur `reconcileBoosters` yang belum pernah ter-pin — streak putus-&-restart saat offline (boostedAt di-refresh TANPA menggelembungkan totalBoosts), anggota bot di-skip, guard guild null/rusak, add-offline mem-pin boostedAt ke premium_since ASLI, dan getRecentEvents limit+bentuk event — plus price-guard desimal level-command `/add-product $5.88` (konfirmasi "Tercatat di stats: 5,88"). Tanpa perubahan runtime — test mem-pin kontrak perilaku booster yang sudah ada.
 
 - **v3.9.55** (2026-09-11) — 💬 **pertanyaan user: "angka itu support desimal misal $2.5 USD?"**. Harga desimal internasional kini terbaca BENAR — heuristic dot era Rupiah dulu membaca `$2.50` sebagai 250 dan `$9.99` sebagai 999 (kesalahan senyap 100x), dan `Math.round` membuang cents (`$2.5` → 3). Dengan penanda mata uang non-Rp: satu dot dengan pecahan 1-2 digit adalah **desimal** (`$2.5 USD` → 2.5, `$2.50` → 2.5, `$9.99` → 9.99, `$12.99` → 12.99, `$0.99` → 0.99, `€9,99` → 9.99), pecahan 3 digit tetap **grup ribuan** (`$50.000` → 50000), dan **cents dipertahankan** (maksimal 2 desimal). Format lama tanpa penanda, cabang Rp, dan pencatatan dua mata uang tidak berubah. `/add-product` / `/update-product` menerima harga desimal (daftar format menampilkan `$2.50`); FAQ `/help` mendokumentasikan desimal; rekber tetap ketat angka-bulat. +5 unit test (total **557**).
 
@@ -1060,6 +1062,6 @@ Jika ada masalah yang tidak ada di Troubleshooting:
 
 ---
 
-**Versi dokumen:** v3.9.54
-**Last updated:** 10 September 2026
-**Bot version:** 3.9.54 · 91 slash command · 552 unit test
+**Versi dokumen:** v3.9.56
+**Last updated:** 12 September 2026
+**Bot version:** 3.9.56 · 91 slash command · 563 unit test
