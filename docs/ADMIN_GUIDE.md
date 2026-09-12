@@ -1,4 +1,4 @@
-# 📖 Admin Guide — Thor Bot v3.9.59
+# 📖 Admin Guide — Thor Bot v3.9.60
 
 Panduan lengkap untuk admin server Discord yang menjalankan bot ini — cocok untuk admin baru yang pertama kali setup, maupun admin yang sudah berjalan sebagai referensi harian.
 
@@ -824,7 +824,7 @@ Bot membalas pesan otomatis saat pesan member cocok dengan trigger (case-insensi
 /backup-now
 ```
 
-Bot membuat folder `backups/YYYY-MM-DD_HH-mm-ss/` berisi salinan **semua 16 file data** dari folder `data/`: config, keys, scheduledRoles, selfRoles, giveaways, polls, warns, stats, scheduledAnns, tempVoice, tickets, automod, levels, responders, afk, panels.
+Bot membuat folder `backups/YYYY-MM-DD_HH-mm-ss/` berisi salinan **semua 20 file data** dari folder `data/`: config, keys, scheduledRoles, selfRoles, giveaways, polls, warns, stats, scheduledAnns, tempVoice, tickets, automod, levels, responders, afk, panels, deals, boosts, serverstats, modlogs (v3.9.60 — riwayat moderasi).
 
 ### Auto-Backup
 
@@ -851,7 +851,7 @@ Menampilkan semua backup, termasuk safety backup `pre-restore_*` (jika pernah re
 1. Bot mengirim embed konfirmasi dengan 2 tombol: **Ya, Restore Sekarang** dan **Batal**
 2. Admin menekan tombol → restore dijalankan
 3. Bot otomatis membuat safety backup `pre-restore_*` sebelum menimpa (antisipasi salah restore)
-4. Setelah restore selesai, semua cache in-memory di-reload otomatis (stats, panels, permissions, automod, afk, responders, levels)
+4. Setelah restore selesai, semua cache in-memory di-reload otomatis (stats, serverstats, panels, permissions, automod, afk, responders, levels, boosts, modlogs — v3.9.60: cache riwayat boost & riwayat moderasi juga di-reload, jadi tidak ada yang menimpa file hasil restore)
 5. **Restart bot** (`Ctrl+C` lalu `npm start`) tetap disarankan untuk konsistensi penuh
 
 **Proteksi:**
@@ -1029,11 +1029,12 @@ Cooldown bersifat **per-user** — user A memicu tidak memengaruhi user B.
 
 ## 11. Riwayat Versi
 
-Riwayat lengkap semua versi (v3.9.0 – v3.9.59) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
+Riwayat lengkap semua versi (v3.9.0 – v3.9.60) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
 
 Ringkasan semua versi:
 
-- **v3.9.59** (2026-09-12) — 💬 **permintaan user: "auto role booster — yang sudah boost server bakal dapet role"**. BARU **`tipe:booster`** di `/set-role`: role Booster **otomatis** diberikan saat member boost server dan dihapus saat boost berakhir (semantik role Server Booster bawaan Discord, tapi pakai role sendiri — urutan/warna bisa diatur). Diterapkan **retroaktif** ke semua booster yang sudah ada saat di-set (reply menyebut jumlahnya), disinkronkan saat startup untuk boost yang terjadi saat bot offline, dan **tidak pernah mencabut** pemberian role manual ke member biasa. Setiap skip/gagal meninggalkan log penyebab + solusi (belum di-set, role ghost, posisi di atas role bot, permission Manage Roles); `/test-booster` ikut mendiagnosis rantai role-nya tanpa mengutak-atik role (simulasi tetap murni); `/remove-role booster` mematikan otomatisasi tanpa mencabut role yang terpasang. +18 unit test (total **595**).
+- **v3.9.60** (2026-09-12) — 🧪 **audit subsistem backup/restore (code review)**. Perbaikan 3 bug nyata: (1) **modlogs.json tidak pernah di-backup** — sejak v3.9.43 riwayat moderasi (timeout/kick/ban yang ditampilkan `/warn-list`) senyap tidak ikut `/backup-now` dan hilang oleh `/restore-backup`; file kini masuk FILES_TO_BACKUP dan dipaten regression test bebas environment (cross-check registry 20 file). (2) **Penimpaan cache basi pasca-restore untuk boosts.json** — store in-memory permanen boostManager tidak pernah di-invalidate setelah restore, jadi event boost pertama menimpa riwayat hasil restore; `reload()` kini dipanggil di alur restore (modLogManager juga). (3) **`npm test` merah di setiap fresh clone/CI** — GUARD test mengasumsikan file data runtime ada; fresh checkout kini melewatkan scan itu dan jaminannya pindah ke regression test baru. +3 unit test (total **598**). Tanpa command baru, tanpa perubahan config — data v3.9.59 kompatibel penuh.
+- **v3.9.59** (2026-09-12) — 💬 **permintaan user: "auto role booster — yang sudah boost server bakal dapet role"**. BARU **`tipe:booster`** di `/set-role`: role Booster **otomatis** diberikan saat member boost server dan dihapus saat boost berakhir (semantik yang sama dengan role Server Booster bawaan Discord, tapi pakai role sendiri — urutan/warna bisa diatur). Diterapkan **retroaktif** ke semua booster yang sudah ada saat di-set (reply menyebut jumlahnya), disinkronkan saat startup untuk boost yang terjadi saat bot offline, dan **tidak pernah mencabut** pemberian role manual ke member biasa. Setiap skip/gagal meninggalkan log penyebab + solusi (belum di-set, role ghost, posisi di atas role bot, permission Manage Roles); `/test-booster` ikut mendiagnosis rantai role-nya tanpa mengutak-atik role (simulasi tetap murni); `/remove-role booster` mematikan otomatisasi tanpa mencabut role yang terpasang. +18 unit test (total **595**).
 
 - **v3.9.58** (2026-09-12) — 🧪 **permintaan user: "command test booster"**. BARU **`/test-booster`** (command ke-92, admin): versi `/test-welcome` milik fitur boost — admin tidak bisa mensimulasikan boost asli (bayar uang sungguhan), jadi command ini membuktikan seluruh rantai notifikasi bekerja: channel server-booster di-set → ada → izin View/Send/Embed bot, plus **preview live dari embed yang persis** dikirim boost asli (builder yang sama dengan event live — mustahil beda). `tipe:add` → preview pink 🚀 dengan mention; `tipe:remove` → preview abu-abu 💔. Opsi `live:true` SEKALIAN mengirim preview ke channel server-booster ASLI — tes pengiriman end-to-end penuh. **Simulasi murni — tidak ada yang dicatat** (riwayat boost, server log dan counter tetap bersih). +11 unit test (total **577**).
 
@@ -1086,6 +1087,6 @@ Jika ada masalah yang tidak ada di Troubleshooting:
 
 ---
 
-**Versi dokumen:** v3.9.59
+**Versi dokumen:** v3.9.60
 **Last updated:** 12 September 2026
-**Bot version:** 3.9.59 · 92 slash command · 595 unit test
+**Bot version:** 3.9.60 · 92 slash command · 598 unit test
