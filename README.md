@@ -2,7 +2,7 @@
 
 Bot Discord serbaguna untuk komunitas apa pun — server jualan, gaming, content creator, hingga komunitas umum. Semua konfigurasi dapat diatur langsung dari Discord melalui slash command, tanpa mengedit file.
 
-> **v3.9.56** · 91 slash command · 563 unit test · discord.js v14 · Node.js 18+ · single-guild
+> **v3.9.57** · 91 slash command · 566 unit test · discord.js v14 · Node.js 18+ · single-guild
 >
 > 📖 **[Panduan Admin Lengkap](./docs/ADMIN_GUIDE.md)** — setup, operasional harian, troubleshooting
 > 📜 **[Changelog](./CHANGELOG.md)** — riwayat semua versi
@@ -202,7 +202,7 @@ Jalankan **`/test-welcome tipe:welcome`** — command ini mendiagnosis setiap ma
 
 ### Total revenue tidak bergerak saat jualan
 
-**Baris "Total Revenue" agregat DIHAPUS dari `/stats` di v3.9.51** (permintaan user — toh angkanya tidak akan pernah cocok dengan pembukuan manual). Belanja pribadi per member tetap dilacak dan terlihat di `/my-stats` ("Total Belanja") dan `/leaderboard` ("Top Spender"). Sejak v3.9.49/50 parser harga paham suffix Indonesia (`25rb` = 25.000, `2jt`/`2juta` = 2.000.000) dan harga dua mata uang (`3$ USD | Rp. 25.000` tercatat **Rp 25.000 per penjualan**); sejak **v3.9.54 harga currency-AGNOSTIC** — penanda APA SAJA diterima (`$3`, `€25`, `¥1000`, `₩25.000`, `25 usd`, `IDR 30.000`…), USD-only tidak lagi ditolak, dan `/add-product` hanya **menolak** string yang benar-benar tak terbaca (beserta daftar format) — jadi yang terlacak tercatat dengan benar. Sejak **v3.9.55 harga desimal mempertahankan cents** — dengan penanda non-Rp, `$2.5` / `$2.50` → 2.5 dan `$9.99` → 9.99, sementara grup dot 3 digit tetap ribuan (`$50.000` → 50.000); nominal deal rekber tetap wajib angka bulat (memang didesain begitu). Stats & rekber menampilkan angka locale polos (tanpa `Rp` yang di-hardcode). Belanja pribadi menghitung order tiket + penyelesaian rekber (harga + fee) yang diproses **lewat bot** — penjualan manual di luar tiket/deal tidak terlacak.
+**Baris "Total Revenue" agregat DIHAPUS dari `/stats` di v3.9.51** (permintaan user — toh angkanya tidak akan pernah cocok dengan pembukuan manual). Belanja pribadi per member tetap dilacak dan terlihat di `/my-stats` ("Total Belanja") dan `/leaderboard` ("Top Spender"). Sejak v3.9.49/50 parser harga paham suffix Indonesia (`25rb` = 25.000, `2jt`/`2juta` = 2.000.000) dan harga dua mata uang (`3$ USD | Rp. 25.000` tercatat **Rp 25.000 per penjualan**); sejak **v3.9.54 harga currency-AGNOSTIC** — penanda APA SAJA diterima (`$3`, `€25`, `¥1000`, `₩25.000`, `25 usd`, `IDR 30.000`…), USD-only tidak lagi ditolak, dan `/add-product` hanya **menolak** string yang benar-benar tak terbaca (beserta daftar format) — jadi yang terlacak tercatat dengan benar. Sejak **v3.9.55 harga desimal mempertahankan cents** — dengan penanda non-Rp, `$2.5` / `$2.50` → 2.5 dan `$9.99` → 9.99 — dan sejak **v3.9.57 desimal POLOS juga sah** (`5.88` → 5.88, `5,88` → 5.88; dulu `5.88` terbaca 588), sementara grup dot 3 digit tetap ribuan (`50.000` → 50.000); nominal deal rekber tetap wajib angka bulat (memang didesain begitu). Stats & rekber menampilkan angka locale polos (tanpa `Rp` yang di-hardcode). Belanja pribadi menghitung order tiket + penyelesaian rekber (harga + fee) yang diproses **lewat bot** — penjualan manual di luar tiket/deal tidak terlacak.
 
 Troubleshooting lengkap (tiket, role, stats, backup, dll): **[docs/ADMIN_GUIDE.md → Section 9](./docs/ADMIN_GUIDE.md)**.
 

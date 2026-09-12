@@ -23,6 +23,11 @@
  * di-skip reconcile; (c) guard guild null/rusak; (d) add-offline mem-pin
  * boostedAt ke premium_since ASLI (bukan waktu reconcile); (e) getRecentEvents
  * limit + bentuk event; (f) price guard desimal $5.88 (cents v3.9.55).
+ *
+ * v3.9.57 (permintaan user: "biar support harga desimal untuk add produk nya
+ * misal 5.88"): +1 test — price guard desimal POLOS level-command: /add-product
+ * price:5.88 → tersimpan + konfirmasi "Tercatat di stats: 5,88" (tanpa
+ * penanda mata uang pun, dot pecahan 1-2 digit kini dibaca desimal).
  */
 
 const test = require('node:test');
@@ -537,6 +542,42 @@ test('PRODUCT PRICE GUARD v3.9.55: /add-product menerima desimal $5.88 → stats
     const configAfter = require('../../src/data/configManager').getConfig();
     assert.strictEqual(configAfter.products.length, 1, 'produk tersimpan');
     assert.strictEqual(configAfter.products[0].price, '$5.88', 'harga tersimpan persis seperti input admin');
+});
+
+test('PRODUCT PRICE GUARD v3.9.57: /add-product desimal POLOS 5.88 → stats mencatat 5,88', async () => {
+    // Permintaan user: "biar support harga desimal untuk add produk nya misal
+    // 5.88" — TANPA penanda mata uang pun, dot pecahan 1-2 digit kini desimal
+    // (dulu "5.88" polos terbaca 588 di stats — dot dianggap pemisah ribuan,
+    // salah 100x senyap; admin harus menulis "$5.88" atau "5,88" untuk
+    // mendapat 5.88).
+    writeTestConfig({});
+    const replies = [];
+    const interaction = {
+        commandName: 'add-product',
+        deferReply: async () => {},
+        editReply: async opts => {
+            replies.push(opts);
+            return {};
+        },
+        guild: { id: GUILD_ID, name: 'Boost Test Server' },
+        user: { id: 'admin_1', tag: 'Admin#0001' },
+        client: { channels: { cache: new Map() } },
+        options: {
+            getString: name => (name === 'price' ? '5.88' : name === 'label' ? 'Plain Decimal Product' : name === 'value' ? 'tp_plain_decimal' : null),
+            getBoolean: () => null
+        }
+    };
+
+    const productsCommand = require('../../src/commands/products');
+    await productsCommand(interaction);
+
+    assert.match(replies[0].content, /✅ Produk ditambahkan/);
+    // "5.88" polos → 5,88 (id-ID koma desimal) — BUKAN 588 seperti era
+    // pra-v3.9.57, dan bukan 5,9 (cents dipertahankan, maksimal 2 desimal).
+    assert.match(replies[0].content, /Tercatat di stats: \*\*5,88\*\*/);
+    const configAfter = require('../../src/data/configManager').getConfig();
+    assert.strictEqual(configAfter.products.length, 1, 'produk tersimpan');
+    assert.strictEqual(configAfter.products[0].price, '5.88', 'harga tersimpan persis seperti input admin');
 });
 
 // ============ CLEANUP ============

@@ -5,6 +5,15 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 Legend: 🔴 critical · 🟠 high · 🟡 medium · 🟢 improvement
 
+## [3.9.57] — 2026-09-12
+
+### Fixed — 💬 permintaan user: "biar support harga desimal untuk add produk nya misal 5.88"
+
+- 🟠 **Desimal POLOS kini didukung — "5.88" terbaca 5.88, bukan 588.** Aturan decimal v3.9.55 yang tadinya hanya berlaku kalau ada penanda mata uang (`$2.50`) kini berlaku untuk input polos juga: satu dot dengan **pecahan 1-2 digit = desimal** (`5.88` → 5.88, `9.99` → 9.99, `0.99` → 0.99, `12.99` → 12.99), dengan atau tanpa penanda — flag `intl` dihapus, satu aturan untuk semua input. Kenapa aman: penulisan RIBUAN Indonesia yang sah selalu **grup 3 digit** (`50.000`), jadi `5.88` tidak mungkin format Rupiah yang benar — paling masuk akal admin sedang menulis desimal (bot currency-agnostic sejak v3.9.54). Pecahan 3 digit (`50.000`, `5.880`) dan multi-dot (`1.234.567`) tetap RIBUAN; cabang Rp, harga dua mata uang, dan rekber tidak tersentuh.
+- 🟡 **Perilaku yang berubah SENGAJA (input yang tak-valid-as-Rupiah):** `1.50` kini 1.5 (dulu 150), `100.00` kini 100 (dulu 10000), `2.50` kini 2.5 (dulu 250) — penulisan ribuan yang benar tetap `150` / `10.000` / `250`. Bonus: suffix+desimal yang dulu meledak 100x kini konsisten dengan versi komanya (`1.50rb` → 1500, dulu 150.000; `9.99jt` → 9.990.000, dulu 999.000.000).
+- 🟢 **`/add-product` / `/update-product`:** daftar format yang diterima kini menampilkan contoh desimal polos (`5.88`), begitu juga deskripsi opsi slash (`Rp 50.000 / $3 / $2.50 / 5.88 / 25rb`). FAQ `/help` "❓ Desimal?" diperbarui — desimal polos sah, grup 3 digit tetap ribuan, nominal rekber tetap wajib angka bulat.
+- 🟢 **+3 unit test (total 566):** parsePrice.test.js — matriks desimal polos (`5.88`/`5,88`/`0.99`/`2.50`/`1.50rb`/`1,50rb`/`9.99jt`/`$5.88`/`5.88 usd`) dan ribuan sah & multi-dot tidak berubah (`5.880`/`50.000`/`1.000.000`/`5.000rb` + rekber tetap menolak desimal); 3 pin lama era sentris-Rupiah dipasang ulang ke nilai desimal yang baru; priceValidationError menerima desimal polos. boosters.test.js — price-guard level-command `/add-product price:5.88` → konfirmasi `💰 Tercatat di stats: **5,88** per penjualan` (jalur command PENUH, bukan cuma parser).
+
 ## [3.9.56] — 2026-09-12
 
 ### Added — 🧪 permintaan user: "tambah untuk test booster sekalian"

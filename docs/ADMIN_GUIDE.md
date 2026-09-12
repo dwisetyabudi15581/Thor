@@ -1,4 +1,4 @@
-# 📖 Admin Guide — Thor Bot v3.9.56
+# 📖 Admin Guide — Thor Bot v3.9.57
 
 Panduan lengkap untuk admin server Discord yang menjalankan bot ini — cocok untuk admin baru yang pertama kali setup, maupun admin yang sudah berjalan sebagai referensi harian.
 
@@ -121,9 +121,24 @@ Bot mengirim embed + tombol "Verifikasi Saya" ke channel tempat command dijalank
 
 - `label` — nama yang ditampilkan ke member
 - `value` — ID unik (tanpa spasi, mis. `7d`, `30d`, `perm`)
-- `price` — string bebas, mata uang APA SAJA (v3.9.54): `$3`, `€25`, `¥1000`, `₩25.000`, `25 usd`, `IDR 30.000`, format Indonesia (`Rp. 50.000`), angka polos (`25000`, `25,000`), suffix (`25rb`, `2jt`), atau dua mata uang (`3$ USD | Rp 25.000` — stats mencatat **bagian Rp**, 25.000; tanpa bagian Rp, nominal PERTAMA yang tercatat). **Desimal mempertahankan cents (v3.9.55):** dengan penanda non-Rp, `$2.5` / `$2.50` → 2.5 dan `$9.99` → 9.99, sementara grup dot 3 digit tetap ribuan (`$50.000` → 50.000). Bot currency-agnostic: pakai SATU mata uang konsisten — stats menampilkan angka polos
+- `price` — string bebas, mata uang APA SAJA (v3.9.54): `$3`, `€25`, `¥1000`, `₩25.000`, `25 usd`, `IDR 30.000`, format Indonesia (`Rp. 50.000`), angka polos (`25000`, `25,000`), suffix (`25rb`, `2jt`), atau dua mata uang (`3$ USD | Rp 25.000` — stats mencatat **bagian Rp**, 25.000; tanpa bagian Rp, nominal PERTAMA yang tercatat). **Desimal didukung penuh (v3.9.57):** `$2.5` / `$2.50` / `5.88` / `5,88` / `€9.99` semua tercatat lengkap dengan cents (2.5 / 5.88 / 9.99) — dengan ATAU tanpa penanda mata uang — sementara grup dot 3 digit tetap ribuan (`50.000` → 50.000). Bot currency-agnostic: pakai SATU mata uang konsisten — stats menampilkan angka polos
 - `duration` — opsional, hanya keterangan (tidak otomatis menjadi durasi expire role)
 - Maksimal 25 produk (batas dropdown Discord)
+
+**Cara penulisan harga — cheat sheet (v3.9.57):**
+
+| Kamu tulis | Tercatat di stats | Catatan |
+|---|---|---|
+| `Rp 50.000` · `50.000` · `50000` · `50rb` · `2jt` | 50.000 · 2.000.000 | format Indonesia — grup dot selalu 3 digit |
+| `25000` · `25,000` | 25.000 | angka polos / koma ribuan |
+| `$3` · `€25` · `25 usd` | 3 · 25 | penanda mata uang apa saja |
+| `5.88` · `5,88` · `$5.88` · `5.88 usd` | **5.88** | ✅ desimal — pecahan 1-2 digit, dengan/tanpa penanda |
+| `$2.5` · `0.99` · `12.99` | **2.5** · **0.99** · **12.99** | ✅ desimal kecil juga sah |
+| `1.50rb` · `9.99jt` | 1.500 · 9.990.000 | ✅ suffix + desimal konsisten |
+| `3$ USD \| Rp 25.000` | 25.000 | dua mata uang → bagian Rp yang dicatat |
+| `murah` · `negosiasi` | ❌ ditolak | guard menampilkan daftar format saat setup |
+
+**Perhatian:** pecahan **3 digit** selalu dianggap grup ribuan — `5.880` = 5.880 (untuk desimal, tulis `5.88`). Sebaliknya, untuk harga ribuan tulis formatnya yang benar: `150` (bukan `1.50` — itu kini dibaca 1,5) dan `10.000` (bukan `100.00` — itu kini dibaca 100). Nominal deal **rekber** tetap wajib angka bulat — `$2.5` ditolak (keamanan deal); untuk $5.88, input `588` (satuan sen).
 
 ### Step 5: Set Auto-Role untuk Produk
 
@@ -905,6 +920,7 @@ Cek juga `/list-responder` untuk memastikan responder terdaftar. Trigger bersifa
 - **Harga dua mata uang diparse benar (v3.9.50):** `3$ USD | Rp. 25.000` tercatat **Rp 25.000** per penjualan.
 - **Mata uang apa saja bisa (v3.9.54):** USD-only dan penanda lain apapun (`$3`, `€25`, `¥1000`, `25 usd`…) diterima — bot currency-AGNOSTIC, mencatat nominal angka dalam mata uang harga kamu (tanpa konversi). Stats & embed rekber menampilkan angka locale polos (tanpa prefiks `Rp`).
 - **Harga desimal mempertahankan cents (v3.9.55):** dengan penanda mata uang non-Rp, `$2.5` / `$2.50` tercatat **2.5** dan `$9.99` tercatat **9.99** per penjualan — satu dot dengan pecahan 1-2 digit adalah desimal, grup 3 digit tetap ribuan (`$50.000` → 50.000). Sebelum v3.9.55, `$2.50` senyap tercatat 250 (salah 100x) dan `$2.5` dibulatkan jadi 3. Nominal deal rekber tetap **wajib angka bulat** (keamanan deal, memang didesain begitu).
+- **Desimal polos juga sah (v3.9.57):** `5.88` TANPA penanda mata uang kini tercatat **5.88** per penjualan (dulu terbaca 588 — salah 100x; admin terpaksa menulis `$5.88` atau `5,88`). Satu dot dengan pecahan 1-2 digit sekarang selalu desimal — dengan atau tanpa penanda — karena ribuan Indonesia yang sah selalu grup 3 digit. Konsekuensi: `1.50` kini terbaca 1,5 (dulu 150) — untuk 150 tulis `150`; `5.880` tetap 5.880 (grup 3 digit = ribuan). Lihat cheat sheet penulisan harga di Step 4.
 - **`/add-product` menolak harga yang tak terparse** (mis. `murah`, `negosiasi`) beserta daftar format yang diterima, dan menampilkan `💰 Tercatat di stats: 25.000 per penjualan` di konfirmasi — format buruk tidak bisa lagi mencatat 0 senyap. `/update-product` juga menampilkan nominal yang dihitung saat harga diubah. Perbaiki harga yang formatnya buruk lewat `/update-product value:... price:25.000`.
 - Belanja pribadi menghitung **order tiket + penyelesaian rekber** (harga + fee) yang diproses lewat bot. Penjualan manual di luar tiket/deal tidak terlacak. Penjualan yang tercatat SEBELUM fix ini tetap menyimpan jumlah historisnya yang kecil di `stats.json` (riwayat tidak dihitung ulang).
 
@@ -1011,9 +1027,11 @@ Cooldown bersifat **per-user** — user A memicu tidak memengaruhi user B.
 
 ## 11. Riwayat Versi
 
-Riwayat lengkap semua versi (v3.9.0 – v3.9.56) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
+Riwayat lengkap semua versi (v3.9.0 – v3.9.57) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
 
 Ringkasan semua versi:
+
+- **v3.9.57** (2026-09-12) — 💬 **permintaan user: "biar support harga desimal untuk add produk nya misal 5.88"**. Desimal POLOS kini didukung: `5.88` → tercatat **5.88** (dulu terbaca 588 — salah 100x senyap; admin terpaksa menulis `$5.88` atau `5,88`). Satu dot dengan pecahan 1-2 digit kini selalu desimal — dengan atau tanpa penanda mata uang — karena penulisan ribuan Indonesia yang sah selalu grup 3 digit (`50.000`). Pecahan 3 digit & multi-dot tetap ribuan; rekber tetap wajib angka bulat; cheat sheet penulisan harga ditambahkan di Step 4. +3 unit test (total **566**).
 
 - **v3.9.56** (2026-09-12) — 🧪 **permintaan user: "tambah untuk test booster sekalian"**. +6 unit test untuk fitur SERVER BOOSTER (total **563**): lima jalur `reconcileBoosters` yang belum pernah ter-pin — streak putus-&-restart saat offline (boostedAt di-refresh TANPA menggelembungkan totalBoosts), anggota bot di-skip, guard guild null/rusak, add-offline mem-pin boostedAt ke premium_since ASLI, dan getRecentEvents limit+bentuk event — plus price-guard desimal level-command `/add-product $5.88` (konfirmasi "Tercatat di stats: 5,88"). Tanpa perubahan runtime — test mem-pin kontrak perilaku booster yang sudah ada.
 
@@ -1062,6 +1080,6 @@ Jika ada masalah yang tidak ada di Troubleshooting:
 
 ---
 
-**Versi dokumen:** v3.9.56
+**Versi dokumen:** v3.9.57
 **Last updated:** 12 September 2026
-**Bot version:** 3.9.56 · 91 slash command · 563 unit test
+**Bot version:** 3.9.57 · 91 slash command · 566 unit test

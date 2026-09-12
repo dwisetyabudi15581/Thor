@@ -360,6 +360,20 @@ function getServerStats(guildId) {
  * Rekber (midmanManager.parsePriceNumber) tetap ketat angka-bulat — "$2.5"
  * ditolak di sana SENGAJA (keamanan deal, lihat docs-nya sendiri).
  *
+ * v3.9.57 FIX (permintaan user: "biar support harga desimal untuk add produk
+ * nya misal 5.88"): aturan decimal v3.9.55 di atas kini berlaku untuk input
+ * POLOS juga, bukan cuma yang berpenanda mata uang — "5.88" → 5.88 (dulu
+ * terbaca 588, salah 100x senyap), "9.99" → 9.99, "0.99" → 0.99. Kenapa aman:
+ * penulisan RIBUAN Indonesia yang sah selalu grup 3 digit ("50.000"), jadi satu
+ * dot dengan pecahan 1-2 digit tidak mungkin format Rupiah yang benar — jauh
+ * lebih mungkin admin sedang menulis desimal (mata uang apa pun yang pakai
+ * cents; bot currency-agnostic sejak v3.9.54). Pecahan 3 digit ("50.000",
+ * "5.880") dan multi-dot ("1.234.567") tetap RIBUAN — format Rupiah tidak
+ * tersentuh. Konsekuensi yang disengaja: "1.50" kini 1.5 (dulu 150) dan
+ * "100.00" kini 100 (dulu 10000) — penulisan ribuan yang benar tetap "150" /
+ * "10.000"; suffix+desimal kini konsisten dengan versi komanya ("1.50rb" →
+ * 1500, dulu 150.000; "9.99jt" → 9.990.000, dulu 999.000.000 — dulu meledak 100x).
+ *
  * P2-13 FIX: sebelumnya `.replace(/\./g, '').replace(/,/g, '.')` ambigu:
  *   - "25,000" (US thousand) → "25.000" → parseFloat → 25 (SALAH, harusnya 25000)
  *   - "Rp. 50.000" (ID thousand) → 50000 → OK
@@ -372,10 +386,6 @@ function parsePrice(priceStr) {
     if (typeof priceStr === 'number') return isNaN(priceStr) ? 0 : Math.max(0, priceStr);
     if (!priceStr) return 0;
     let s = String(priceStr).toLowerCase().trim();
-    // v3.9.55: di-set kalau ada penanda mata uang NON-Rp — aturan decimal di
-    // bawah lalu mengikuti konvensi internasional (cents) alih-alih heuristic
-    // sentris-Rupiah "dot selalu ribuan".
-    let intl = false;
     // v3.9.50 FIX (laporan user: harga diisi "3$ USD | Rp. 25.000" — format
     // harga produk asli user). parseFloat berhenti di '$', jadi harga ganda itu
     // tercatat **Rp 3** per penjualan dan revenue kembali terlihat beku.
@@ -405,7 +415,8 @@ function parsePrice(priceStr) {
         const m = s.match(/[0-9][0-9.,]*(?:\s*(?:juta|jt|rb)|[km])?/);
         if (!m) return 0; // ada penanda tapi tanpa nominal ("usd") → tidak terbaca
         s = m[0];
-        intl = true; // v3.9.55: aturan decimal internasional berlaku dari sini
+        // (v3.9.57: flag `intl` tidak lagi diperlukan — aturan decimal satu
+        // pakai untuk semua input, lihat cabang hasDot di bawah.)
     }
     s = s.replace(/\s/g, '');
     let multiplier = 1;
@@ -458,50 +469,33 @@ function parsePrice(priceStr) {
             s = s.replace(/,/g, '');
         }
     } else if (hasDot) {
-        // Hanya dot. Asumsi: thousand separator (format ID).
-        // Mis. "50.000" → 50000
+        // Hanya dot (tanpa comma). Dua kemungkinan: grup RIBUAN (format ID,
+        // mis. "50.000") atau DECIMAL (format internasional, mis. "5.88").
         //
-        // v3.9.8 FIX: heuristic lama `parts[1].length <= 2` treat sebagai decimal,
-        // bikin "1.50" (ID = 150) salah jadi 1.5, dan "100.00" (ID = 10000) salah jadi 100.
+        // v3.9.8/9/17 (era sentris-Rupiah): dot polos SELALU ribuan — hanya
+        // int < 10 + pecahan 1 digit ("2.5") yang dibaca desimal, jadi "5.88"
+        // terbaca 588 dan "9.99" terbaca 999 (kesalahan senyap 100x).
         //
-        // v3.9.9 FIX: heuristic lebih ketat. Untuk Rupiah (integer currency),
-        // thousand separator jauh lebih umum daripada decimal. Hanya treat sebagai
-        // decimal kalau SANGAT jelas (int part < 10 DAN fractional 1 digit).
-        // Mis. "2.5" → 2.5 (decimal), "9.9" → 9.9 (decimal).
-        // Tapi "1.50" → 150 (thousand), "10.50" → 1050 (thousand), "2.50" → 250 (thousand).
+        // v3.9.55: dengan penanda mata uang non-Rp, pecahan 1-2 digit dibaca
+        // sebagai decimal ("$9.99" → 9.99); pecahan 3 digit tetap ribuan.
         //
-        // v3.9.17 FIX: untuk currency Rupiah (integer currency), dot SELALU
-        // thousand separator. "1.5" sebagai 1.5 Rupiah tidak masuk akal — kemungkinan
-        // besar admin maksudnya 15 atau 1500. Tapi untuk backward compat, kita keep
-        // heuristic v3.9.9 untuk angka kecil (< 10) supaya test lama gak break.
-        // Dokumentasi: kalau admin mau input harga < 10 Rupiah dengan decimal
-        // (sangat jarang), pakai format "0.5" atau "5" saja.
-        //
-        // v3.9.55 FIX: aturan di atas SENTRIS-RUPIAH — tapi kalau ada penanda mata
-        // uang non-Rp (intl), mata uangnya hampir pasti pakai cents, dan pecahan
-        // 1-2 digit setelah satu dot adalah decimal: "$2.5" → 2.5, "$2.50" → 2.5,
-        // "$9.99" → 9.99, "$12.99" → 12.99, "$0.99" → 0.99 ("$2.0" → 2).
-        // Pecahan 3 digit adalah grup ribuan: "$50.000" (gaya Jerman) → 50000.
-        // Multi-dot di bawah ("$1.234.567") adalah ribuan yang tak ambigu di
-        // konvensi manapun.
+        // v3.9.57 FIX (permintaan user: "biar support harga desimal untuk add
+        // produk nya misal 5.88"): aturan v3.9.55 kini berlaku untuk input POLOS
+        // juga — flag `intl` dihapus, satu aturan untuk semua penanda. Pemisah
+        // amannya: penulisan ribuan Indonesia yang SAH selalu grup 3 digit
+        // ("50.000"), jadi satu dot dengan pecahan 1-2 digit ("5.88", "9.99",
+        // "0.99") bukan format Rupiah yang benar — paling masuk akal itu
+        // desimal (currency-agnostic v3.9.54: mata uang admin bisa apa saja,
+        // mayoritas pakai cents). Suffix + desimal ikut konsisten dengan versi
+        // komanya: "1.50rb" → 1.5 × 1000 = 1500 (dulu 150.000), "9.99jt" →
+        // 9.99 × 1.000.000 (dulu 999 juta — dua-duanya dulu meledak 100x).
         const parts = s.split('.');
-        if (parts.length === 2 && parts[0] !== '' && parts[1].length > 0) {
-            const intPart = parseInt(parts[0], 10);
-            if (intl) {
-                // v3.9.55: aturan decimal internasional (lihat di atas).
-                if (parts[1].length >= 3) {
-                    s = s.replace(/\./g, ''); // grup ribuan ("$50.000")
-                }
-                // else: biarkan dot → decimal ("$2.50", "$9.99")
-            } else if (!isNaN(intPart) && intPart < 10 && parts[1].length === 1 && parts[1] !== '0') {
-                // Dot sebagai decimal (mis. "2.5", "9.9")
-                // biarkan
-            } else {
-                // Dot sebagai thousand separator
-                s = s.replace(/\./g, '');
-            }
+        if (parts.length === 2 && parts[0] !== '' && parts[1].length > 0 && parts[1].length <= 2) {
+            // Satu dot, pecahan 1-2 digit → DECIMAL — biarkan dot untuk parseFloat
+            // ("5.88", "2.50", "9.99", "0.99", "12.99")
         } else {
-            // Multiple dots (mis. "1.234.567") → thousand separator
+            // Pecahan 3 digit ("50.000", "5.880") atau multi-dot ("1.234.567")
+            // → grup ribuan: buang semua dot
             s = s.replace(/\./g, '');
         }
     }

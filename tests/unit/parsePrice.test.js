@@ -39,25 +39,26 @@ test('parsePrice: ID thousand separator (dot)', () => {
     assert.strictEqual(parsePrice('99.999'), 99999);
 });
 
-test('parsePrice: v3.9.8 FIX — ID format with 2-digit suffix', () => {
-    // v3.9.9 FIX: the heuristic was tightened again. "1.50" now → 150 (thousand),
-    // not 1.5 (decimal). For Rupiah, integer prices are far more common.
-    assert.strictEqual(parsePrice('1.50'), 150);
-    assert.strictEqual(parsePrice('10.50'), 1050);
-    assert.strictEqual(parsePrice('100.00'), 10000);
-    assert.strictEqual(parsePrice('99.99'), 9999);
+test('parsePrice v3.9.57: dot polos pecahan 2 digit = DESIMAL (bukan lagi ribuan)', () => {
+    // v3.9.8/9/17 dulu (era sentris-Rupiah): "1.50" → 150, "100.00" → 10000 —
+    // dot polos SELALU dibaca pemisah ribuan. v3.9.57 (permintaan user: "biar
+    // support harga desimal untuk add produk nya misal 5.88"): ribuan Indonesia
+    // yang SAH selalu grup 3 digit, jadi pecahan 1-2 digit tidak mungkin format
+    // Rupiah yang benar — kini dibaca desimal, konsisten dengan aturan
+    // berpenanda v3.9.55. Tulis 150 sebagai "150" dan 10000 sebagai "10.000".
+    assert.strictEqual(parsePrice('1.50'), 1.5);
+    assert.strictEqual(parsePrice('10.50'), 10.5);
+    assert.strictEqual(parsePrice('100.00'), 100);
+    assert.strictEqual(parsePrice('99.99'), 99.99);
 });
 
-test('parsePrice: actual decimal (only int < 10 + 1-digit fractional)', () => {
-    // v3.9.9: only int part < 10 AND a 1-digit fractional part → decimal.
-    // v3.9.55: cents DIPERTAHANKAN (stats currency-agnostic) — "2.5" → 2.5
-    // dan "9.9" → 9.9, tidak lagi dibulatkan ke 3 / 10.
+test('parsePrice: decimal kecil tanpa penanda (pecahan 1 digit)', () => {
+    // v3.9.9: int < 10 + 1-digit → decimal. v3.9.55: cents DIPERTAHANKAN
+    // (stats currency-agnostic) — "2.5" → 2.5 dan "9.9" → 9.9, tidak lagi
+    // dibulatkan ke 3 / 10. v3.9.57: aturan yang sama kini berlaku untuk
+    // pecahan 2 digit juga (lihat blok v3.9.57 di bawah).
     assert.strictEqual(parsePrice('2.5'), 2.5);
     assert.strictEqual(parsePrice('9.9'), 9.9);
-    // "9.99" tetap → 999 (ribuan), bukan 9.99 (desimal) — tanpa penanda, jadi
-    // heuristic sentris-Rupiah yang berlaku (harga Rupiah < 10 dengan 2 digit
-    // desimal sangat jarang). Dengan penanda, "$9.99" → 9.99 (v3.9.55 di bawah).
-    assert.strictEqual(parsePrice('9.99'), 999);
 });
 
 test('parsePrice: comma as thousand separator', () => {
@@ -266,13 +267,15 @@ test('parsePrice v3.9.55: grup dot 3 digit dengan penanda tetap RIBUAN', () => {
     assert.strictEqual(parsePrice('$2.5k'), 2500);
 });
 
-test('parsePrice v3.9.55: format Rp & lama tanpa penanda tidak berubah (no regression)', () => {
-    // Cabang Rp tidak pernah men-set intl — heuristic dot tetap sentris-Rupiah.
+test('parsePrice v3.9.55/57: format Rp & grup ribuan 3 digit tidak berubah', () => {
+    // Cabang Rp tidak tersentuh; grup dot 3 digit + multi-dot tetap ribuan.
     assert.strictEqual(parsePrice('Rp 2.5rb'), 2500);
     assert.strictEqual(parsePrice('Rp 25.000'), 25000);
     assert.strictEqual(parsePrice('50.000'), 50000);
-    assert.strictEqual(parsePrice('1.50'), 150);
-    assert.strictEqual(parsePrice('9.99'), 999);
+    // v3.9.57 (perubahan yang DISENGAJA): desimal polos — "1.50" kini 1.5
+    // (dulu 150) dan "9.99" kini 9.99 (dulu 999), konsisten dengan "$1.50".
+    assert.strictEqual(parsePrice('1.50'), 1.5);
+    assert.strictEqual(parsePrice('9.99'), 9.99);
     // Harga ganda dua mata uang tetap mencatat bagian Rp (v3.9.50, tidak berubah).
     assert.strictEqual(parsePrice('$2.5 USD | Rp 25.000'), 25000);
 });
@@ -287,12 +290,51 @@ test('parsePriceNumber v3.9.55 (midman): rekber tetap wajib angka bulat', () => 
     assert.strictEqual(mm.parsePriceNumber('$25,000'), 25000); // tetap sah
 });
 
-test('priceValidationError v3.9.55 (products): harga desimal valid', () => {
+test('priceValidationError v3.9.55/57 (products): harga desimal valid', () => {
     const products = require('../../src/commands/products');
     assert.strictEqual(products.priceValidationError('$2.5 USD'), null);
     assert.strictEqual(products.priceValidationError('$2.50'), null);
     assert.strictEqual(products.priceValidationError('€9.99'), null);
-    // Daftar format kini menampilkan contoh desimal.
+    // v3.9.57: desimal POLOS juga valid — tanpa penanda mata uang apa pun.
+    assert.strictEqual(products.priceValidationError('5.88'), null);
+    assert.strictEqual(products.priceValidationError('5,88'), null);
+    // Daftar format kini menampilkan contoh desimal (berpenanda + polos).
     const junkErr = products.priceValidationError('murah');
     assert.ok(junkErr.includes('$2.50'), 'daftar format menampilkan contoh desimal');
+    assert.ok(junkErr.includes('5.88'), 'daftar format menampilkan contoh desimal polos v3.9.57');
+});
+
+// ============ v3.9.57 — DESIMAL POLOS (permintaan user: "biar support harga desimal untuk add produk nya misal 5.88") ============
+// Aturan decimal v3.9.55 yang tadinya hanya berlaku dengan penanda mata uang
+// kini berlaku untuk input POLOS juga: satu dot dengan pecahan 1-2 digit =
+// desimal ("5.88" → 5.88, dulu terbaca 588 — salah 100x senyap), karena
+// penulisan ribuan Indonesia yang sah selalu grup 3 digit ("50.000").
+
+test('parsePrice v3.9.57: desimal POLOS didukung — "5.88" terbaca 5.88 (bukan 588)', () => {
+    // Format persis yang diminta user + varian penulisannya.
+    assert.strictEqual(parsePrice('5.88'), 5.88);
+    assert.strictEqual(parsePrice('5,88'), 5.88); // koma desimal — sudah benar sejak lama
+    assert.strictEqual(parsePrice('0.99'), 0.99);
+    assert.strictEqual(parsePrice('12.99'), 12.99);
+    assert.strictEqual(parsePrice('2.50'), 2.5);
+    // Suffix + desimal: kini konsisten dengan versi komanya, tidak lagi meledak 100x.
+    assert.strictEqual(parsePrice('1.50rb'), 1500); // dulu 150 × 1000 = 150.000
+    assert.strictEqual(parsePrice('1,50rb'), 1500); // versi koma — sudah benar sejak lama
+    assert.strictEqual(parsePrice('9.99jt'), 9990000); // dulu 999 × 1jt = 999 juta
+    // Penanda mata uang bekerja seperti sebelumnya (v3.9.55 tidak berubah).
+    assert.strictEqual(parsePrice('$5.88'), 5.88);
+    assert.strictEqual(parsePrice('5.88 usd'), 5.88);
+});
+
+test('parsePrice v3.9.57: ribuan sah & multi-dot TIDAK berubah (no regression)', () => {
+    // Grup 3 digit = ribuan — format Rupiah yang benar tetap terbaca sama.
+    assert.strictEqual(parsePrice('5.880'), 5880);
+    assert.strictEqual(parsePrice('50.000'), 50000);
+    assert.strictEqual(parsePrice('1.000.000'), 1000000);
+    assert.strictEqual(parsePrice('25,000'), 25000);
+    assert.strictEqual(parsePrice('5.000rb'), 5000000);
+    // Rekber tetap wajib angka bulat (tidak tersentuh v3.9.57).
+    const mm = require('../../src/data/midmanManager');
+    assert.strictEqual(mm.parsePriceNumber('5.88'), 0);
+    assert.strictEqual(mm.parsePriceNumber('$5.88'), 0);
 });
