@@ -2,7 +2,7 @@
 
 Bot Discord serbaguna untuk komunitas apa pun — server jualan, gaming, content creator, hingga komunitas umum. Semua konfigurasi dapat diatur langsung dari Discord melalui slash command, tanpa mengedit file.
 
-> **v3.9.57** · 91 slash command · 566 unit test · discord.js v14 · Node.js 18+ · single-guild
+> **v3.9.58** · 92 slash command · 577 unit test · discord.js v14 · Node.js 18+ · single-guild
 >
 > 📖 **[Panduan Admin Lengkap](./docs/ADMIN_GUIDE.md)** — setup, operasional harian, troubleshooting
 > 📜 **[Changelog](./CHANGELOG.md)** — riwayat semua versi
@@ -49,7 +49,7 @@ Bot Discord serbaguna untuk komunitas apa pun — server jualan, gaming, content
 
 - XP per pesan (cooldown anti-spam) + role reward per level + `/rank` + `/leaderboard-level`.
 - Stats server: jumlah member live, boost, tiket terbuka (langsung dari Discord) + aktivitas terlacak & transaksi. **Channel counter live** (`/serverstats`) — nama channelnya sendiri adalah counter yang ter-update otomatis (member, bot, boost, role, channel — **pilih mana yang mau ditampilkan** lewat opsi boolean), aman rate-limit. **Tampilan kategori `/help` adalah panduan lengkap per-command** — sintaks, perilaku + jawaban pertanyaan yang paling sering, biar member berhenti bertanya-tanya. Leaderboard messages/purchases/spending/wins; `/my-stats` menampilkan tanggal gabung asli.
-- **Server Booster:** notifikasi boost tambah/hilang ke channel booster khusus + catch-up offline + daftar `/boosters` publik (roster live + riwayat boost terbaru).
+- **Server Booster:** notifikasi boost tambah/hilang ke channel booster khusus + catch-up offline + daftar `/boosters` publik (roster live + riwayat boost terbaru) + **`/test-booster`** — simulasi boost tambah/hilang untuk mengetes rantai notifikasi end-to-end (simulasi murni, tidak ada yang dicatat).
 
 ### 🎭 Lainnya
 

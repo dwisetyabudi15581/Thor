@@ -50,9 +50,11 @@
 const {
     EmbedBuilder,
     MessageFlags,
+    PermissionFlagsBits,
     getUserStats,
     getTopUsersStats,
     getServerStatsAll,
+    getConfig,
     safeEditReply
 } = require('./_shared');
 
@@ -61,7 +63,8 @@ const { getActiveTicketCount } = require('../data/ticketManager');
 
 // v3.9.49: /boosters — daftar booster live + riwayat terlacak. Embed dibangun
 // di boostHandler (satu sumber kebenaran — builder yang sama dengan event live).
-const { buildBoostersEmbed } = require('../bot/boostHandler');
+// v3.9.58: /test-booster mem-preview builder add/remove yang SAMA (mustahil beda).
+const { buildBoostersEmbed, buildBoostAddEmbed, buildBoostRemoveEmbed } = require('../bot/boostHandler');
 const { getRecentEvents: getRecentBoostEvents } = require('../data/boostManager');
 
 module.exports = async function (interaction) {
@@ -141,6 +144,105 @@ module.exports = async function (interaction) {
         const recent = getRecentBoostEvents(guild.id, 5);
         const embed = buildBoostersEmbed(guild, boosters, recent);
         return safeEditReply(interaction, { embeds: [embed] });
+    }
+
+    // ====================================================
+    // === /test-booster (v3.9.58) ===
+    // ====================================================
+    // Versi /test-welcome milik fitur boost: admin TIDAK BISA mensimulasikan
+    // boost asli (bayar uang sungguhan), jadi command ini membuktikan seluruh
+    // rantainya bekerja — config → channel ada → izin bot — dan mengirim
+    // PREVIEW LIVE dari embed yang persis dikirim boost asli (builder
+    // buildBoostAddEmbed / buildBoostRemoveEmbed yang SAMA dengan event live —
+    // mustahil beda). SIMULASI MURNI: tidak ada yang dicatat — riwayat boost
+    // (/boosters), server log dan counter live tetap bersih, jadi aman
+    // dijalankan kapan saja. Opsi `live:true` SEKALIAN mengirim preview ke
+    // channel server-booster ASLI (tes pengiriman end-to-end penuh).
+    if (interaction.commandName === 'test-booster') {
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+        const tipe = interaction.options.getString('tipe'); // 'add' | 'remove'
+        const live = interaction.options.getBoolean('live') === true;
+        const guild = interaction.guild;
+        const config = getConfig();
+        const configuredId = config.channels['server-booster'];
+        const me = guild.members.me;
+
+        // --- diagnosis setiap mata rantai (pola v3.9.48) ---
+        const lines = [];
+        let channel = null;
+        if (!configuredId) {
+            lines.push(`❌ **channel server-booster: belum di-set** → perbaiki dengan \`/set-channel server-booster #channel\``);
+        } else {
+            channel = guild.channels.cache.get(configuredId);
+            if (!channel) {
+                lines.push(
+                    `❌ **channel server-booster: tidak ditemukan** (ID \`${configuredId}\`) — terhapus, atau ID-nya milik server lain → set ulang dengan \`/set-channel server-booster #channel\``
+                );
+            } else {
+                lines.push(`✅ **channel server-booster:** ${channel} (\`${channel.id}\`)`);
+                if (me) {
+                    const perms = channel.permissionsFor(me);
+                    const canSend = perms?.has?.(PermissionFlagsBits.SendMessages) ?? false;
+                    const canEmbed = perms?.has?.(PermissionFlagsBits.EmbedLinks) ?? false;
+                    const canView = perms?.has?.(PermissionFlagsBits.ViewChannel) ?? true;
+                    lines.push(
+                        `${canView ? '✅' : '❌'} View Channel · ${canSend ? '✅' : '❌'} Send Messages · ${canEmbed ? '✅' : '❌'} Embed Links (izin bot di channel itu)`
+                    );
+                    if (!canSend || !canEmbed) {
+                        lines.push('→ perbaiki: Server Settings → channel itu → tambahkan bot → aktifkan **Send Messages** + **Embed Links**');
+                    }
+                }
+            }
+        }
+        // Deteksi boost = diff premium_since guildMemberUpdate (Discord tidak
+        // punya event boost khusus) — bot yang online membuktikan intent
+        // GuildMembers menyala (intent privileged mati = login crash, tidak
+        // pernah jalan diam-diam).
+        lines.push('ℹ️ Deteksi boost: ✅ aktif (diff premium_since guildMemberUpdate — bot online = intent GuildMembers menyala)');
+        // State boost live sekarang — inilah yang berubah kalau boost ASLI masuk.
+        const boostCount = guild.premiumSubscriptionCount ?? 0;
+        lines.push(`ℹ️ Server sekarang: Level ${guild.premiumTier ?? 0} · ${boostCount} boost`);
+
+        // --- preview live: embed yang PERSIS dikirim boost asli ---
+        // interaction.member berperan sebagai "booster-nya". Untuk preview
+        // remove, awal streak = tanggal boost asli admin kalau sedang boost,
+        // selain itu disimulasikan masuk akal (3 hari lalu).
+        const simulatedSince = interaction.member?.premiumSinceTimestamp || Date.now() - 3 * 86400000;
+        const embed =
+            tipe === 'add'
+                ? buildBoostAddEmbed(interaction.member)
+                : buildBoostRemoveEmbed(interaction.member, simulatedSince);
+        let previewNote;
+        try {
+            await interaction.channel.send({
+                content: tipe === 'add' ? `<@${interaction.user.id}>` : undefined,
+                embeds: [embed]
+            });
+            previewNote = `🧪 Preview terkirim ke **channel ini** — ${tipe === 'add' ? 'notifikasi boost' : 'pemberitahuan boost selesai'} yang asli masuk ke ${channel ? channel : 'channel server-booster yang kamu set'}. Data kamu dipakai sebagai "booster-nya".`;
+        } catch (sendErr) {
+            previewNote = `⚠️ Preview GAGAL terkirim ke channel ini: ${sendErr.message}\nCek izin Send Messages + Embed Links bot DI SINI juga — kemungkinan channel server-booster punya masalah yang sama.`;
+        }
+
+        // --- opsional kirim asli: channel ASLI, tetap simulasi ---
+        if (live) {
+            if (channel) {
+                try {
+                    await channel.send({
+                        content: tipe === 'add' ? `<@${interaction.user.id}>` : undefined,
+                        embeds: [embed]
+                    });
+                    lines.push(`🧪 Kirim asli: ✅ juga terkirim ke channel server-booster ASLI — seluruh rantai bekerja end-to-end.`);
+                } catch (err) {
+                    lines.push(`🧪 Kirim asli: ❌ gagal di channel server-booster: ${err.message} — cek izin Send Messages + Embed Links bot di sana.`);
+                }
+            } else {
+                lines.push('🧪 Kirim asli: dilewati — channel server-booster belum di-set (atau terhapus). Perbaiki dulu yang di atas.');
+            }
+        }
+
+        return safeEditReply(interaction, {
+            content: `${lines.join('\n')}\n\n${previewNote}\n\n🧪 **Simulasi saja** — tidak ada yang dicatat: riwayat boost (\`/boosters\`), server log dan counter live tetap bersih.`
+        });
     }
 
     // ====================================================

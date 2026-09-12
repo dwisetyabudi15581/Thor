@@ -611,7 +611,7 @@ test('KONTRAK registry/router: /serverstats terdaftar dengan 3 subcommand, admin
     resetManager();
     const { getCommands } = require('../../src/commands/registry');
     const cmds = getCommands();
-    assert.strictEqual(cmds.length, 91, '91 command (90 + /serverstats)');
+    assert.strictEqual(cmds.length, 92, '92 command (91 + /test-booster v3.9.58)');
 
     const cmd = cmds.find(c => c.name === 'serverstats');
     assert.ok(cmd, '/serverstats ada di registry');

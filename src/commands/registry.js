@@ -1140,6 +1140,36 @@ function getCommands() {
             name: 'boosters',
             description: 'Daftar server booster saat ini + riwayat boost terbaru (public)'
         },
+        // v3.9.58 (permintaan user: "command test booster"): versus /test-welcome
+        // milik fitur boost — admin tidak bisa mensimulasikan boost asli
+        // (bayar uang sungguhan), jadi command ini membuktikan seluruh rantai
+        // notifikasi bekerja: config → channel → izin bot, plus PREVIEW LIVE
+        // dari embed yang persis dikirim event asli (builder yang sama dengan
+        // boostHandler — mustahil beda). SIMULASI MURNI: tidak ada yang dicatat
+        // — riwayat boost (/boosters), server log dan counter live tetap bersih.
+        {
+            name: 'test-booster',
+            description: 'Diagnosis & preview notifikasi boost tambah/selesai (cek kenapa tidak muncul)',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
+            options: [
+                {
+                    type: 3,
+                    name: 'tipe',
+                    description: 'Mana yang mau dites',
+                    required: true,
+                    choices: [
+                        { name: 'Boost ditambahkan', value: 'add' },
+                        { name: 'Boost selesai', value: 'remove' }
+                    ]
+                },
+                {
+                    type: 5,
+                    name: 'live',
+                    description: 'Sekalian kirim preview ke channel server-booster ASLI (tes pengiriman)',
+                    required: false
+                }
+            ]
+        },
         // v3.9.51: channel counter server stats live (pengalaman "bot
         // ServerStats"): NAMA channel adalah counter yang ter-update sendiri
         // (member, bot, boost, role, channel). setup/remove/refresh — lihat

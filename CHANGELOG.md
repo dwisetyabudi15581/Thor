@@ -5,6 +5,16 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 Legend: 🔴 critical · 🟠 high · 🟡 medium · 🟢 improvement
 
+## [3.9.58] — 2026-09-12
+
+### Added — 🧪 permintaan user: "command test booster"
+
+- 🟢 **BARU `/test-booster` (command ke-92, admin) — versi `/test-welcome` milik fitur boost.** Admin tidak bisa mensimulasikan boost asli (bayar uang sungguhan), jadi sebelum ini seluruh rantai notifikasi tidak bisa dites sampai ada booster beneran. `/test-booster tipe:add` (atau `tipe:remove`) sekarang mendiagnosis **setiap mata rantai** — channel server-booster di-set → ada → izin View/Send/Embed bot — dan mengirim **preview live dari embed yang PERSIS** dikirim boost asli (builder `buildBoostAddEmbed`/`buildBoostRemoveEmbed` yang sama dengan event live — mustahil beda), dengan data kamu sendiri berperan sebagai "booster". Reply-nya juga menampilkan state boost live (level + jumlah) dan catatan intent (deteksi boost = diff premium_since guildMemberUpdate; bot yang online membuktikan intent GuildMembers menyala).
+- 🟢 **Opsi `live:true` — tes pengiriman end-to-end penuh.** Sekalian mengirim preview ke **channel server-booster ASLI**, membuktikan embed-nya benar-benar sampai ke tujuan notifikasi asli. Tanpa opsi ini tidak ada yang dikirim ke sana; dengan channel rusak/hilang, kirim asli dilewati dengan alasan jelas (tidak pernah crash).
+- 🟢 **SIMULASI MURNI — tidak ada yang dicatat.** Riwayat boost (`/boosters`), server log dan counter live tak tersentuh — command-nya aman dijalankan kapan saja, dan unit test mem-pin `boosts.json` byte-identik setelah run add + remove + live.
+- 🟢 **`/help` diperbarui (aman budget):** daftar baris kompak Statistik kini memuat `/test-booster` (baris dikompak supaya embed Semua Command tetap **5.766/5.800** — 20 kategori utuh), panduan Statistik menjelaskan command-nya + `live:true`, dan FAQ Log & Channel kini mengarah ke `/test-booster` untuk channel boost.
+- 🟢 **+11 unit test (total 577):** kontrak registry (pilihan, ManageGuild, boolean opsional), mapping router, diagnosis semua-sehat + preview pink dengan konten mention, remove → embed abu-abu tanpa mention, diagnosis channel-belum-di-set / ID-ghost / izin-kurang, pengiriman `live:true` + jalur dilewati, dan guard kemurnian boosts.json.
+
 ## [3.9.57] — 2026-09-12
 
 ### Fixed — 💬 permintaan user: "biar support harga desimal untuk add produk nya misal 5.88"

@@ -196,6 +196,8 @@ const COMMAND_TO_DOMAIN = {
     'my-stats': 'stats',
     // v3.9.49: daftar server booster (live + riwayat)
     boosters: 'stats',
+    // v3.9.58: diagnosis notifikasi boost + preview live (simulasi)
+    'test-booster': 'stats',
 
     // poll
     poll: 'poll',

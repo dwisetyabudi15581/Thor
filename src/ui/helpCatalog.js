@@ -291,7 +291,7 @@ const HELP_CATEGORIES = [
             '• `tipe:invoice` — invoice pembelian (satu per order selesai).',
             '• `tipe:server-booster` — 🚀 boost mulai/berhenti diumumkan otomatis sebagai embed pink, dan SELALU tercatat di log server + riwayat boost walau channel ini belum diatur.',
             '• `/remove-channel tipe` — matikan salah satu (event yang relevan tetap mengalir ke server log).',
-            '❓ **Sudah di-set tapi tidak ada yang masuk?** Jalankan `/test-welcome` untuk welcome/goodbye, atau cek permission View + Send + Embed bot di channel itu.',
+            '❓ **Sudah di-set tapi tidak ada yang masuk?** Jalankan `/test-welcome` untuk welcome/goodbye, `/test-booster` untuk boost, atau cek permission View + Send + Embed bot di channel itu.',
             '❓ **Channelnya terhapus?** Set ulang dengan `/set-channel` — ID channel mati terdeteksi dan dilaporkan saat startup.'
         ]
     },
@@ -522,11 +522,13 @@ const HELP_CATEGORIES = [
         // v3.9.51: + /serverstats (channel counter live). Baris dikompak supaya
         // embed Semua Command tetap dalam budget 5800 dengan 20 kategori utuh
         // (diukur ulang setiap kali baris berubah).
+        // v3.9.58: + /test-booster — baris stats dikompak lagi supaya muat.
         lines: [
-            '• `/stats` — statistik live server + aktivitas terlacak',
-            '• `/serverstats` — channel counter live (member/boost)',
-            '• `/boosters` — booster saat ini + riwayat',
-            '• `/leaderboard` — peringkat (pesan/belanja/menang)',
+            '• `/stats` — statistik server live',
+            '• `/serverstats` — channel counter live',
+            '• `/boosters` — booster + riwayat',
+            '• `/test-booster` — tes notifikasi boost + preview',
+            '• `/leaderboard` — peringkat top-10',
             '• `/my-stats` — pesan & transaksi kamu'
         ],
         // v3.9.53: panduan lengkap mandiri (tampilan kategori = detail saja) —
@@ -539,6 +541,7 @@ const HELP_CATEGORIES = [
             '• Update otomatis: member join/left, boost mulai/berhenti, channel & role dibuat/dihapus. Aman rate limit (Discord izinkan 2 rename per channel / 10 menit — update di-throttle + self-heal tiap ±5 menit). Counter terhapus dikasih peringatan; semua hilang → mati otomatis.',
             '',
             '**Notifikasi boost:** member mulai/berhenti boost → embed pink dikirim otomatis ke channel server-booster (`/set-channel tipe:server-booster #ch`), selalu tercatat di log server + riwayat `/boosters`.',
+            '• **Tes sendiri (v3.9.58):** `/test-booster tipe:add` (atau `tipe:remove`) — cek seluruh rantainya (channel di-set → ada → izin bot), preview embed PERSIS di sini, dan dengan `live:true` sekalian kirim ke channel aslinya. Simulasi murni — tidak ada yang dicatat.',
             '',
             '**Angka & peringkat**',
             '• `/stats` — ringkasan server: member live, boost, tiket terbuka + aktivitas terlacak (pesan, transaksi). Tanpa baris revenue — belanja bersifat pribadi.',

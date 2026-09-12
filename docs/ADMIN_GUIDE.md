@@ -1,4 +1,4 @@
-# 📖 Admin Guide — Thor Bot v3.9.57
+# 📖 Admin Guide — Thor Bot v3.9.58
 
 Panduan lengkap untuk admin server Discord yang menjalankan bot ini — cocok untuk admin baru yang pertama kali setup, maupun admin yang sudah berjalan sebagai referensi harian.
 
@@ -91,7 +91,7 @@ Urutan berikut adalah **rekomendasi** untuk server baru. Lewati langkah yang sud
 - `invoice` — channel testimoni transaksi (otomatis terisi setiap Set Key / Kirim Pesanan / Pesanan Sukses — **sekali per tiket**, tidak dobel)
 - `audit-log` — channel tempat bot mencatat SEMUA admin action (63 action types; dikirim ulang 1x otomatis bila gagal karena rate limit/network)
 - `transcript` — channel arsip transcript tiket (chat history tersimpan otomatis setiap tiket di-close)
-- `server-booster` — (v3.9.49, opsional) channel notifikasi boost: embed pink `🚀 BOOST SERVER BARU!` saat member mulai boost, abu-abu `💔 BOOST BERAKHIR` saat berhenti, plus SATU embed catch-up gabungan saat startup untuk perubahan yang terjadi saat bot offline. Boost juga SELALU tercatat di **server log**. Tanpa channel ini `/boosters` tetap jalan — hanya notifikasinya yang mati.
+- `server-booster` — (v3.9.49, opsional) channel notifikasi boost: embed pink `🚀 BOOST SERVER BARU!` saat member mulai boost, abu-abu `💔 BOOST BERAKHIR` saat berhenti, plus SATU embed catch-up gabungan saat startup untuk perubahan yang terjadi saat bot offline. Boost juga SELALU tercatat di **server log**. Tanpa channel ini `/boosters` tetap jalan — hanya notifikasinya yang mati. **Mau ngetesnya tanpa nunggu boost beneran?** Jalankan `/test-booster tipe:add` (v3.9.58) — diagnosis seluruh rantai + preview embed yang persis; tambah `live:true` untuk sekalian kirim preview ke channel ini. Simulasi murni, tidak ada yang dicatat.
 
 > 📊 **Counter server stats live (v3.9.51, opsional):** `/serverstats setup` membuat kategori `📊 STATISTIK SERVER` di PALING ATAS daftar channel berisi channel display-only yang NAMANYA counter live — `👥 Member: 123`, `🤖 Bot: 2`, `🚀 Boost: 5`, `🎭 Role: 9`, `📺 Channel: 12` — pengalaman "bot ServerStats" tanpa bot lain. **v3.9.53: pilih counter mana yang mau ditampilkan** — opsi boolean `members`/`bots`/`boosts`/`roles`/`channels` semuanya AKTIF default; set ke False untuk melewatinya (semua-False ditolak). Ter-update otomatis saat ada perubahan member/boost/role/channel (aman rate-limit: angka yang tidak berubah = nol panggilan API, dan tiap channel paling banyak di-rename sekali per 5 menit — limit Discord 2x per 10 menit). Kelola dengan `/serverstats refresh` (paksa update sekarang) dan `/serverstats remove` (hapus semuanya — lalu `setup` lagi untuk mengubah pilihan). Bot butuh **Manage Channels + Manage Roles** untuk setup-nya.
 
@@ -1027,9 +1027,11 @@ Cooldown bersifat **per-user** — user A memicu tidak memengaruhi user B.
 
 ## 11. Riwayat Versi
 
-Riwayat lengkap semua versi (v3.9.0 – v3.9.57) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
+Riwayat lengkap semua versi (v3.9.0 – v3.9.58) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
 
 Ringkasan semua versi:
+
+- **v3.9.58** (2026-09-12) — 🧪 **permintaan user: "command test booster"**. BARU **`/test-booster`** (command ke-92, admin): versi `/test-welcome` milik fitur boost — admin tidak bisa mensimulasikan boost asli (bayar uang sungguhan), jadi command ini membuktikan seluruh rantai notifikasi bekerja: channel server-booster di-set → ada → izin View/Send/Embed bot, plus **preview live dari embed yang persis** dikirim boost asli (builder yang sama dengan event live — mustahil beda). `tipe:add` → preview pink 🚀 dengan mention; `tipe:remove` → preview abu-abu 💔. Opsi `live:true` SEKALIAN mengirim preview ke channel server-booster ASLI — tes pengiriman end-to-end penuh. **Simulasi murni — tidak ada yang dicatat** (riwayat boost, server log dan counter tetap bersih). +11 unit test (total **577**).
 
 - **v3.9.57** (2026-09-12) — 💬 **permintaan user: "biar support harga desimal untuk add produk nya misal 5.88"**. Desimal POLOS kini didukung: `5.88` → tercatat **5.88** (dulu terbaca 588 — salah 100x senyap; admin terpaksa menulis `$5.88` atau `5,88`). Satu dot dengan pecahan 1-2 digit kini selalu desimal — dengan atau tanpa penanda mata uang — karena penulisan ribuan Indonesia yang sah selalu grup 3 digit (`50.000`). Pecahan 3 digit & multi-dot tetap ribuan; rekber tetap wajib angka bulat; cheat sheet penulisan harga ditambahkan di Step 4. +3 unit test (total **566**).
 
@@ -1080,6 +1082,6 @@ Jika ada masalah yang tidak ada di Troubleshooting:
 
 ---
 
-**Versi dokumen:** v3.9.57
+**Versi dokumen:** v3.9.58
 **Last updated:** 12 September 2026
-**Bot version:** 3.9.57 · 91 slash command · 566 unit test
+**Bot version:** 3.9.58 · 92 slash command · 577 unit test
