@@ -8,15 +8,15 @@
 
 const { Events, AuditLogEvent } = require('discord.js');
 const { logServerEvent, findAuditExecutor, snip } = require('../../infra/serverLog');
-// v3.11.0: guard allowlist multi-guild (fase 2).
+// v3.12.0: guard GUILD_ID tunggal (mode 1 server / mode publik).
 const { isGuildAllowed } = require('../../infra/guild');
 
 async function onEvent(ban) {
     try {
         const { guild, user, reason } = ban;
         if (!guild?.id) return;
-        // v3.11.0: guard allowlist — guild di luar ALLOWED_GUILD_IDS (fallback
-        // GUILD_ID) diabaikan; daftar kosong = mode terbuka (semua guild diproses).
+        // v3.12.0: guard GUILD_ID tunggal — guild yang tidak cocok dengan
+        // GUILD_ID di .env diabaikan; GUILD_ID kosong = mode publik (semua guild).
         if (!isGuildAllowed(guild.id)) return;
 
         // Executor + reason resmi dari audit log (reason param event sering null

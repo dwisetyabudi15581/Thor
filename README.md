@@ -2,7 +2,7 @@
 
 Bot Discord serbaguna untuk komunitas apa pun — server jualan, gaming, content creator, hingga komunitas umum. Semua konfigurasi dapat diatur langsung dari Discord melalui slash command, tanpa mengedit file.
 
-> **v3.11.0** · 92 slash command · 613 unit test · discord.js v14 · Node.js 18+ · multi-guild (allowlist)
+> **v3.12.0** · 92 slash command · 616 unit test · discord.js v14 · Node.js 18+ · mode 1 server / publik (ala Dyno)
 >
 > 📖 **[Panduan Admin Lengkap](./docs/ADMIN_GUIDE.md)** — setup, operasional harian, troubleshooting
 > 📜 **[Changelog](./CHANGELOG.md)** — riwayat semua versi
@@ -115,15 +115,15 @@ npm install
 
 # 3. Siapkan environment
 cp .env.example .env
-# Isi .env:
+# Isi .env (SATU tempat mengatur server — ganti server = ganti baris ini):
 #   DISCORD_TOKEN=token_bot_anda
-#   GUILD_ID=id_server_discord_anda
-
+#   GUILD_ID=id_server_discord_anda   ← kosongkan untuk mode publik (ala Dyno)
+#
 # 4. Jalankan bot
 npm start
 ```
 
-Registrasi slash command berlangsung instan ke guild yang ditentukan `GUILD_ID`. Untuk development dengan auto-restart: `npm run dev`.
+Registrasi slash command berlangsung instan ke guild yang ditentukan `GUILD_ID`. Kalau `GUILD_ID` dikosongkan, bot jalan **mode publik ala Dyno**: command didaftarkan global dan muncul otomatis di semua server yang meng-invite bot (±1 jam propagasi) — tanpa memasukkan guild id manual di mana pun. Untuk development dengan auto-restart: `npm run dev`.
 
 ### Konfigurasi Awal (setelah bot online)
 
@@ -153,7 +153,7 @@ Panduan lengkap termasuk contoh produk, kategori custom, dan operasional harian:
 | ---------------- | -------------------------------------- |
 | `npm start`      | Jalankan bot                           |
 | `npm run dev`    | Jalankan dengan nodemon (auto-restart) |
-| `npm test`       | Jalankan semua unit test (436 test)    |
+| `npm test`       | Jalankan semua unit test (616 test)    |
 | `npm run lint`   | ESLint check                           |
 | `npm run format` | Prettier format semua file             |
 
@@ -168,7 +168,7 @@ Test memakai `node:test` bawaan Node.js v18+ — tidak perlu dependensi tambahan
 - **Karantina file korup** — file data gagal parse di-rename `.corrupt-<ts>`, tidak pernah tertimpa diam-diam.
 - **TOCTOU guard** — `userLock` mencegah double-process saat user double-click.
 - **Audit log** — key selalu dimasking; semua admin action tercatat.
-- **Multi-guild (v3.10.0)** — config kini per-server: `data/config/<guildId>.json`. Admin server A tidak bisa menimpa setting server B. Data layer lain (key, warn, stats, ticket, deal) sudah guild-scoped sejak awal. Guard `GUILD_ID` opsional: di-set = mode single-guild (abaikan server lain), kosong = mode multi-guild penuh.
+- **Mode 1 server / publik — SATU variabel `GUILD_ID` (v3.12.0)** — `GUILD_ID` terisi: command instan + event dari server lain diabaikan (asuransi kalau bot tak sengaja ter-invite). `GUILD_ID` kosong: **mode publik ala Dyno** — command global, muncul otomatis di semua server yang meng-invite bot, dan config terisolasi per-server (`data/config/<guildId>.json`) — admin server A tidak bisa menimpa setting server B. Panduan membuka bot ke publik: [docs/ADMIN_GUIDE.md → Mode Publik](./docs/ADMIN_GUIDE.md).
 
 ---
 
@@ -180,7 +180,7 @@ Cek `DISCORD_TOKEN` di `.env` dan pastikan bot sudah di-invite ke server dengan 
 
 ### Slash command tidak muncul
 
-Pastikan `GUILD_ID` benar (server ID, bukan user ID) dan bot adalah member guild itu. Restart bot — registrasi ulang instan.
+Pastikan `GUILD_ID` benar (server ID, bukan user ID) dan bot adalah member guild itu. Restart bot — registrasi ulang instan. Catatan: kalau `GUILD_ID` dikosongkan (mode publik), registrasi GLOBAL memerlukan ±1 jam propagasi Discord — command tidak instan, itu normal.
 
 ### Permission error
 

@@ -1,4 +1,4 @@
-# 📖 Admin Guide — Thor Bot v3.11.0
+# 📖 Admin Guide — Thor Bot v3.12.0
 
 Panduan lengkap untuk admin server Discord yang menjalankan bot ini — cocok untuk admin baru yang pertama kali setup, maupun admin yang sudah berjalan sebagai referensi harian.
 
@@ -19,6 +19,7 @@ Panduan lengkap untuk admin server Discord yang menjalankan bot ini — cocok un
 9. [Troubleshooting](#9-troubleshooting)
 10. [Best Practices](#10-best-practices)
 11. [Riwayat Versi](#11-riwayat-versi)
+12. [Mode Publik ala Dyno + Developer Portal](#12-mode-publik-ala-dyno--developer-portal-fase-3)
 
 ---
 
@@ -47,10 +48,10 @@ npm start
 
 - Console menampilkan: `✅ Bot online sebagai NamaBot`
 - Console menampilkan: `✅ Slash Commands terdaftar ke guild: Nama Server (instan!)`
-- Di Discord, ketik `/` — semua **91 slash command** harus muncul
+- Di Discord, ketik `/` — semua **92 slash command** harus muncul
 - Jika command tidak muncul, pastikan `GUILD_ID` di `.env` benar
 
-> 🌍 **Multi-Guild (v3.10.0 + v3.11.0)** — config bot **per-server** (`data/config/<guildId>.json`): admin server A tidak bisa menimpa setting server B. Mode sekarang dikontrol **allowlist** di `.env`: (1) `ALLOWED_GUILD_IDS=111...,222...` = hanya server terdaftar yang diproses — command terdaftar **per-guild (INSTAN)** di tiap server terdaftar, server di luar daftar bahkan tidak melihat command-nya; (2) tanpa `ALLOWED_GUILD_IDS` tapi `GUILD_ID` di-set = perilaku lama single-guild (tidak berubah apa pun); (3) keduanya kosong = **mode terbuka** (semua server yang meng-invite diproses, command global ±1 jam). Config lama `data/config.json` dimigrasi otomatis saat guild yang sah pertama kali membacanya (file lama di-rename `config.json.migrated` — tidak dihapus). Mau invite bot ke server kedua? Invite bot ke server itu, tambahkan ID-nya ke `ALLOWED_GUILD_IDS`, restart — admin server itu menjalankan `/set-role admin` sendiri dan semua konfigurasi mereka terpisah dari server Anda.
+> 🌍 **SATU GUILD ID (v3.12.0)** — semua perilaku server dikontrol **SATU baris** di `.env`: `GUILD_ID`. **Terisi** = mode 1 server (default): slash command terdaftar **instan** ke server itu, dan event dari server lain (pesan/join/boost/tiket) diabaikan — asuransi kalau bot tak sengaja ter-invite. **Kosong** = **mode publik ala Dyno**: command global (muncul otomatis di semua server yang meng-invite, ±1 jam), config **per-server** `data/config/<guildId>.json` — admin server A tidak bisa menimpa setting server B. Config lama `data/config.json` dimigrasi otomatis saat guild yang sah pertama kali membacanya (file lama di-rename `config.json.migrated` — tidak dihapus). Ganti server = ganti satu baris itu, titik. Mau membuka bot ke publik? Lihat [Section 12 — Mode Publik ala Dyno + Developer Portal](#12-mode-publik-ala-dyno--developer-portal-fase-3).
 
 > 💡 **Lupa command apa namanya?** Ketik `/help` — sejak v3.9.39 ini **navigator interaktif** (bukan lagi satu embed panjang yang harus di-scroll), dan sejak **v3.9.44** katalognya disusun ulang jadi **20 kategori diurut prioritas pemakaian**: 🏠 home kini membuka dengan seksi **"Butuh apa sekarang?"** (member nakal? → Moderasi · mau jualan? → Panduan Cepat · mau pantau? → Log & Channel · server sepi? → Giveaway & Leveling), 📂 **dropdown kategori** untuk melompat, 🔍 **Cari Command** untuk kata kunci bebas (`key`, `panel`, `warn`...), atau langsung `/help search:<kata kunci>`. Sejak **v3.9.53 SEMUA tampilan kategori adalah panduan lengkap mandiri** — sintaks + perilaku per-command + jawaban ❓ pertanyaan yang paling sering ditanya member (daftar 📖 Semua Command tetap ringkas supaya selalu muat dalam satu embed). Semua navigasi terjadi di satu pesan ephemeral — tidak memenuhi channel.
 
@@ -1031,11 +1032,12 @@ Cooldown bersifat **per-user** — user A memicu tidak memengaruhi user B.
 
 ## 11. Riwayat Versi
 
-Riwayat lengkap semua versi (v3.9.0 – v3.11.0) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
+Riwayat lengkap semua versi (v3.9.0 – v3.12.0) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
 
 Ringkasan semua versi:
 
-- **v3.11.0** (2026-09-12) — 🛡️ **FASE 2 MULTI-GUILD: allowlist `ALLOWED_GUILD_IDS`**. Daftar ID server (dipisah koma) yang boleh memakai bot — prioritas `ALLOWED_GUILD_IDS` > `GUILD_ID` > keduanya kosong (mode terbuka). Semua 11 event handler berganti ke guard allowlist (`isGuildAllowed()`); registrasi slash command kini **per-guild untuk SEMUA server allowlist sekaligus** (instan, dan server di luar daftar tidak melihat command sama sekali); startup (cek channel, catch-up boost, sinkron server-stats) kini berjalan untuk setiap guild allowlist (dulu cuma guild pertama); gerbang klaim config legacy ikut allowlist (allowlist tunggal → hanya guild itu yang bisa klaim). **.env lama tidak perlu diubah** — tanpa `ALLOWED_GUILD_IDS`, `GUILD_ID` otomatis jadi allowlist satu entri. +15 unit test (total **613**).
+- **v3.12.0** (2026-09-12) — 🎯 **SATU GUILD ID + FASE 3: MODE PUBLIK (ala Dyno)**. `.env` kini hanya punya **satu variabel server: `GUILD_ID`** — allowlist `ALLOWED_GUILD_IDS` (v3.11.0) dihapus total (anti bingung: ganti server = ganti satu baris). **Terisi** = mode 1 server (command instan, event server lain diabaikan); **kosong** = mode publik ala Dyno/MEE6 (command global — muncul otomatis di semua server ±1 jam, tanpa guild id manual). `src/infra/guild.js` disederhanakan (`getPrimaryGuildId()`); gerbang klaim config legacy + registrasi command + startup mengikuti; log skip join/leave kini menyebut `GUILD_ID`. Docs: seksi baru **12 — Mode Publik + Developer Portal** (cara kerja Dyno, OAuth2 URL + scope `applications.commands`, verifikasi Discord 100 server, checklist keamanan). Test `guildGuard.test.js` rewrite + 3 PIN ANTI-BINGUNG (allowlist tak boleh muncul lagi; `.env.example` satu variabel; kontrak ekspor). +3 test (total **616**).
+- **v3.11.0** (2026-09-12) — 🛡️ **FASE 2 MULTI-GUILD: allowlist `ALLOWED_GUILD_IDS`**. Daftar ID server (dipisah koma) yang boleh memakai bot — prioritas `ALLOWED_GUILD_IDS` > `GUILD_ID` > keduanya kosong (mode terbuka). Semua 11 event handler berganti ke guard allowlist (`isGuildAllowed()`); registrasi slash command kini **per-guild untuk SEMUA server allowlist sekaligus** (instan, dan server di luar daftar tidak melihat command sama sekali); startup (cek channel, catch-up boost, sinkron server-stats) kini berjalan untuk setiap guild allowlist (dulu cuma guild pertama); gerbang klaim config legacy ikut allowlist (allowlist tunggal → hanya guild itu yang bisa klaim). +15 unit test (total **613**). *Catatan v3.12.0: fitur ini digantikan konfigurasi satu `GUILD_ID`.*
 - **v3.10.0** (2026-09-12) — 🌍 **FASE 1 MULTI-GUILD: config per-server**. `data/config.json` global (dipakai bersama semua server yang meng-invite bot — admin server A menimpa setting server B) diganti **`data/config/<guildId>.json`** — satu file per server. Migrasi otomatis satu kali saat bot start (file lama jadi `config.json.migrated`). API internal `getConfig/saveConfig/setField` kini wajib `guildId` (fail-fast) via helper baru `resolveGuildId()`; cache admin-role permission jadi per-guild (dulu global — role admin server A terbaca server B); backup/restore mendukung folder `config/` recursive + backward-compat backup lama. 57 call site di 24 file src + 19 file test di-update; total tetap **598 test** hijau. `GUILD_ID` kosong = mode multi-guild penuh; server yang sekarang single-server tidak berubah apa pun.
 
 - **v3.9.60** (2026-09-12) — 🧪 **audit subsistem backup/restore (code review)**. Perbaikan 3 bug nyata: (1) **modlogs.json tidak pernah di-backup** — sejak v3.9.43 riwayat moderasi (timeout/kick/ban yang ditampilkan `/warn-list`) senyap tidak ikut `/backup-now` dan hilang oleh `/restore-backup`; file kini masuk FILES_TO_BACKUP dan dipaten regression test bebas environment (cross-check registry 20 file). (2) **Penimpaan cache basi pasca-restore untuk boosts.json** — store in-memory permanen boostManager tidak pernah di-invalidate setelah restore, jadi event boost pertama menimpa riwayat hasil restore; `reload()` kini dipanggil di alur restore (modLogManager juga). (3) **`npm test` merah di setiap fresh clone/CI** — GUARD test mengasumsikan file data runtime ada; fresh checkout kini melewatkan scan itu dan jaminannya pindah ke regression test baru. +3 unit test (total **598**). Tanpa command baru, tanpa perubahan config — data v3.9.59 kompatibel penuh.
@@ -1080,6 +1082,57 @@ Ringkasan semua versi:
 
 ---
 
+## 12. Mode Publik ala Dyno + Developer Portal (Fase 3)
+
+> 🌍 **Satu variabel, dua mode (v3.12.0).** Seluruh perilaku server bot dikontrol SATU baris di `.env` — `GUILD_ID`. Terisi = mode 1 server (command instan, event server lain diabaikan). Kosong = **mode publik**: bot melayani SEMUA server yang meng-invite-nya, dengan data & config terisolasi per-server. Ini penutup fondasi multi-guild: Fase 1 (v3.10.0) = data per-server, Fase 2 (v3.11.0) = pilihan mode (kini disederhanakan jadi satu `GUILD_ID`).
+
+### Bagaimana bot seperti Dyno bisa mendaftarkan slash command tanpa guild id?
+
+Bot publik besar (Dyno, MEE6, Carl-bot) memakai **global application commands**: command didaftarkan SEKALI ke *aplikasi* (bukan ke server tertentu), lalu Discord otomatis menampilkannya di setiap server yang meng-invite bot. Tidak ada guild id yang perlu dimasukkan manual — baik saat development maupun saat server baru bergabung.
+
+- **Registrasi global** memakai endpoint aplikasi (tanpa guild id sama sekali); Discord mempropagasi command ke semua server dalam waktu hingga ±1 jam. Inilah mengapa slash command Dyno "sudah ada" begitu bot di-invite.
+- **Registrasi guild-scoped** (yang dipakai mode 1 server bot ini) hanya unggul satu hal: **INSTAN** (hitungan detik) — cocok untuk server sendiri / development.
+- **Setting per-server:** Dyno tidak menyimpan guild id di config manual. ID server ditangkap otomatis dari event Discord (`interaction.guildId`, `message.guildId`), lalu setting tiap server disimpan di database mereka dengan ID server sebagai key. Admin server baru tinggal menjalankan command setup di server mereka — data mereka terisi sendiri.
+
+Thor memakai arsitektur yang sama persis sejak v3.10.0: `GUILD_ID` dikosongkan → registrasi global otomatis (lihat log `ℹ️ GUILD_ID kosong — MODE PUBLIK` saat startup), dan config tiap server disimpan di `data/config/<guildId>.json` yang terisi sendiri saat admin server itu menjalankan `/set-role` / `/set-channel`. Jadi "menjadi Dyno" = **cukup kosongkan `GUILD_ID`** + ikuti langkah Developer Portal di bawah.
+
+### Langkah membuka bot ke publik
+
+1. **`.env`: kosongkan `GUILD_ID`** (atau hapus barisnya) → restart bot. Console mencatat mode publik dan mendaftarkan command global.
+2. **Developer Portal** (discord.com/developers/applications → pilih aplikasi bot → tab **Bot**):
+   - **Public Bot: ON** — tanpa ini hanya Anda yang bisa meng-invite bot.
+   - **Require OAuth2 Code Grant: OFF** (default).
+   - Privileged Intents tetap ON seperti biasa (**SERVER MEMBERS INTENT** + **MESSAGE CONTENT INTENT**) — bot butuh keduanya untuk welcome/leveling/AFK/automod.
+3. **Buat link invite** (tab **OAuth2 → URL Generator**):
+   - Scopes: centang **`bot`** DAN **`applications.commands`** — scope kedua WAJIB supaya slash command global ikut terpasang di server yang meng-invite (tanpanya command tidak muncul walau bot masuk).
+   - Bot Permissions (least privilege, sesuai fitur yang dipakai): View Channels, Send Messages, Embed Links, Attach Files, Read Message History, Manage Messages, Manage Roles, Manage Channels, Kick Members, Ban Members, Moderate Members, Connect, Speak, Move Members.
+   - Copy URL yang dihasilkan — itu link invite publik bot Anda. Format dasarnya:
+     `https://discord.com/api/oauth2/authorize?client_id=<APP_ID>&scope=bot+applications.commands&permissions=<ANGKA>`
+4. **Tes dengan server kedua** (bukan server utama): invite lewat URL itu, tunggu propagasi global (±1 jam), lalu admin server kedua menjalankan `/set-role admin` + `/set-channel ...` — semua tercatat ke config server mereka sendiri, tidak menyentuh data server Anda.
+5. **Pantau console** — aktivitas server baru terlihat di log; data tiap server tetap terpisah (file per-guild di `data/`).
+
+### Verifikasi Discord — kapan wajib?
+
+- **Di bawah 75 server:** tidak perlu apa pun, bot jalan normal.
+- **75–100 server:** Discord mengirim pemberitahuan email agar bersiap verifikasi.
+- **Lebih dari 100 server:** bot WAJIB terverifikasi — tanpa verifikasi, bot tidak bisa join server baru. Prosesnya gratis (form identitas developer di Developer Portal → Verification: nama asli, verifikasi identitas, 2FA aktif; umumnya 1–7 hari kerja).
+
+Selama bot Anda masih di bawah 100 server, bagian ini bisa diabaikan.
+
+### Checklist keamanan sebelum publik
+
+- [ ] `DISCORD_TOKEN` hanya di `.env` (sudah di-gitignore) — **jangan pernah** di-commit/di-chat. Kalau pernah bocor: **Reset Token** segera di Developer Portal.
+- [ ] **2FA aktif** di akun Discord dan GitHub pemilik repo.
+- [ ] Backup rutin berjalan (`/backup-now` + autoBackup scheduler) — makin banyak server, makin banyak data yang taruhannya.
+- [ ] Hosting cukup: bot ini self-throttling (stats dirty-driven, audit best-effort), tapi pantau RAM/CPU saat server yang dilayani bertambah banyak.
+- [ ] Moderasi tetap aman: `/ban`, `/purge`, dll. hanya bisa dipakai admin per-server (role admin + permission Discord) — tidak ada yang perlu diubah.
+
+### Kembali ke mode 1 server
+
+Isi kembali `GUILD_ID` di `.env` → restart. Server lain berhenti melihat command (registrasi kembali guild-scoped instan ke server Anda) dan event server lain diabaikan lagi. Data per-server yang sudah terbentuk **tetap utuh** — mode publik bisa dibuka lagi kapan saja tanpa kehilangan apa pun.
+
+---
+
 ## 📞 Bantuan
 
 Jika ada masalah yang tidak ada di Troubleshooting:
@@ -1092,6 +1145,6 @@ Jika ada masalah yang tidak ada di Troubleshooting:
 
 ---
 
-**Versi dokumen:** v3.11.0
+**Versi dokumen:** v3.12.0
 **Last updated:** 12 September 2026
-**Bot version:** 3.11.0 · 92 slash command · 613 unit test
+**Bot version:** 3.12.0 · 92 slash command · 616 unit test

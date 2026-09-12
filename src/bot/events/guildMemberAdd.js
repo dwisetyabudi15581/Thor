@@ -10,20 +10,20 @@
 const { Events } = require('discord.js');
 const { onMemberAdd } = require('../memberHandler');
 const { logServerEvent } = require('../../infra/serverLog');
-// v3.11.0: guard allowlist multi-guild (fase 2).
+// v3.12.0: guard GUILD_ID tunggal (mode 1 server / mode publik).
 const { isGuildAllowed } = require('../../infra/guild');
 // v3.9.51: channel counter server stats live.
 const { markStatsDirty } = require('../../data/serverstatsManager');
 
 async function onEvent(member) {
     try {
-        // v3.9.26 → v3.11.0 (allowlist): abaikan member dari guild di luar
-        // ALLOWED_GUILD_IDS (fallback GUILD_ID; daftar kosong = semua guild).
+        // v3.9.26 → v3.12.0 (GUILD_ID tunggal): abaikan member dari guild
+        // selain GUILD_ID di .env (GUILD_ID kosong = semua guild — mode publik).
         // v3.9.48: skip ini KELIHATAN (dulu return diam-diam — member join di
         // guild lain & admin tidak tahu kenapa welcome tidak muncul).
         if (member.guild?.id && !isGuildAllowed(member.guild.id)) {
             console.warn(
-                `⚠️ Join member dari guild lain (ID: ${member.guild.id}) diabaikan — guild ini tidak ada di allowlist (ALLOWED_GUILD_IDS / fallback GUILD_ID). Welcome hanya jalan di guild yang di-allowlist.`
+                `⚠️ Join member dari guild lain (ID: ${member.guild.id}) diabaikan — ID ini tidak sama dengan GUILD_ID di .env (mode 1 server). Welcome hanya jalan di server itu.`
             );
             return;
         }

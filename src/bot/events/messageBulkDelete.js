@@ -10,7 +10,7 @@
 
 const { Events, AuditLogEvent } = require('discord.js');
 const { logServerEvent, findAuditExecutor } = require('../../infra/serverLog');
-// v3.11.0: guard allowlist multi-guild (fase 2).
+// v3.12.0: guard GUILD_ID tunggal (mode 1 server / mode publik).
 const { isGuildAllowed } = require('../../infra/guild');
 
 async function onEvent(messages) {
@@ -20,8 +20,8 @@ async function onEvent(messages) {
         const channel = messages?.channel || coll?.first()?.channel;
         const guild = channel?.guild || coll?.first()?.guild;
         if (!guild?.id) return;
-        // v3.11.0: guard allowlist — guild di luar ALLOWED_GUILD_IDS (fallback
-        // GUILD_ID) diabaikan; daftar kosong = mode terbuka (semua guild diproses).
+        // v3.12.0: guard GUILD_ID tunggal — guild yang tidak cocok dengan
+        // GUILD_ID di .env diabaikan; GUILD_ID kosong = mode publik (semua guild).
         if (!isGuildAllowed(guild.id)) return;
 
         const count = typeof coll?.size === 'number' ? coll.size : 0;

@@ -1,5 +1,5 @@
 /**
- * Guild helpers — v3.10.0 multi-guild, v3.11.0 fase 2 (allowlist).
+ * Guild helpers — v3.10.0 multi-guild, v3.12.0 SATU GUILD ID.
  *
  * resolveGuildId(interaction): ambil ID guild dari interaction Discord.
  * Discord asli menyediakan `interaction.guildId` (selalu ada di context
@@ -13,22 +13,35 @@
  * (atau membiarkan configManager throw dengan pesan yang jelas).
  *
  * ---------------------------------------------------------------------
- * v3.11.0 FASE 2 — ALLOWED_GUILD_IDS (allowlist multi-server):
- *   getAllowedGuildIds(): daftar guild yang diizinkan memakai bot.
- *     Sumber (prioritas):
- *       1. env ALLOWED_GUILD_IDS — dipisah koma/spasi, hanya angka
- *          snowflake Discord yang valid, mis. "111...,222...,333...".
- *       2. env GUILD_ID (fallback) — mode single-guild v3.9.26; admin
- *          lama tidak perlu mengubah .env apa pun setelah upgrade.
- *       3. [] (kosong) = MODE TERBUKA: semua guild diproses (perilaku
- *          v3.10.0) — untuk bot yang memang dipakai publik.
- *   isGuildAllowed(guildId): true kalau guild ada di daftar, ATAU daftar
- *     kosong (mode terbuka). Dipakai sebagai guard SEMUA event handler.
+ * v3.12.0 — SATU GUILD ID (permintaan admin: anti bingung):
+ *   HANYA ada satu variabel di .env: GUILD_ID. Allowlist multi-server
+ *   era v3.11.0 DIHAPUS total — daftar ID justru bikin bingung saat
+ *   ganti server. Dua mode, satu tempat ganti:
+ *
+ *   1. GUILD_ID TERISI → MODE 1 SERVER (privat):
+ *      - Slash command didaftarkan per-guild → INSTAN (detik, bukan jam).
+ *      - Semua event (pesan/command/join/boost/tiket/dll.) dari server
+ *        lain DIABAIKAN — asuransi kalau bot tak sengaja ter-invite.
+ *      - Config.json legacy hanya boleh diklaim guild ini.
+ *      Inilah mode yang dipakai deployment biasa: ganti server = ganti
+ *      SATU baris GUILD_ID di .env, selesai.
+ *
+ *   2. GUILD_ID KOSONG → MODE PUBLIK (ala Dyno):
+ *      - Slash command didaftarkan GLOBAL: muncul otomatis di SEMUA
+ *        server yang meng-invite bot (propagasi ~1 jam — perilaku yang
+ *        sama dengan bot publik besar seperti Dyno/MEE6; mereka tidak
+ *        pernah memasukkan guild id manual).
+ *      - Semua event diproses; config terisolasi per-server otomatis
+ *        (data/config/<guildId>.json — arsitektur v3.10.0).
+ *
+ *   getPrimaryGuildId(): GUILD_ID di .env (trim) atau null (mode publik).
+ *   isGuildAllowed(guildId): guard SEMUA event handler — true kalau mode
+ *     publik, atau guildId === GUILD_ID.
  *
  * Dibaca langsung dari process.env (tanpa cache) — env statik selama
  * proses hidup, dan unit test bebas memutar nilai env antar-kasus.
- * Operasinya split string pendek — murah bahkan di event high-frequency
- * seperti messageCreate.
+ * Operasinya cuma satu perbandingan string — murah bahkan di event
+ * high-frequency seperti messageCreate.
  */
 function resolveGuildId(interaction) {
     if (!interaction) return null;
@@ -36,38 +49,28 @@ function resolveGuildId(interaction) {
 }
 
 /**
- * Daftar guild yang diizinkan (lihat aturan prioritas di header).
- * Token kosong dibuang; TIDAK ada validasi digit ketat supaya fallback
- * GUILD_ID tetap kompatibel dengan nilai apa pun yang admin pakai
- * (ID Discord asli memang snowflake numerik, tapi kita tidak membatasi).
- * @returns {string[]} — kosong berarti mode terbuka (semua guild).
+ * SATU-SATUNYA guild yang diproses bot (lihat dua mode di header).
+ * @returns {string|null} — GUILD_ID yang sudah di-trim, atau null
+ *   (= mode publik: semua guild diproses).
  */
-function getAllowedGuildIds() {
-    const rawList = (process.env.ALLOWED_GUILD_IDS || '').trim();
-    if (rawList) {
-        return rawList
-            .split(/[,\s]+/)
-            .map((s) => s.trim())
-            .filter(Boolean);
-    }
+function getPrimaryGuildId() {
     const single = (process.env.GUILD_ID || '').trim();
-    if (single) return [single];
-    return [];
+    return single || null;
 }
 
 /**
- * Guard allowlist: guild ini boleh diproses?
+ * Guard guild: guild ini boleh diproses?
  * - guildId null/undefined → false (DM / tanpa konteks — caller men-guard sendiri).
- * - Daftar kosong (mode terbuka) → selalu true.
- * - Daftar terisi → true hanya untuk anggota daftar.
+ * - GUILD_ID kosong (mode publik) → selalu true.
+ * - GUILD_ID terisi (mode 1 server) → true hanya untuk guild yang cocok.
  * @param {string|null} guildId
  * @returns {boolean}
  */
 function isGuildAllowed(guildId) {
     if (!guildId) return false;
-    const list = getAllowedGuildIds();
-    if (list.length === 0) return true;
-    return list.includes(String(guildId));
+    const primary = getPrimaryGuildId();
+    if (!primary) return true; // mode publik — semua server diizinkan
+    return String(guildId) === primary;
 }
 
-module.exports = { resolveGuildId, getAllowedGuildIds, isGuildAllowed };
+module.exports = { resolveGuildId, getPrimaryGuildId, isGuildAllowed };

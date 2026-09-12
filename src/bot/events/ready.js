@@ -33,21 +33,22 @@ const { getPending: getPendingAnns } = require('../../data/scheduledAnnouncement
 const { startAutoFlush: startStatsAutoFlush, init: initStats } = require('../../data/statsManager');
 const tempVoiceManager = require('../../data/tempVoiceManager');
 
-// v3.11.0 fase 2: allowlist multi-guild. Daftar guild yang diproses saat
-// startup + registrasi command: ALLOWED_GUILD_IDS (fallback GUILD_ID;
-// kosong = mode terbuka — semua guild yang ter-cache).
-const { getAllowedGuildIds } = require('../../infra/guild');
+// v3.12.0: SATU GUILD ID. Guild yang diproses saat startup + registrasi
+// command ditentukan GUILD_ID di .env: terisi = 1 server itu saja (instan);
+// kosong = mode publik ala Dyno (global commands) — SEMUA guild ter-cache.
+const { getPrimaryGuildId } = require('../../infra/guild');
 
 /**
- * Guild yang diproses saat startup — anggota allowlist yang ter-cache,
- * atau SEMUA guild ter-cache kalau allowlist kosong (mode terbuka).
- * Guild allowlist yang belum ter-cache (bot belum di-invite / sedang down)
- * di-skip dengan warning dari pemanggilnya.
+ * Guild yang diproses saat startup: guild GUILD_ID kalau terisi & ter-cache,
+ * atau SEMUA guild ter-cache kalau GUILD_ID kosong (mode publik).
+ * GUILD_ID yang tidak ter-cache (bot belum di-invite / salah ID) di-skip
+ * dengan warning dari pemanggilnya.
  */
 function startupGuilds(client) {
-    const list = getAllowedGuildIds();
-    if (list.length === 0) return [...client.guilds.cache.values()];
-    return list.map((id) => client.guilds.cache.get(id)).filter(Boolean);
+    const primary = getPrimaryGuildId();
+    if (!primary) return [...client.guilds.cache.values()];
+    const guild = client.guilds.cache.get(primary);
+    return guild ? [guild] : [];
 }
 
 async function onReady(client) {
@@ -66,9 +67,10 @@ async function onReady(client) {
     // v3.9.49: server-booster ikut dicek dengan pola yang sama (notifikasi boost).
     try {
         const { getConfig } = require('../../data/configManager');
-        // v3.11.0: cek channel untuk SETIAP guild yang di-allowlist (dulu cuma
-        // guild GUILD_ID / guild pertama yang dicek — sekarang laporan lengkap
-        // per-server). Handler runtime selalu pakai guild masing-masing.
+        // v3.12.0: cek channel untuk guild GUILD_ID (mode 1 server) atau SEMUA
+        // guild ter-cache (mode publik) — dulu cuma guild pertama yang dicek,
+        // sekarang laporan lengkap per-server. Handler runtime selalu pakai
+        // guild masing-masing.
         for (const guild of startupGuilds(client)) {
             const config = getConfig(guild.id);
             const CHANNEL_LABELS = {
@@ -101,8 +103,8 @@ async function onReady(client) {
     // kirim SATU embed catch-up gabungan ke channel server-booster kalau ada
     // yang benar-benar berubah (anti spam: satu embed, bukan satu per member).
     try {
-        // v3.11.0: rekonsiliasi per-guild untuk SEMUA guild allowlist (dulu cuma
-        // guild GUILD_ID / guild pertama yang direkonsiliasi).
+        // v3.12.0: rekonsiliasi per-guild — guild GUILD_ID (mode 1 server)
+        // atau SEMUA guild ter-cache (mode publik).
         for (const guild of startupGuilds(client)) {
             // Cache member kosong tepat setelah login — fetch roster dulu supaya
             // premiumSinceTimestamp diketahui untuk SEMUA member, bukan cuma yang
@@ -169,7 +171,7 @@ async function onReady(client) {
     try {
         const serverstatsManager = require('../../data/serverstatsManager');
         if (serverstatsManager.isEnabled()) {
-            // v3.11.0: sinkron counter untuk SEMUA guild allowlist.
+            // v3.12.0: sinkron counter untuk guild GUILD_ID / semua guild (mode publik).
             for (const guild of startupGuilds(client)) {
                 const result = await serverstatsManager.refreshServerStats(guild, { force: true });
                 if (result.disabled) {
@@ -185,42 +187,38 @@ async function onReady(client) {
         console.warn('⚠️ Sinkronisasi server stats startup gagal:', err.message);
     }
 
-    // === 1. Register slash commands (v3.11.0: per-guild untuk SEMUA guild allowlist) ===
+    // === 1. Register slash commands (v3.12.0: guild tunggal / global ala Dyno) ===
     let registeredToGuild = false;
     try {
-        const allowed = getAllowedGuildIds();
-        if (allowed.length === 0) {
+        const primary = getPrimaryGuildId();
+        if (!primary) {
+            // GUILD_ID kosong = MODE PUBLIK — persis cara kerja bot besar
+            // (Dyno/MEE6): command didaftarkan GLOBAL sekali, muncul otomatis
+            // di setiap server yang meng-invite bot (propagasi ~1 jam).
+            // Tidak perlu memasukkan guild id manual di mana pun.
             console.warn(
-                '⚠️ ALLOWED_GUILD_IDS / GUILD_ID belum di-set di .env — mode terbuka: global commands.'
+                'ℹ️ GUILD_ID kosong di .env — MODE PUBLIK: slash command didaftarkan GLOBAL.'
             );
-            console.warn('   Semua server yang meng-invite bot bisa memakai semua fitur.');
+            console.warn('   Command muncul otomatis di semua server yang meng-invite bot (propagasi ~1 jam).');
             console.warn(
-                '   Set ALLOWED_GUILD_IDS (atau GUILD_ID) di .env untuk registrasi instan (1 detik vs 1 jam) sekaligus membatasi bot hanya ke server yang terdaftar.'
+                '   Isi GUILD_ID di .env kalau bot cuma untuk 1 server (registrasi instan + guard event).'
             );
             // set() mengganti SELURUH daftar global sekaligus — tidak perlu pre-wipe.
             await client.application.commands.set(getCommands());
         } else {
-            // v3.11.0: daftar command ke TIAP guild allowlist — instan di semua
-            // server sekaligus, dan guild di luar daftar tidak melihat command
-            // sama sekali (guard event juga memblokirnya).
-            const missing = [];
-            for (const gid of allowed) {
-                const guild = client.guilds.cache.get(gid);
-                if (!guild) {
-                    missing.push(gid);
-                    continue;
-                }
+            // GUILD_ID terisi = MODE 1 SERVER: daftar command ke guild itu —
+            // INSTAN (detik, bukan ~1 jam), dan guild lain tidak melihat
+            // command sama sekali (guard event juga memblokirnya).
+            const guild = client.guilds.cache.get(primary);
+            if (guild) {
                 await guild.commands.set(getCommands());
                 registeredToGuild = true;
                 console.log(`✅ Slash Commands terdaftar ke guild: ${guild.name} (instan!)`);
-            }
-            for (const gid of missing) {
+            } else {
                 console.warn(
-                    `⚠️ Guild allowlist dengan ID ${gid} tidak ditemukan. Pastikan bot sudah di-invite ke server itu.`
+                    `⚠️ GUILD_ID (${primary}) tidak cocok dengan server manapun yang bot ikuti — cek ID-nya, atau bot memang belum di-invite ke server itu.`
                 );
-            }
-            if (!registeredToGuild) {
-                console.warn('   Tidak ada guild allowlist yang terjangkau — sementara fallback ke global commands (perlu ~1 jam).');
+                console.warn('   Sementara fallback ke global commands (perlu ~1 jam).');
                 await client.application.commands.set(getCommands());
             }
         }
@@ -322,9 +320,9 @@ async function onReady(client) {
     }
 
     // === 7. Init statsManager dengan default guild untuk migrasi legacy ===
-    // v3.11.0: guild pertama allowlist (fallback: guild cache pertama).
+    // v3.12.0: GUILD_ID (fallback: guild cache pertama saat mode publik).
     const defaultStatsGuildId =
-        getAllowedGuildIds()[0] || (client.guilds.cache.size > 0 ? client.guilds.cache.first().id : null);
+        getPrimaryGuildId() || (client.guilds.cache.size > 0 ? client.guilds.cache.first().id : null);
     if (defaultStatsGuildId) {
         try {
             initStats(defaultStatsGuildId);
@@ -421,6 +419,7 @@ module.exports = {
     name: Events.ClientReady,
     once: true,
     execute: onReady,
-    // v3.11.0: dieksport untuk unit test (pilihan guild saat startup).
+    // v3.11.0: dieksport untuk unit test (pilihan guild saat startup) —
+    // v3.12.0: tetap dipakai, sumbernya kini GUILD_ID tunggal.
     _startupGuilds: startupGuilds
 };

@@ -11,7 +11,7 @@
 const { Events, EmbedBuilder } = require('discord.js');
 const { incrementMessages: trackMessage } = require('../../data/statsManager');
 const { getConfig } = require('../../data/configManager');
-// v3.11.0: guard allowlist multi-guild (fase 2).
+// v3.12.0: guard GUILD_ID tunggal (mode 1 server / mode publik).
 const { isGuildAllowed } = require('../../infra/guild');
 
 // Data managers untuk fitur baru
@@ -93,8 +93,8 @@ async function onMessageCreate(message) {
         if (!message.author || message.author.bot || message.webhookId) return;
         if (!message.guild) return;
 
-        // v3.9.26 → v3.11.0 (allowlist): abaikan pesan dari guild di luar
-        // ALLOWED_GUILD_IDS (fallback GUILD_ID; daftar kosong = semua guild).
+        // v3.9.26 → v3.12.0 (GUILD_ID tunggal): abaikan pesan dari guild
+        // selain GUILD_ID di .env (GUILD_ID kosong = semua guild — mode publik).
         // Tanpa guard ini, kalau bot di-invite ke server asing: leveling jalan
         // dengan config guild asing, XP tercecer, role ID salah guild di-add,
         // audit log nyasar. Guard = asuransi murah.

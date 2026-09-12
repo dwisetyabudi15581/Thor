@@ -1,12 +1,12 @@
 # 📚 Dokumentasi — Thor Bot
 
-Kumpulan dokumen resmi untuk **Thor — All-in-One Discord Community Bot** (v3.11.0).
+Kumpulan dokumen resmi untuk **Thor — All-in-One Discord Community Bot** (v3.12.0).
 
 | Dokumen                            | Isi                                                                                                                                            |
 | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | [README.md](../README.md)          | Ringkasan project: fitur, instalasi, konfigurasi awal, development, troubleshooting dasar                                                      |
 | [ADMIN_GUIDE.md](./ADMIN_GUIDE.md) | Panduan admin lengkap: setup server, manajemen produk & VIP, operasional harian, moderation, backup & restore, troubleshooting, best practices |
-| [CHANGELOG.md](../CHANGELOG.md)    | Riwayat lengkap semua versi (v3.9.0 – v3.11.0)                                                                                                 |
+| [CHANGELOG.md](../CHANGELOG.md)    | Riwayat lengkap semua versi (v3.9.0 – v3.12.0)                                                                                                 |
 
 ## Mulai Cepat
 
@@ -17,9 +17,9 @@ Kumpulan dokumen resmi untuk **Thor — All-in-One Discord Community Bot** (v3.1
 
 ## Statistik Project
 
-- **88 slash command** — semua fitur dapat dikonfigurasi dari Discord, tanpa edit file
-- **457 unit test** — `node:test`, sandbox (aman dijalankan di server live)
-- **discord.js v14** · Node.js 18+ · single-guild
+- **92 slash command** — semua fitur dapat dikonfigurasi dari Discord, tanpa edit file
+- **616 unit test** — `node:test`, sandbox (aman dijalankan di server live)
+- **discord.js v14** · Node.js 18+ · mode 1 server / publik (ala Dyno) — satu variabel `GUILD_ID`
 - **CI/CD** — GitHub Actions menjalankan lint + test pada setiap push (Node 18/20/22)
 
 ## Kontributor / Developer

@@ -5,6 +5,23 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 Legend: 🔴 critical · 🟠 high · 🟡 medium · 🟢 improvement
 
+## [3.12.0] — 2026-09-12
+
+### Changed — 🎯 SATU GUILD ID + FASE 3: MODE PUBLIK (ala Dyno)
+
+- 🟢 **`.env` kini hanya punya SATU variabel server: `GUILD_ID`** (permintaan admin: anti bingung). Allowlist `ALLOWED_GUILD_IDS` era v3.11.0 DIHAPUS total — daftar ID multi-server justru bikin bingung saat ganti server. Sekarang ganti server = ganti SATU baris `GUILD_ID` di `.env`, titik. Dua mode: **terisi = mode 1 server** (command instan, event server lain diabaikan) · **kosong = mode publik ala Dyno/MEE6** (command global, muncul otomatis di semua server yang meng-invite bot ±1 jam — tanpa memasukkan guild id manual di mana pun).
+- 🟢 **`src/infra/guild.js` disederhanakan:** `getAllowedGuildIds()` (daftar) diganti `getPrimaryGuildId()` (GUILD_ID di-trim, atau null = publik). `isGuildAllowed()` tetap jadi guard SEMUA 11 event handler (kode guard tidak berubah — hanya sumbernya kini tunggal). Log skip join/leave guild asing kini menyebut `GUILD_ID .env` (tetap ter-log ala v3.9.48).
+- 🟢 **Registrasi command (ready.js):** GUILD_ID terisi → daftar instan ke guild itu (guild tidak ter-cache → warning "cek ID-nya" + fallback global, tidak crash); GUILD_ID kosong → command GLOBAL — persis cara kerja bot publik besar (Dyno/MEE6): Discord mempropagasi command ke semua server ±1 jam, tanpa guild id manual.
+- 🟢 **Gerbang klaim config legacy (configManager):** GUILD_ID terisi → hanya guild itu yang bisa klaim `config.json` lama; kosong → pemanggil pertama (perilaku v3.10.0 dipertahankan).
+- 🟢 **Docs FASE 3 (ADMIN_GUIDE):** seksi baru **"Mode Publik ala Dyno + Developer Portal"** — penjelasan cara kerja bot publik (global commands + config per-server otomatis dari ID event), langkah Developer Portal (Public Bot ON, OAuth2 URL Generator dengan scope `bot` + `applications.commands`), aturan verifikasi Discord (wajib saat bot melewati 100 server), dan checklist keamanan sebelum membuka bot ke publik.
+- 🟡 **Test suite:** `guildGuard.test.js` di-rewrite untuk kontrak v3.12.0 (18 test, dulu 15) — termasuk **3 PIN ANTI-BINGUNG**: (1) `ALLOWED_GUILD_IDS`/`getAllowedGuildIds` tidak boleh muncul lagi di `src/` manapun, (2) `.env.example` hanya punya satu variabel `GUILD_ID` + mendokumentasikan mode publik, (3) kontrak ekspor `guild.js` tepat 3 fungsi. Total **616**.
+- 🟡 `serverLog.test.js`: kontrak guard statis v3.11.0 → v3.12.0 (masih `isGuildAllowed`, sumber kini GUILD_ID tunggal).
+
+### Kompatibilitas
+
+- **.env hanya memakai `GUILD_ID` (deployment umum): TIDAK ADA yang perlu diubah** — perilaku persis sama seperti v3.9.26/v3.11.0 single-guild.
+- **.env memakai `ALLOWED_GUILD_IDS` (v3.11.0):** variabel itu kini diabaikan. Pindahkan ID server utama Anda ke `GUILD_ID` (satu server per deployment). Melayani banyak server? Kosongkan `GUILD_ID` → mode publik, config tiap server terisolasi otomatis.
+
 ## [3.11.0] — 2026-09-12
 
 ### Added — 🛡️ FASE 2 MULTI-GUILD: allowlist ALLOWED_GUILD_IDS

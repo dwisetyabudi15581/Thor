@@ -219,9 +219,9 @@ test('v3.9.43 #19 index.js: 6 event server-log ter-register + intent GuildBans a
 // === E. Guard per event file (statis) ===
 // ====================================================
 
-test('v3.9.43 #20 event file: guard allowlist + skip bot + audit-log best-effort', () => {
-    // Guard guild semua file event — v3.11.0: kini via allowlist
-    // (isGuildAllowed — fallback GUILD_ID, lihat src/infra/guild.js).
+test('v3.9.43 #20 event file: guard GUILD_ID + skip bot + audit-log best-effort', () => {
+    // Guard guild semua file event — v3.12.0: via GUILD_ID tunggal
+    // (isGuildAllowed, lihat src/infra/guild.js).
     for (const rel of [
         'src/bot/events/messageDelete.js',
         'src/bot/events/messageUpdate.js',
@@ -231,7 +231,7 @@ test('v3.9.43 #20 event file: guard allowlist + skip bot + audit-log best-effort
         'src/bot/events/guildMemberUpdate.js'
     ]) {
         const src = readSrc(rel);
-        assert.ok(src.includes('isGuildAllowed('), `${rel}: guard allowlist wajib (pattern v3.11.0)`);
+        assert.ok(src.includes('isGuildAllowed('), `${rel}: guard GUILD_ID wajib (pattern v3.9.26+)`);
         assert.ok(src.includes('try'), `${rel}: handler wajib try/catch (event error tak boleh crash bot)`);
     }
 
