@@ -11,7 +11,8 @@
  * Struktur folder:
  *   backups/
  *     2026-07-31_15-30-00/
- *       config.json
+ *       config/              ← v3.10.0: folder per-guild (satu file per server)
+ *         <guildId>.json
  *       keys.json
  *       ...
  *     2026-07-31_09-00-00/
@@ -37,7 +38,11 @@ const backupsDir = path.join(rootDir, 'backups');
 // (sebelumnya 5 file ini TIDAK di-backup padahal dipakai live oleh fitur
 // auto-mod word rules, leveling, responder, AFK, dan panel tiket).
 const FILES_TO_BACKUP = [
-    'config.json',
+    // v3.10.0 MULTI-GUILD: 'config' sekarang DIREKTORI (data/config/<guildId>.json —
+    // satu file per server). Entry ini di-copy recursive (semua *.json di
+    // dalamnya). Backup lama (pre-3.10.0) yang menyimpan config.json datar tetap
+    // bisa di-restore — lihat catatan legacy di _restoreBackupImpl.
+    'config',
     'keys.json',
     'scheduledRoles.json',
     'selfRoles.json',
@@ -126,9 +131,29 @@ function createBackup() {
         try {
             if (fs.existsSync(src)) {
                 const stats = fs.statSync(src);
-                fs.copyFileSync(src, dst);
-                result.filesCopied++;
-                result.totalSize += stats.size;
+                if (stats.isDirectory()) {
+                    // v3.10.0: entri direktori (config/ per-guild) — salin semua
+                    // *.json di dalamnya. Direktori kosong dihitung 0 file
+                    // (feature belum dipakai — konsisten dengan perilaku file).
+                    fs.mkdirSync(dst, { recursive: true });
+                    let dirSize = 0;
+                    let dirFiles = 0;
+                    for (const f of fs.readdirSync(src)) {
+                        if (!f.endsWith('.json')) continue;
+                        const fsz = fs.statSync(path.join(src, f)).size;
+                        fs.copyFileSync(path.join(src, f), path.join(dst, f));
+                        dirSize += fsz;
+                        dirFiles++;
+                    }
+                    if (dirFiles > 0) {
+                        result.filesCopied++;
+                        result.totalSize += dirSize;
+                    }
+                } else {
+                    fs.copyFileSync(src, dst);
+                    result.filesCopied++;
+                    result.totalSize += stats.size;
+                }
             }
         } catch (err) {
             result.errors.push(`${file}: ${err.message}`);
@@ -296,9 +321,27 @@ function _restoreBackupImpl(name) {
         const src = dataFilePath(file);
         if (fs.existsSync(src)) {
             try {
-                fs.copyFileSync(src, path.join(preRestoreDir, file));
+                if (fs.statSync(src).isDirectory()) {
+                    // v3.10.0: snapshot folder config/ per-guild recursive.
+                    fs.mkdirSync(path.join(preRestoreDir, file), { recursive: true });
+                    for (const f of fs.readdirSync(src)) {
+                        if (f.endsWith('.json')) {
+                            fs.copyFileSync(path.join(src, f), path.join(preRestoreDir, file, f));
+                        }
+                    }
+                } else {
+                    fs.copyFileSync(src, path.join(preRestoreDir, file));
+                }
             } catch (_) {}
         }
+    }
+    // v3.10.0: file legacy data/config.json (era single-guild, sebelum migrasi)
+    // ikut di-snapshot supaya pre-restore lengkap dua-duanya.
+    const legacyLive = dataFilePath('config.json');
+    if (fs.existsSync(legacyLive)) {
+        try {
+            fs.copyFileSync(legacyLive, path.join(preRestoreDir, 'config.json'));
+        } catch (_) {}
     }
 
     // Restore: copy file dari backup ke root
@@ -308,11 +351,40 @@ function _restoreBackupImpl(name) {
         const dst = dataFilePath(file);
         try {
             if (fs.existsSync(src)) {
-                fs.copyFileSync(src, dst);
-                result.filesRestored++;
+                if (fs.statSync(src).isDirectory()) {
+                    // v3.10.0: restore folder config/ per-guild — semua file
+                    // guild di dalam backup dikembalikan. File config guild
+                    // yang TIDAK ada di backup dibiarkan (tidak dihapus) supaya
+                    // server yang join setelah backup tidak kehilangan config.
+                    fs.mkdirSync(dst, { recursive: true });
+                    for (const f of fs.readdirSync(src)) {
+                        if (!f.endsWith('.json')) continue;
+                        fs.copyFileSync(path.join(src, f), path.join(dst, f));
+                    }
+                    result.filesRestored++;
+                } else {
+                    fs.copyFileSync(src, dst);
+                    result.filesRestored++;
+                }
             }
         } catch (err) {
             result.errors.push(`${file}: ${err.message}`);
+        }
+    }
+
+    // v3.10.0 BACKWARD-COMPAT: backup lama (pre-3.10.0) menyimpan config sebagai
+    // config.json datar di root folder backup. Restore sebagai data/config.json
+    // (file legacy) — configManager._claimLegacyConfigIfNeeded akan meng-klaim
+    // untuk guild yang sah saat getConfig() pertama kali dipanggil. Kalau guild
+    // sudah punya config/ aktif, file legacy TIDAK menimpa (klaim hanya jalan
+    // kalau file per-guild belum ada) — perilaku aman by design.
+    const legacyBackupSrc = path.join(srcDir, 'config.json');
+    if (fs.existsSync(legacyBackupSrc)) {
+        try {
+            fs.copyFileSync(legacyBackupSrc, dataFilePath('config.json'));
+            result.filesRestored++;
+        } catch (err) {
+            result.errors.push(`config.json (legacy): ${err.message}`);
         }
     }
 

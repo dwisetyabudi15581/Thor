@@ -13,6 +13,7 @@ const {
     EmbedBuilder,
     MessageFlags,
     getConfig,
+    resolveGuildId,
     addKey,
     findAllByUser,
     findAllSchedulesByUser,
@@ -31,7 +32,9 @@ const {
 const { formatRemaining } = require('../data/keyManager');
 
 module.exports = async function (interaction) {
-    const config = getConfig();
+    // v3.10.0 multi-guild: role/key di-set di config guild ini.
+    const guildId = resolveGuildId(interaction);
+    const config = getConfig(guildId);
 
     // ====================================================
     // === /set-key — BERI KEY + ROLE + EXTEND SCHEDULE ===

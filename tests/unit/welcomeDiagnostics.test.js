@@ -26,8 +26,10 @@ const fs = require('fs');
 const path = require('path');
 
 const DATA_DIR = path.join(__dirname, '..', '..', 'data');
-const configPath = path.join(DATA_DIR, 'config.json');
+// v3.10.0: config per-guild — mock interaksi file ini pakai guild 'guild_w'.
+const configPath = path.join(DATA_DIR, 'config', 'guild_w.json');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
+fs.mkdirSync(path.dirname(configPath), { recursive: true });
 
 // ====================================================
 // === Sandbox: snapshot & restore config.json       ===
@@ -147,7 +149,7 @@ test('buildWelcomeEmbed: variabel template terisi dari member (builder sama deng
     const { buildWelcomeEmbed } = require('../../src/bot/memberHandler');
     const { member } = makeWorld();
 
-    const embed = buildWelcomeEmbed(member, require('../../src/data/configManager').getConfig());
+    const embed = buildWelcomeEmbed(member, require('../../src/data/configManager').getConfig('guild_w'));
     assert.strictEqual(embed.data.title, '👋 WELCOME!');
     assert.strictEqual(embed.data.description, 'Halo <@user_new>! Selamat datang di **Chronos** — member #42');
     assert.strictEqual(embed.data.thumbnail.url, 'https://cdn.example/avatar.png');
@@ -157,7 +159,7 @@ test('buildGoodbyeEmbed: variabel action terisi (keluar/dikeluarkan)', () => {
     writeConfig({});
     const { buildGoodbyeEmbed } = require('../../src/bot/memberHandler');
     const { member } = makeWorld();
-    const config = require('../../src/data/configManager').getConfig();
+    const config = require('../../src/data/configManager').getConfig('guild_w');
 
     const keluar = buildGoodbyeEmbed(member, config, 'keluar');
     assert.match(keluar.data.description, /sudah keluar\./);

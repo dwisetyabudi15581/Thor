@@ -35,7 +35,8 @@ const dataDir = path.join(__dirname, '..', '..', 'data');
 // === Sandbox: file data produksi di-snapshot & restore ===
 // === (pola hardeningV38*.test.js) ===
 // ====================================================
-const SANDBOX_FILES = ['giveaways.json', 'tickets.json', 'config.json', 'deals.json', 'polls.json'];
+// v3.10.0: config per-guild — meta tiket file ini pakai guild 'g_v40'.
+const SANDBOX_FILES = ['giveaways.json', 'tickets.json', 'config/g_v40.json', 'deals.json', 'polls.json'];
 const backups = [];
 for (const f of SANDBOX_FILES) {
     const p = path.join(dataDir, f);
@@ -56,7 +57,10 @@ process.on('exit', () => {
 
 /** Reset file data ke isi deterministik (mirror pola v3.9.38). */
 function resetDataFile(name, content) {
-    fs.writeFileSync(path.join(dataDir, name), JSON.stringify(content, null, 2));
+    const p = path.join(dataDir, name);
+    // v3.10.0: name bisa path bertingkat (config/<guildId>.json).
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    fs.writeFileSync(p, JSON.stringify(content, null, 2));
 }
 
 // ====================================================
@@ -274,7 +278,7 @@ test('v3.9.40 FIX: createTicket saat verifikasi transient → ABORT dengan pesan
     resetDataFile('tickets.json', {
         'ch-live-2': { userId: 'buyer-v40', guildId: 'g_v40', productName: 'VIP 30 Hari', productValue: 'vip30' }
     });
-    resetDataFile('config.json', {
+    resetDataFile('config/g_v40.json', {
         roles: { admin: 'role-admin' },
         categories: [{ id: 'transaction', label: 'Transaksi' }],
         products: [
@@ -325,6 +329,8 @@ function makeTicketInteraction({ customId, channelId }) {
     const interaction = {
         id: `v3940-${customId}-${Date.now()}-${Math.random()}`,
         customId,
+        // v3.10.0: handler domain membaca config per-guild.
+        guildId: 'g_v40',
         replied: false,
         deferred: false,
         isRepliable: () => true,
@@ -369,7 +375,7 @@ function makeTicketInteraction({ customId, channelId }) {
 }
 
 test('v3.9.40 FIX: tombol tutup (✅ Selesai) saat completionLocks dipegang → DITOLAK, channel tidak dihapus', async () => {
-    resetDataFile('config.json', {
+    resetDataFile('config/g_v40.json', {
         roles: { admin: 'role-admin' },
         products: [{ label: 'VIP 30 Hari', value: 'vip30', price: 'Rp 30.000', category: 'transaction', requiresKey: true }]
     });
@@ -393,7 +399,7 @@ test('v3.9.40 FIX: tombol tutup (✅ Selesai) saat completionLocks dipegang → 
 });
 
 test('v3.9.40 FIX: tombol tutup (❌ Tidak Jadi Beli) saat completionLocks dipegang → DITOLAK', async () => {
-    resetDataFile('config.json', {
+    resetDataFile('config/g_v40.json', {
         roles: { admin: 'role-admin' },
         products: [{ label: 'VIP 30 Hari', value: 'vip30', price: 'Rp 30.000', category: 'transaction', requiresKey: true }]
     });
@@ -430,6 +436,8 @@ test('v3.9.40 FIX: replay gateway PARALEL saat handler masih jalan → di-drop, 
     const makeInteraction = () => ({
         id,
         customId: 'btn_verify',
+        // v3.10.0: domain verify membaca config per-guild.
+        guildId: 'g_v40',
         replied: false,
         deferred: false,
         isRepliable: () => true,
@@ -546,7 +554,7 @@ test('v3.9.40 FIX: reconcile TIDAK menghapus meta deal yang sedang dipegang tran
 const { saveTranscript } = require('../../src/data/ticketManager');
 
 test('v3.9.40 FIX: pesan user berisi ``` → code fence transcript tetap utuh', async () => {
-    resetDataFile('config.json', { channels: { transcript: 'ch-trans-v40' } });
+    resetDataFile('config/g_v40.json', { channels: { transcript: 'ch-trans-v40' } });
 
     const evil = '```\nscript jahat\n```';
     const msgs = [
@@ -558,7 +566,7 @@ test('v3.9.40 FIX: pesan user berisi ``` → code fence transcript tetap utuh', 
     const ticketChannel = {
         id: 'ch-t40',
         name: 'ticket-t40',
-        guild: { channels: { cache: new Map([['ch-trans-v40', transcriptChannel]]) } },
+        guild: { id: 'g_v40', channels: { cache: new Map([['ch-trans-v40', transcriptChannel]]) } },
         messages: {
             fetch: async opts => {
                 const sorted = [...msgs].sort((a, b) => Number(b.id) - Number(a.id));

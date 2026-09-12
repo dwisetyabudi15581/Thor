@@ -650,7 +650,9 @@ test('configManager.DEFAULTS: claim_giveaway ada sebagai contoh kategori custom'
 test('configManager.getConfig: migration rename label "Bantuan Staff" → "Help"', () => {
     const fs = require('fs');
     const path = require('path');
-    const configPath = path.join(__dirname, '..', '..', 'data', 'config.json');
+    // v3.10.0: config per-guild — test ini pakai guild 'g_tf_mig'.
+    const configPath = path.join(__dirname, '..', '..', 'data', 'config', 'g_tf_mig.json');
+    fs.mkdirSync(path.dirname(configPath), { recursive: true });
     // Backup existing config if any
     let backup = null;
     if (fs.existsSync(configPath)) {
@@ -692,7 +694,7 @@ test('configManager.getConfig: migration rename label "Bantuan Staff" → "Help"
 
         // getConfig should trigger migration
         const { getConfig } = require('../../src/data/configManager');
-        const config = getConfig();
+        const config = getConfig('g_tf_mig');
 
         const help = config.ticketCategories.find(c => c.id === 'help');
         const report = config.ticketCategories.find(c => c.id === 'report');
@@ -715,7 +717,9 @@ test('configManager.getConfig: migration rename label "Bantuan Staff" → "Help"
 test('configManager.getConfig: migration TIDAK ubah label yang sudah di-customize admin', () => {
     const fs = require('fs');
     const path = require('path');
-    const configPath = path.join(__dirname, '..', '..', 'data', 'config.json');
+    // v3.10.0: config per-guild — test ini pakai guild 'g_tf_mig'.
+    const configPath = path.join(__dirname, '..', '..', 'data', 'config', 'g_tf_mig.json');
+    fs.mkdirSync(path.dirname(configPath), { recursive: true });
     let backup = null;
     if (fs.existsSync(configPath)) {
         backup = fs.readFileSync(configPath, 'utf8');
@@ -754,7 +758,7 @@ test('configManager.getConfig: migration TIDAK ubah label yang sudah di-customiz
         fs.writeFileSync(configPath, JSON.stringify(customConfig), 'utf8');
 
         const { getConfig } = require('../../src/data/configManager');
-        const config = getConfig();
+        const config = getConfig('g_tf_mig');
 
         const help = config.ticketCategories.find(c => c.id === 'help');
         const report = config.ticketCategories.find(c => c.id === 'report');

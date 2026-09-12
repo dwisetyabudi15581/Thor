@@ -20,7 +20,8 @@ const path = require('node:path');
 
 const DATA_DIR = path.join(__dirname, '..', '..', 'data');
 const SANDBOX_FILES = [
-    'config.json',
+    // v3.10.0: config per-guild — test configManager di file ini pakai guild 'g_v26'.
+    'config/g_v26.json',
     'giveaways.json',
     'polls.json',
     'scheduledAnnouncements.json',
@@ -50,7 +51,10 @@ function restoreSandbox() {
 }
 
 function writeDataJSON(name, data) {
-    fs.writeFileSync(path.join(DATA_DIR, name), JSON.stringify(data, null, 2));
+    const p = path.join(DATA_DIR, name);
+    // v3.10.0: name bisa path bertingkat (config/<guildId>.json).
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    fs.writeFileSync(p, JSON.stringify(data, null, 2));
 }
 
 function readDataJSON(name) {
@@ -96,7 +100,7 @@ test('v3.9.26 isValidEmoji: tolak string yang akan meracuni setEmoji()', () => {
 test('v3.9.26 claim_giveaway: flag dismissed mencegah resurrection', () => {
     const { getConfig } = require('../../src/data/configManager');
     // Tulis config TANPA claim_giveaway + dengan flag dismissed
-    writeDataJSON('config.json', {
+    writeDataJSON('config/g_v26.json', {
         roles: { admin: 'r_admin' },
         ticketCategories: [
             { id: 'transaction', label: 'Beli Key', emoji: '🛒', style: 'Primary', requiresKey: true, isDefault: true },
@@ -106,7 +110,7 @@ test('v3.9.26 claim_giveaway: flag dismissed mencegah resurrection', () => {
         customFieldAdmin: 'jangan-hilang'
     });
 
-    const config = getConfig();
+    const config = getConfig('g_v26');
     const ids = config.ticketCategories.map(c => c.id);
     assert.ok(!ids.includes('claim_giveaway'), 'claim_giveaway TIDAK boleh ditambah ulang kalau dismissed');
     // Field custom harus preserve
@@ -115,14 +119,14 @@ test('v3.9.26 claim_giveaway: flag dismissed mencegah resurrection', () => {
 
 test('v3.9.26 claim_giveaway: tanpa flag, migration tetap nambah (backward compat)', () => {
     const { getConfig } = require('../../src/data/configManager');
-    writeDataJSON('config.json', {
+    writeDataJSON('config/g_v26.json', {
         roles: { admin: 'r_admin' },
         ticketCategories: [
             { id: 'transaction', label: 'Beli Key', emoji: '🛒', style: 'Primary', requiresKey: true, isDefault: true }
         ]
         // claimGiveawayDismissed TIDAK di-set
     });
-    const config = getConfig();
+    const config = getConfig('g_v26');
     const ids = config.ticketCategories.map(c => c.id);
     assert.ok(ids.includes('claim_giveaway'), 'tanpa flag, kategori contoh tetap ditambah (perilaku lama)');
 });
@@ -131,7 +135,7 @@ test('v3.9.26 migrasi v1→v2: field modern tidak lagi DROPPED', () => {
     const { getConfig } = require('../../src/data/configManager');
     // Config CAMPURAN: sisa flat key v1 + field modern v2 — sebelumnya auto-save
     // migrasi cuma nulis 5 key utama → ticketCategories/leveling hilang dari disk.
-    writeDataJSON('config.json', {
+    writeDataJSON('config/g_v26.json', {
         verifiedRoleId: 'r_verified_old',
         invoiceChannelId: 'c_invoice_old',
         roles: { admin: 'r_admin' },
@@ -145,7 +149,7 @@ test('v3.9.26 migrasi v1→v2: field modern tidak lagi DROPPED', () => {
         customFieldAdmin: 'preserve-me'
     });
 
-    const config = getConfig();
+    const config = getConfig('g_v26');
     // Flat v1 → dipindah ke nested
     assert.strictEqual(config.roles.verified, 'r_verified_old');
     assert.strictEqual(config.channels.invoice, 'c_invoice_old');
@@ -157,7 +161,7 @@ test('v3.9.26 migrasi v1→v2: field modern tidak lagi DROPPED', () => {
     assert.ok(ids.includes('jasa'), 'ticketCategories custom harus preserve');
 
     // Dan yang tersimpan di disk harus BEBAS flat key v1 (idempotent)
-    const saved = readDataJSON('config.json');
+    const saved = readDataJSON('config/g_v26.json');
     assert.strictEqual(saved.verifiedRoleId, undefined, 'flat key v1 harus hilang dari disk setelah migrasi');
     assert.ok(Array.isArray(saved.ticketCategories));
 });
@@ -445,7 +449,7 @@ test('v3.9.26 panel patch contract: imageUrl/thumbnailUrl/footerText sampai ke b
     // Builder harus ME-LOAD nilai yang sama (inilah bug v3.9.26: patch lama nulis
     // `image` tapi builder baca `imageUrl` → no-op diam-diam)
     const built = buildTicketPanel(patched, {
-        guild: { name: 'Test Guild', members: { me: { id: 'bot' } } },
+        guild: { id: 'g_test', name: 'Test Guild', members: { me: { id: 'bot' } } },
         client: { user: { username: 'Thor', displayAvatarURL: () => 'https://example.com/a.png' } }
     });
     // buildTicketPanel return { embed, components } (bukan EmbedBuilder langsung)

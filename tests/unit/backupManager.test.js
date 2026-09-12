@@ -171,8 +171,10 @@ test('v3.9.60 REGRESSION: semua nama file JSON manager data ada di FILES_TO_BACK
     // path.join(..., 'data', '<file>.json') di src/data/*). Manager baru yang
     // lupa dapat entri FILES_TO_BACKUP mematahkan test ini — invarian yang sama
     // dengan GUARD file live di atas, tapi tetap hijau di fresh clone.
+    // v3.10.0: 'config' kini DIREKTORI per-guild (data/config/<guildId>.json),
+    // bukan file datar config.json.
     const managerFiles = [
-        'config.json',
+        'config',
         'keys.json',
         'scheduledRoles.json',
         'selfRoles.json',

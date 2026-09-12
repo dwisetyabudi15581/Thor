@@ -58,7 +58,7 @@ const {
     // (string select — opsinya observer saat ini).
     StringSelectMenuBuilder
 } = require('discord.js');
-const { getConfig, safeEditReply, logAudit, checkIsAdmin } = require('../commands/_shared');
+const { getConfig, resolveGuildId, safeEditReply, logAudit, checkIsAdmin } = require('../commands/_shared');
 const mm = require('../data/midmanManager');
 const { sendInvoice, saveTranscript, findActiveTicketFor } = require('../data/ticketManager');
 const { recordPurchase } = require('../data/statsManager');
@@ -295,7 +295,7 @@ const CONFIRM_MSG = {
  * ticket.js). Tampilkan modal input deal.
  */
 async function openCreateModal(interaction) {
-    const config = getConfig();
+    const config = getConfig(resolveGuildId(interaction));
 
     if (!passesVerifiedCheck(interaction, config)) {
         return interaction.reply({ content: '❌ Verifikasi dulu!', flags: MessageFlags.Ephemeral });
@@ -441,7 +441,7 @@ function pendingSummary(pending) {
  */
 async function handleCreateDeal(interaction) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    const config = getConfig();
+    const config = getConfig(resolveGuildId(interaction));
     const guild = interaction.guild;
     const creator = interaction.user;
 
@@ -566,7 +566,7 @@ async function handlePickBuyer(interaction) {
  */
 async function handlePickSeller(interaction) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    const config = getConfig();
+    const config = getConfig(resolveGuildId(interaction));
     const guild = interaction.guild;
     const creator = interaction.user;
 
@@ -956,7 +956,7 @@ async function finalizeDeal(channel, deal, closer, endState, config) {
  * dengan pesan jelas — bukan cuma larangan tertulis.
  */
 async function handleEvent(interaction, event) {
-    const config = getConfig();
+    const config = getConfig(resolveGuildId(interaction));
     const channel = interaction.channel;
 
     if (!channel) {
@@ -1141,7 +1141,7 @@ function memberGuard(deal, interaction, config) {
  * (searchable). Hanya midman/admin yang bisa sampai sini.
  */
 async function showAddMemberSelect(interaction) {
-    const config = getConfig();
+    const config = getConfig(resolveGuildId(interaction));
     const deal = mm.getDeal(interaction.channel?.id);
     const blocked = memberGuard(deal, interaction, config);
     if (blocked) {
@@ -1165,7 +1165,7 @@ async function showAddMemberSelect(interaction) {
  */
 async function handlePickMember(interaction) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    const config = getConfig();
+    const config = getConfig(resolveGuildId(interaction));
     const channel = interaction.channel;
     const guild = interaction.guild;
 
@@ -1292,7 +1292,7 @@ async function handlePickMember(interaction) {
  * bisa dikeluarkan — urusan mereka lewat batal/dispute).
  */
 async function showRemoveMemberSelect(interaction) {
-    const config = getConfig();
+    const config = getConfig(resolveGuildId(interaction));
     const deal = mm.getDeal(interaction.channel?.id);
     const blocked = memberGuard(deal, interaction, config);
     if (blocked) {
@@ -1334,7 +1334,7 @@ async function showRemoveMemberSelect(interaction) {
  */
 async function handleRemovePick(interaction) {
     await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-    const config = getConfig();
+    const config = getConfig(resolveGuildId(interaction));
     const channel = interaction.channel;
 
     const deal = mm.getDeal(channel?.id);

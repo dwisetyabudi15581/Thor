@@ -179,6 +179,8 @@ test('interactions router: dedup — same interaction.id processed only once (v3
     const makeInteraction = () => ({
         id,
         customId: 'btn_verify',
+        // v3.10.0: domain verify membaca config per-guild.
+        guildId: 'g_ir_dedup',
         replied: false,
         deferred: false,
         isRepliable: () => true,

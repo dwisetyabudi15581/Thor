@@ -220,6 +220,8 @@ function makeMockInteraction({ customId, type = 'button', id = `t-${Date.now()}-
     const interaction = {
         id,
         customId,
+        // v3.10.0: handler domain membaca config per-guild — meta tiket file ini pakai 'g1'.
+        guildId: 'g1',
         replied: false,
         deferred: false,
         isRepliable: () => true,

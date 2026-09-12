@@ -2,7 +2,7 @@
 
 Bot Discord serbaguna untuk komunitas apa pun — server jualan, gaming, content creator, hingga komunitas umum. Semua konfigurasi dapat diatur langsung dari Discord melalui slash command, tanpa mengedit file.
 
-> **v3.9.60** · 92 slash command · 598 unit test · discord.js v14 · Node.js 18+ · single-guild
+> **v3.10.0** · 92 slash command · 598 unit test · discord.js v14 · Node.js 18+ · multi-guild
 >
 > 📖 **[Panduan Admin Lengkap](./docs/ADMIN_GUIDE.md)** — setup, operasional harian, troubleshooting
 > 📜 **[Changelog](./CHANGELOG.md)** — riwayat semua versi
@@ -168,7 +168,7 @@ Test memakai `node:test` bawaan Node.js v18+ — tidak perlu dependensi tambahan
 - **Karantina file korup** — file data gagal parse di-rename `.corrupt-<ts>`, tidak pernah tertimpa diam-diam.
 - **TOCTOU guard** — `userLock` mencegah double-process saat user double-click.
 - **Audit log** — key selalu dimasking; semua admin action tercatat.
-- **Guild-scoped data** — key, warn, stats, dan config di-scope per guild (single-guild bot, dengan guard `GUILD_ID` di semua event).
+- **Multi-guild (v3.10.0)** — config kini per-server: `data/config/<guildId>.json`. Admin server A tidak bisa menimpa setting server B. Data layer lain (key, warn, stats, ticket, deal) sudah guild-scoped sejak awal. Guard `GUILD_ID` opsional: di-set = mode single-guild (abaikan server lain), kosong = mode multi-guild penuh.
 
 ---
 

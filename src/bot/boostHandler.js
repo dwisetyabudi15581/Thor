@@ -84,7 +84,8 @@ function buildBoostRemoveEmbed(member, sinceTs) {
  */
 async function onBoostChange(member, action, oldSinceTs = null) {
     const { guild, user } = member;
-    const config = getConfig();
+    // v3.10.0 multi-guild: channel & role booster dari config guild ini.
+    const config = getConfig(guild.id);
 
     // 1. Simpan riwayat dulu (walau notifikasi gagal, data tetap ada).
     try {
@@ -228,7 +229,7 @@ async function applyBoostRole(member, action) {
         if (!member?.guild?.id || !member.user || member.user.bot) {
             return { ok: false, reason: 'skip' };
         }
-        const config = getConfig();
+        const config = getConfig(member.guild.id);
         const roleId = config.roles && config.roles.booster;
         if (!roleId) {
             // Role belum di-set = fitur opsional belum dinyalakan. Untuk boost
@@ -306,7 +307,8 @@ async function syncBoostRoles(guild, removedUserIds = []) {
     const out = { applied: 0, removed: 0 };
     if (!guild?.id || !guild.members?.cache) return out;
 
-    const config = getConfig();
+    // v3.10.0 multi-guild: role booster dibaca dari config guild ini.
+    const config = getConfig(guild.id);
     const roleId = config.roles && config.roles.booster;
     if (!roleId) return out; // fitur belum dinyalakan — no-op senyap
     const role = guild.roles.cache?.get?.(roleId);

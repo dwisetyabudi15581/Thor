@@ -13,6 +13,7 @@
 const { MessageFlags } = require('discord.js');
 const {
     getConfig,
+    resolveGuildId,
     setField,
     logAudit,
     EMBED_LIMITS
@@ -65,9 +66,10 @@ module.exports = async function (interaction) {
                 });
             }
 
-            // Apply perubahan
-            const oldValue = getConfig().messages?.[tipe];
-            setField(`messages.${tipe}`, newText);
+            // Apply perubahan (v3.10.0: config guild yang menjalankan modal ini)
+            const guildId = resolveGuildId(interaction);
+            const oldValue = getConfig(guildId).messages?.[tipe];
+            setField(guildId, `messages.${tipe}`, newText);
 
             // logAudit async — kalau gagal, config udah tersimpan. Tetap balas sukses,
             // tapi log warning biar kelihatan di console.

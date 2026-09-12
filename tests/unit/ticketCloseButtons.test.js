@@ -24,7 +24,8 @@ const dataDir = path.join(__dirname, '..', '..', 'data');
 // === Sandbox: file data produksi di-snapshot & restore ===
 // === (pola hardeningV31.test.js)                    ===
 // ====================================================
-const SANDBOX_FILES = ['tickets.json', 'config.json', 'stats.json'];
+// v3.10.0: config sekarang per-guild — data/config/<guildId>.json.
+const SANDBOX_FILES = ['tickets.json', 'config/g_v3935.json', 'stats.json'];
 const backups = [];
 for (const f of SANDBOX_FILES) {
     const p = path.join(dataDir, f);
@@ -53,6 +54,8 @@ process.on('exit', () => {
 
 function resetDataFile(name, content) {
     const p = path.join(dataDir, name);
+    // v3.10.0: name bisa berupa path bertingkat (config/<guildId>.json).
+    fs.mkdirSync(path.dirname(p), { recursive: true });
     if (content === null) {
         if (fs.existsSync(p)) fs.unlinkSync(p);
     } else {
@@ -67,7 +70,7 @@ const { setTicketMeta, getTicketMeta } = require('../../src/data/ticketManager')
 // tanpa flag isTransaction → resolveTicketType → isTransaction=false.
 function seedNonTransactionTicket(channelId, category) {
     resetDataFile('tickets.json', {});
-    resetDataFile('config.json', {});
+    resetDataFile('config/g_v3935.json', {});
     setTicketMeta(channelId, {
         userId: 'u_v3935',
         productName: 'Help',
@@ -88,6 +91,9 @@ function makeMockInteraction({ customId, channel }) {
     const interaction = {
         id: `v3935-${customId}-${Date.now()}-${Math.random()}`,
         customId,
+        // v3.10.0: handler domain membaca config per-guild — mock wajib bawa
+        // guildId (resolveGuildId di infra/guild.js).
+        guildId: 'g_v3935',
         replied: false,
         deferred: false,
         isRepliable: () => true,

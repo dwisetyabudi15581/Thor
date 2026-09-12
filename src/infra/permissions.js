@@ -17,38 +17,54 @@ const { getConfig } = require('../data/configManager');
  * Cache di-invalidate otomatis setelah 30 detik, jadi kalau admin baru
  * set role admin, maks 30 detik sudah terbaca.
  *
+ * v3.10.0 MULTI-GUILD: cache sekarang PER-GUILD (Map<guildId, entry>).
+ * Sebelumnya satu variabel global — admin role server A terbaca oleh
+ * server B (kalau bot dipakai 2+ server). Entry per guild kecil (2 field),
+ * jumlah guild yang realistis (< ribuan) tidak membebani memori; entry
+ * basi ditimpa saat TTL habis, bukan menumpuk.
+ *
  * @param {import('discord.js').GuildMember} member
  * @returns {boolean}
  */
 
 const CACHE_TTL_MS = 30 * 1000; // 30 detik
-let cachedAdminRoleId = undefined; // undefined = belum dicek; null = tidak di-set
-let cacheExpiresAt = 0;
+// v3.10.0: Map guildId -> { roleId, expiresAt }. undefined/null roleId =
+// "sudah dicek, tidak di-set" (beda dari "belum dicek" = tidak ada entry).
+const adminRoleCache = new Map();
 
-function getAdminRoleId() {
+function getAdminRoleId(guildId) {
+    // Tanpa konteks guild (mis. mock test tanpa guild, DM) → tidak ada
+    // role admin yang bisa dicek; caller tetap bisa lolos via permission
+    // Discord (ManageGuild/Administrator) di bawah.
+    if (!guildId) return null;
+
     const now = Date.now();
-    if (now < cacheExpiresAt) {
-        return cachedAdminRoleId;
+    const hit = adminRoleCache.get(guildId);
+    if (hit && now < hit.expiresAt) {
+        return hit.roleId;
     }
-    // Cache expired — baca ulang dari config
+    // Cache expired — baca ulang dari config guild ini
+    let roleId = null;
     try {
-        const config = getConfig();
-        cachedAdminRoleId = config.roles?.admin || null;
+        const config = getConfig(guildId);
+        roleId = config.roles?.admin || null;
     } catch (_err) {
         // Defensive: kalau getConfig throw (mis. config rusak), anggap tidak ada admin role
-        cachedAdminRoleId = null;
+        roleId = null;
     }
-    cacheExpiresAt = now + CACHE_TTL_MS;
-    return cachedAdminRoleId;
+    adminRoleCache.set(guildId, { roleId, expiresAt: now + CACHE_TTL_MS });
+    return roleId;
 }
 
 /**
  * Invalidate cache manual. Dipanggil saat admin role di-set/unset via /set-role
  * supaya perubahan langsung efektif tanpa nunggu TTL.
+ * v3.10.0: bersihkan SEMUA guild (invalidateAdminRoleCache() tanpa argumen,
+ * konsisten dengan pemanggilan dari configManager.setField dan
+ * backupManager pasca-restore — keduanya tidak tahu guild mana yang berubah).
  */
 function invalidateAdminRoleCache() {
-    cachedAdminRoleId = undefined;
-    cacheExpiresAt = 0;
+    adminRoleCache.clear();
 }
 
 function isAdmin(member) {
@@ -58,8 +74,8 @@ function isAdmin(member) {
     if (member.permissions?.has(PermissionFlagsBits.ManageGuild)) return true;
     if (member.permissions?.has(PermissionFlagsBits.Administrator)) return true;
 
-    // Cek role admin dari config (cached)
-    const adminRoleId = getAdminRoleId();
+    // Cek role admin dari config guild member (cached per-guild)
+    const adminRoleId = member.guild?.id ? getAdminRoleId(member.guild.id) : null;
     if (adminRoleId && member.roles?.cache?.has(adminRoleId)) return true;
 
     return false;

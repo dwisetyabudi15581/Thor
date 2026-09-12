@@ -38,7 +38,7 @@ const {
     TextInputBuilder,
     TextInputStyle
 } = require('discord.js');
-const { getConfig, safeEditReply, logAudit, checkIsAdmin } = require('../commands/_shared');
+const { getConfig, resolveGuildId, safeEditReply, logAudit, checkIsAdmin } = require('../commands/_shared');
 const {
     createTicket,
     closeTicket,
@@ -85,7 +85,9 @@ function passesVerifiedCheck(interaction, config) {
 }
 
 module.exports = async function (interaction) {
-    const config = getConfig();
+    // v3.10.0 multi-guild: config tiket (role verified, kategori, produk)
+    // dibaca dari guild tempat interaction berasal.
+    const config = getConfig(resolveGuildId(interaction));
     // ====================================================
     // === v3.9.14: TIKET KATEGORI SELECT MENU (DROPDOWN PANEL) ===
     // === customId: ticket_cat_select (exact match)         ===
@@ -1375,7 +1377,8 @@ module.exports.completionLocks = completionLocks;
  */
 async function completeNonKeyOrder(interaction, meta) {
     const warnings = [];
-    const config = getConfig();
+    // v3.10.0 multi-guild: auto-role & produk dibaca dari config guild tiket ini.
+    const config = getConfig(resolveGuildId(interaction));
     const userId = meta?.userId;
 
     // 1. Auto-role (kalau produknya punya roleId — janji /set-product-role).

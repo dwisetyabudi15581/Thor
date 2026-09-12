@@ -79,6 +79,8 @@ test('v3.9.38: dedup — handler sukses → baru di-mark; check() true setelahny
     const makeInteraction = () => ({
         id,
         customId: 'btn_verify',
+        // v3.10.0: domain verify membaca config per-guild.
+        guildId: 'g_v38',
         replied: false,
         deferred: false,
         isRepliable: () => true,

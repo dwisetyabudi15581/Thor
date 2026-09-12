@@ -26,7 +26,8 @@ const dataDir = path.join(__dirname, '..', '..', 'data');
 // === Sandbox: file data produksi di-snapshot & restore ===
 // === (pola keyManager.test.js / ticketNonKey.test.js)  ===
 // ====================================================
-const SANDBOX_FILES = ['tickets.json', 'config.json', 'stats.json', 'scheduledRoles.json', 'keys.json'];
+// v3.10.0: config per-guild — mock tiket v3.9.35 pakai guild 'g_v3935' (meta tickets.json).
+const SANDBOX_FILES = ['tickets.json', 'config/g_v31.json', 'stats.json', 'scheduledRoles.json', 'keys.json'];
 const backups = [];
 for (const f of SANDBOX_FILES) {
     const p = path.join(dataDir, f);
@@ -56,6 +57,8 @@ process.on('exit', () => {
 
 function resetDataFile(name, content) {
     const p = path.join(dataDir, name);
+    // v3.10.0: name bisa path bertingkat (config/<guildId>.json).
+    fs.mkdirSync(path.dirname(p), { recursive: true });
     if (content === null) {
         if (fs.existsSync(p)) fs.unlinkSync(p);
     } else {
@@ -72,7 +75,7 @@ const { closeTicket, setTicketMeta, getTicketMeta } = require('../../src/data/ti
 function seedTicket(channelId) {
     resetDataFile('tickets.json', {});
     // config minimal → tanpa channels.transcript/invoice (skip transcript & invoice path).
-    resetDataFile('config.json', {});
+    resetDataFile('config/g_v31.json', {});
     setTicketMeta(channelId, {
         userId: 'u_v31',
         productName: 'VIP 30 Hari',
@@ -156,6 +159,8 @@ function makeNullChannelInteraction(customId) {
     const interaction = {
         id: `v31-${customId}-${Date.now()}-${Math.random()}`,
         customId,
+        // v3.10.0: handler domain membaca config per-guild (meta tiket pakai g_v31).
+        guildId: 'g_v31',
         replied: false,
         deferred: false,
         isRepliable: () => true,

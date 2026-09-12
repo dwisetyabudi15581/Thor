@@ -2,9 +2,28 @@ const fs = require('fs');
 const path = require('path');
 const { safeWriteJSON, quarantineCorruptFile } = require('../infra/safeWrite');
 
-const configPath = path.join(__dirname, '..', '..', 'data', 'config.json');
+// ============================================================
+// v3.10.0 MULTI-GUILD: config sekarang PER-GUILD.
+//   Sebelumnya: satu file global data/config.json dipakai bersama
+//   SEMUA server yang meng-invite bot — admin server A set
+//   /set-channel welcome, server B ikut berubah (timpa-menimpa).
+//   Sekarang: data/config/<guildId>.json — satu file per server.
+//
+//   Migrasi otomatis satu kali: data/config.json lama (era
+//   single-guild) dipindah ke data/config/<guildId>.json saat
+//   guild yang sah pertama kali membaca config (lihat
+//   _claimLegacyConfigIfNeeded). File lama di-rename jadi
+//   config.json.migrated sebagai jejak audit, bukan dihapus.
+// ============================================================
+const configDir = path.join(__dirname, '..', '..', 'data', 'config');
+const LEGACY_CONFIG_PATH = path.join(__dirname, '..', '..', 'data', 'config.json');
 
-// Default structure (digunakan kalau config.json kosong / rusak / format lama)
+/** Path file config milik satu guild. */
+function configPathFor(guildId) {
+    return path.join(configDir, `${guildId}.json`);
+}
+
+// Default structure (digunakan kalau file config kosong / rusak / format lama)
 const DEFAULTS = {
     roles: {},
     channels: {},
@@ -17,7 +36,7 @@ const DEFAULTS = {
             '**{username}** telah {action} dari server.\n\nSampai jumpa lagi! 👋\n\n📊 Sisa member: **{count}**',
         verifyTitle: '✅ VERIFIKASI SERVER',
         verifyBody:
-            'Selamat datang di **{server}**!\n\nKlik tombol di bawah untuk diverifikasi dan mendapatkan akses penuh ke seluruh channel.',
+            'Selamat datang di **{server}**!\nKlik tombol di bawah untuk diverifikasi dan mendapatkan akses penuh ke seluruh channel.',
         ticketTitle: '🎫 SISTEM TIKET & PRICE LIST',
         // v3.9.12: ticket body sekarang support template variables.
         // Variabel tersedia: {server}, {price_list}, {price_list:<category>}, {price_header}, {categories_list}
@@ -99,8 +118,67 @@ const DEFAULTS = {
     products: []
 };
 
+// ============================================================
+// === v3.10.0: MIGRASI LEGACY (config.json → config/<guildId>.json) ===
+// ============================================================
+// Flag in-process: klaim legacy hanya boleh sekali — setelah dipindah,
+// file lama sudah di-rename jadi config.json.migrated jadi existsSync
+// false, flag ini jaring pengaman kedua kalau rename gagal.
+let legacyClaimed = false;
+
 /**
- * Baca config.json (selalu fresh - anti cache).
+ * Klaim data/config.json lama (era single-guild) untuk guild ini.
+ * Dipanggil HANYA dari branch ENOENT di getConfig() — file per-guild
+ * belum ada, jadi tidak ada risiko menimpa config guild yang sudah jalan.
+ *
+ * Aturan klaim (cegah server lain "mencuri" config lama):
+ *   - Kalau env GUILD_ID di-set: hanya guild yang cocok yang boleh klaim.
+ *     (GUILD_ID adalah mode single-guild v3.9.26 — guild lain dapat
+ *     DEFAULTS murni, bukan salinan config server utama.)
+ *   - Kalau GUILD_ID tidak di-set (mode multi-guild penuh): guild PERTAMA
+ *     yang memanggil getConfig() mengklaim legacy. Untuk bot yang sudah
+ *     dipakai 1 server lalu dibuka multi-guild, server lama itu hampir
+ *     pasti yang pertama memanggil (event ready/interaction). Log jelas
+ *     dicetak supaya admin bisa audit siapa yang mengklaim.
+ *
+ * @returns {Object} raw config lama (belum di-merge), atau {} kalau tidak ada.
+ */
+function _claimLegacyConfigIfNeeded(guildId) {
+    if (legacyClaimed) return {};
+    if (!fs.existsSync(LEGACY_CONFIG_PATH)) return {};
+
+    const envGuild = process.env.GUILD_ID;
+    if (envGuild && envGuild !== guildId) return {};
+
+    try {
+        const raw = JSON.parse(fs.readFileSync(LEGACY_CONFIG_PATH, 'utf8'));
+        fs.mkdirSync(configDir, { recursive: true });
+        // Tulis ke file guild baru via writeFileSync langsung (bukan
+        // safeWriteJSON) — data masih raw; normalisasi + save penuh
+        // dilanjutkan oleh pipeline getConfig() setelah return.
+        fs.writeFileSync(configPathFor(guildId), JSON.stringify(raw, null, 2));
+        // Rename legacy → .migrated: jejak audit + anti klaim ulang.
+        try {
+            fs.renameSync(LEGACY_CONFIG_PATH, `${LEGACY_CONFIG_PATH}.migrated`);
+        } catch (renameErr) {
+            // Rename gagal (mis. FS Windows lock) — file lama tetap ada tapi
+            // flag legacyClaimed mencegah klaim kedua di process ini.
+            console.warn('⚠️ Gagal rename config.json lama:', renameErr.message);
+        }
+        legacyClaimed = true;
+        console.log(
+            `✅ Migrasi multi-guild v3.10.0: config.json lama dipindah ke data/config/${guildId}.json ` +
+                '(file lama di-rename config.json.migrated sebagai jejak).'
+        );
+        return raw;
+    } catch (err) {
+        console.warn('⚠️ Gagal migrasi config legacy (pakai DEFAULTS):', err.message);
+        return {};
+    }
+}
+
+/**
+ * Baca config guild (selalu fresh - anti cache).
  * - Kalau file tidak ada / rusak -> pakai DEFAULTS
  * - Kalau format v1 (flat) -> auto-migrate ke v2 (nested)
  * - Kalau format v2 -> merge dengan DEFAULTS supaya field baru tetap ada
@@ -108,24 +186,39 @@ const DEFAULTS = {
  * P2-4 FIX: sebelumnya pakai `delete require.cache` + `require()` yang
  * rentan race condition dan anti-pattern. Sekarang pakai readFileSync + JSON.parse
  * seperti manager lain.
+ *
+ * v3.10.0: signature getConfig(guildId). guildId WAJIB — tanpa guildId,
+ * fungsi ini throw (fail-fast). Silent fallback ke file global = bug
+ * cross-guild yang sulit dilacak (server A baca config server B);
+ * lebih baik caller langsung crash di dev/test ketahuan.
+ *
+ * @param {string} guildId - ID guild Discord (wajib)
  */
-function getConfig() {
+function getConfig(guildId) {
+    if (!guildId || typeof guildId !== 'string') {
+        throw new Error('getConfig(guildId): guildId wajib — multi-guild v3.10.0 (panggil resolveGuildId(interaction) di caller)');
+    }
+    const configPath = configPathFor(guildId);
+
     let raw = {};
     try {
         const fileContent = fs.readFileSync(configPath, 'utf8');
         raw = JSON.parse(fileContent);
     } catch (err) {
         if (err.code !== 'ENOENT') {
-            // File ada tapi rusak — log warning. Kalau ENOENT (file belum ada), silent.
-            console.warn('⚠️ config.json rusak, pakai DEFAULTS. Pesan:', err.message);
+            // File ada tapi rusak — log warning. Kalau ENOENT (file belum ada), cek legacy.
+            console.warn(`⚠️ config/${guildId}.json rusak, pakai DEFAULTS. Pesan:`, err.message);
             // v3.9.26: karantina file korup SEBELUM lanjut pakai DEFAULTS. Tanpa ini,
             // setField()/saveConfig() berikutnya menulis config BARU di atas file
             // korup — semua setting (roles/channels/products) hilang permanen tanpa
             // bekas. Dengan karantina, isi lama tersimpan sebagai
             // config.json.corrupt-<ts> untuk inspeksi/pulihkan manual.
             quarantineCorruptFile(configPath);
+        } else {
+            // v3.10.0: file guild ini belum ada — mungkin migrasi dari
+            // config.json era single-guild.
+            raw = _claimLegacyConfigIfNeeded(guildId);
         }
-        raw = {};
     }
 
     // === AUTO-MIGRATE v1 -> v2 ===
@@ -264,20 +357,20 @@ function getConfig() {
     // field custom) bukan cuma 5 key utama.
     if (didV1Migration) {
         try {
-            saveConfig(config);
-            console.log('✅ config.json lama (v1) otomatis di-migrate ke v2 (field modern preserve).');
+            saveConfig(guildId, config);
+            console.log(`✅ config guild ${guildId} lama (v1) otomatis di-migrate ke v2 (field modern preserve).`);
         } catch (e) {
             console.warn('⚠️ Gagal auto-save migrasi v1:', e.message);
         }
     }
     if (_migrationChanged) {
         try {
-            saveConfig(config);
+            saveConfig(guildId, config);
             // v3.9.37: pesan di-update — blok ini sekarang juga menambah
             // kategori midman (v3.9.32), bukan cuma rename Help/Report +
             // claim_giveaway (v3.9.18) seperti pesan lama.
             console.log(
-                '📦 Migration ticket categories: Help/Report rename + claim_giveaway + midman (rekber) ditambahkan.'
+                `📦 Migration ticket categories (guild ${guildId}): Help/Report rename + claim_giveaway + midman (rekber) ditambahkan.`
             );
         } catch (migErr) {
             console.warn('⚠️ Gagal save migration ticket categories:', migErr.message);
@@ -288,22 +381,39 @@ function getConfig() {
 }
 
 /**
- * Simpan config.json dengan format rapi.
+ * Simpan config guild dengan format rapi.
  * v3.9.0 FIX: pakai safeWriteJSON (atomic write via tmp+rename) supaya
- * kalau bot crash / OOM / power loss saat write, file config.json tidak
+ * kalau bot crash / OOM / power loss saat write, file config tidak
  * corrupt (truncated / empty). Sebelumnya pakai fs.writeFileSync langsung.
+ *
+ * v3.10.0: signature saveConfig(guildId, config) — folder data/config/
+ * dibuat otomatis (recursive) kalau belum ada.
+ *
+ * @param {string} guildId - ID guild Discord (wajib)
+ * @param {Object} config - objek config lengkap
  */
-function saveConfig(config) {
-    safeWriteJSON(configPath, config);
+function saveConfig(guildId, config) {
+    if (!guildId || typeof guildId !== 'string') {
+        throw new Error('saveConfig(guildId, config): guildId wajib — multi-guild v3.10.0');
+    }
+    fs.mkdirSync(configDir, { recursive: true });
+    safeWriteJSON(configPathFor(guildId), config);
 }
 
 /**
  * Set nilai nested (mis. 'roles.admin' atau 'channels.welcome').
  * v3.9.0 FIX: sanitize dotPath untuk cegah prototype pollution
  * (mis. '__proto__.polluted' atau 'constructor.prototype.x').
+ *
+ * v3.10.0: signature setField(guildId, dotPath, value) — config guild
+ * yang diubah hanya milik guild itu.
+ *
+ * @param {string} guildId - ID guild Discord (wajib)
+ * @param {string} dotPath - path nested, mis. 'roles.admin'
+ * @param {*} value
  */
-function setField(dotPath, value) {
-    const config = getConfig();
+function setField(guildId, dotPath, value) {
+    const config = getConfig(guildId);
     const keys = dotPath.split('.');
 
     // Reject keys yang bisa menyentuh Object.prototype
@@ -322,7 +432,7 @@ function setField(dotPath, value) {
         cur = cur[keys[i]];
     }
     cur[keys[keys.length - 1]] = value;
-    saveConfig(config);
+    saveConfig(guildId, config);
 
     // v3.9.2: invalidate permissions cache kalau admin role berubah,
     // supaya perubahan langsung efektif tanpa nunggu TTL 30 detik.
@@ -382,4 +492,4 @@ function fillTemplate(text, vars = {}) {
     return result;
 }
 
-module.exports = { getConfig, saveConfig, setField, fillTemplate, DEFAULTS };
+module.exports = { getConfig, saveConfig, setField, fillTemplate, DEFAULTS, configPathFor };

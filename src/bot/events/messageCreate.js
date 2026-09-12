@@ -384,7 +384,8 @@ async function hookAfkSystem(message) {
  * Tambah XP ke user. Kalo naik level, announce + kasih role reward (kalau ada).
  */
 async function hookLeveling(message) {
-    const config = getConfig();
+    // v3.10.0 multi-guild: konfigurasi leveling milik guild pesan ini.
+    const config = getConfig(message.guild.id);
     const levelingConfig = config.leveling;
     if (!levelingConfig || !levelingConfig.enabled) return;
 

@@ -26,7 +26,11 @@ const fs = require('fs');
 const path = require('path');
 
 const DATA_DIR = path.join(__dirname, '..', '..', 'data');
-const configPath = path.join(DATA_DIR, 'config.json');
+// v3.10.0: config per-guild — mock makeMember//set-role pakai guild 'g_br',
+// mock /test-booster lokal pakai guild 'g_tb'. writeConfig menulis dua-duanya
+// supaya kedua jalur handler membaca config yang sama.
+const CONFIG_GUILD_IDS = ['g_br', 'g_tb'];
+const configPaths = CONFIG_GUILD_IDS.map(g => path.join(DATA_DIR, 'config', `${g}.json`));
 const boostsPath = path.join(DATA_DIR, 'boosts.json');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
@@ -35,7 +39,7 @@ if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 // === boosts.json                                   ===
 // ====================================================
 const backups = [
-    { path: configPath, had: fs.existsSync(configPath) },
+    ...configPaths.map(p => ({ path: p, had: fs.existsSync(p) })),
     { path: boostsPath, had: fs.existsSync(boostsPath) }
 ];
 for (const b of backups) {
@@ -58,9 +62,12 @@ process.on('exit', () => {
 // === Helpers                                       ===
 // ====================================================
 
-/** Tulis config.json (roles + channels). */
+/** Tulis config guild mock (roles + channels) — v3.10.0: per-guild path. */
 function writeConfig({ roles = {}, channels = {} } = {}) {
-    fs.writeFileSync(configPath, JSON.stringify({ channels, roles, messages: {} }, null, 4));
+    fs.mkdirSync(path.join(DATA_DIR, 'config'), { recursive: true });
+    for (const p of configPaths) {
+        fs.writeFileSync(p, JSON.stringify({ channels, roles, messages: {} }, null, 4));
+    }
 }
 
 /** Role booster standar (position 3, di bawah role bot di posisi 10). */
@@ -357,8 +364,8 @@ test('/set-role booster: config tersimpan + retroaktif ke booster yang ada + rep
 
     await require('../../src/commands/config')(interaction);
 
-    // Config tersimpan.
-    const saved = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    // Config tersimpan (v3.10.0: /set-role menulis config guild 'g_br').
+    const saved = JSON.parse(fs.readFileSync(configPaths[0], 'utf8'));
     assert.strictEqual(saved.roles.booster, 'r_boost', 'roles.booster tersimpan');
     // Retroaktif: booster yang sedang boost langsung dapat role.
     assert.strictEqual(booster.__calls.add.length, 1, 'booster live langsung di-add');

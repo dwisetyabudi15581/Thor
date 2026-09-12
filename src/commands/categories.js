@@ -7,13 +7,15 @@
  * untuk render button dinamis.
  */
 
-const { EmbedBuilder, MessageFlags, getConfig, saveConfig, logAudit, safeEditReply } = require('./_shared');
+const { EmbedBuilder, MessageFlags, getConfig, saveConfig, resolveGuildId, logAudit, safeEditReply } = require('./_shared');
 const { isValidEmoji } = require('../infra/text');
 
 const CATEGORY_ID_REGEX = /^[a-zA-Z0-9_-]{1,30}$/;
 
 module.exports = async function (interaction) {
-    const config = getConfig();
+    // v3.10.0 multi-guild: kategori tiket disimpan di config guild ini.
+    const guildId = resolveGuildId(interaction);
+    const config = getConfig(guildId);
 
     // === ADD CATEGORY ===
     if (interaction.commandName === 'add-category') {
@@ -74,7 +76,7 @@ module.exports = async function (interaction) {
         };
         categories.push(newCategory);
         config.ticketCategories = categories;
-        saveConfig(config);
+        saveConfig(guildId, config);
 
         await logAudit(interaction.client, {
             action: 'ADD_CATEGORY',
@@ -182,7 +184,7 @@ module.exports = async function (interaction) {
             });
         }
 
-        saveConfig(config);
+        saveConfig(guildId, config);
 
         await logAudit(interaction.client, {
             action: 'REMOVE_CATEGORY',
@@ -266,7 +268,7 @@ module.exports = async function (interaction) {
         }
 
         config.ticketCategories = categories;
-        saveConfig(config);
+        saveConfig(guildId, config);
 
         await logAudit(interaction.client, {
             action: 'UPDATE_CATEGORY',

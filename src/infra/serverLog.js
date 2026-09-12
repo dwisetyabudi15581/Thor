@@ -76,7 +76,9 @@ async function logServerEvent(client, data) {
     let channelId;
     try {
         const { getConfig } = require('../data/configManager');
-        const config = getConfig();
+        // v3.10.0 multi-guild: channel server-log dibaca dari config guild
+        // yang bersangkutan (data.guildId sudah bagian kontrak sejak v3.9.43).
+        const config = getConfig(data.guildId);
         channelId = config.channels && config.channels['server-log'];
     } catch (_err) {
         return false; // config rusak — skip

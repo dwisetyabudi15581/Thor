@@ -5,6 +5,23 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 Legend: 🔴 critical · 🟠 high · 🟡 medium · 🟢 improvement
 
+## [3.10.0] — 2026-09-12
+
+### Added — 🌍 FASE 1 MULTI-GUILD: config per-server
+
+- 🟢 **Config sekarang PER-GUILD: `data/config/<guildId>.json`.** Sebelumnya satu file global `data/config.json` dipakai bersama SEMUA server yang meng-invite bot — admin server A menjalankan `/set-channel welcome`, server B ikut berubah (timpa-menimpa). Kini tiap server punya file config sendiri. Ini fondasi untuk membuka bot ke publik (hosted multi-server): data layer lain (key, warn, stats, ticket, deal rekber) memang sudah guild-scoped sejak awal — configManager adalah satu-satunya titik data global yang tersisa.
+- 🟢 **Migrasi otomatis satu kali:** `data/config.json` lama (era single-guild) dipindah ke `data/config/<guildId>.json` saat guild yang sah pertama kali membaca config. File lama di-rename `config.json.migrated` sebagai jejak audit (tidak dihapus). Aturan klaim: kalau `GUILD_ID` di-set (mode single-guild v3.9.26), hanya guild itu yang boleh klaim — server lain dapat DEFAULTS murni.
+- 🟢 **API baru `resolveGuildId(interaction)`** (`src/infra/guild.js`) — satu pintu resolusi ID guild dari interaction (cek `guildId` → fallback `guild.id`), dipakai semua domain command/interaction handler. `getConfig(guildId)` / `saveConfig(guildId, config)` / `setField(guildId, dotPath, value)` kini WAJIB menerima guildId — tanpa guildId langsung throw dengan pesan jelas (fail-fast: bug cross-guild ketahuan saat dev/test, bukan senyap di produksi).
+- 🟢 **Cache admin-role permission kini PER-GUILD** (`src/infra/permissions.js`): sebelumnya satu variabel global 30 detik — role admin server A terbaca oleh server B. Sekarang Map per guild dengan TTL yang sama.
+- 🟢 **backupManager mendukung direktori:** `FILES_TO_BACKUP` entri `'config'` di-copy recursive (semua `*.json` per-guild ikut). Backup lama (pre-3.10.0, `config.json` datar) tetap bisa di-restore — file legacy diletakkan kembali sebagai `data/config.json` dan diklaim migrasi saat dibaca (tidak menimpa config guild yang sudah aktif).
+- 🟢 **`.gitignore`:** folder `data/config/` di-ignore (runtime per-guild).
+- 🟡 **19 file test suite di-update** ke pola per-guild: sandbox menulis `data/config/<guildId>.json`, mock interaction membawa `guildId`, dan helper `resetDataFile`/`writeDataJSON` mendukung path bertingkat. Total tetap 598 test — semua hijau.
+
+### Catatan perilaku
+
+- **`GUILD_ID` kosong = mode multi-guild penuh** — event & command dari semua server diproses, slash command teregistrasi global. Kalau bot Anda saat ini single-server, TIDAK ADA yang berubah: set `GUILD_ID` seperti biasa, config lama otomatis dimigrasi saat bot start.
+- Fase 2 (next): guard `ALLOWED_GUILD_IDS` (allowlist server publik) + persiapan verifikasi Discord (batas 100 server).
+
 ## [3.9.60] — 2026-09-12
 
 ### Fixed — 🧪 audit subsistem backup/restore (test merah di fresh clone)

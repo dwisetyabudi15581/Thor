@@ -38,7 +38,8 @@ const dataDir = path.join(__dirname, '..', '..', 'data');
 // === Sandbox: file data produksi di-snapshot & restore ===
 // === (pola hardeningV37.test.js / midman.test.js)      ===
 // ====================================================
-const SANDBOX_FILES = ['deals.json', 'config.json', 'tickets.json'];
+// v3.10.0: config per-guild — mock guild file ini pakai 'g_v38'.
+const SANDBOX_FILES = ['deals.json', 'config/g_v38.json', 'tickets.json'];
 const backups = [];
 for (const f of SANDBOX_FILES) {
     const p = path.join(dataDir, f);
@@ -67,6 +68,8 @@ process.on('exit', () => {
 
 function resetDataFile(name, content) {
     const p = path.join(dataDir, name);
+    // v3.10.0: name bisa path bertingkat (config/<guildId>.json).
+    fs.mkdirSync(path.dirname(p), { recursive: true });
     if (content === null) {
         if (fs.existsSync(p)) fs.unlinkSync(p);
     } else {
@@ -244,7 +247,11 @@ function seedDeal(channelId, overrides = {}) {
 }
 
 function seedConfig() {
-    resetDataFile('config.json', { roles: { admin: 'ra', midman: 'rm' }, channels: {} });
+    // v3.10.0: config per-guild — tulis config yang sama ke SEMUA guild mock
+    // yang dipakai file ini ('g_v38' utama + varian deal-flow c/d/e).
+    for (const gid of ['g_v38', 'g_v38c', 'g_v38d', 'g_v38e']) {
+        resetDataFile(`config/${gid}.json`, { roles: { admin: 'ra', midman: 'rm' }, channels: {} });
+    }
 }
 
 // ====================================================

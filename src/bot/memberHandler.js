@@ -76,7 +76,7 @@ async function onMemberAdd(member) {
 
     if (user.bot) return;
 
-    const config = getConfig();
+    const config = getConfig(guild.id);
 
     try {
         const { recordJoin } = require('../data/statsManager');
@@ -135,7 +135,7 @@ async function onMemberRemove(member) {
 
     if (user.bot) return;
 
-    const config = getConfig();
+    const config = getConfig(guild.id);
 
     // v3.9.48: fix silent failure (pola sama dengan welcome di atas) — member
     // keluar tanpa goodbye DAN tanpa log membuat admin menebak-nebak.

@@ -28,7 +28,8 @@ const DATA_DIR = path.join(__dirname, '..', '..', 'data');
 // ====================================================
 // === Sandbox: snapshot & restore file data produksi ===
 // ====================================================
-const SANDBOX_FILES = ['tickets.json', 'config.json', 'keys.json', 'scheduledRoles.json', 'stats.json', 'deals.json'];
+// v3.10.0: config per-guild — mock interaksi file ini pakai 'g38', test deal-flow pakai 'g-create'.
+const SANDBOX_FILES = ['tickets.json', 'config/g38.json', 'config/g-create.json', 'keys.json', 'scheduledRoles.json', 'stats.json', 'deals.json'];
 const backups = new Map();
 for (const f of SANDBOX_FILES) {
     const p = path.join(DATA_DIR, f);
@@ -53,6 +54,8 @@ process.on('exit', () => {
 
 function resetDataFile(name, content) {
     const p = path.join(DATA_DIR, name);
+    // v3.10.0: name bisa path bertingkat (config/<guildId>.json).
+    fs.mkdirSync(path.dirname(p), { recursive: true });
     if (content === null || content === undefined) {
         if (fs.existsSync(p)) fs.unlinkSync(p);
     } else {
@@ -136,6 +139,8 @@ function makeMockInteraction({ customId, type = 'button', id, channel, guild, co
     const interaction = {
         id: id || `v3938-${customId}-${Date.now()}-${Math.random()}`,
         customId,
+        // v3.10.0: handler domain membaca config per-guild (meta tiket pakai 'g38').
+        guildId: 'g38',
         replied: false,
         deferred: false,
         isRepliable: () => true,
@@ -187,7 +192,7 @@ function makeMockInteraction({ customId, type = 'button', id, channel, guild, co
 }
 
 function seedKeyTicketConfig() {
-    resetDataFile('config.json', {
+    resetDataFile('config/g38.json', {
         roles: { admin: 'role-admin' },
         products: [
             {
@@ -362,7 +367,8 @@ test('FIX 2c: channel ter-lock oleh admin lain → submit kedua DITOLAK "⏳", s
 
 test('FIX 3a: createTicket menyimpan productValue (ID stabil) di samping productName (label)', async () => {
     resetDataFile('tickets.json', {});
-    resetDataFile('config.json', { roles: { admin: 'role-admin' } });
+    // v3.10.0: config per-guild — mock guild test ini pakai id 'g-create'.
+    resetDataFile('config/g-create.json', { roles: { admin: 'role-admin' } });
     resetDataFile('deals.json', []);
 
     const created = [];
@@ -496,7 +502,7 @@ test('FIX 6c: pesan error key duplikat TIDAK menyertakan nilai key', () => {
 // ====================================================
 
 test('FIX 7: saveTranscript >100 pesan → bukti pembayaran di AWAL tiket ikut terarsip (paginated)', async () => {
-    resetDataFile('config.json', { channels: { transcript: 'ch-trans' } });
+    resetDataFile('config/g38.json', { channels: { transcript: 'ch-trans' } });
 
     // 150 pesan: id naik seiring waktu (snowflake), konten pesan #1 = bukti bayar.
     const msgs = [];
@@ -522,7 +528,7 @@ test('FIX 7: saveTranscript >100 pesan → bukti pembayaran di AWAL tiket ikut t
     const ticketChannel = {
         id: 'ch-t7',
         name: 'ticket-t7',
-        guild: { channels: { cache: new Map([['ch-trans', transcriptChannel]]) } },
+        guild: { id: 'g38', channels: { cache: new Map([['ch-trans', transcriptChannel]]) } },
         messages: {
             fetch: async opts => {
                 const sorted = [...msgs].sort((a, b) => Number(b.id) - Number(a.id));

@@ -36,7 +36,8 @@ const dataDir = path.join(__dirname, '..', '..', 'data');
 // === Sandbox: file data produksi di-snapshot & restore ===
 // === (pola midman.test.js / ticketCloseButtons.test.js) ===
 // ====================================================
-const SANDBOX_FILES = ['deals.json', 'config.json', 'tickets.json'];
+// v3.10.0: config per-guild — mock interaksi pakai 'g_v3937', mock deal-flow pakai 'g_deal'.
+const SANDBOX_FILES = ['deals.json', 'config/g_v3937.json', 'config/g_deal.json', 'tickets.json'];
 const backups = [];
 for (const f of SANDBOX_FILES) {
     const p = path.join(dataDir, f);
@@ -65,6 +66,8 @@ process.on('exit', () => {
 
 function resetDataFile(name, content) {
     const p = path.join(dataDir, name);
+    // v3.10.0: name bisa path bertingkat (config/<guildId>.json).
+    fs.mkdirSync(path.dirname(p), { recursive: true });
     if (content === null) {
         if (fs.existsSync(p)) fs.unlinkSync(p);
     } else {
@@ -77,12 +80,14 @@ function resetDataFile(name, content) {
 // ====================================================
 
 test('router v3.9.37: kategori custom "midman_jual" (prefix midman) di-route ke TICKET, tidak mati di midman', async () => {
-    resetDataFile('config.json', {}); // → DEFAULTS (midman_jual tidak terdaftar)
+    resetDataFile('config/g_v3937.json', {}); // → DEFAULTS (midman_jual tidak terdaftar)
     const routeInteraction = require('../../src/interactions');
     const replies = [];
     const interaction = {
         id: `v3937-router-${Date.now()}-${Math.random()}`,
         customId: 'ticket_cat:midman_jual',
+        // v3.10.0: handler domain membaca config per-guild.
+        guildId: 'g_v3937',
         replied: false,
         deferred: false,
         isRepliable: () => true,
@@ -109,11 +114,13 @@ test('router v3.9.37: kategori custom "midman_jual" (prefix midman) di-route ke 
 });
 
 test('router v3.9.37: tombol persis "ticket_cat:midman" tetap dispatch ke domain midman', async () => {
-    resetDataFile('config.json', { roles: { admin: 'ra', midman: 'rm' } });
+    resetDataFile('config/g_v3937.json', { roles: { admin: 'ra', midman: 'rm' } });
     const routeInteraction = require('../../src/interactions');
     const interaction = {
         id: `v3937-router2-${Date.now()}-${Math.random()}`,
         customId: 'ticket_cat:midman',
+        // v3.10.0: handler domain membaca config per-guild.
+        guildId: 'g_v3937',
         replied: false,
         deferred: false,
         isRepliable: () => true,
@@ -165,10 +172,12 @@ test('findEmptyCategoryWarnings v3.9.37: kategori midman tidak di-warn (bukan ka
 
 test('buildTicketPanel v3.9.37: option midman di dropdown menyebut deal/escrow (bukan "buka tiket")', () => {
     const { buildTicketPanel } = require('../../src/commands/panels');
-    resetDataFile('config.json', {});
+    resetDataFile('config/g_v3937.json', {});
     const build = buildTicketPanel(
         { useDropdown: true, categoryIds: [], title: 'Panel' },
         {
+            // v3.10.0: builder membaca config per-guild dari ctx.guild.id.
+            guild: { id: 'g_v3937', name: 'ServerTes' },
             client: { user: { username: 'Bot', displayAvatarURL: () => 'http://x/a.png' } }
         }
     );
@@ -431,7 +440,8 @@ function makeFlowInteraction({ type, customId, values, fields, guild }) {
 }
 
 test('deal flow v3.9.37: penjual dengan tiket reguler aktif DITOLAK (asimetri diperbaiki)', async () => {
-    resetDataFile('config.json', { roles: { admin: 'ra', midman: 'rm' } });
+    // v3.10.0: config per-guild — makeMidmanGuild pakai id 'g_deal'.
+    resetDataFile('config/g_deal.json', { roles: { admin: 'ra', midman: 'rm' } });
     resetDataFile('deals.json', {});
     resetDataFile('tickets.json', {
         ch_ticket_seller: { userId: 'seller1', guildId: 'g_deal', productName: 'Help', category: 'help' }
@@ -469,7 +479,8 @@ test('deal flow v3.9.37: penjual dengan tiket reguler aktif DITOLAK (asimetri di
 });
 
 test('deal flow v3.9.37 (regression): penjual tanpa tiket aktif → deal tetap dibuat normal', async () => {
-    resetDataFile('config.json', { roles: { admin: 'ra', midman: 'rm' }, channels: {} });
+    // v3.10.0: config per-guild — makeMidmanGuild pakai id 'g_deal'.
+    resetDataFile('config/g_deal.json', { roles: { admin: 'ra', midman: 'rm' }, channels: {} });
     resetDataFile('deals.json', {});
     resetDataFile('tickets.json', {});
     const guild = makeMidmanGuild({ sellerHasTicket: false });
@@ -514,7 +525,7 @@ test('deal flow v3.9.37 (regression): penjual tanpa tiket aktif → deal tetap d
 
 test('saveTranscript v3.9.37: baris hard-split sisa tepat 1900 char tidak menghasilkan chunk kosong', async () => {
     const { saveTranscript } = require('../../src/data/ticketManager');
-    resetDataFile('config.json', { channels: { transcript: 'ch_transcript' } });
+    resetDataFile('config/g_v3937.json', { channels: { transcript: 'ch_transcript' } });
 
     // Satu pesan user yang panjang: baris transcript-nya harus > CHUNK_SIZE
     // supaya jalur hard-split jalan. Sisa slice dibuat GENAP 1900 + header
@@ -538,7 +549,7 @@ test('saveTranscript v3.9.37: baris hard-split sisa tepat 1900 char tidak mengha
     const ticketChannel = {
         id: 'ch_ticket',
         name: 'ticket-u1',
-        guild: { channels: { cache: new Map([['ch_transcript', transcriptChannel]]) } },
+        guild: { id: 'g_v3937', channels: { cache: new Map([['ch_transcript', transcriptChannel]]) } },
         messages: {
             fetch: async () =>
                 new Map([

@@ -109,8 +109,11 @@ function makeStubMember({ premiumSinceTimestamp = null, boosterChannelId = null,
  * pattern from welcomeDiagnostics.test.js).
  */
 function writeTestConfig({ boosterChannel = null, serverLogChannel = null } = {}) {
+    // v3.10.0: config per-guild — handler boost membaca config guild mock ini.
+    const guildConfigPath = path.join(DATA_DIR, 'config', `${GUILD_ID}.json`);
+    fs.mkdirSync(path.dirname(guildConfigPath), { recursive: true });
     fs.writeFileSync(
-        path.join(DATA_DIR, 'config.json'),
+        guildConfigPath,
         JSON.stringify({
             channels: {
                 ...(boosterChannel ? { 'server-booster': boosterChannel } : {}),
@@ -120,6 +123,12 @@ function writeTestConfig({ boosterChannel = null, serverLogChannel = null } = {}
             products: []
         }, null, 4)
     );
+    // Bersihkan file config guild mock saat test selesai (tidak mencemari data/).
+    process.on('exit', () => {
+        try {
+            fs.rmSync(guildConfigPath, { force: true });
+        } catch (_) {}
+    });
 }
 
 test('boostManager: record start → end → start tracks state + counts, idempotent', () => {
@@ -484,7 +493,7 @@ test('PRODUCT PRICE GUARD: /add-product rejects unparseable price, shows the par
     assert.match(replies[0].content, /tidak bisa dibaca sebagai angka/);
     assert.match(replies[0].content, /30rb/); // v3.9.54: daftar format internasional ($3 · €25 · Rp 30.000 · 30rb)
     assert.match(replies[0].content, /\$3/);
-    const configAfterReject = require('../../src/data/configManager').getConfig();
+    const configAfterReject = require('../../src/data/configManager').getConfig(GUILD_ID);
     assert.strictEqual(configAfterReject.products.length, 0, 'tidak ada yang tersimpan');
 
     // 2. Valid Indonesian suffix → saved + the stats amount is shown.
@@ -492,7 +501,7 @@ test('PRODUCT PRICE GUARD: /add-product rejects unparseable price, shows the par
     await productsCommand(makeInteraction('25rb'));
     assert.match(replies[0].content, /✅ Produk ditambahkan/);
     assert.match(replies[0].content, /Tercatat di stats: \*\*25\.000\*\*/); // v3.9.54: tanpa prefiks "Rp"
-    const configAfterAdd = require('../../src/data/configManager').getConfig();
+    const configAfterAdd = require('../../src/data/configManager').getConfig(GUILD_ID);
     assert.strictEqual(configAfterAdd.products.length, 1);
     assert.strictEqual(configAfterAdd.products[0].price, '25rb');
 
@@ -506,7 +515,7 @@ test('PRODUCT PRICE GUARD: /add-product rejects unparseable price, shows the par
     };
     await productsCommand(updInteraction);
     assert.match(replies[0].content, /tidak bisa dibaca sebagai angka/);
-    const configAfterUpdate = require('../../src/data/configManager').getConfig();
+    const configAfterUpdate = require('../../src/data/configManager').getConfig(GUILD_ID);
     assert.strictEqual(configAfterUpdate.products[0].price, '25rb', 'harga tidak berubah setelah penolakan');
 });
 
@@ -539,7 +548,7 @@ test('PRODUCT PRICE GUARD v3.9.55: /add-product menerima desimal $5.88 → stats
     // id-ID memakai koma desimal: 5.88 → "5,88" — BUKAN "588" (salah 100x di
     // era pra-v3.9.55 saat dot selalu dianggap pemisah ribuan).
     assert.match(replies[0].content, /Tercatat di stats: \*\*5,88\*\*/);
-    const configAfter = require('../../src/data/configManager').getConfig();
+    const configAfter = require('../../src/data/configManager').getConfig(GUILD_ID);
     assert.strictEqual(configAfter.products.length, 1, 'produk tersimpan');
     assert.strictEqual(configAfter.products[0].price, '$5.88', 'harga tersimpan persis seperti input admin');
 });
@@ -575,7 +584,7 @@ test('PRODUCT PRICE GUARD v3.9.57: /add-product desimal POLOS 5.88 → stats men
     // "5.88" polos → 5,88 (id-ID koma desimal) — BUKAN 588 seperti era
     // pra-v3.9.57, dan bukan 5,9 (cents dipertahankan, maksimal 2 desimal).
     assert.match(replies[0].content, /Tercatat di stats: \*\*5,88\*\*/);
-    const configAfter = require('../../src/data/configManager').getConfig();
+    const configAfter = require('../../src/data/configManager').getConfig(GUILD_ID);
     assert.strictEqual(configAfter.products.length, 1, 'produk tersimpan');
     assert.strictEqual(configAfter.products[0].price, '5.88', 'harga tersimpan persis seperti input admin');
 });

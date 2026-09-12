@@ -13,11 +13,11 @@
  */
 
 const { MessageFlags } = require('discord.js');
-const { getConfig } = require('../commands/_shared');
+const { getConfig, resolveGuildId } = require('../commands/_shared');
 
 module.exports = async function (interaction) {
     // Router memanggil handler ini HANYA untuk customId === 'btn_verify'.
-    const config = getConfig();
+    const config = getConfig(resolveGuildId(interaction));
 
     if (!config.roles.verified) {
         return interaction.reply({

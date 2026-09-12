@@ -33,7 +33,8 @@ const dataDir = path.join(__dirname, '..', '..', 'data');
 // === Sandbox: file data produksi di-snapshot & restore ===
 // === (pola hardeningV31.test.js)                      ===
 // ====================================================
-const SANDBOX_FILES = ['deals.json', 'config.json', 'tickets.json'];
+// v3.10.0: config per-guild — test configManager file ini pakai guild 'g_midman'.
+const SANDBOX_FILES = ['deals.json', 'config/g_midman.json', 'tickets.json'];
 const backups = [];
 for (const f of SANDBOX_FILES) {
     const p = path.join(dataDir, f);
@@ -63,6 +64,8 @@ process.on('exit', () => {
 
 function resetDataFile(name, content) {
     const p = path.join(dataDir, name);
+    // v3.10.0: name bisa path bertingkat (config/<guildId>.json).
+    fs.mkdirSync(path.dirname(p), { recursive: true });
     if (content === null) {
         if (fs.existsSync(p)) fs.unlinkSync(p);
         return;
@@ -523,9 +526,9 @@ function freshConfigManager() {
 }
 
 test('config DEFAULTS: midman fee ada & kategori midman terdaftar', () => {
-    resetDataFile('config.json', {});
+    resetDataFile('config/g_midman.json', {});
     const { getConfig, DEFAULTS } = freshConfigManager();
-    const config = getConfig();
+    const config = getConfig('g_midman');
     assert.strictEqual(DEFAULTS.midman.feeMode, 'percent');
     assert.strictEqual(DEFAULTS.midman.feeValue, 5);
     assert.strictEqual(DEFAULTS.midman.category, '🤝 REKBER');
@@ -537,7 +540,7 @@ test('config DEFAULTS: midman fee ada & kategori midman terdaftar', () => {
 
 test('config migration: config lama otomatis dapat kategori midman (sekali saja)', () => {
     // Simulasi config v3.9.31 lama — belum ada kategori midman.
-    resetDataFile('config.json', {
+    resetDataFile('config/g_midman.json', {
         roles: { admin: '123' },
         ticketCategories: [
             { id: 'transaction', label: 'Beli Key / Transaksi', emoji: '🔑', style: 'Primary', requiresKey: true },
@@ -546,32 +549,32 @@ test('config migration: config lama otomatis dapat kategori midman (sekali saja)
         products: []
     });
     const { getConfig } = freshConfigManager();
-    const config = getConfig();
+    const config = getConfig('g_midman');
     const cats = config.ticketCategories.map(c => c.id);
     assert.ok(cats.includes('midman'), 'migration harus menambah kategori midman');
     assert.ok(config.ticketCategories.find(c => c.id === 'midman').emoji === '🤝');
     // Migration di-save ke disk — getConfig ulang tidak menambah dobel.
-    const config2 = freshConfigManager().getConfig();
+    const config2 = freshConfigManager().getConfig('g_midman');
     const midmanCount = config2.ticketCategories.filter(c => c.id === 'midman').length;
     assert.strictEqual(midmanCount, 1, 'kategori midman tidak boleh dobel setelah re-read');
 });
 
 test('config migration: flag midmanCategoryDismissed mencegah re-add setelah /remove-category', () => {
-    resetDataFile('config.json', {
+    resetDataFile('config/g_midman.json', {
         roles: { admin: '123' },
         midmanCategoryDismissed: true,
         ticketCategories: [{ id: 'transaction', label: 'Beli Key', emoji: '🔑', style: 'Primary' }],
         products: []
     });
     const { getConfig } = freshConfigManager();
-    const cats = getConfig().ticketCategories.map(c => c.id);
+    const cats = getConfig('g_midman').ticketCategories.map(c => c.id);
     assert.ok(!cats.includes('midman'), 'kategori midman TIDAK boleh ditambah lagi jika dismissed');
 });
 
 test('config merge: field midman custom admin preserve', () => {
-    resetDataFile('config.json', { roles: { admin: '1' }, midman: { feeMode: 'flat', feeValue: 2500 }, products: [] });
+    resetDataFile('config/g_midman.json', { roles: { admin: '1' }, midman: { feeMode: 'flat', feeValue: 2500 }, products: [] });
     const { getConfig } = freshConfigManager();
-    const config = getConfig();
+    const config = getConfig('g_midman');
     assert.strictEqual(config.midman.feeMode, 'flat');
     assert.strictEqual(config.midman.feeValue, 2500);
     // Field yang tidak di-set admin fallback ke DEFAULTS (category).

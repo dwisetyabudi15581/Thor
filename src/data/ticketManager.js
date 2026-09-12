@@ -302,7 +302,8 @@ async function findActiveTicketFor(guild, userId) {
 async function createTicket(interaction, product) {
     const guild = interaction.guild;
     const user = interaction.user;
-    const config = getConfig();
+    // v3.10.0 multi-guild: kategori/produk/role tiket dibaca dari config guild ini.
+    const config = getConfig(guild.id);
 
     // P2-2 FIX: cek lock dulu — kalau sedang diproses, reject.
     // v3.9.8: lock di-scope per guild supaya user di multi-guild bot gak saling block.
@@ -570,7 +571,8 @@ async function createTicket(interaction, product) {
  * Dipakai oleh Set Key flow & closeTicket.
  */
 async function sendInvoice(channel, userId, productName, price, closer) {
-    const config = getConfig();
+    // v3.10.0 multi-guild: channel invoice dibaca dari config guild channel ini.
+    const config = getConfig(channel.guild?.id);
     if (!config.channels.invoice) return false;
     // v3.9.11 Phase 1: hapus magic string 'Bantuan/Lapor'.
     // Sekarang: kirim invoice untuk semua produk transaksi (bukan help/report).
@@ -640,7 +642,9 @@ function resolveProduct(config, meta) {
  * @param {boolean} isSuccess - true kalau transaksi sukses
  */
 async function saveTranscript(ticketChannel, meta, closer, isSuccess) {
-    const config = getConfig();
+    // v3.10.0 multi-guild: channel transcript dari config guild tiket ini.
+    // Prioritas: guild channel live → meta.guildId (tiket lama).
+    const config = getConfig(ticketChannel.guild?.id || meta?.guildId);
     const transcriptChannelId = config.channels?.transcript;
     if (!transcriptChannelId) return false;
 
@@ -838,7 +842,7 @@ async function closeTicket(channel, closer, isSuccess) {
         // v3.9.11 Phase 3: auto-save transcript ke channel transcript (kalau di-set).
         // Dilakukan SEBELUM delete channel supaya messages masih bisa di-fetch.
         // Failure tidak block close — log warning saja.
-        const config = getConfig();
+        const config = getConfig(channel.guild?.id || meta?.guildId);
         const transcriptChannelId = config.channels?.transcript;
         if (transcriptChannelId) {
             try {
