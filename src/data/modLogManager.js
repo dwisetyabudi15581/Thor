@@ -136,11 +136,26 @@ function modLogTypeLabel(type) {
     }
 }
 
+/**
+ * v3.9.60: reset cache in-memory supaya bacaan berikutnya reload dari disk.
+ * Dipanggil backupManager setelah /restore-backup — modlogs.json ikut
+ * di-restore (v3.9.60) dan cache `store` permanen yang masih menyimpan state
+ * SEBELUM-restore bakal ditulis balik ke file hasil restore oleh addModLog()
+ * berikutnya → riwayat moderasi hasil restore hilang senyap (kelas bug yang
+ * sama yang sudah diperbaiki untuk stats/serverstats/boosts).
+ * @returns {Object} store yang baru dimuat
+ */
+function reload() {
+    store = null;
+    return load();
+}
+
 module.exports = {
     addModLog,
     getModLogs,
     getModLogCount,
     modLogTypeLabel,
+    reload,
     _filePath: filePath,
     _resetForTests() {
         store = null;
