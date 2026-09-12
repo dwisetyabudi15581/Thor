@@ -11,6 +11,8 @@
 const { Events, EmbedBuilder } = require('discord.js');
 const { incrementMessages: trackMessage } = require('../../data/statsManager');
 const { getConfig } = require('../../data/configManager');
+// v3.11.0: guard allowlist multi-guild (fase 2).
+const { isGuildAllowed } = require('../../infra/guild');
 
 // Data managers untuk fitur baru
 const responderManager = require('../../data/responderManager');
@@ -91,12 +93,12 @@ async function onMessageCreate(message) {
         if (!message.author || message.author.bot || message.webhookId) return;
         if (!message.guild) return;
 
-        // v3.9.26 (single-guild hardening): kalau GUILD_ID di-set di .env, abaikan
-        // pesan dari guild lain. Bot single-guild — kalau tak sengaja di-invite ke
-        // server lain, tanpa guard ini: leveling jalan (config global!), XP tercecer
-        // ke levels.json, role ID guild utama di-add ke member guild lain (gagal),
-        // audit log nyasar ke channel guild utama. Guard = asuransi murah.
-        if (process.env.GUILD_ID && message.guild.id !== process.env.GUILD_ID) return;
+        // v3.9.26 → v3.11.0 (allowlist): abaikan pesan dari guild di luar
+        // ALLOWED_GUILD_IDS (fallback GUILD_ID; daftar kosong = semua guild).
+        // Tanpa guard ini, kalau bot di-invite ke server asing: leveling jalan
+        // dengan config guild asing, XP tercecer, role ID salah guild di-add,
+        // audit log nyasar. Guard = asuransi murah.
+        if (!isGuildAllowed(message.guild.id)) return;
 
         // Deteksi kalo Message Content Intent belum di-enable.
         // Pesan user yang datang dengan content kosong DAN bukan "memang tanpa

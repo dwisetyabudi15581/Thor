@@ -5,6 +5,22 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 Legend: 🔴 critical · 🟠 high · 🟡 medium · 🟢 improvement
 
+## [3.11.0] — 2026-09-12
+
+### Added — 🛡️ FASE 2 MULTI-GUILD: allowlist ALLOWED_GUILD_IDS
+
+- 🟢 **Guard allowlist `ALLOWED_GUILD_IDS`** (`src/infra/guild.js` — `getAllowedGuildIds()` + `isGuildAllowed()`): daftar server yang boleh memakai bot, dipisah koma/spasi (contoh: `ALLOWED_GUILD_IDS=111...,222...`). Prioritas: `ALLOWED_GUILD_IDS` > `GUILD_ID` > keduanya kosong (mode terbuka = perilaku v3.10.0). Fase 1 (v3.10.0) membuat data per-server AMAN, tapi bot yang di-invite ke server mana pun langsung diproses penuh — fase 2 memberi admin PINTU: server di luar daftar diabaikan total (pesan, join, boost, tiket, voice, interaction).
+- 🟢 **Semua 11 event handler bermigrasi ke guard allowlist** (messageCreate, messageUpdate, messageDelete, messageBulkDelete, interactionCreate, guildMemberAdd, guildMemberRemove, guildMemberUpdate, guildBanAdd, guildBanRemove, voiceStateUpdate) — pola `process.env.GUILD_ID && x !== process.env.GUILD_ID` diganti `!isGuildAllowed(x)`. Skip yang tadinya kelihatan (join/leave guild asing) tetap kelihatan, kini menyebut allowlist.
+- 🟢 **Registrasi slash command per-guild untuk SEMUA server allowlist** (ready.js): daftar command ke TIAP guild di daftar — instan di semua server sekaligus, dan server di luar daftar bahkan tidak melihat command-nya (bukan cuma diblokir saat dipakai). Guild allowlist yang belum ter-cache (belum di-invite) → warning jelas + tidak crash; kalau TIDAK ADA yang terjangkau → fallback global command (perilaku lama dipertahankan).
+- 🟢 **Startup kini per-guild untuk semua server allowlist:** cek channel welcome/goodbye/booster, catch-up boost offline, dan sinkronisasi counter server-stats berjalan untuk SETIAP guild allowlist (dulu cuma guild GUILD_ID / guild pertama yang dicek — guild kedua tidak pernah direkonsiliasi).
+- 🟢 **Gerbang klaim config legacy (v3.10.0) ikut allowlist:** allowlist TUNGGAL → hanya guild itu yang bisa klaim `config.json` lama (server lain tidak bisa "mencuri"); allowlist kosong/multi → pemanggil pertama (perilaku v3.10.0).
+- 🟢 **`.env.example`** didokumentasikan lengkap: prioritas 3 mode + contoh + cara menambah server baru (invite → tambah ID → restart).
+- 🟢 **+15 unit test (total 613):** `guildGuard.test.js` — parsing daftar (koma/spasi/entri kosong/prioritas atas GUILD_ID), guard murni (mode terbuka/anggota/DM null), guard event handler (join guild asing diabaikan + ter-log; interaction asing tidak pernah di-route), gerbang klaim legacy (guild asing dapat DEFAULTS, guild allowlist tunggal klaim + `.migrated`), `startupGuilds` (allowlist/filter/skip guild belum ter-cache), dan kontrak statis ready.js.
+
+### Kompatibilitas
+- **.env lama tidak perlu diubah apa pun** — tanpa `ALLOWED_GUILD_IDS`, `GUILD_ID` lama otomatis jadi allowlist satu entri (perilaku persis v3.9.26/v3.10.0). Tanpa keduanya → mode terbuka (persis v3.10.0).
+- Menambah server: invite bot → tambah ID ke `ALLOWED_GUILD_IDS` → restart.
+
 ## [3.10.0] — 2026-09-12
 
 ### Added — 🌍 FASE 1 MULTI-GUILD: config per-server

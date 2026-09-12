@@ -11,16 +11,19 @@
 const { Events, AuditLogEvent } = require('discord.js');
 const { onMemberRemove } = require('../memberHandler');
 const { logServerEvent, findAuditExecutor } = require('../../infra/serverLog');
+// v3.11.0: guard allowlist multi-guild (fase 2).
+const { isGuildAllowed } = require('../../infra/guild');
 // v3.9.51: channel counter server stats live.
 const { markStatsDirty } = require('../../data/serverstatsManager');
 
 async function onEvent(member) {
     try {
-        // v3.9.26 (single-guild hardening): abaikan member dari guild lain.
-        // v3.9.48: skip ini kini KELIHATAN (dulu return diam-diam).
-        if (process.env.GUILD_ID && member.guild?.id && member.guild.id !== process.env.GUILD_ID) {
+        // v3.9.26 → v3.11.0 (allowlist): abaikan member dari guild di luar
+        // ALLOWED_GUILD_IDS (fallback GUILD_ID; daftar kosong = semua guild).
+        // v3.9.48: skip ini KELIHATAN (dulu return diam-diam).
+        if (member.guild?.id && !isGuildAllowed(member.guild.id)) {
             console.warn(
-                `⚠️ Leave member dari guild lain (ID: ${member.guild.id}) diabaikan — GUILD_ID di-set ke server yang berbeda. Goodbye hanya jalan di guild GUILD_ID.`
+                `⚠️ Leave member dari guild lain (ID: ${member.guild.id}) diabaikan — guild ini tidak ada di allowlist (ALLOWED_GUILD_IDS / fallback GUILD_ID). Goodbye hanya jalan di guild yang di-allowlist.`
             );
             return;
         }

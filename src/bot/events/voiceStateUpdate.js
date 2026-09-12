@@ -25,14 +25,17 @@
 
 const { Events, PermissionFlagsBits, ChannelType } = require('discord.js');
 const tempVoiceManager = require('../../data/tempVoiceManager');
+// v3.11.0: guard allowlist multi-guild (fase 2).
+const { isGuildAllowed } = require('../../infra/guild');
 
 async function onVoiceStateUpdate(oldState, newState) {
     try {
         if (!newState.guild) return;
-        // v3.9.26 (single-guild hardening): abaikan voice event dari guild lain —
-        // tanpa ini, member guild kedua yang join trigger channel akan bikin temp
-        // voice ter-register ke tempVoice.json guild kedua (data nyasar).
-        if (process.env.GUILD_ID && newState.guild.id !== process.env.GUILD_ID) return;
+        // v3.9.26 → v3.11.0 (allowlist): abaikan voice event dari guild di luar
+        // ALLOWED_GUILD_IDS — tanpa ini, member guild asing yang join trigger
+        // channel akan bikin temp voice ter-register ke tempVoice.json guild
+        // asing (data nyasar).
+        if (!isGuildAllowed(newState.guild.id)) return;
 
         const guildId = newState.guild.id;
         const userId = newState.id;

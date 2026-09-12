@@ -2,7 +2,7 @@
 
 Bot Discord serbaguna untuk komunitas apa pun — server jualan, gaming, content creator, hingga komunitas umum. Semua konfigurasi dapat diatur langsung dari Discord melalui slash command, tanpa mengedit file.
 
-> **v3.10.0** · 92 slash command · 598 unit test · discord.js v14 · Node.js 18+ · multi-guild
+> **v3.11.0** · 92 slash command · 613 unit test · discord.js v14 · Node.js 18+ · multi-guild (allowlist)
 >
 > 📖 **[Panduan Admin Lengkap](./docs/ADMIN_GUIDE.md)** — setup, operasional harian, troubleshooting
 > 📜 **[Changelog](./CHANGELOG.md)** — riwayat semua versi

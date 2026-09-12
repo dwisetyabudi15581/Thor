@@ -8,12 +8,16 @@
 
 const { Events, AuditLogEvent } = require('discord.js');
 const { logServerEvent, findAuditExecutor, snip } = require('../../infra/serverLog');
+// v3.11.0: guard allowlist multi-guild (fase 2).
+const { isGuildAllowed } = require('../../infra/guild');
 
 async function onEvent(ban) {
     try {
         const { guild, user, reason } = ban;
         if (!guild?.id) return;
-        if (process.env.GUILD_ID && guild.id !== process.env.GUILD_ID) return;
+        // v3.11.0: guard allowlist — guild di luar ALLOWED_GUILD_IDS (fallback
+        // GUILD_ID) diabaikan; daftar kosong = mode terbuka (semua guild diproses).
+        if (!isGuildAllowed(guild.id)) return;
 
         // Executor + reason resmi dari audit log (reason param event sering null
         // kalau ban manual dari UI — audit log lebih lengkap).

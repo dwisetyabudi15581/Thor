@@ -1,4 +1,4 @@
-# 📖 Admin Guide — Thor Bot v3.10.0
+# 📖 Admin Guide — Thor Bot v3.11.0
 
 Panduan lengkap untuk admin server Discord yang menjalankan bot ini — cocok untuk admin baru yang pertama kali setup, maupun admin yang sudah berjalan sebagai referensi harian.
 
@@ -50,7 +50,7 @@ npm start
 - Di Discord, ketik `/` — semua **91 slash command** harus muncul
 - Jika command tidak muncul, pastikan `GUILD_ID` di `.env` benar
 
-> 🌍 **Multi-Guild (v3.10.0)** — sejak versi ini config bot **per-server** (`data/config/<guildId>.json`): admin server A tidak bisa menimpa setting server B. `GUILD_ID` di `.env` kini **opsional**: di-set = mode single-guild seperti biasa (bot mengabaikan server lain); **dikosongkan = mode multi-guild penuh** (semua server yang meng-invite bot diproses, command teregistrasi global ± 1 jam). Config lama `data/config.json` dimigrasi otomatis saat bot pertama kali membacanya (file lama di-rename jadi `config.json.migrated` — tidak dihapus). Mau invite bot ke server kedua? Cukup share invite link — admin server itu menjalankan `/set-role admin` sendiri dan semua konfigurasi mereka terpisah dari server Anda.
+> 🌍 **Multi-Guild (v3.10.0 + v3.11.0)** — config bot **per-server** (`data/config/<guildId>.json`): admin server A tidak bisa menimpa setting server B. Mode sekarang dikontrol **allowlist** di `.env`: (1) `ALLOWED_GUILD_IDS=111...,222...` = hanya server terdaftar yang diproses — command terdaftar **per-guild (INSTAN)** di tiap server terdaftar, server di luar daftar bahkan tidak melihat command-nya; (2) tanpa `ALLOWED_GUILD_IDS` tapi `GUILD_ID` di-set = perilaku lama single-guild (tidak berubah apa pun); (3) keduanya kosong = **mode terbuka** (semua server yang meng-invite diproses, command global ±1 jam). Config lama `data/config.json` dimigrasi otomatis saat guild yang sah pertama kali membacanya (file lama di-rename `config.json.migrated` — tidak dihapus). Mau invite bot ke server kedua? Invite bot ke server itu, tambahkan ID-nya ke `ALLOWED_GUILD_IDS`, restart — admin server itu menjalankan `/set-role admin` sendiri dan semua konfigurasi mereka terpisah dari server Anda.
 
 > 💡 **Lupa command apa namanya?** Ketik `/help` — sejak v3.9.39 ini **navigator interaktif** (bukan lagi satu embed panjang yang harus di-scroll), dan sejak **v3.9.44** katalognya disusun ulang jadi **20 kategori diurut prioritas pemakaian**: 🏠 home kini membuka dengan seksi **"Butuh apa sekarang?"** (member nakal? → Moderasi · mau jualan? → Panduan Cepat · mau pantau? → Log & Channel · server sepi? → Giveaway & Leveling), 📂 **dropdown kategori** untuk melompat, 🔍 **Cari Command** untuk kata kunci bebas (`key`, `panel`, `warn`...), atau langsung `/help search:<kata kunci>`. Sejak **v3.9.53 SEMUA tampilan kategori adalah panduan lengkap mandiri** — sintaks + perilaku per-command + jawaban ❓ pertanyaan yang paling sering ditanya member (daftar 📖 Semua Command tetap ringkas supaya selalu muat dalam satu embed). Semua navigasi terjadi di satu pesan ephemeral — tidak memenuhi channel.
 
@@ -1031,10 +1031,11 @@ Cooldown bersifat **per-user** — user A memicu tidak memengaruhi user B.
 
 ## 11. Riwayat Versi
 
-Riwayat lengkap semua versi (v3.9.0 – v3.10.0) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
+Riwayat lengkap semua versi (v3.9.0 – v3.11.0) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
 
 Ringkasan semua versi:
 
+- **v3.11.0** (2026-09-12) — 🛡️ **FASE 2 MULTI-GUILD: allowlist `ALLOWED_GUILD_IDS`**. Daftar ID server (dipisah koma) yang boleh memakai bot — prioritas `ALLOWED_GUILD_IDS` > `GUILD_ID` > keduanya kosong (mode terbuka). Semua 11 event handler berganti ke guard allowlist (`isGuildAllowed()`); registrasi slash command kini **per-guild untuk SEMUA server allowlist sekaligus** (instan, dan server di luar daftar tidak melihat command sama sekali); startup (cek channel, catch-up boost, sinkron server-stats) kini berjalan untuk setiap guild allowlist (dulu cuma guild pertama); gerbang klaim config legacy ikut allowlist (allowlist tunggal → hanya guild itu yang bisa klaim). **.env lama tidak perlu diubah** — tanpa `ALLOWED_GUILD_IDS`, `GUILD_ID` otomatis jadi allowlist satu entri. +15 unit test (total **613**).
 - **v3.10.0** (2026-09-12) — 🌍 **FASE 1 MULTI-GUILD: config per-server**. `data/config.json` global (dipakai bersama semua server yang meng-invite bot — admin server A menimpa setting server B) diganti **`data/config/<guildId>.json`** — satu file per server. Migrasi otomatis satu kali saat bot start (file lama jadi `config.json.migrated`). API internal `getConfig/saveConfig/setField` kini wajib `guildId` (fail-fast) via helper baru `resolveGuildId()`; cache admin-role permission jadi per-guild (dulu global — role admin server A terbaca server B); backup/restore mendukung folder `config/` recursive + backward-compat backup lama. 57 call site di 24 file src + 19 file test di-update; total tetap **598 test** hijau. `GUILD_ID` kosong = mode multi-guild penuh; server yang sekarang single-server tidak berubah apa pun.
 
 - **v3.9.60** (2026-09-12) — 🧪 **audit subsistem backup/restore (code review)**. Perbaikan 3 bug nyata: (1) **modlogs.json tidak pernah di-backup** — sejak v3.9.43 riwayat moderasi (timeout/kick/ban yang ditampilkan `/warn-list`) senyap tidak ikut `/backup-now` dan hilang oleh `/restore-backup`; file kini masuk FILES_TO_BACKUP dan dipaten regression test bebas environment (cross-check registry 20 file). (2) **Penimpaan cache basi pasca-restore untuk boosts.json** — store in-memory permanen boostManager tidak pernah di-invalidate setelah restore, jadi event boost pertama menimpa riwayat hasil restore; `reload()` kini dipanggil di alur restore (modLogManager juga). (3) **`npm test` merah di setiap fresh clone/CI** — GUARD test mengasumsikan file data runtime ada; fresh checkout kini melewatkan scan itu dan jaminannya pindah ke regression test baru. +3 unit test (total **598**). Tanpa command baru, tanpa perubahan config — data v3.9.59 kompatibel penuh.
@@ -1091,6 +1092,6 @@ Jika ada masalah yang tidak ada di Troubleshooting:
 
 ---
 
-**Versi dokumen:** v3.10.0
+**Versi dokumen:** v3.11.0
 **Last updated:** 12 September 2026
-**Bot version:** 3.10.0 · 92 slash command · 598 unit test
+**Bot version:** 3.11.0 · 92 slash command · 613 unit test

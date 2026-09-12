@@ -14,6 +14,8 @@
 const { Events, MessageFlags } = require('discord.js');
 const routeCommand = require('../../commands');
 const routeInteraction = require('../../interactions');
+// v3.11.0: guard allowlist multi-guild (fase 2).
+const { isGuildAllowed } = require('../../infra/guild');
 
 function isTransientNetworkError(err) {
     if (!err) return false;
@@ -43,11 +45,12 @@ function isIgnorableReplyError(err) {
 
 async function onInteractionCreate(interaction) {
     try {
-        // v3.9.26 (single-guild hardening): kalau GUILD_ID di-set, abaikan
-        // interaction dari guild lain. Tanpa guard, command bisa dipakai di guild
-        // kedua (kalau bot tak sengaja di-invite): config global → roles/channels
-        // guild utama dipakai di sana → perilaku aneh + data nyasar.
-        if (process.env.GUILD_ID && interaction.guildId && interaction.guildId !== process.env.GUILD_ID) {
+        // v3.9.26 (single-guild hardening) → v3.11.0 (allowlist): abaikan
+        // interaction dari guild di luar ALLOWED_GUILD_IDS (fallback GUILD_ID;
+        // daftar kosong = mode terbuka). Tanpa guard, command bisa dipakai di
+        // guild asing (kalau bot ter-invite ke sana): roles/channels guild lain
+        // terpakai → perilaku aneh + data nyasar.
+        if (interaction.guildId && !isGuildAllowed(interaction.guildId)) {
             return;
         }
         if (interaction.isChatInputCommand()) {

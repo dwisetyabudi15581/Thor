@@ -1,6 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 const { safeWriteJSON, quarantineCorruptFile } = require('../infra/safeWrite');
+// v3.11.0 fase 2: gerbang klaim legacy pakai allowlist.
+const { getAllowedGuildIds } = require('../infra/guild');
 
 // ============================================================
 // v3.10.0 MULTI-GUILD: config sekarang PER-GUILD.
@@ -132,14 +134,15 @@ let legacyClaimed = false;
  * belum ada, jadi tidak ada risiko menimpa config guild yang sudah jalan.
  *
  * Aturan klaim (cegah server lain "mencuri" config lama):
- *   - Kalau env GUILD_ID di-set: hanya guild yang cocok yang boleh klaim.
- *     (GUILD_ID adalah mode single-guild v3.9.26 — guild lain dapat
- *     DEFAULTS murni, bukan salinan config server utama.)
- *   - Kalau GUILD_ID tidak di-set (mode multi-guild penuh): guild PERTAMA
- *     yang memanggil getConfig() mengklaim legacy. Untuk bot yang sudah
- *     dipakai 1 server lalu dibuka multi-guild, server lama itu hampir
- *     pasti yang pertama memanggil (event ready/interaction). Log jelas
- *     dicetak supaya admin bisa audit siapa yang mengklaim.
+ *   - Kalau allowlist berisi TEPAT SATU guild (ALLOWED_GUILD_IDS tunggal
+ *     atau fallback GUILD_ID — mode single-guild v3.9.26): hanya guild yang
+ *     cocok yang boleh klaim. Guild lain dapat DEFAULTS murni, bukan salinan
+ *     config server utama.
+ *   - Kalau allowlist kosong / berisi banyak guild (mode multi-guild):
+ *     guild PERTAMA yang memanggil getConfig() mengklaim legacy. Untuk bot
+ *     yang sudah dipakai 1 server lalu dibuka multi-guild, server lama itu
+ *     hampir pasti yang pertama memanggil (event ready/interaction). Log
+ *     jelas dicetak supaya admin bisa audit siapa yang mengklaim.
  *
  * @returns {Object} raw config lama (belum di-merge), atau {} kalau tidak ada.
  */
@@ -147,8 +150,11 @@ function _claimLegacyConfigIfNeeded(guildId) {
     if (legacyClaimed) return {};
     if (!fs.existsSync(LEGACY_CONFIG_PATH)) return {};
 
-    const envGuild = process.env.GUILD_ID;
-    if (envGuild && envGuild !== guildId) return {};
+    // v3.11.0: gate klaim pakai allowlist — single guild (dari
+    // ALLOWED_GUILD_IDS tunggal / fallback GUILD_ID) berarti hanya dia yang
+    // boleh klaim; kosong / multi guild → pemanggil pertama yang klaim.
+    const allowed = getAllowedGuildIds();
+    if (allowed.length === 1 && allowed[0] !== guildId) return {};
 
     try {
         const raw = JSON.parse(fs.readFileSync(LEGACY_CONFIG_PATH, 'utf8'));
@@ -492,4 +498,16 @@ function fillTemplate(text, vars = {}) {
     return result;
 }
 
-module.exports = { getConfig, saveConfig, setField, fillTemplate, DEFAULTS, configPathFor };
+module.exports = {
+    getConfig,
+    saveConfig,
+    setField,
+    fillTemplate,
+    DEFAULTS,
+    configPathFor,
+    // v3.11.0: khusus unit test — reset flag klaim in-process supaya alur
+    // migrasi bisa diuji berulang kali dalam satu proses. Produksi tidak memakai.
+    _resetLegacyClaimForTest: () => {
+        legacyClaimed = false;
+    }
+};

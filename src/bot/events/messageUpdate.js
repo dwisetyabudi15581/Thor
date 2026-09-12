@@ -15,12 +15,16 @@
 
 const { Events } = require('discord.js');
 const { logServerEvent, snip } = require('../../infra/serverLog');
+// v3.11.0: guard allowlist multi-guild (fase 2).
+const { isGuildAllowed } = require('../../infra/guild');
 
 async function onEvent(oldMessage, newMessage) {
     try {
         const msg = newMessage || oldMessage;
         if (!msg.guild?.id) return; // DM
-        if (process.env.GUILD_ID && msg.guild.id !== process.env.GUILD_ID) return;
+        // v3.11.0: guard allowlist — guild di luar ALLOWED_GUILD_IDS (fallback
+        // GUILD_ID) diabaikan; daftar kosong = mode terbuka (semua guild diproses).
+        if (!isGuildAllowed(msg.guild.id)) return;
         if (msg.author?.bot) return;
 
         // Embed-only edit (content kosong di kedua versi) → skip.

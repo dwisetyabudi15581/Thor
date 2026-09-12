@@ -30,6 +30,8 @@
 
 const { Events } = require('discord.js');
 const { logServerEvent, snip } = require('../../infra/serverLog');
+// v3.11.0: guard allowlist multi-guild (fase 2).
+const { isGuildAllowed } = require('../../infra/guild');
 // v3.9.49: notifikasi boost (channel server-booster + server log + riwayat).
 // v3.9.59: applyBoostRole — auto role booster (dipanggil SETELAH notifikasi
 // supaya riwayat tetap tercatat walau penugasan role gagal).
@@ -41,7 +43,9 @@ const { markStatsDirty } = require('../../data/serverstatsManager');
 async function onEvent(oldMember, newMember) {
     try {
         if (!newMember?.guild?.id) return;
-        if (process.env.GUILD_ID && newMember.guild.id !== process.env.GUILD_ID) return;
+        // v3.11.0: guard allowlist — guild di luar ALLOWED_GUILD_IDS (fallback
+        // GUILD_ID) diabaikan; daftar kosong = mode terbuka (semua guild diproses).
+        if (!isGuildAllowed(newMember.guild.id)) return;
         if (newMember.user?.bot) return;
 
         const hasOldState = !!(oldMember && oldMember.roles && oldMember.roles.cache);

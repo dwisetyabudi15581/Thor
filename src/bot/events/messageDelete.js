@@ -24,11 +24,15 @@
 
 const { Events, AuditLogEvent } = require('discord.js');
 const { logServerEvent, findAuditExecutor, snip } = require('../../infra/serverLog');
+// v3.11.0: guard allowlist multi-guild (fase 2).
+const { isGuildAllowed } = require('../../infra/guild');
 
 async function onEvent(message) {
     try {
         if (!message.guild?.id) return; // DM
-        if (process.env.GUILD_ID && message.guild.id !== process.env.GUILD_ID) return;
+        // v3.11.0: guard allowlist — guild di luar ALLOWED_GUILD_IDS (fallback
+        // GUILD_ID) diabaikan; daftar kosong = mode terbuka (semua guild diproses).
+        if (!isGuildAllowed(message.guild.id)) return;
         if (message.author?.bot) return; // jangan log pesan bot (spam log sendiri)
 
         // Executor: siapa yang hapus? (try/catch — permission bisa absen)
