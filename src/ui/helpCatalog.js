@@ -351,7 +351,7 @@ const HELP_CATEGORIES = [
         name: 'Role & Self-Role',
         short: 'Role sistem + panel role pilihan member',
         lines: [
-            '• `/set-role verified @role` — role sistem (verified/unverified/admin/**midman**) · `/remove-role`',
+            '• `/set-role verified @role` — role sistem (verified/unverified/admin/midman/**booster**) · `/remove-role`',
             '• `/setup-selfrole title:... type:button` — panel role pilihan member',
             '• `/selfrole-add` `/selfrole-remove` — kelola daftar · `/selfrole-list` `/selfrole-delete`',
             '💡 `requires_role:@Verified` — role terkunci syarat'
@@ -360,6 +360,7 @@ const HELP_CATEGORIES = [
         detail: [
             '**Role sistem (logika bot)** — `/set-role tipe role`:',
             '• `tipe:verified` — diberikan setelah verifikasi · `tipe:unverified` — disandang sebelum verifikasi · `tipe:admin` — siapa yang boleh pakai command admin · `tipe:midman` — petugas rekber. `/remove-role tipe` menghapus satu.',
+            '• `tipe:booster` (v3.9.59) — role Booster: **otomatis** diberikan saat member boost & dihapus saat boost berakhir; saat di-set langsung diterapkan ke booster yang ada. Tes rantainya: `/test-booster`.',
             '',
             '**Panel self-role (pilihan member)** — member klik sendiri untuk ambil/lepas role:',
             '• `/setup-selfrole title description type:button|dropdown exclusive` — pasang panelnya. `exclusive:true` = cuma SATU role dari panel itu dalam satu waktu.',
@@ -540,8 +541,8 @@ const HELP_CATEGORIES = [
             '• `/serverstats remove` — hapus semuanya · `/serverstats refresh` — paksa update sekarang. Untuk GANTI pilihan: `remove` dulu lalu `setup` lagi.',
             '• Update otomatis: member join/left, boost mulai/berhenti, channel & role dibuat/dihapus. Aman rate limit (Discord izinkan 2 rename per channel / 10 menit — update di-throttle + self-heal tiap ±5 menit). Counter terhapus dikasih peringatan; semua hilang → mati otomatis.',
             '',
-            '**Notifikasi boost:** member mulai/berhenti boost → embed pink dikirim otomatis ke channel server-booster (`/set-channel tipe:server-booster #ch`), selalu tercatat di log server + riwayat `/boosters`.',
-            '• **Tes sendiri (v3.9.58):** `/test-booster tipe:add` (atau `tipe:remove`) — cek seluruh rantainya (channel di-set → ada → izin bot), preview embed PERSIS di sini, dan dengan `live:true` sekalian kirim ke channel aslinya. Simulasi murni — tidak ada yang dicatat.',
+            '**Notifikasi boost:** member mulai/berhenti boost → embed pink dikirim otomatis ke channel server-booster (`/set-channel tipe:server-booster #ch`), selalu tercatat di log server + riwayat `/boosters`. Kalau role booster di-set (`/set-role tipe:booster @role`), role itu diberikan/dihapus otomatis bersama boost-nya.',
+            '• **Tes sendiri (v3.9.58):** `/test-booster tipe:add` (atau `tipe:remove`) — cek seluruh rantainya (channel di-set → ada → izin bot, plus role booster kalau di-set), preview embed PERSIS di sini, dan dengan `live:true` sekalian kirim ke channel aslinya. Simulasi murni — tidak ada yang dicatat.',
             '',
             '**Angka & peringkat**',
             '• `/stats` — ringkasan server: member live, boost, tiket terbuka + aktivitas terlacak (pesan, transaksi). Tanpa baris revenue — belanja bersifat pribadi.',

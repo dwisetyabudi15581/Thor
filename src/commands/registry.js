@@ -47,7 +47,7 @@ function getCommands() {
         // === SET ROLE ===
         {
             name: 'set-role',
-            description: 'Atur role (verified / unverified / admin / midman)',
+            description: 'Atur role (verified / unverified / admin / midman / booster)',
             defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
             options: [
                 {
@@ -60,7 +60,11 @@ function getCommands() {
                         { name: 'Unverified', value: 'unverified' },
                         { name: 'Admin', value: 'admin' },
                         // v3.9.32: role midman/rekber — pegang deal escrow 3-pihak.
-                        { name: 'Midman (Rekber)', value: 'midman' }
+                        { name: 'Midman (Rekber)', value: 'midman' },
+                        // v3.9.59: role booster — otomatis diberikan saat member
+                        // boost, dihapus saat boost berakhir. Diterapkan retroaktif
+                        // ke booster yang sudah ada saat di-set.
+                        { name: 'Booster (auto role)', value: 'booster' }
                     ]
                 },
                 { type: 8, name: 'role', description: 'Role yang akan dipakai', required: true }
@@ -547,7 +551,7 @@ function getCommands() {
         // === REMOVE ROLE (hapus role dari config) ===
         {
             name: 'remove-role',
-            description: 'Hapus role dari config (verified / unverified / admin)',
+            description: 'Hapus role dari config (verified / unverified / admin / midman / booster)',
             defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
             options: [
                 {
@@ -560,7 +564,11 @@ function getCommands() {
                         { name: 'Unverified', value: 'unverified' },
                         { name: 'Admin', value: 'admin' },
                         // v3.9.32: hapus role midman dari config.
-                        { name: 'Midman (Rekber)', value: 'midman' }
+                        { name: 'Midman (Rekber)', value: 'midman' },
+                        // v3.9.59: hapus role booster dari config (role yang sudah
+                        // terpasang di member TIDAK dicabut — hanya berhenti
+                        // di-otomatisasi).
+                        { name: 'Booster (auto role)', value: 'booster' }
                     ]
                 }
             ]

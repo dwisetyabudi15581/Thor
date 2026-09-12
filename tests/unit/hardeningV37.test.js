@@ -263,8 +263,8 @@ test('help v3.9.37: Auto-Split 3 kategori (TRANSAKSI/BANTUAN/REKBER) + section M
     assert.match(allText, /midman-deals/);
     assert.match(allText, /set-role midman/);
 
-    // Role list menyebut midman.
-    assert.match(allText, /verified\/unverified\/admin\/\*\*midman\*\*/);
+    // Role list menyebut midman (+ booster sejak v3.9.59).
+    assert.match(allText, /verified\/unverified\/admin\/midman\/\*\*booster\*\*/);
 
     // Versi dinamis dari package.json.
     const { version: pkgVersion } = require('../../package.json');

@@ -1,4 +1,4 @@
-# 📖 Admin Guide — Thor Bot v3.9.58
+# 📖 Admin Guide — Thor Bot v3.9.59
 
 Panduan lengkap untuk admin server Discord yang menjalankan bot ini — cocok untuk admin baru yang pertama kali setup, maupun admin yang sudah berjalan sebagai referensi harian.
 
@@ -64,6 +64,7 @@ Urutan berikut adalah **rekomendasi** untuk server baru. Lewati langkah yang sud
 /set-role verified @Verified
 /set-role unverified @Unverified
 /set-role admin @Staff
+/set-role booster @Booster
 ```
 
 **Penjelasan:**
@@ -72,6 +73,7 @@ Urutan berikut adalah **rekomendasi** untuk server baru. Lewati langkah yang sud
 - Role `unverified` — role default member baru (dilepas setelah verifikasi)
 - Role `admin` — role staff yang mendapat akses channel tiket + panel admin
 - Perubahan admin role langsung efektif (cache di-invalidate otomatis)
+- Role `booster` — (v3.9.59, opsional) **auto role booster**: member yang boost server otomatis dapat role ini, dan kehilangannya saat boost berakhir — semantik yang sama dengan role Server Booster bawaan Discord, tapi pakai role sendiri (urutan/warna bisa diatur). Saat di-set, role langsung diterapkan ke semua member yang SEDANG boost (retroaktif — reply menyebut jumlahnya). Boost yang mulai/berakhir saat bot offline ikut disinkronkan saat startup. **Syarat:** role harus DI BAWAH role bot + bot punya permission **Manage Roles**; `/test-booster` mengecek seluruh rantainya. `/remove-role booster` hanya mematikan otomatisasi — role yang sudah terpasang tidak dicabut.
 
 ### Step 2: Set Channel
 
@@ -91,7 +93,7 @@ Urutan berikut adalah **rekomendasi** untuk server baru. Lewati langkah yang sud
 - `invoice` — channel testimoni transaksi (otomatis terisi setiap Set Key / Kirim Pesanan / Pesanan Sukses — **sekali per tiket**, tidak dobel)
 - `audit-log` — channel tempat bot mencatat SEMUA admin action (63 action types; dikirim ulang 1x otomatis bila gagal karena rate limit/network)
 - `transcript` — channel arsip transcript tiket (chat history tersimpan otomatis setiap tiket di-close)
-- `server-booster` — (v3.9.49, opsional) channel notifikasi boost: embed pink `🚀 BOOST SERVER BARU!` saat member mulai boost, abu-abu `💔 BOOST BERAKHIR` saat berhenti, plus SATU embed catch-up gabungan saat startup untuk perubahan yang terjadi saat bot offline. Boost juga SELALU tercatat di **server log**. Tanpa channel ini `/boosters` tetap jalan — hanya notifikasinya yang mati. **Mau ngetesnya tanpa nunggu boost beneran?** Jalankan `/test-booster tipe:add` (v3.9.58) — diagnosis seluruh rantai + preview embed yang persis; tambah `live:true` untuk sekalian kirim preview ke channel ini. Simulasi murni, tidak ada yang dicatat.
+- `server-booster` — (v3.9.49, opsional) channel notifikasi boost: embed pink `🚀 BOOST SERVER BARU!` saat member mulai boost, abu-abu `💔 BOOST BERAKHIR` saat berhenti, plus SATU embed catch-up gabungan saat startup untuk perubahan yang terjadi saat bot offline. Boost juga SELALU tercatat di **server log**. Tanpa channel ini `/boosters` tetap jalan — hanya notifikasinya yang mati. **Mau ngetesnya tanpa nunggu boost beneran?** Jalankan `/test-booster tipe:add` (v3.9.58) — diagnosis seluruh rantai (termasuk role booster kalau di-set, v3.9.59) + preview embed yang persis; tambah `live:true` untuk sekalian kirim preview ke channel ini. Simulasi murni, tidak ada yang dicatat.
 
 > 📊 **Counter server stats live (v3.9.51, opsional):** `/serverstats setup` membuat kategori `📊 STATISTIK SERVER` di PALING ATAS daftar channel berisi channel display-only yang NAMANYA counter live — `👥 Member: 123`, `🤖 Bot: 2`, `🚀 Boost: 5`, `🎭 Role: 9`, `📺 Channel: 12` — pengalaman "bot ServerStats" tanpa bot lain. **v3.9.53: pilih counter mana yang mau ditampilkan** — opsi boolean `members`/`bots`/`boosts`/`roles`/`channels` semuanya AKTIF default; set ke False untuk melewatinya (semua-False ditolak). Ter-update otomatis saat ada perubahan member/boost/role/channel (aman rate-limit: angka yang tidak berubah = nol panggilan API, dan tiap channel paling banyak di-rename sekali per 5 menit — limit Discord 2x per 10 menit). Kelola dengan `/serverstats refresh` (paksa update sekarang) dan `/serverstats remove` (hapus semuanya — lalu `setup` lagi untuk mengubah pilihan). Bot butuh **Manage Channels + Manage Roles** untuk setup-nya.
 
@@ -1027,9 +1029,11 @@ Cooldown bersifat **per-user** — user A memicu tidak memengaruhi user B.
 
 ## 11. Riwayat Versi
 
-Riwayat lengkap semua versi (v3.9.0 – v3.9.58) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
+Riwayat lengkap semua versi (v3.9.0 – v3.9.59) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
 
 Ringkasan semua versi:
+
+- **v3.9.59** (2026-09-12) — 💬 **permintaan user: "auto role booster — yang sudah boost server bakal dapet role"**. BARU **`tipe:booster`** di `/set-role`: role Booster **otomatis** diberikan saat member boost server dan dihapus saat boost berakhir (semantik role Server Booster bawaan Discord, tapi pakai role sendiri — urutan/warna bisa diatur). Diterapkan **retroaktif** ke semua booster yang sudah ada saat di-set (reply menyebut jumlahnya), disinkronkan saat startup untuk boost yang terjadi saat bot offline, dan **tidak pernah mencabut** pemberian role manual ke member biasa. Setiap skip/gagal meninggalkan log penyebab + solusi (belum di-set, role ghost, posisi di atas role bot, permission Manage Roles); `/test-booster` ikut mendiagnosis rantai role-nya tanpa mengutak-atik role (simulasi tetap murni); `/remove-role booster` mematikan otomatisasi tanpa mencabut role yang terpasang. +18 unit test (total **595**).
 
 - **v3.9.58** (2026-09-12) — 🧪 **permintaan user: "command test booster"**. BARU **`/test-booster`** (command ke-92, admin): versi `/test-welcome` milik fitur boost — admin tidak bisa mensimulasikan boost asli (bayar uang sungguhan), jadi command ini membuktikan seluruh rantai notifikasi bekerja: channel server-booster di-set → ada → izin View/Send/Embed bot, plus **preview live dari embed yang persis** dikirim boost asli (builder yang sama dengan event live — mustahil beda). `tipe:add` → preview pink 🚀 dengan mention; `tipe:remove` → preview abu-abu 💔. Opsi `live:true` SEKALIAN mengirim preview ke channel server-booster ASLI — tes pengiriman end-to-end penuh. **Simulasi murni — tidak ada yang dicatat** (riwayat boost, server log dan counter tetap bersih). +11 unit test (total **577**).
 
@@ -1082,6 +1086,6 @@ Jika ada masalah yang tidak ada di Troubleshooting:
 
 ---
 
-**Versi dokumen:** v3.9.58
+**Versi dokumen:** v3.9.59
 **Last updated:** 12 September 2026
-**Bot version:** 3.9.58 · 92 slash command · 577 unit test
+**Bot version:** 3.9.59 · 92 slash command · 595 unit test

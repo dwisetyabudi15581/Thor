@@ -301,6 +301,30 @@ module.exports = async function (interaction) {
             details: `Role **${tipe}** diatur ke ${role.name} (\`${role.id}\`)`,
             guildId: interaction.guild.id
         });
+
+        // v3.9.59: set role booster → SEKALIAN terapkan retroaktif ke semua
+        // member yang SEDANG boost (admin tidak perlu menunggu boost berikutnya).
+        // syncBoostRoles hanya menambah role ke booster live — pemberian role
+        // manual ke member biasa tidak pernah tersentuh.
+        if (tipe === 'booster') {
+            let retroNote;
+            try {
+                if (typeof interaction.guild.members.fetch === 'function') {
+                    await interaction.guild.members.fetch(); // cache bisa partial — fetch roster dulu
+                }
+                const { syncBoostRoles } = require('../bot/boostHandler');
+                const res = await syncBoostRoles(interaction.guild, []);
+                retroNote =
+                    res.applied > 0
+                        ? `\n🚀 ${res.applied} member yang sedang boost langsung diberi role ini. Selanjutnya otomatis: dapat role saat boost, kehilangan role saat boost berakhir.`
+                        : '\nℹ️ Belum ada member yang sedang boost — role akan diberikan otomatis saat ada yang boost, dan dihapus saat boost berakhir.';
+            } catch (syncErr) {
+                retroNote = `\n⚠️ Role tersimpan, tapi penerapan ke booster yang sudah ada gagal: ${syncErr.message}`;
+            }
+            return safeEditReply(interaction, {
+                content: `✅ Role **${tipe}** diatur ke ${role} (\`${role.id}\`)${retroNote}`
+            });
+        }
         return safeEditReply(interaction, { content: `✅ Role **${tipe}** diatur ke ${role} (\`${role.id}\`)` });
     }
 
@@ -576,7 +600,10 @@ module.exports = async function (interaction) {
                             `• Verified: ${fmt(config.roles.verified, '@&')}`,
                             `• Unverified: ${fmt(config.roles.unverified, '@&')}`,
                             `• Admin: ${fmt(config.roles.admin, '@&')}`,
-                            `• Midman (Rekber): ${fmt(config.roles.midman, '@&')}`
+                            `• Midman (Rekber): ${fmt(config.roles.midman, '@&')}`,
+                            // v3.9.59: role booster auto (diberikan saat boost,
+                            // dihapus saat boost berakhir).
+                            `• Booster (auto): ${fmt(config.roles.booster, '@&')}`
                         ].join('\n')
                     ),
                     inline: false

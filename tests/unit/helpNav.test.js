@@ -440,7 +440,8 @@ test('helpNav: konten lama tetap utuh di katalog (regression v3.9.37/v3.9.38)', 
     assert.match(allText, /set-midman-fee/);
     assert.match(allText, /midman-deals/);
     assert.match(allText, /set-role midman/);
-    assert.match(allText, /verified\/unverified\/admin\/\*\*midman\*\*/);
+    // v3.9.59: baris set-role kini memuat booster juga.
+    assert.match(allText, /verified\/unverified\/admin\/midman\/\*\*booster\*\*/);
     // Panel & commands populer.
     assert.match(allText, /list-panels/);
     assert.match(allText, /update-panel/);

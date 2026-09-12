@@ -203,6 +203,36 @@ module.exports = async function (interaction) {
         const boostCount = guild.premiumSubscriptionCount ?? 0;
         lines.push(`ℹ️ Server sekarang: Level ${guild.premiumTier ?? 0} · ${boostCount} boost`);
 
+        // --- v3.9.59: diagnosis mata rantai AUTO ROLE BOOSTER (opsional — tapi
+        // kalau di-set harus benar-benar bisa di-assign). Murni diagnosis:
+        // role TIDAK pernah diutak-atik di sini (simulasi tetap murni). ---
+        const boosterRoleId = config.roles && config.roles.booster;
+        if (!boosterRoleId) {
+            lines.push('ℹ️ Role booster: belum di-set (opsional) → `/set-role booster @role` supaya member yang boost otomatis dapat role');
+        } else {
+            const boosterRole = guild.roles.cache.get(boosterRoleId);
+            if (!boosterRole) {
+                lines.push(
+                    `❌ **role booster: tidak ditemukan** (ID \`${boosterRoleId}\`) — terhapus, atau ID-nya milik server lain → set ulang dengan \`/set-role booster @role\``
+                );
+            } else {
+                lines.push(`✅ **role booster:** ${boosterRole} — otomatis diberikan saat member boost, dihapus saat boost berakhir`);
+                if (me) {
+                    const botPos = me.roles?.highest?.position;
+                    if (typeof botPos === 'number' && (boosterRole.position ?? 0) >= botPos) {
+                        lines.push(
+                            '❌ posisi role booster DI ATAS role bot tertinggi — bot tidak bisa assign → pindahkan role booster ke BAWAH role bot (Server Settings → Roles)'
+                        );
+                    }
+                    const canManageRoles =
+                        typeof me.permissions?.has === 'function' ? me.permissions.has(PermissionFlagsBits.ManageRoles) : null;
+                    if (canManageRoles === false) {
+                        lines.push('❌ bot tidak punya permission **Manage Roles** → aktifkan di Server Settings → Roles → bot');
+                    }
+                }
+            }
+        }
+
         // --- preview live: embed yang PERSIS dikirim boost asli ---
         // interaction.member berperan sebagai "booster-nya". Untuk preview
         // remove, awal streak = tanggal boost asli admin kalau sedang boost,
@@ -241,7 +271,7 @@ module.exports = async function (interaction) {
         }
 
         return safeEditReply(interaction, {
-            content: `${lines.join('\n')}\n\n${previewNote}\n\n🧪 **Simulasi saja** — tidak ada yang dicatat: riwayat boost (\`/boosters\`), server log dan counter live tetap bersih.`
+            content: `${lines.join('\n')}\n\n${previewNote}\n\n🧪 **Simulasi saja** — tidak ada yang dicatat: riwayat boost (\`/boosters\`), server log dan counter live tetap bersih, role booster tidak diutak-atik.`
         });
     }
 

@@ -104,6 +104,20 @@ async function onReady(client) {
             }
             const boostManager = require('../../data/boostManager');
             const { added, removed } = boostManager.reconcileBoosters(guild);
+            // v3.9.59: auto role booster — sinkronisasi STATE (bukan event):
+            // semua booster live tanpa role mendapatkannya (boost saat offline
+            // ATAU penugasan live yang dulu gagal), boost yang berakhir saat
+            // offline kehilangan role-nya. Pemberian role manual ke member
+            // biasa tidak pernah disentuh.
+            try {
+                const { syncBoostRoles } = require('../boostHandler');
+                const roleRes = await syncBoostRoles(guild, removed);
+                if (roleRes.applied > 0 || roleRes.removed > 0) {
+                    console.log(`🎭 Role Booster sinkron: ${roleRes.applied} diberikan, ${roleRes.removed} dihapus.`);
+                }
+            } catch (roleErr) {
+                console.warn(`⚠️ Sinkron role Booster gagal: ${roleErr.message}`);
+            }
             if (added.length > 0 || removed.length > 0) {
                 const lines = [];
                 if (added.length > 0) lines.push(`🚀 Booster baru saat bot offline: ${added.map(id => `<@${id}>`).join(' ')}`);

@@ -1,6 +1,6 @@
 /**
  * Event: guildMemberUpdate — log perubahan role & nickname (v3.9.43) +
- * deteksi BOOST SERVER tambah/hilang (v3.9.49).
+ * deteksi BOOST SERVER tambah/hilang (v3.9.49) + auto role booster (v3.9.59).
  *
  * Kenapa penting di server jual-beli:
  *   - Role berubah = perubahan status akses (verified → revoked, atau dapat
@@ -11,6 +11,10 @@
  *     TIDAK punya event boost khusus, jadi tambah/hilangnya boost dideteksi
  *     di sini lewat diff premium_since (null → tanggal = boost baru,
  *     tanggal → null = boost berakhir).
+ *   - Role Booster otomatis (v3.9.59) = role custom admin diberikan/dihapus
+ *     mengikuti status boost — penugasan role di sini memicu event
+ *     guildMemberUpdate LAGI (diff role saja, premium_since tidak berubah),
+ *     jadi tidak ada rekursi: event kedua cuma meng-log ROLE_UPDATE.
  *
  * Guard:
  *   - oldMember bisa PARTIAL (belum ke-cache) → roles/nickname/premium lama
@@ -27,7 +31,9 @@
 const { Events } = require('discord.js');
 const { logServerEvent, snip } = require('../../infra/serverLog');
 // v3.9.49: notifikasi boost (channel server-booster + server log + riwayat).
-const { onBoostChange } = require('../boostHandler');
+// v3.9.59: applyBoostRole — auto role booster (dipanggil SETELAH notifikasi
+// supaya riwayat tetap tercatat walau penugasan role gagal).
+const { onBoostChange, applyBoostRole } = require('../boostHandler');
 // v3.9.51: channel counter server stats live (counter Boost berubah saat
 // boost ditambah/dihentikan).
 const { markStatsDirty } = require('../../data/serverstatsManager');
@@ -42,16 +48,21 @@ async function onEvent(oldMember, newMember) {
         const user = newMember.user;
 
         // === 0. Diff boost (v3.9.49) — dicek PERTAMA supaya boost yang datang
-        // bersamaan dengan role change (role Booster otomatis) tidak menutupinya.
-        // oldMember partial → premiumSinceTimestamp undefined → tak bisa
-        // dibandingkan → skip. ===
+        // bersamaan dengan role change (role Server Booster bawaan Discord)
+        // tidak menutupinya. oldMember partial → premiumSinceTimestamp
+        // undefined → tak bisa dibandingkan → skip. ===
         if (hasOldState && oldMember.premiumSinceTimestamp !== newMember.premiumSinceTimestamp) {
             const wasBoosting = oldMember.premiumSinceTimestamp !== null && oldMember.premiumSinceTimestamp !== undefined;
             const isBoosting = newMember.premiumSinceTimestamp !== null && newMember.premiumSinceTimestamp !== undefined;
             if (!wasBoosting && isBoosting) {
                 await onBoostChange(newMember, 'add', null);
+                // v3.9.59: auto role booster — member yang boost dapat role-nya.
+                await applyBoostRole(newMember, 'add');
             } else if (wasBoosting && !isBoosting) {
                 await onBoostChange(newMember, 'remove', oldMember.premiumSinceTimestamp);
+                // v3.9.59: boost berakhir → role dihapus (semantik role
+                // Server Booster bawaan Discord).
+                await applyBoostRole(newMember, 'remove');
             }
         }
 
