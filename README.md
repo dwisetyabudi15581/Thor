@@ -2,7 +2,7 @@
 
 Bot Discord serbaguna untuk komunitas apa pun — server jualan, gaming, content creator, hingga komunitas umum. Semua konfigurasi dapat diatur langsung dari Discord melalui slash command, tanpa mengedit file.
 
-> **v3.12.0** · 92 slash command · 616 unit test · discord.js v14 · Node.js 18+ · mode 1 server / publik (ala Dyno)
+> **v3.13.0** · 96 slash command · 645 unit test · discord.js v14 · Node.js 18+ · mode 1 server / publik (ala Dyno) · jualan key mandiri (premium SaaS)
 >
 > 📖 **[Panduan Admin Lengkap](./docs/ADMIN_GUIDE.md)** — setup, operasional harian, troubleshooting
 > 📜 **[Changelog](./CHANGELOG.md)** — riwayat semua versi
@@ -19,11 +19,13 @@ Bot Discord serbaguna untuk komunitas apa pun — server jualan, gaming, content
 - **Invoice otomatis** ke channel testimoni (sekali per tiket) + **transcript otomatis** tersimpan sebelum channel tiket dihapus.
 - **🤝 Midman / Rekber (deal escrow 3-pihak)** — pembeli, penjual, dan midman dalam satu channel deal dengan **Deal Board** (embed sumber kebenaran) + **state machine**: dana masuk (konfirmasi midman) → barang diterima (konfirmasi pembeli) → cairkan (midman). Dispute → freeze, hanya admin yang resolve. **Deal bisa dibuka siapa saja** (pembeli/penjual/pihak yang menolong) lewat **formulir 3 langkah** (item + harga → pilih pembeli → pilih penjual, semua dropdown searchable), **terms terkunci hanya setelah pembeli & penjual dua-duanya setuju**. Tombol **👥 Tambah Member / ➖ Keluarkan Member** untuk mengelola member tambahan di dalam channel deal (hanya bisa lihat & chat; tidak bisa menggerakkan deal). **Fee ditambah di atas harga** (penjual selalu terima harga penuh; pembeli bayar harga + fee), history klik tercatat, invoice/transcript/audit terintegrasi.
 
-### 🔑 Produk & VIP (Key-Driven)
+### 🔑 Produk & VIP (Key-Driven + Premium SaaS)
 
 - Produk dengan kategori, harga, dan flag `requires_key` (diwariskan dari kategori ke produk).
 - Role VIP berbasis key dengan model **MAX EXTEND** — role mengikuti key dengan sisa waktu terbanyak; auto-expire terjadwal.
 - Set Key sukses → simpan key, beri role, DM member, invoice, catat stats — semua otomatis.
+- **Jualan mandiri (v3.13.0)** — `/gen-key` membuat key stok acak crypto-secure (`XXXXX-XXXXX-XXXXX`); kirim ke pembeli via DM/marketplace/top.gg; pembeli menukar sendiri lewat `/redeem` → role + jadwal expire otomatis, **durasi mulai saat ditukar** (stok tidak basi). Admin tidak perlu online 24 jam. Stok guild-scoped; `/redeem` dijaga rate limiter (5 kegagalan/10 menit) + pesan error generik (anti brute-force & enumerasi) + konsumsi atomic.
+- Kelola stok: `/list-stock` (lihat stok belum ditukar) · `/revoke-key` (batalkan key bocor). Baris stok muncul di `/config-show`.
 - Key selalu **dimasking** di audit log (tidak pernah bocor nilai).
 
 ### 🛡️ Anti-Spam & Auto-Mod
@@ -153,7 +155,7 @@ Panduan lengkap termasuk contoh produk, kategori custom, dan operasional harian:
 | ---------------- | -------------------------------------- |
 | `npm start`      | Jalankan bot                           |
 | `npm run dev`    | Jalankan dengan nodemon (auto-restart) |
-| `npm test`       | Jalankan semua unit test (616 test)    |
+| `npm test`       | Jalankan semua unit test (645 test)   |
 | `npm run lint`   | ESLint check                           |
 | `npm run format` | Prettier format semua file             |
 

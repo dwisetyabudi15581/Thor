@@ -74,6 +74,9 @@ const midmanHandler = require('./midman');
 const moderationHandler = require('./moderation');
 // v3.9.51: channel counter server stats live (/serverstats setup|remove|refresh)
 const serverstatsHandler = require('./serverstats');
+// v3.13.0: premium SaaS — stok key + penukaran mandiri (/gen-key /redeem
+// /list-stock /revoke-key)
+const premiumHandler = require('./premium');
 
 const DOMAIN_HANDLERS = {
     help: helpHandler,
@@ -105,7 +108,9 @@ const DOMAIN_HANDLERS = {
     // v3.9.43
     moderation: moderationHandler,
     // v3.9.51: channel counter server stats live
-    serverstats: serverstatsHandler
+    serverstats: serverstatsHandler,
+    // v3.13.0: premium SaaS (stok key + penukaran mandiri)
+    premium: premiumHandler
 };
 
 // Mapping commandName → domain key (di DOMAIN_HANDLERS).
@@ -149,6 +154,12 @@ const COMMAND_TO_DOMAIN = {
     'set-key': 'keys',
     'list-keys': 'keys',
     'clear-schedule': 'keys',
+
+    // v3.13.0: premium SaaS — stok key + penukaran mandiri
+    'gen-key': 'premium',
+    redeem: 'premium',
+    'list-stock': 'premium',
+    'revoke-key': 'premium',
 
     // selfrole
     'setup-selfrole': 'selfrole',
@@ -264,7 +275,9 @@ const COMMAND_TO_DOMAIN = {
 
 // Command yang boleh dipakai member biasa (bukan admin).
 // v3.9.13: tambah afk, afk-clear, rank, leaderboard-level (public community features)
-const PUBLIC_COMMANDS = ['leaderboard', 'my-stats', 'boosters', 'afk', 'afk-clear', 'rank', 'leaderboard-level'];
+// v3.13.0: tambah redeem — member menukar key beliannya sendiri (self-service
+// premium; keamanannya di data layer: rate limiter + pesan generik).
+const PUBLIC_COMMANDS = ['leaderboard', 'my-stats', 'boosters', 'afk', 'afk-clear', 'rank', 'leaderboard-level', 'redeem'];
 
 // v3.9.43: command moderasi — boleh dipakai moderator non-admin selama punya
 // Discord permission yang sesuai (role hierarchy tetap dicek di handler).

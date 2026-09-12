@@ -735,6 +735,68 @@ function getCommands() {
             ]
         },
 
+        // === v3.13.0: PREMIUM SAAS — STOK KEY + PENUKARAN MANDIRI ===
+        // /gen-key + /redeem = admin jual key tanpa harus online 24 jam
+        // (melengkapi mode publik v3.12.0 ala Dyno).
+        {
+            name: 'gen-key',
+            description: 'Buat key stok produk untuk dijual (member menukar sendiri lewat /redeem)',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
+            options: [
+                { type: 3, name: 'value', description: 'Value produk (mis. vip30)', required: true },
+                {
+                    type: 4,
+                    name: 'count',
+                    description: 'Jumlah key yang dibuat sekaligus (1-10, default 1)',
+                    required: false,
+                    min_value: 1,
+                    max_value: 10
+                },
+                {
+                    type: 3,
+                    name: 'note',
+                    description: 'Catatan internal (mis. order top.gg #123)',
+                    required: false,
+                    max_length: 100
+                }
+            ]
+        },
+        {
+            // Command PUBLIK (tanpa defaultMemberPermissions) — member
+            // menukar key beliannya sendiri; keamanan via rate limiter +
+            // pesan error generik (lihat src/commands/premium.js).
+            name: 'redeem',
+            description: 'Tukar key belianmu jadi role VIP (durasi mulai saat ditukar)',
+            options: [
+                {
+                    type: 3,
+                    name: 'key',
+                    description: 'Key yang kamu beli (format XXXXX-XXXXX-XXXXX)',
+                    required: true,
+                    max_length: 100
+                }
+            ]
+        },
+        {
+            name: 'list-stock',
+            description: 'Lihat semua key stok yang belum ditukar di server ini',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild
+        },
+        {
+            name: 'revoke-key',
+            description: 'Batalkan key stok (belum ditukar) yang bocor / salah buat',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
+            options: [
+                {
+                    type: 3,
+                    name: 'key',
+                    description: 'Key stok yang mau dibatalkan',
+                    required: true,
+                    max_length: 100
+                }
+            ]
+        },
+
         // === SELF-ROLE FLEKSIBEL ===
         {
             name: 'setup-selfrole',

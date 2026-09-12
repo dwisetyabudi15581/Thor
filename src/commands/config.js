@@ -525,10 +525,15 @@ module.exports = async function (interaction) {
         const keyLines = [
             `• Total key tersimpan: **${keyStats.total}**`,
             `• Aktif: **${keyStats.active}**${keyStats.permanent > 0 ? ` (termasuk ${keyStats.permanent} permanen)` : ''}`,
+            // v3.13.0: stok key (available) — dibuat /gen-key, belum ditukar
+            // siapa pun. Durasi belum jalan; tidak dihitung aktif/permanen.
+            keyStats.available > 0
+                ? `• 🏷️ Stok siap dijual (belum ditukar): **${keyStats.available}** — kelola lewat \`/list-stock\``
+                : null,
             keyStats.expired > 0
                 ? `• ⚠️ Expired (menunggu scheduler bersihkan): **${keyStats.expired}**`
                 : `• Expired: **0** ✅`
-        ];
+        ].filter(Boolean);
 
         // --- Stats: Scheduled Role Removals ---
         // v3.9.4: scoped per guild — sebelumnya getAllScheduledActive() return global list.

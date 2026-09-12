@@ -1,4 +1,4 @@
-# 📖 Admin Guide — Thor Bot v3.12.0
+# 📖 Admin Guide — Thor Bot v3.13.0
 
 Panduan lengkap untuk admin server Discord yang menjalankan bot ini — cocok untuk admin baru yang pertama kali setup, maupun admin yang sudah berjalan sebagai referensi harian.
 
@@ -48,7 +48,7 @@ npm start
 
 - Console menampilkan: `✅ Bot online sebagai NamaBot`
 - Console menampilkan: `✅ Slash Commands terdaftar ke guild: Nama Server (instan!)`
-- Di Discord, ketik `/` — semua **92 slash command** harus muncul
+- Di Discord, ketik `/` — semua **96 slash command** harus muncul
 - Jika command tidak muncul, pastikan `GUILD_ID` di `.env` benar
 
 > 🌍 **SATU GUILD ID (v3.12.0)** — semua perilaku server dikontrol **SATU baris** di `.env`: `GUILD_ID`. **Terisi** = mode 1 server (default): slash command terdaftar **instan** ke server itu, dan event dari server lain (pesan/join/boost/tiket) diabaikan — asuransi kalau bot tak sengaja ter-invite. **Kosong** = **mode publik ala Dyno**: command global (muncul otomatis di semua server yang meng-invite, ±1 jam), config **per-server** `data/config/<guildId>.json` — admin server A tidak bisa menimpa setting server B. Config lama `data/config.json` dimigrasi otomatis saat guild yang sah pertama kali membacanya (file lama di-rename `config.json.migrated` — tidak dihapus). Ganti server = ganti satu baris itu, titik. Mau membuka bot ke publik? Lihat [Section 12 — Mode Publik ala Dyno + Developer Portal](#12-mode-publik-ala-dyno--developer-portal-fase-3).
@@ -325,6 +325,31 @@ Bot otomatis:
 5. Mengirim invoice ke channel invoice
 6. Mencatat purchase ke stats
 7. Audit log `SET_KEY` — **key dimasking** (hanya `***` + panjang, nilai key tidak pernah bocor)
+
+### 💰 Jualan Key Mandiri — Premium SaaS (v3.13.0)
+
+> Mode jualan tanpa staf online 24 jam — melengkapi mode publik v3.12.0. Bot mengarang keynya, pembeli menukar sendiri. Alur klasik `/set-key` di atas tetap berlaku.
+
+**Alur jualan (sekali setup, berulang selamanya):**
+
+1. Pastikan produk sudah punya auto-role (`/set-product-role`) dan durasi hari yang benar.
+2. `/gen-key value:30d count:5 note:stok-minggu-ini` — bot mengarang 5 key acak crypto-secure (`XXXXX-XXXXX-XXXXX` tanpa huruf ambigu), tampil HANYA ke kamu (ephemeral).
+3. Sebarkan key ke pembeli: DM langsung, marketplace, atau toko eksternal/top.gg. **Jangan pernah taruh key di channel publik.**
+4. Pembeli mengetik `/redeem key:XXXXX-XXXXX-XXXXX` → role VIP langsung diberikan + jadwal auto-expire dibuat + DM bukti pembelian. **Durasi baru mulai SAAT DITUKAR** — stok tidak "basi" walau lama tidak terjual.
+5. Selesai — tidak ada langkah admin. Audit `REDEEM_KEY` tercatat otomatis (key tetap dimasking).
+
+**Kelola stok:**
+
+```
+/list-stock        → semua key belum ditukar (produk · durasi · note)
+/revoke-key key:…  → batalkan key stok yang bocor/salah buat
+```
+
+- `/config-show` kini menampilkan baris **🏷️ Stok siap dijual (belum ditukar)**.
+- Key stok terikat server tempat ia dibuat — tidak bisa ditukar di server lain (aman untuk mode publik multi-server).
+- Key yang SUDAH ditukar tidak bisa di-revoke (pencairan sah) — untuk mencabut VIP dari member, pakai `/clear-schedule user clear_keys:true`.
+
+**Keamanan `/redeem` (command publik):** rate limiter 5 kegagalan / 10 menit per user; semua kegagalan memakai SATU pesan generik (tidak bisa di-enumerasi); konsumsi key atomic (dua klik bersamaan → cuma satu sukses); nilai key tidak pernah muncul di audit log.
 
 ### Lihat Key Member
 
@@ -1032,10 +1057,11 @@ Cooldown bersifat **per-user** — user A memicu tidak memengaruhi user B.
 
 ## 11. Riwayat Versi
 
-Riwayat lengkap semua versi (v3.9.0 – v3.12.0) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
+Riwayat lengkap semua versi (v3.9.0 – v3.13.0) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
 
 Ringkasan semua versi:
 
+- **v3.13.0** (2026-09-12) — 💰 **PREMIUM SAAS: STOK KEY + PENUKARAN MANDIRI**. Jualan key tanpa staf online 24 jam: `/gen-key` (admin) mengarang key stok crypto-secure `XXXXX-XXXXX-XXXXX`; pembeli menukar sendiri lewat `/redeem` (PUBLIK) → role + jadwal expire otomatis, **durasi mulai saat ditukar**. `/list-stock` + `/revoke-key` untuk kelola stok; baris stok muncul di `/config-show`. Keamanan: rate limiter 5 kegagalan/10 menit, pesan error generik (anti enumerasi), konsumsi atomic, key guild-scoped, key tak pernah bocor di audit. Registry 92 → 96 command; +29 test (total **645**). Tanpa breaking change — alur `/set-key` klasik tetap.
 - **v3.12.0** (2026-09-12) — 🎯 **SATU GUILD ID + FASE 3: MODE PUBLIK (ala Dyno)**. `.env` kini hanya punya **satu variabel server: `GUILD_ID`** — allowlist `ALLOWED_GUILD_IDS` (v3.11.0) dihapus total (anti bingung: ganti server = ganti satu baris). **Terisi** = mode 1 server (command instan, event server lain diabaikan); **kosong** = mode publik ala Dyno/MEE6 (command global — muncul otomatis di semua server ±1 jam, tanpa guild id manual). `src/infra/guild.js` disederhanakan (`getPrimaryGuildId()`); gerbang klaim config legacy + registrasi command + startup mengikuti; log skip join/leave kini menyebut `GUILD_ID`. Docs: seksi baru **12 — Mode Publik + Developer Portal** (cara kerja Dyno, OAuth2 URL + scope `applications.commands`, verifikasi Discord 100 server, checklist keamanan). Test `guildGuard.test.js` rewrite + 3 PIN ANTI-BINGUNG (allowlist tak boleh muncul lagi; `.env.example` satu variabel; kontrak ekspor). +3 test (total **616**).
 - **v3.11.0** (2026-09-12) — 🛡️ **FASE 2 MULTI-GUILD: allowlist `ALLOWED_GUILD_IDS`**. Daftar ID server (dipisah koma) yang boleh memakai bot — prioritas `ALLOWED_GUILD_IDS` > `GUILD_ID` > keduanya kosong (mode terbuka). Semua 11 event handler berganti ke guard allowlist (`isGuildAllowed()`); registrasi slash command kini **per-guild untuk SEMUA server allowlist sekaligus** (instan, dan server di luar daftar tidak melihat command sama sekali); startup (cek channel, catch-up boost, sinkron server-stats) kini berjalan untuk setiap guild allowlist (dulu cuma guild pertama); gerbang klaim config legacy ikut allowlist (allowlist tunggal → hanya guild itu yang bisa klaim). +15 unit test (total **613**). *Catatan v3.12.0: fitur ini digantikan konfigurasi satu `GUILD_ID`.*
 - **v3.10.0** (2026-09-12) — 🌍 **FASE 1 MULTI-GUILD: config per-server**. `data/config.json` global (dipakai bersama semua server yang meng-invite bot — admin server A menimpa setting server B) diganti **`data/config/<guildId>.json`** — satu file per server. Migrasi otomatis satu kali saat bot start (file lama jadi `config.json.migrated`). API internal `getConfig/saveConfig/setField` kini wajib `guildId` (fail-fast) via helper baru `resolveGuildId()`; cache admin-role permission jadi per-guild (dulu global — role admin server A terbaca server B); backup/restore mendukung folder `config/` recursive + backward-compat backup lama. 57 call site di 24 file src + 19 file test di-update; total tetap **598 test** hijau. `GUILD_ID` kosong = mode multi-guild penuh; server yang sekarang single-server tidak berubah apa pun.
@@ -1145,6 +1171,6 @@ Jika ada masalah yang tidak ada di Troubleshooting:
 
 ---
 
-**Versi dokumen:** v3.12.0
+**Versi dokumen:** v3.13.0
 **Last updated:** 12 September 2026
-**Bot version:** 3.12.0 · 92 slash command · 616 unit test
+**Bot version:** 3.13.0 · 96 slash command · 645 unit test

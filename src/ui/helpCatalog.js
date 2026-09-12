@@ -81,13 +81,13 @@ const HELP_CATEGORIES = [
         name: 'Panduan Cepat',
         short: 'Baru pakai bot? Urutan setup server dari nol',
         lines: [
-            '**Baru pakai bot? Ikuti urutan ini:**',
-            '1️⃣ `/set-role verified @Verified` — role member terverifikasi',
+            '**Baru pakai bot? Ikuti ini:**',
+            '1️⃣ `/set-role verified @Verified` — role member verified',
             '2️⃣ `/add-category` + `/add-product` — siapkan katalog',
             '3️⃣ `/setup-ticket-panel` — pasang panel tiket',
             '4️⃣ `/setup-verify` — verifikasi member baru',
             '5️⃣ `/set-channel server-log #log` — aktifkan log',
-            '💡 Lanjut eksplor kategori lain lewat dropdown 📂.'
+            '💡 Lanjut eksplor kategori lain lewat 📂.'
         ],
         // v3.9.53: panduan lengkap mandiri (tampilan kategori = detail saja).
         detail: [
@@ -116,12 +116,12 @@ const HELP_CATEGORIES = [
         lines: [
             '**Riwayat pelanggaran:**',
             '• `/warn user reason` — peringatan (3=mute 1j, 5=mute 1h, 7=kick)',
-            '• `/warn-list user` — riwayat warn + sanksi · `/warn-remove` `/warn-clear`',
+            '• `/warn-list user` — riwayat warn · `/warn-remove` `/warn-clear`',
             '**Tindakan langsung:**',
-            '• `/timeout user menit reason` — mute (maks 40320 = 28 hari) · `/untimeout`',
+            '• `/timeout user menit reason` — mute (maks 28 hari) · `/untimeout`',
             '• `/kick` keluarkan · `/ban` blokir · `/unban` buka blokir',
-            '• `/purge amount:100 user?` — hapus massal pesan (1-100)',
-            '💡 Tercatat otomatis di `/warn-list` + log server. Role lebih tinggi kebal tindakan.'
+            '• `/purge amount:100 user?` — hapus massal (1-100)',
+            '💡 Tercatat di `/warn-list` + log. Role lebih tinggi kebal tindakan.'
         ],
         // v3.9.53: panduan lengkap mandiri (tampilan kategori = detail saja).
         detail: [
@@ -176,17 +176,29 @@ const HELP_CATEGORIES = [
         short: 'Stok key produk & jadwal expire member',
         lines: [
             '• `/set-key user:@user value:vip30 key:ABCDE-12345` — set key produk',
-            '• `/list-keys user:@user` — key member · `/clear-schedule user clear_keys:true` — bersihkan'
+            '• `/list-keys user` — key member · `/clear-schedule clear_keys:true` — bersihkan',
+            '• `/gen-key` stok jualan · member `/redeem` · `/list-stock` · `/revoke-key`'
         ],
         // v3.9.53: panduan lengkap mandiri (tampilan kategori = detail saja).
+        // v3.13.0: + alur jualan mandiri (stok key + /redeem).
+        // NOTE: `lines` ikut tampil di embed 📖 Semua Command yang budget-nya
+        // ketat — baris premium sengaja super-ringkas; penjelasan lengkap ada
+        // di `detail` (tampilan kategori utama).
         detail: [
-            '**Key = bukti pembelian. Pembeli tunjukkan key, staf verifikasi SEKALI, role + jadwal expire urus sendiri.**',
+            '**Key = bukti pembelian. Dua alur: (1) klasik — staf set key manual; (2) mandiri — admin buat stok, member tukar sendiri lewat `/redeem`.**',
+            '**Alur klasik (admin online)**',
             '• `/set-key user value key` — daftarkan key, mis. `/set-key value:vip30 key:ABCDE-12345`. Pembeli langsung dapat role produknya, dan jadwal expire diperpanjang sesuai durasi produk (tidak pernah dobel — MAX EXTEND).',
             '• `/list-keys user` — semua key milik member, aktif MAUPUN expired, lengkap dengan tanggalnya.',
             '• `/clear-schedule user` — hapus semua jadwal expire role member; `clear_keys:true` sekalian hapus key-nya + lepas role VIP — bersih total untuk refund/chargeback.',
+            '**Alur mandiri (premium SaaS — admin tidak perlu online)**',
+            '• `/gen-key value:vip30 count:5` — bot mengarang 5 key acak (format `XXXXX-XXXXX-XXXXX`) sebagai STOK. Kirim key itu ke pembeli (DM / marketplace / top.gg).',
+            '• `/redeem key` — pembeli menukar key SENDIRI: role langsung diberikan + jadwal expire dibuat otomatis. **Durasi mulai SAAT DITUKAR** — stok tidak "basi" walau lama tidak terjual.',
+            '• `/list-stock` — stok guild ini yang belum ditukar (produk, durasi, note).',
+            '• `/revoke-key key` — batalkan key stok yang bocor/salah buat (key yang sudah ditukar tidak bisa di-revoke — pakai `/clear-schedule`).',
             '',
             '❓ **Key sudah terpakai?** Tiap key hanya bisa dipakai SEKALI — statusnya kelihatan di `/list-keys`.',
-            '❓ **Pembeli kehilangan key?** `/list-keys user` menunjukkan key-nya — tidak perlu cari-cari di DM.'
+            '❓ **Pembeli kehilangan key?** `/list-keys user` menunjukkan key-nya — tidak perlu cari-cari di DM.',
+            '❓ **Key stok bisa dipakai di server lain?** Tidak — key stok terikat server tempat ia dibuat (aman untuk mode publik multi-server).'
         ]
     },
     {

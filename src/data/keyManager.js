@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { safeWriteJSON, quarantineCorruptFile } = require('../infra/safeWrite');
 
 const keysPath = path.join(__dirname, '..', '..', 'data', 'keys.json');
@@ -24,6 +25,20 @@ const keysPath = path.join(__dirname, '..', '..', 'data', 'keys.json');
  * Setiap pembelian = 1 key baru dengan expireAt INDEPENDEN (tidak ditumpuk).
  * Role VIP mengikuti key dengan sisa waktu TERBANYAK (max dari semua key aktif).
  * Key yang sudah expired akan dihapus otomatis dari keys.json.
+ *
+ * === v3.13.0: STOK KEY + PENUKARAN MANDIRI (PREMIUM SAAS) ===
+ * Mode publik ala Dyno (v3.12.0) melengkapi sisi monetisasinya:
+ *   1. /gen-key  — bot yang mengarang key (random crypto-secure),
+ *                   bukan admin lagi mengarang manual lewat /set-key.
+ *   2. Key stok  — entry dengan status 'available' + userId null.
+ *                   Durasi baru mulai jalan SAAT DITUKAR, bukan saat dibuat
+ *                   (expireAt dihitung redeemKey, bukan createStockKey).
+ *   3. /redeem   — member menukar key SENDIRI (self-service): role +
+ *                   jadwal expire otomatis — admin tidak perlu online.
+ *   4. Key stok guild-scoped: key server A tidak bisa ditukar di server B
+ *      (penting di mode publik multi-server).
+ * Key stok ditandai field `status: 'available'`; key legacy (pre-v3.13)
+ * tidak punya field status → dianggap sudah diklaim (sudah punya userId).
  */
 
 function loadKeys() {
@@ -50,6 +65,229 @@ function saveKeys(list) {
 
 function genId() {
     return `key_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+// ============================================================
+// === v3.13.0: STOK KEY + PENUKARAN MANDIRI (PREMIUM SAAS) ===
+// ============================================================
+
+// Alphabet tanpa karakter ambigu (I, L, O, 0, 1 dibuang) supaya key
+// mudah dibaca & disalin manual oleh pembeli (HP-friendly).
+const KEY_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+const KEY_GROUPS = 3; // format: XXXXX-XXXXX-XXXXX
+const KEY_GROUP_LEN = 5;
+
+// Anti brute-force /redeem: max kegagalan per user sebelum cooldown.
+const REDEEM_MAX_FAILURES = 5;
+const REDEEM_WINDOW_MS = 10 * 60 * 1000; // window 10 menit (sliding)
+const redeemFailures = new Map(); // userId → { count, firstAt }
+
+/**
+ * v3.13.0: Apakah entry ini key STOK (belum ditukar)?
+ * Marker: status === 'available' — hanya createStockKey yang men-set-nya.
+ * Key legacy (pre-v3.13) tidak punya field status → bukan stok.
+ */
+function isStockKey(k) {
+    return Boolean(k) && k.status === 'available';
+}
+
+/**
+ * v3.13.0: Karang key acak format XXXXX-XXXXX-XXXXX.
+ * Crypto-secure (crypto.randomBytes, BUKAN Math.random — Math.random
+ * tidak untuk nilai yang bernilai uang). 15 char dari alphabet 31 char
+ * = ~74 bit entropy — jauh di luar jangkauan brute force, apalagi
+ * ditambah rate limiter /redeem. (bytes[i] % 31 punya bias kecil
+ * ~3% per char — diabaikan: margin entropy terlalu besar.)
+ * Collision dengan key yang sudah ada → retry (maks 10x, lalu throw).
+ *
+ * @param {Array} [existingList] - daftar key saat ini (dup-check)
+ * @returns {string} key baru, mis. "K7M2P-QXN4R-TVW8Y"
+ */
+function generateKeyString(existingList = []) {
+    const existing = new Set((existingList || []).map(k => k && k.key));
+    for (let attempt = 0; attempt < 10; attempt++) {
+        const bytes = crypto.randomBytes(KEY_GROUPS * KEY_GROUP_LEN);
+        let key = '';
+        for (let i = 0; i < KEY_GROUPS * KEY_GROUP_LEN; i++) {
+            if (i > 0 && i % KEY_GROUP_LEN === 0) key += '-';
+            key += KEY_ALPHABET[bytes[i] % KEY_ALPHABET.length];
+        }
+        if (!existing.has(key)) return key;
+    }
+    // Praktis mustahil (74 bit entropy), tapi fail-fast lebih aman
+    // daripada diam-diam return key duplikat (yang akan ditolak addKey
+    // / createStockKey berikutnya dan bikin bingung).
+    throw new Error('Gagal generate key unik (coba lagi)');
+}
+
+/**
+ * v3.13.0: Buat key STOK (available, belum milik siapa pun) — dipakai
+ * /gen-key. Key ini lalu disebarkan ke pembeli (DM / marketplace /
+ * top.gg / toko eksternal) dan ditukar sendiri lewat /redeem.
+ *
+ * @param {Object} data - { productName, roleId, days, guildId, note, createdBy }
+ *   - days: 0 = permanen, >0 = durasi hari SEJAK DITUKAR (bukan sejak dibuat)
+ *   - roleId wajib: role yang diberikan saat key ditukar (produk harus
+ *     sudah di-set-product-role sebelum gen-key — divalidasi caller juga)
+ * @returns {Object} entry stok yang baru disimpan
+ */
+function createStockKey(data) {
+    const list = loadKeys();
+    const now = Date.now();
+    const days = Number(data.days) || 0;
+
+    // Fail-fast: tanpa productName/roleId, key tidak bisa ditukar dengan
+    // benar nantinya (redeem butuh roleId untuk memberi role).
+    if (!data.productName) throw new Error('Nama produk wajib diisi');
+    if (!data.roleId) throw new Error('roleId wajib diisi (role yang diberikan saat key ditukar)');
+
+    const key = generateKeyString(list);
+    const entry = {
+        id: genId(),
+        key,
+        userId: null, // belum ditukar — diisi redeemKey
+        username: null,
+        roleId: data.roleId,
+        productName: data.productName,
+        days,
+        expireAt: null, // dihitung SAAT DITUKAR (redeemKey) — durasi belum jalan
+        status: 'available', // 'available' → 'redeemed'
+        note: (typeof data.note === 'string' ? data.note.trim() : '').slice(0, 100),
+        createdBy: data.createdBy || null,
+        guildId: data.guildId || null,
+        createdAt: now
+    };
+    list.push(entry);
+    saveKeys(list);
+    return entry;
+}
+
+/**
+ * v3.13.0: Cari key persis (untuk pre-validasi handler / list stok / test).
+ * @returns {Object|null} entry, atau null kalau tidak ada / input kosong
+ */
+function findKeyByString(key) {
+    const trimmed = typeof key === 'string' ? key.trim() : '';
+    if (!trimmed) return null;
+    return loadKeys().find(k => k.key === trimmed) || null;
+}
+
+/**
+ * v3.13.0: Tukar key stok ke user (dipakai /redeem — self-service).
+ * Atomic dalam satu proses Node (load → validasi → mutate → save tanpa
+ * await di tengah): dua redeem bersamaan → hanya satu yang sukses.
+ *
+ * Validasi — SEMUA kegagalan throw pesan GENERIK yang sama supaya key
+ * tidak bisa di-enumerasi (tidak bocor mana key yang valid tapi belum
+ * dipakai):
+ *   - key tidak ditemukan → generik
+ *   - key bukan stok / sudah ditukar → generik
+ *   - key milik guild lain → generik (guild-scoped, penting mode publik)
+ *
+ * Sukses: status 'redeemed', userId/username/redeemedAt terisi, dan
+ * expireAt dihitung dari SEKARANG (durasi mulai saat ditukar).
+ *
+ * @param {string} keyString - key yang diketik user (di-trim)
+ * @param {Object} who - { userId, username, guildId }
+ * @returns {Object} entry yang sudah ditukar
+ */
+function redeemKey(keyString, { userId, username, guildId }) {
+    const trimmed = typeof keyString === 'string' ? keyString.trim() : '';
+    if (!trimmed) throw new Error('Key tidak valid atau sudah dipakai');
+    if (!userId) throw new Error('userId wajib diisi');
+
+    const list = loadKeys();
+    const entry = list.find(k => k.key === trimmed);
+    const GENERIC = 'Key tidak valid atau sudah dipakai';
+    if (!entry) throw new Error(GENERIC);
+    if (!isStockKey(entry)) throw new Error(GENERIC);
+    if (entry.guildId && entry.guildId !== guildId) throw new Error(GENERIC);
+
+    const now = Date.now();
+    const days = Number(entry.days) || 0;
+    entry.userId = userId;
+    entry.username = username || '';
+    entry.redeemedAt = now;
+    entry.status = 'redeemed';
+    // Durasi SEJAK DITUKAR — key stok tidak punya expireAt sebelum ini.
+    entry.expireAt = days > 0 ? now + days * 24 * 60 * 60 * 1000 : null;
+    saveKeys(list);
+    return entry;
+}
+
+/**
+ * v3.13.0: Semua key stok (available) milik guild ini (untuk /list-stock).
+ * Key stok selalu punya guildId eksplisit (createStockKey), tapi guard
+ * legacy null tetap dipertahankan untuk robustness.
+ * @returns {Array} entry stok
+ */
+function listStockKeys(guildId) {
+    const list = loadKeys();
+    return list.filter(k => isStockKey(k) && (!guildId || !k.guildId || k.guildId === guildId));
+}
+
+/**
+ * v3.13.0: Batalkan key stok (belum ditukar) — dipakai /revoke-key untuk
+ * key yang bocor / salah buat. Key yang SUDAH ditukar bukan wewenang
+ * revoke (pemakaiannya sudah sah — untuk itu pakai /clear-schedule
+ * user clear_keys:true). Guild-scope: admin guild lain tidak bisa
+ * mencabut stok guild ini.
+ * @returns {Object|null} entry yang dihapus, atau null kalau tidak sah
+ */
+function revokeStockKey(keyString, guildId) {
+    const trimmed = typeof keyString === 'string' ? keyString.trim() : '';
+    if (!trimmed) return null;
+    const list = loadKeys();
+    const idx = list.findIndex(k => k.key === trimmed);
+    if (idx === -1) return null;
+    const entry = list[idx];
+    if (!isStockKey(entry)) return null; // sudah ditukar → bukan revoke-able
+    if (guildId && entry.guildId && entry.guildId !== guildId) return null; // stok guild lain
+    list.splice(idx, 1);
+    saveKeys(list);
+    return entry;
+}
+
+/**
+ * v3.13.0: Apakah user sedang diblok /redeem (terlalu banyak kegagalan)?
+ * Window 10 menit sliding: hitungan reset sendiri kalau kegagalan
+ * pertama sudah lebih tua dari window.
+ */
+function isRedeemRateLimited(userId, now = Date.now()) {
+    const rec = redeemFailures.get(userId);
+    if (!rec) return false;
+    if (now - rec.firstAt >= REDEEM_WINDOW_MS) {
+        redeemFailures.delete(userId); // window lewat — reset
+        return false;
+    }
+    return rec.count >= REDEEM_MAX_FAILURES;
+}
+
+/**
+ * v3.13.0: Catat 1 kegagalan /redeem (dipanggil handler setiap redeemKey
+ * throw). @returns {number} jumlah kegagalan berjalan
+ */
+function noteRedeemFailure(userId, now = Date.now()) {
+    const rec = redeemFailures.get(userId);
+    if (!rec || now - rec.firstAt >= REDEEM_WINDOW_MS) {
+        redeemFailures.set(userId, { count: 1, firstAt: now });
+        return 1;
+    }
+    rec.count += 1;
+    return rec.count;
+}
+
+/**
+ * v3.13.0: Reset hitungan kegagalan user (dipanggil handler saat redeem
+ * sukses — user yang berhasil jelas bukan penyerang).
+ */
+function noteRedeemSuccess(userId) {
+    redeemFailures.delete(userId);
+}
+
+/** v3.13.0: reset limiter untuk test (tidak untuk produksi). */
+function _resetRedeemRateLimitForTest() {
+    redeemFailures.clear();
 }
 
 /**
@@ -191,18 +429,27 @@ function getAllKeys() {
 
 /**
  * Hitung statistik key buat /config-show.
- * Returns: { total, active, expired, permanent }
+ * Returns: { total, active, expired, permanent, available }
  *  - total: semua key di file
  *  - active: expireAt > now ATAU permanen
  *  - expired: expireAt <= now (akan dibersihkan scheduler)
- *  - permanent: days=0 atau expireAt=null
+ *  - permanent: days=0 atau expireAt=null (yang sudah DIKONSUMSI)
+ *  - available: v3.13.0 — key stok yang belum ditukar (belum memberi
+ *    apa pun ke siapa pun → TIDAK dihitung aktif/permanen)
  */
 function getStats(now = Date.now()) {
     const list = loadKeys();
     let active = 0,
         expired = 0,
-        permanent = 0;
+        permanent = 0,
+        available = 0;
     for (const k of list) {
+        // v3.13.0: key stok dihitung terpisah — expireAt-nya null (belum
+        // jalan), tanpa guard ini bakal salah dihitung permanent+active.
+        if (isStockKey(k)) {
+            available++;
+            continue;
+        }
         if (k.expireAt === null || k.days === 0) {
             permanent++;
             active++; // permanent selalu active
@@ -212,7 +459,7 @@ function getStats(now = Date.now()) {
             expired++;
         }
     }
-    return { total: list.length, active, expired, permanent };
+    return { total: list.length, active, expired, permanent, available };
 }
 
 /**
@@ -221,15 +468,22 @@ function getStats(now = Date.now()) {
  *
  * @param {string} guildId
  * @param {number} now
- * @returns {{total, active, expired, permanent}}
+ * @returns {{total, active, expired, permanent, available}}
  */
 function getStatsByGuild(guildId, now = Date.now()) {
     if (!guildId) return getStats(now);
     const list = loadKeys().filter(k => !k.guildId || k.guildId === guildId);
     let active = 0,
         expired = 0,
-        permanent = 0;
+        permanent = 0,
+        available = 0;
     for (const k of list) {
+        // v3.13.0: key stok guild lain sudah terfilter di atas; stok guild
+        // ini dihitung terpisah (belum dikonsumsi siapa pun).
+        if (isStockKey(k)) {
+            available++;
+            continue;
+        }
         if (k.expireAt === null || k.days === 0) {
             permanent++;
             active++;
@@ -239,7 +493,7 @@ function getStatsByGuild(guildId, now = Date.now()) {
             expired++;
         }
     }
-    return { total: list.length, active, expired, permanent };
+    return { total: list.length, active, expired, permanent, available };
 }
 
 /**
@@ -353,5 +607,16 @@ module.exports = {
     removeAllKeysByUserAndRole,
     getRemainingDays,
     formatRemaining,
-    formatKeysForUser
+    formatKeysForUser,
+    // v3.13.0: stok key + penukaran mandiri (premium SaaS)
+    generateKeyString,
+    createStockKey,
+    findKeyByString,
+    redeemKey,
+    listStockKeys,
+    revokeStockKey,
+    isRedeemRateLimited,
+    noteRedeemFailure,
+    noteRedeemSuccess,
+    _resetRedeemRateLimitForTest
 };

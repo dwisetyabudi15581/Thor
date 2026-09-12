@@ -5,6 +5,27 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 Legend: 🔴 critical · 🟠 high · 🟡 medium · 🟢 improvement
 
+## [3.13.0] — 2026-09-12
+
+### Added — 💰 PREMIUM SAAS: STOK KEY + PENUKARAN MANDIRI
+
+Melengkapi mode publik v3.12.0: admin jual key TANPA harus online 24 jam menunggu pembeli. Model lama (`/set-key`) tetap ada; ini alur baru yang mandiri penuh.
+
+- 🟢 **`/gen-key value count note` (admin)** — bot mengarang key stok acak crypto-secure (`crypto.randomBytes`, BUKAN `Math.random`): format `XXXXX-XXXXX-XXXXX`, alphabet 31 char tanpa huruf ambigu (I/L/O/0/1 dibuang — mudah dibaca & disalin manual), ~74 bit entropy. `count` 1-10 per sekali jalan. Key stok = `status: 'available'`, belum milik siapa pun, **durasi belum jalan** (`expireAt` null) — dihitung belakangan saat key DITUKAR. Audit log tetap tanpa nilai key (pola v3.9.1).
+- 🟢 **`/redeem key` (PUBLIK — command publik pertama yang menyentuh data key)** — member menukar key beliannya SENDIRI: role diberikan + jadwal auto-expire dibuat (MAX EXTEND, expireAt dihitung `redeemKey` = durasi SEJAK DITUKAR — stok tidak "basi" walau lama tidak terjual), DM bukti pembelian, audit REDEEM_KEY. Kalau role gagal diberikan (role terhapus / hierarki bot), key tetap tersimpan + member diarahkan ke admin (pola /set-key).
+- 🟢 **`/list-stock` (admin)** — semua stok guild ini yang belum ditukar (key, produk, durasi, note), embed hijau dengan penjelasan "durasi mulai saat ditukar".
+- 🟢 **`/revoke-key key` (admin)** — batalkan key stok yang bocor/salah buat. Key yang SUDAH ditukar tidak bisa di-revoke (pencairan sah) — untuk itu `/clear-schedule user clear_keys:true`.
+- 🟢 **Keamanan /redeem (4 lapis):** (1) rate limiter data-layer — 5 kegagalan / 10 menit per user (window sliding, sukses me-reset); (2) SEMUA kegagalan validasi → SATU pesan generik "Key tidak valid atau sudah dipakai" — key tidak bisa di-enumerasi; (3) konsumsi ATOMIC di `redeemKey` (load→validasi→mutate→save tanpa await) — dua redeem bersamaan cuma satu sukses; (4) key stok guild-scoped — key server A tidak bisa ditukar di server B (penting di mode publik multi-server).
+- 🟢 **`keyManager`: +10 fungsi baru** (`generateKeyString`, `createStockKey`, `findKeyByString`, `redeemKey`, `listStockKeys`, `revokeStockKey`, `isRedeemRateLimited`, `noteRedeemFailure`, `noteRedeemSuccess`, `_resetRedeemRateLimitForTest`) + field `available` di `getStats`/`getStatsByGuild` (stok dihitung TERPISAH — tidak masuk aktif/permanen; `/config-show` kini menampilkan baris stok). `removeExpiredKeys` aman untuk stok (expireAt null → selalu selamat).
+- 🟡 **Router:** domain baru `premium` (4 command ter-route + kontrak GUARD v3.9.24); `/redeem` masuk `PUBLIC_COMMANDS` (8 total). Registry 92 → **96 slash command**.
+- 🟡 **`/help`:** kategori 🔑 Key Manager kini memuat DUA alur (klasik vs mandiri) + FAQ baru ("key stok bisa dipakai di server lain?" — tidak). Baris `lines` super-ringkas (budget embed 📖 Semua Command ketat) + pemandatan minor kategori Moderasi/Panduan Cepat supaya 20 kategori tetap utuh dalam 5.800 char.
+- 🟢 **+29 unit test (total 645):** `premiumKeys.test.js` — format/unik key, field stok, durasi-sejak-ditukar, single-use atomic, pesan generik semua jalur kegagalan, guild-scoped (list/revoke/redeem), rate limiter (5 kegagalan, window 10 menit, reset sukses, isolasi antar user), stats available terpisah, stok selamat dari cleaner, dan 4 kontrak registry/router (terdaftar, ter-route, public vs admin-gated, opsi command).
+
+### Kompatibilitas
+
+- **Tidak ada breaking change.** Model `/set-key` klasik tidak berubah sama sekali; key legacy (pre-v3.13, tanpa field `status`) tetap sah dan dianggap sudah diklaim.
+- Data stok tersimpan di `data/keys.json` yang sama (schema field baru: `status`, `note`, `createdBy`, `redeemedAt`) — tidak ada migrasi.
+
 ## [3.12.0] — 2026-09-12
 
 ### Changed — 🎯 SATU GUILD ID + FASE 3: MODE PUBLIK (ala Dyno)
