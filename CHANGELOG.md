@@ -5,6 +5,17 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 Legend: 🔴 critical · 🟠 high · 🟡 medium · 🟢 improvement
 
+## [3.14.0] — 2026-09-13
+
+### Removed — 🗑️ STOK KEY MANDIRI DIHAPUS ATAS PERMINTAAN USER
+
+Key premium user **lahir dari sistem website VIP eksternal** (dipakai untuk login web), bukan dari bot — key yang diarang bot sendiri tidak berlaku di web itu, jadi seluruh fitur v3.13.0 dihapus menyeluruh.
+
+- 🔴 **`/gen-key` `/redeem` `/list-stock` `/revoke-key` DIHAPUS** — handler `src/commands/premium.js`, 10 fungsi stok di `keyManager`, domain router `premium`, entri `/redeem` di `PUBLIC_COMMANDS`, baris stok di `/config-show`, dan kategori Key 2-alur di `/help` (kembali alur tunggal klasik).
+- 🔴 **`tests/unit/premiumKeys.test.js` DIHAPUS** — 28 test fitur ikut mundur. Registry 96 → **92 slash command**; total test 644 → **616**.
+- 🟢 **`/set-key` klasik TIDAK tersentuh** — tetap jembatan resmi key web eksternal → role Discord (admin memasukkan key dari website VIP ke tiket transaksi).
+- 🟢 Strategi monetisasi premium berpindah ke **web dashboard terpisah** (Discord OAuth + verifikasi key web); roadmap bot: REST API bridge untuk dashboard.
+
 ## [3.13.0] — 2026-09-12
 
 ### Added — 💰 PREMIUM SAAS: STOK KEY + PENUKARAN MANDIRI

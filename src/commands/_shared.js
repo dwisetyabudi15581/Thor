@@ -34,16 +34,7 @@ const {
     formatKeysForUser,
     removeAllKeysByUser,
     getStats: getKeyStats,
-    getStatsByGuild: getKeyStatsByGuild,
-    // v3.13.0: stok key + penukaran mandiri (premium SaaS)
-    createStockKey,
-    redeemKey,
-    findKeyByString,
-    listStockKeys,
-    revokeStockKey,
-    isRedeemRateLimited,
-    noteRedeemFailure,
-    noteRedeemSuccess
+    getStatsByGuild: getKeyStatsByGuild
 } = require('../data/keyManager');
 const {
     scheduleRoleRemoval,
@@ -167,15 +158,6 @@ module.exports = {
     removeAllKeysByUser,
     getKeyStats,
     getKeyStatsByGuild,
-    // v3.13.0: stok key + penukaran mandiri (premium SaaS)
-    createStockKey,
-    redeemKey,
-    findKeyByString,
-    listStockKeys,
-    revokeStockKey,
-    isRedeemRateLimited,
-    noteRedeemFailure,
-    noteRedeemSuccess,
     scheduleRoleRemoval,
     removeActiveByUserAndRole,
     findAllSchedulesByUser,
