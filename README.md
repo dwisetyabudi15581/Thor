@@ -2,7 +2,7 @@
 
 Bot Discord serbaguna untuk komunitas apa pun — server jualan, gaming, content creator, hingga komunitas umum. Semua konfigurasi dapat diatur langsung dari Discord melalui slash command, tanpa mengedit file.
 
-> **v3.13.0** · 96 slash command · 645 unit test · discord.js v14 · Node.js 18+ · mode 1 server / publik (ala Dyno) · jualan key mandiri (premium SaaS)
+> **v3.13.0** · 96 slash command · 644 unit test · discord.js v14 · Node.js 18+ · mode 1 server / publik (ala Dyno) · jualan key mandiri (premium SaaS)
 >
 > 📖 **[Panduan Admin Lengkap](./docs/ADMIN_GUIDE.md)** — setup, operasional harian, troubleshooting
 > 📜 **[Changelog](./CHANGELOG.md)** — riwayat semua versi
@@ -155,7 +155,7 @@ Panduan lengkap termasuk contoh produk, kategori custom, dan operasional harian:
 | ---------------- | -------------------------------------- |
 | `npm start`      | Jalankan bot                           |
 | `npm run dev`    | Jalankan dengan nodemon (auto-restart) |
-| `npm test`       | Jalankan semua unit test (645 test)   |
+| `npm test`       | Jalankan semua unit test (644 test)   |
 | `npm run lint`   | ESLint check                           |
 | `npm run format` | Prettier format semua file             |
 
