@@ -1,4 +1,4 @@
-# 📖 Admin Guide — Thor Bot v3.9.60
+# 📖 Admin Guide — Thor Bot v3.10.0
 
 Panduan lengkap untuk admin server Discord yang menjalankan bot ini — cocok untuk admin baru yang pertama kali setup, maupun admin yang sudah berjalan sebagai referensi harian.
 
@@ -49,6 +49,8 @@ npm start
 - Console menampilkan: `✅ Slash Commands terdaftar ke guild: Nama Server (instan!)`
 - Di Discord, ketik `/` — semua **91 slash command** harus muncul
 - Jika command tidak muncul, pastikan `GUILD_ID` di `.env` benar
+
+> 🌍 **Multi-Guild (v3.10.0)** — sejak versi ini config bot **per-server** (`data/config/<guildId>.json`): admin server A tidak bisa menimpa setting server B. `GUILD_ID` di `.env` kini **opsional**: di-set = mode single-guild seperti biasa (bot mengabaikan server lain); **dikosongkan = mode multi-guild penuh** (semua server yang meng-invite bot diproses, command teregistrasi global ± 1 jam). Config lama `data/config.json` dimigrasi otomatis saat bot pertama kali membacanya (file lama di-rename jadi `config.json.migrated` — tidak dihapus). Mau invite bot ke server kedua? Cukup share invite link — admin server itu menjalankan `/set-role admin` sendiri dan semua konfigurasi mereka terpisah dari server Anda.
 
 > 💡 **Lupa command apa namanya?** Ketik `/help` — sejak v3.9.39 ini **navigator interaktif** (bukan lagi satu embed panjang yang harus di-scroll), dan sejak **v3.9.44** katalognya disusun ulang jadi **20 kategori diurut prioritas pemakaian**: 🏠 home kini membuka dengan seksi **"Butuh apa sekarang?"** (member nakal? → Moderasi · mau jualan? → Panduan Cepat · mau pantau? → Log & Channel · server sepi? → Giveaway & Leveling), 📂 **dropdown kategori** untuk melompat, 🔍 **Cari Command** untuk kata kunci bebas (`key`, `panel`, `warn`...), atau langsung `/help search:<kata kunci>`. Sejak **v3.9.53 SEMUA tampilan kategori adalah panduan lengkap mandiri** — sintaks + perilaku per-command + jawaban ❓ pertanyaan yang paling sering ditanya member (daftar 📖 Semua Command tetap ringkas supaya selalu muat dalam satu embed). Semua navigasi terjadi di satu pesan ephemeral — tidak memenuhi channel.
 
@@ -824,7 +826,7 @@ Bot membalas pesan otomatis saat pesan member cocok dengan trigger (case-insensi
 /backup-now
 ```
 
-Bot membuat folder `backups/YYYY-MM-DD_HH-mm-ss/` berisi salinan **semua 20 file data** dari folder `data/`: config, keys, scheduledRoles, selfRoles, giveaways, polls, warns, stats, scheduledAnns, tempVoice, tickets, automod, levels, responders, afk, panels, deals, boosts, serverstats, modlogs (v3.9.60 — riwayat moderasi).
+Bot membuat folder `backups/YYYY-MM-DD_HH-mm-ss/` berisi salinan **semua data** dari folder `data/`: folder `config/` per-guild (v3.10.0 — satu file per server, di-copy recursive) + 19 file lain: keys, scheduledRoles, selfRoles, giveaways, polls, warns, stats, scheduledAnns, tempVoice, tickets, automod, levels, responders, afk, panels, deals, boosts, serverstats, modlogs (v3.9.60 — riwayat moderasi). Backup lama (pre-v3.10.0, config.json datar) tetap bisa di-restore — file legacy diklaim migrasi otomatis, tanpa menimpa config guild yang sudah aktif.
 
 ### Auto-Backup
 
@@ -1029,9 +1031,11 @@ Cooldown bersifat **per-user** — user A memicu tidak memengaruhi user B.
 
 ## 11. Riwayat Versi
 
-Riwayat lengkap semua versi (v3.9.0 – v3.9.60) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
+Riwayat lengkap semua versi (v3.9.0 – v3.10.0) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
 
 Ringkasan semua versi:
+
+- **v3.10.0** (2026-09-12) — 🌍 **FASE 1 MULTI-GUILD: config per-server**. `data/config.json` global (dipakai bersama semua server yang meng-invite bot — admin server A menimpa setting server B) diganti **`data/config/<guildId>.json`** — satu file per server. Migrasi otomatis satu kali saat bot start (file lama jadi `config.json.migrated`). API internal `getConfig/saveConfig/setField` kini wajib `guildId` (fail-fast) via helper baru `resolveGuildId()`; cache admin-role permission jadi per-guild (dulu global — role admin server A terbaca server B); backup/restore mendukung folder `config/` recursive + backward-compat backup lama. 57 call site di 24 file src + 19 file test di-update; total tetap **598 test** hijau. `GUILD_ID` kosong = mode multi-guild penuh; server yang sekarang single-server tidak berubah apa pun.
 
 - **v3.9.60** (2026-09-12) — 🧪 **audit subsistem backup/restore (code review)**. Perbaikan 3 bug nyata: (1) **modlogs.json tidak pernah di-backup** — sejak v3.9.43 riwayat moderasi (timeout/kick/ban yang ditampilkan `/warn-list`) senyap tidak ikut `/backup-now` dan hilang oleh `/restore-backup`; file kini masuk FILES_TO_BACKUP dan dipaten regression test bebas environment (cross-check registry 20 file). (2) **Penimpaan cache basi pasca-restore untuk boosts.json** — store in-memory permanen boostManager tidak pernah di-invalidate setelah restore, jadi event boost pertama menimpa riwayat hasil restore; `reload()` kini dipanggil di alur restore (modLogManager juga). (3) **`npm test` merah di setiap fresh clone/CI** — GUARD test mengasumsikan file data runtime ada; fresh checkout kini melewatkan scan itu dan jaminannya pindah ke regression test baru. +3 unit test (total **598**). Tanpa command baru, tanpa perubahan config — data v3.9.59 kompatibel penuh.
 - **v3.9.59** (2026-09-12) — 💬 **permintaan user: "auto role booster — yang sudah boost server bakal dapet role"**. BARU **`tipe:booster`** di `/set-role`: role Booster **otomatis** diberikan saat member boost server dan dihapus saat boost berakhir (semantik yang sama dengan role Server Booster bawaan Discord, tapi pakai role sendiri — urutan/warna bisa diatur). Diterapkan **retroaktif** ke semua booster yang sudah ada saat di-set (reply menyebut jumlahnya), disinkronkan saat startup untuk boost yang terjadi saat bot offline, dan **tidak pernah mencabut** pemberian role manual ke member biasa. Setiap skip/gagal meninggalkan log penyebab + solusi (belum di-set, role ghost, posisi di atas role bot, permission Manage Roles); `/test-booster` ikut mendiagnosis rantai role-nya tanpa mengutak-atik role (simulasi tetap murni); `/remove-role booster` mematikan otomatisasi tanpa mencabut role yang terpasang. +18 unit test (total **595**).
@@ -1087,6 +1091,6 @@ Jika ada masalah yang tidak ada di Troubleshooting:
 
 ---
 
-**Versi dokumen:** v3.9.60
+**Versi dokumen:** v3.10.0
 **Last updated:** 12 September 2026
-**Bot version:** 3.9.60 · 92 slash command · 598 unit test
+**Bot version:** 3.10.0 · 92 slash command · 598 unit test
