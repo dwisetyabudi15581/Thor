@@ -5,6 +5,40 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 Legend: 🔴 critical · 🟠 high · 🟡 medium · 🟢 improvement
 
+## [3.15.0] — 2026-09-14
+
+### Added — 🔒 LANGGANAN PREMIUM PER-SERVER (ALA DYNO)
+
+Monetisasi model SaaS: server yang meng-invite bot mendapat tier **Free** (moderasi inti + komunitas dasar); akses PENUH ke semua fitur (tiket jualan, produk + key VIP, rekber, automod, giveaway, dll.) hanya untuk server yang berlangganan — persis model Dyno/MEE6.
+
+- 🟢 **`/premium` (5 subcommand, command #93):**
+  - `status` (PUBLIK) — semua member bisa lihat status langganan server + apa yang free vs premium.
+  - `activate <key>` — admin server (permission *Manage Server*) menukar key jadi langganan SELURUH server. Format key `XXXXX-XXXXX-XXXXX`, validasi regex sebelum menyentuh data.
+  - `gen plan note` — khusus pemilik bot (`PREMIUM_ADMIN_IDS`): bikin key lokal (pool `data/guildPremium.json`), key tampil SEKALI lalu selalu dimasking.
+  - `keys` — khusus pemilik bot: stok key lokal + daftar server berlangganan (key masked, konsisten kebijakan audit).
+  - `revoke <guild>` — khusus pemilik bot: cabut langganan (kasus refund/chargeback).
+- 🟢 **Gate premium (`src/infra/premiumGate.js`)** — di `routeCommand` SEBELUM permission check: guild non-premium yang memanggil command premium dapat embed upsell ephemeral (bukan pesan "akses ditolak" yang membingungkan). Bypass: `PREMIUM_BYPASS_GUILDS` (server rumah), `PREMIUM_ADMIN_IDS` (pemilik bot), dan interaksi tanpa guild (DM). Interaksi komponen (tombol) sengaja TIDAK di-gate — server free tak bisa membuat panel premium karena command setup-nya sudah diblokir, sementara tombol verifikasi (fitur free) tetap hidup.
+- 🟢 **Aktivasi gate otomatis per mode:** `PREMIUM_GATE=auto` (default) → aktif HANYA di mode publik (GUILD_ID kosong); mode 1 server tidak di-gate — perilaku deployment privat tidak berubah setelah upgrade. `on`/`off` memaksa manual.
+- 🟢 **`guildPremiumManager` (`src/data/`)** — data layer `data/guildPremium.json`: subscriptions (MODEL KEY-DRIVEN: tiap aktivasi = entry independen; guild premium = ada entry aktif; tampilan = sisa terpanjang) + pool key lokal (crypto.randomBytes, alphabet 31 char — identik format generator dashboard web). MAX EXTEND konsisten `keyManager`: paket baru ditaruh SETELAH sisa terpanjang; lifetime = `expireAt` null, terkunci selamanya. Status di-cache 15 detik per guild (pola adminRoleCache). File dilindungi `safeWriteJSON` + karantina korup.
+- 🟢 **Provider key remote (opsional):** `PREMIUM_API_URL` + `PREMIUM_API_TOKEN` → `/premium activate` memvalidasi + mengonsumsi key ke REST API dashboard web (`POST /api/bot/premium`) — key scope `guild` yang dibuat admin di web. API unreachable → fallback pool lokal otomatis (jangan gantung interaction); penolakan bisnis (4xx) dari API ditampilkan apa adanya.
+- 🟢 **Scheduler:** `processExpiredSubscriptions` di tick 60 detik + offline catch-up startup — sweep entry expired, invalidate cache (downgrade efektif < 60 detik), lalu kirim notifikasi best-effort "Langganan Berakhir" + cara perpanjang ke system channel / channel teks pertama yang bisa dikirimi (network error ditelan — sweep tidak boleh gagal karena notifikasi).
+- 🟡 **`.env.example`:** +5 variabel `PREMIUM_*` dengan penjelasan dua mode & contoh.
+- 🟢 **+33 unit test (total 649):** `guildPremiumManager.test.js` (16 — format key anti-ambigu, konsumsi sekali pakai, MAX EXTEND numerik, lifetime lock, sweep, revoke, masking) + `premiumGate.test.js` (17 — gate auto/on/off per mode, bypass guild/admin, free vs premium split, integrasi router embed upsell, kontrak registry↔router↔gate, anti-typo FREE_COMMANDS). Dua kontrak jumlah registry 92 → **93**.
+
+### Tier split (Free vs Premium)
+
+| Free (tanpa langganan) | Premium (berlangganan) |
+|---|---|
+| `help`, `premium`, `config-show`, `setup-verify`, `set-verify-button` | Semua setup panel & tiket jualan, produk + `/set-key` VIP, rekber |
+| `timeout` `untimeout` `purge` `kick` `ban` `unban` `warn*` | `automod` word/link filter, `responder`, `announce`, `embed` |
+| `my-stats` `rank` `leaderboard*` `boosters` `afk*` | `giveaway` `poll` `selfrole` `tempvoice` `serverstats` `send-message` `backup*` |
+
+### Compatibilitas
+
+- **Tidak ada breaking change** untuk deployment 1 server (gate mati otomatis). Mode publik baru di-gate — server yang sudah ter-invite dengan konfigurasi premium-only features akan melihat embed upsell setelah langganan belum aktif.
+- Data langganan & pool key di file BARU `data/guildPremium.json` — tidak menyentuh `keys.json` (sistem `/set-key` VIP member klasik tetap berjalan untuk server premium).
+- Sistem key VIP member per-user (`/set-key`) TIDAK dihapus — berjalan berdampingan: langganan = membuka gerbang fitur untuk SERVER; `/set-key` = memberi role VIP untuk MEMBER di dalam server premium.
+
 ## [3.14.0] — 2026-09-13
 
 ### Removed — 🗑️ STOK KEY MANDIRI DIHAPUS ATAS PERMINTAAN USER

@@ -23,7 +23,9 @@ const {
     reconcileZombieDeals,
     reconcileZombieDealsDaily,
     // v3.9.51: channel counter server stats live.
-    processServerStatsTick
+    processServerStatsTick,
+    // v3.15.0: langganan premium guild — sweep expire + notifikasi.
+    processExpiredSubscriptions
 } = require('../../services/schedulerTasks');
 const { getExpired, getAllActive } = require('../../data/roleScheduler');
 const { removeExpiredKeys } = require('../../data/keyManager');
@@ -258,6 +260,13 @@ async function onReady(client) {
         console.error('Startup: removeExpiredKeys error:', err.message);
     }
 
+    // === 2b. Cleanup langganan premium guild expired (v3.15.0, offline catch-up) ===
+    try {
+        await processExpiredSubscriptions(client);
+    } catch (err) {
+        console.error('Startup: processExpiredSubscriptions error:', err.message);
+    }
+
     // === 3. Re-schedule auto-remove role (offline catch-up) ===
     try {
         const expired = getExpired();
@@ -350,6 +359,14 @@ async function onReady(client) {
                     if (removed > 0) console.log(`🧹 ${removed} key expired dihapus.`);
                 } catch (err) {
                     console.error('Scheduler: removeExpiredKeys error:', err.message);
+                }
+
+                // v3.15.0: langganan premium guild — sweep expire (setiap tick,
+                // murah karena no-op kalau tidak ada yang expired).
+                try {
+                    await processExpiredSubscriptions(client);
+                } catch (err) {
+                    console.error('Scheduler: processExpiredSubscriptions error:', err.message);
                 }
 
                 const expiredNow = getExpired();

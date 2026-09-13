@@ -621,6 +621,66 @@ async function processServerStatsTick(client) {
     return processSchedulerTick(client);
 }
 
+/**
+ * v3.15.0: langganan premium guild — dipanggil loop scheduler 60 detik
+ * (mirror removeExpiredKeys: harus responsif, bukan harian).
+ *
+ * 1. sweepExpiredSubscriptions() hapus entry expired & invalidate cache
+ *    → interaksi berikutnya server itu otomatis turun ke tier Free.
+ * 2. Untuk setiap guild yang BARU SAJA kehilangan status premium (ada entry
+ *    terhapus DAN tidak ada sisa entry aktif) → kirim notifikasi best-effort
+ *    ke system channel / channel teks pertama yang bisa dikirimi. Semua
+ *    network error ditelan (notifikasi adalah best-effort, bukan kritikal).
+ */
+async function processExpiredSubscriptions(client) {
+    const gpm = require('../data/guildPremiumManager');
+    const expired = gpm.sweepExpiredSubscriptions();
+    if (expired.length === 0) return 0;
+
+    const { EmbedBuilder } = require('discord.js');
+    const notified = [];
+    for (const entry of expired) {
+        // Guild masih premium (ada paket lain aktif — MAX EXTEND)? Tidak perlu
+        // pesan "habis", cukup entry yang di-sweep.
+        if (gpm.isGuildPremium(entry.guildId)) continue;
+        try {
+            const guild = await client.guilds.fetch(entry.guildId).catch(() => null);
+            if (!guild) continue;
+            let channel = guild.systemChannel || null;
+            if (!channel) {
+                channel = guild.channels.cache.find(
+                    c => c.isTextBased && c.isTextBased() && c.permissionsFor?.(guild.members.me)?.has?.('SendMessages')
+                ) || null;
+            }
+            if (!channel) continue;
+            await channel.send({
+                embeds: [
+                    new EmbedBuilder()
+                        .setColor(0xef4444)
+                        .setTitle('⌛ Langganan Thor Premium Berakhir')
+                        .setDescription(
+                            `Langganan **${gpm.PLANS[entry.plan]?.label || entry.plan}** untuk server ini sudah habis masa aktifnya.\n\n` +
+                            'Server kembali ke tier **Free**: moderasi inti, verifikasi, rank, leaderboard, dan AFK tetap jalan. ' +
+                            'Fitur tiket jualan, produk + key VIP, rekber, automod, dan lainnya terkunci sampai langganan diperbarui.\n\n' +
+                            '🔑 Perpanjang dengan: `/premium activate <key baru>`'
+                        )
+                        .setFooter({ text: 'Thor Premium' })
+                        .setTimestamp()
+                ]
+            });
+            notified.push(entry.guildId);
+        } catch (err) {
+            // Best-effort: gagal kirim (channel dihapus / rate-limit) tidak boleh
+            // mengganggu sweep — entry sudah dihapus, downgrade tetap terjadi.
+            console.warn(`⚠️ Notifikasi premium habis guild ${entry.guildId} gagal: ${err.message}`);
+        }
+    }
+    if (notified.length > 0) {
+        console.log(`📣 Notifikasi langganan habis terkirim ke ${notified.length} guild.`);
+    }
+    return expired.length;
+}
+
 module.exports = {
     processExpiredRole,
     processGiveawayEnd,
@@ -632,5 +692,7 @@ module.exports = {
     reconcileZombieDealsDaily,
     // v3.9.51: channel counter server stats live
     processServerStatsTick,
+    // v3.15.0: langganan premium guild
+    processExpiredSubscriptions,
     attachToClient
 };

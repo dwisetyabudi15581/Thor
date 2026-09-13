@@ -2,7 +2,7 @@
 
 Bot Discord serbaguna untuk komunitas apa pun — server jualan, gaming, content creator, hingga komunitas umum. Semua konfigurasi dapat diatur langsung dari Discord melalui slash command, tanpa mengedit file.
 
-> **v3.14.0** · 92 slash command · 616 unit test · discord.js v14 · Node.js 18+ · mode 1 server / publik (ala Dyno)
+> **v3.15.0** · 93 slash command · 649 unit test · discord.js v14 · Node.js 18+ · mode 1 server / publik (ala Dyno)
 >
 > 📖 **[Panduan Admin Lengkap](./docs/ADMIN_GUIDE.md)** — setup, operasional harian, troubleshooting
 > 📜 **[Changelog](./CHANGELOG.md)** — riwayat semua versi
@@ -10,6 +10,15 @@ Bot Discord serbaguna untuk komunitas apa pun — server jualan, gaming, content
 ---
 
 ## ✨ Fitur Utama
+
+### 🔒 Premium per-Server (ala Dyno) — v3.15.0
+
+- **Model langganan SaaS**: server yang meng-invite bot dapat tier **Free** — moderasi inti (`/timeout` `/purge` `/kick` `/ban` `/warn`), verifikasi anti-raid, `/rank` `/leaderboard` `/my-stats` `/afk` `/boosters`. Akses **penuh** (tiket jualan, produk + key VIP, rekber, automod, giveaway, poll, self-role, temp voice, announce, backup, server stats) hanya untuk server berlangganan.
+- **`/premium status`** (publik — semua member bisa cek) · **`/premium activate <key>`** (admin server) · **`gen` `keys` `revoke`** (pemilik bot — `PREMIUM_ADMIN_IDS`).
+- **3 paket**: 30 hari / 90 hari / **Lifetime** (terkunci selamanya). Model **MAX EXTEND** — paket baru ditaruh setelah sisa terpanjang.
+- **Provider key ganda**: pool lokal (`/premium gen`, key crypto-secure identik format web) **atau** REST API dashboard web (`PREMIUM_API_URL` + `PREMIUM_API_TOKEN`, key scope `guild` dibuat admin di web).
+- **Auto-expire < 60 detik** (scheduler sweep) + notifikasi "Langganan Berakhir" ke server + cara perpanjang.
+- **Gate cerdas**: aktif otomatis hanya di mode publik (`GUILD_ID` kosong) — deployment 1 server tidak berubah; bypass `PREMIUM_BYPASS_GUILDS` untuk server rumah; embed upsell ephemeral yang menjelaskan cara aktivasi (bukan error).
 
 ### 🎫 Tiket & Transaksi
 
