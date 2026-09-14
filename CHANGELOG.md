@@ -5,6 +5,25 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 Legend: 🔴 critical · 🟠 high · 🟡 medium · 🟢 improvement
 
+## [3.21.0] — 2026-09-15
+
+### Added — 🚀 MODUL PANDUAN CEPAT: SETUP SERVER LANGSUNG DARI WEB (MIRROR KATEGORI /HELP)
+
+Konsep persis permintaan user: "di web ada kategori slash command quick start, ngaturnya langsung di web — misal add role ada kolom text untuk memasukkan ID role yang akan didaftarkan". Modul dashboard baru **Panduan Cepat** menyalin kategori 🚀 Panduan Cepat dari `/help` menjadi checklist setup 6 langkah — tiap langkah punya FORM LANGSUNG di web, dan bot langsung menerapkannya ke server Discord tanpa perlu mengetik slash command.
+
+- 🟢 **Checklist 6 langkah dengan progress bar (X/6)**: 1) Role Admin Bot — *pilih dari daftar ATAU tempel ID role di kolom teks* (`≙ /set-role admin`), 2) Role Terverifikasi — sama (`≙ /set-role verified`), 3) Kategori Tiket & Produk + form tambah produk cepat (`≙ /add-product`), 4) Pasang Panel Tiket — pilih channel + layout tombol/dropdown (`≙ /setup-ticket-panel`), 5) Pasang Panel Verifikasi (`≙ /setup-verify`), 6) Channel Log Server (`≙ /set-channel server-log`). Status tiap langkah (✓ selesai / belum) + progres dihitung otomatis dari data bot.
+- 🟢 **Kolom teks ID manual di samping dropdown** (inti permintaan): tempel ID role/channel (Developer Mode → Copy ID) untuk mendaftarkan role yang bahkan tidak tampil di daftar; validasi snowflake di web + tetap divalidasi ulang bot. Dropdown pilih-cepat tetap tersedia untuk yang praktis.
+- 🟢 **Semua aksi LANGSUNG efektif** (call → refresh, tanpa SaveBar): klik "Daftarkan"/"Pasang" → bot menulis config / mengirim panel ke channel Discord dalam hitungan detik — toast konfirmasi menyebut channel tujuan ("Panel tiket dipasang di #xxx — cek Discord").
+- 🟢 **Auto-landing**: server yang belum di-setup (belum ada role admin & produk) langsung dibuka di modul Panduan Cepat — admin baru tidak perlu mencari; server yang sudah siap tetap mendarat di Ringkasan.
+- 🟢 **Bagian "Langkah lanjutan"**: pintasan ke 8 modul lain (Server Stats, Leveling, Temp Voice, Auto-Responder, Self Roles, AutoMod, Giveaway & Poll, Embed Builder) — web menghubungkan SEMUA kategori slash command, tidak hanya quick start.
+- 🟢 **DASH API baru**: `POST /guilds/:id/panels` (pasang panel tiket — paritas penuh `/setup-ticket-panel`: prasyarat roles.admin + kategori non-kosong, builder `buildTicketPanel` yang sama, render-first + rollback pola P0-5, panel tercatat di `panels.json` sehingga bisa di-`/update-panel`/`/refresh-panel`) dan `POST /guilds/:id/verify-panel` (paritas `/setup-verify`: render embed + tombol identik dari config yang sama). Payload dashboard kini menyertakan `panels` (bentuk slim tanpa body 4000-char).
+- 🟢 **Modul Umum lengkap**: channel Log Server, Booster, dan Transcript kini bisa diatur dari web (sebelumnya hanya via `/set-channel`) — paritas penuh kategori "Log & Channel".
+- 🟢 **Test & alat**: 5 unit test dashServer baru (prasyarat 422, sukses 201, categoryIds tak cocok 400, panel tercatat + bentuk slim) — total 698 test lulus; smoke test `scripts/smoke-v321.mjs` untuk mock DASH API; mock mendukung endpoint baru + seed `panels: []`; `scripts/dev-sandbox.cjs` (pratinjau dashboard penuh tanpa OAuth asli — interceptor Discord API + env sandbox, aktif HANYA via `--require` eksplisit).
+
+### Changed
+- 🟢 Sidebar dashboard: modul baru "Panduan Cepat" (grup Server, posisi kedua setelah Ringkasan) — total 19 modul.
+- 🟢 `dashboard/package.json` kini ikut menyimpan versi monorepo (3.18.0 → 3.21.0) supaya versi web & bot selalu sinkron.
+
 ## [3.20.0] — 2026-09-15
 
 ### Added — 🪄 CUSTOM COMMAND DARI WEB + EMBED BUILDER LENGKAP (BUAT DI WEB, TERUSKAN KE SERVER)

@@ -66,6 +66,18 @@ export function GeneralModule({ draft, meta, setConfig }: ModuleFormProps) {
         <Field label="Channel Invoice" hint="Invoice transaksi (tiket + rekber) terkirim ke sini.">
           <ChannelSelect value={c.channels.invoice ?? null} onChange={(v) => setConfig("channels.invoice", v)} channels={meta.channels} />
         </Field>
+        {/* v3.21.0: paritas penuh kategori "Log & Channel" (/set-channel semua tipe) —
+            sebelumnya server-log / server-booster / transcript hanya bisa diatur
+            lewat slash command. */}
+        <Field label="Channel Log Server" hint="Join/left, pesan dihapus, ban, tindakan moderasi (≙ /set-channel server-log).">
+          <ChannelSelect value={c.channels["server-log"] ?? null} onChange={(v) => setConfig("channels.server-log", v)} channels={meta.channels} />
+        </Field>
+        <Field label="Channel Booster" hint="Embed pink tiap ada yang boost server (≙ /set-channel server-booster).">
+          <ChannelSelect value={c.channels["server-booster"] ?? null} onChange={(v) => setConfig("channels.server-booster", v)} channels={meta.channels} />
+        </Field>
+        <Field label="Channel Transcript Tiket" hint="Arsip chat tiket yang sudah ditutup (≙ /set-channel transcript).">
+          <ChannelSelect value={c.channels.transcript ?? null} onChange={(v) => setConfig("channels.transcript", v)} channels={meta.channels} />
+        </Field>
       </Section>
 
       <Section title="Pesan Selamat Datang & Verifikasi" desc={TEMPLATE_VARS}>

@@ -14,6 +14,10 @@
  *   - POST/DELETE announce — jadwal valid; waktu lampau 400
  *   - POST selfroles — panel dibuat + message terkirim (channel mock); rollback
  *     kalau channel fetch gagal
+ *   - POST panels / verify-panel (v3.21.0 Panduan Cepat) — paritas
+ *     /setup-ticket-panel & /setup-verify: validasi prasyarat (roles.admin /
+ *     roles.verified), kirim sukses 201, panel tercatat di panels.json +
+ *     payload.panels (bentuk slim), categoryIds tak cocok → 400
  *
  * Server test jalan di ephemeral port (listen(0)) dengan client mock —
  * tidak menyentuh Discord. File data produksi di-snapshot & restore.
@@ -31,15 +35,20 @@ const configDir = path.join(dataDir, 'config');
 const TOUCHED = [
     'automod.json', 'responders.json', 'selfRoles.json', 'scheduledAnnouncements.json',
     // v3.19.0: file yang disentuh modul baru (giveaway/poll/keys/schedule)
-    'giveaways.json', 'polls.json', 'keys.json', 'scheduledRoles.json'
+    'giveaways.json', 'polls.json', 'keys.json', 'scheduledRoles.json',
+    // v3.21.0: endpoint Panduan Cepat menulis panel tiket
+    'panels.json'
 ];
+// panels.json berformat OBJECT MAP (bukan array) — file kosong harus '{}'
+// supaya loadPanels tidak mengkarantina-nya sebagai format invalid.
+const INIT_CONTENT = { 'panels.json': '{}' };
 const backups = {}; // path -> konten lama (null = belum ada)
 let configDirBackup = null; // nama file lama di data/config/
 
 for (const f of TOUCHED) {
     const p = path.join(dataDir, f);
     backups[p] = fs.existsSync(p) ? fs.readFileSync(p) : null;
-    if (backups[p] === null) fs.writeFileSync(p, '[]');
+    if (backups[p] === null) fs.writeFileSync(p, INIT_CONTENT[f] ?? '[]');
 }
 if (fs.existsSync(configDir)) {
     configDirBackup = fs.readdirSync(configDir).map((f) => ({
@@ -207,7 +216,7 @@ test('dash: GET /guilds/:id/dashboard — semua modul hadir', async () => {
     const res = await api('GET', `/guilds/${GUILD_ID}/dashboard`);
     assert.strictEqual(res.status, 200);
     const data = await res.json();
-    for (const key of ['config', 'automod', 'responders', 'selfroles', 'tempvoice', 'announces', 'serverstats']) {
+    for (const key of ['config', 'automod', 'responders', 'selfroles', 'tempvoice', 'announces', 'serverstats', 'panels']) {
         assert.ok(key in data, `payload.${key} harus ada`);
     }
     // Config ter-merge dengan DEFAULTS (pola getConfig)
@@ -725,4 +734,79 @@ test('dash: PUT config products — roleId tidak valid → 422', async () => {
         }
     });
     assert.strictEqual(res.status, 422);
+});
+
+// ====================================================
+// === v3.21.0: Panduan Cepat — pasang panel dari web ===
+// ====================================================
+
+test('dash: POST /panels tanpa roles.admin → 422 (paritas /setup-ticket-panel)', async () => {
+    // Prasyarat identik slash command: role admin wajib sebelum panel tiket.
+    await api('PUT', `/guilds/${GUILD_ID}/config`, { body: { updates: { 'roles.admin': null } } });
+    const res = await api('POST', `/guilds/${GUILD_ID}/panels`, {
+        body: { channelId: '777000111222333444', actor: { id: '42', tag: 'tester' } }
+    });
+    assert.strictEqual(res.status, 422);
+    assert.match((await res.json()).error, /Role Admin/i);
+});
+
+test('dash: POST /panels valid → 201 + panel tercatat + payload.panels bentuk slim', async () => {
+    await api('PUT', `/guilds/${GUILD_ID}/config`, {
+        body: { updates: { 'roles.admin': '888000111222333555' } }
+    });
+    const res = await api('POST', `/guilds/${GUILD_ID}/panels`, {
+        body: {
+            channelId: '777000111222333444',
+            title: 'PANEL DARI WEB',
+            useDropdown: true,
+            actor: { id: '42', tag: 'tester' }
+        }
+    });
+    assert.strictEqual(res.status, 201);
+    const data = await res.json();
+    assert.ok(data.ok);
+    assert.ok(data.panel.id, 'panel dapat id (tp_...)');
+    assert.strictEqual(data.panel.channelId, '777000111222333444');
+    assert.strictEqual(data.panel.useDropdown, true);
+    assert.ok(Array.isArray(data.panel.categoryIds) && data.panel.categoryIds.length > 0);
+    assert.strictEqual(typeof data.panel.messageId, 'string');
+
+    // Panel muncul di payload dashboard — bentuk slim (tanpa body 4000 char)
+    const dash = await (await api('GET', `/guilds/${GUILD_ID}/dashboard`)).json();
+    const slim = dash.panels.find((p) => p.id === data.panel.id);
+    assert.ok(slim, 'panel harus muncul di payload.panels');
+    assert.ok(!('body' in slim), 'payload.panels harus bentuk slim (tanpa body)');
+
+    // File fisik juga tercatat — sumber kebenaran /update-panel & /refresh-panel
+    const raw = JSON.parse(fs.readFileSync(path.join(dataDir, 'panels.json'), 'utf8'));
+    assert.ok(raw[data.panel.id], 'panel tersimpan di panels.json');
+});
+
+test('dash: POST /panels categoryIds tak cocok → 400', async () => {
+    const res = await api('POST', `/guilds/${GUILD_ID}/panels`, {
+        body: { channelId: '777000111222333444', categoryIds: ['tidak-ada'], actor: { id: '42', tag: 'tester' } }
+    });
+    assert.strictEqual(res.status, 400);
+});
+
+test('dash: POST /verify-panel tanpa roles.verified → 422 (paritas /setup-verify)', async () => {
+    await api('PUT', `/guilds/${GUILD_ID}/config`, { body: { updates: { 'roles.verified': null } } });
+    const res = await api('POST', `/guilds/${GUILD_ID}/verify-panel`, {
+        body: { channelId: '777000111222333444', actor: { id: '42', tag: 'tester' } }
+    });
+    assert.strictEqual(res.status, 422);
+    assert.match((await res.json()).error, /Role Terverifikasi/i);
+});
+
+test('dash: POST /verify-panel valid → 201 (embed + tombol verifikasi terkirim)', async () => {
+    await api('PUT', `/guilds/${GUILD_ID}/config`, {
+        body: { updates: { 'roles.verified': '888000111222333444' } }
+    });
+    const res = await api('POST', `/guilds/${GUILD_ID}/verify-panel`, {
+        body: { channelId: '777000111222333444', actor: { id: '42', tag: 'tester' } }
+    });
+    assert.strictEqual(res.status, 201);
+    const data = await res.json();
+    assert.ok(data.ok);
+    assert.strictEqual(typeof data.messageId, 'string');
 });

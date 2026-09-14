@@ -355,6 +355,10 @@ function seedGuild({ id, name, icon, memberCount }) {
         guildId: id,
       },
     ],
+    // v3.21.0: panel tiket terpasang (status checklist Panduan Cepat).
+    // Demo sengaja kosong — langkah "pasang panel tiket" kelihatan belum
+    // selesai, jadi alur quickstart bisa dicoba penuh dari web.
+    panels: [],
     // v3.20.0: custom command demo — contoh nyata hasil modul Custom Command.
     customCommands: [
       {
@@ -815,6 +819,43 @@ const server = http.createServer(async (req, res) => {
     if (!entry.data.tempvoice) return send(404, { error: "Setup temp voice tidak ditemukan" });
     entry.data.tempvoice = null;
     return send(200, { ok: true, note: "(demo) config dilepas." });
+  }
+
+  // v3.21.0: Panduan Cepat — pasang panel tiket + verifikasi (demo in-memory).
+  // Validasi prasyarat sama dengan bot asli supaya alur checklist terasa nyata.
+  if (req.method === "POST" && rest[0] === "panels" && rest.length === 1) {
+    const body = await readBody();
+    if (!entry.data.config.roles?.admin) return send(422, { error: "Role Admin Bot belum di-set — isi dulu langkah 1 Panduan Cepat (Role Admin)." });
+    const allCats = entry.data.config.ticketCategories ?? [];
+    if (allCats.length === 0) return send(422, { error: "Belum ada kategori tiket — tambahkan dulu di langkah 3 Panduan Cepat / modul Tiket & Produk." });
+    const channelId = String(body?.channelId || "");
+    if (!/^\d{5,25}$/.test(channelId)) return send(400, { error: "channelId tidak valid" });
+    const ch = entry.meta.channels.find((c) => c.id === channelId && (c.type === 0 || c.type === 5));
+    if (!ch) return send(400, { error: "Channel harus berupa text channel" });
+    // Filter kategori opsional — paritas bot asli (categoryIds tak cocok → 400).
+    const requested = Array.isArray(body?.categoryIds) ? body.categoryIds.map(String) : null;
+    const cats = requested ? allCats.filter((c) => requested.includes(c.id)) : allCats;
+    if (cats.length === 0) return send(400, { error: "Tidak ada kategori yang cocok dengan categoryIds yang diminta" });
+    const panel = {
+      id: `tp_demo_${Date.now().toString(36)}`,
+      channelId,
+      messageId: `msg_${Date.now()}`,
+      title: body?.title ? String(body.title).slice(0, 256) : null,
+      categoryIds: cats.map((c) => c.id),
+      useDropdown: body?.useDropdown === true,
+      createdAt: Date.now(),
+    };
+    entry.data.panels.push(panel);
+    return send(201, { ok: true, panel, url: `https://discord.com/channels/${guildId}/${channelId}/demo` });
+  }
+  if (req.method === "POST" && rest[0] === "verify-panel" && rest.length === 1) {
+    const body = await readBody();
+    if (!entry.data.config.roles?.verified) return send(422, { error: "Role Terverifikasi belum di-set — isi dulu langkah 2 Panduan Cepat (Role Verified)." });
+    const channelId = String(body?.channelId || "");
+    if (!/^\d{5,25}$/.test(channelId)) return send(400, { error: "channelId tidak valid" });
+    const ch = entry.meta.channels.find((c) => c.id === channelId && (c.type === 0 || c.type === 5));
+    if (!ch) return send(400, { error: "Channel harus berupa text channel" });
+    return send(201, { ok: true, messageId: `msg_${Date.now()}`, url: `https://discord.com/channels/${guildId}/${channelId}/demo` });
   }
 
   return send(404, { error: "Endpoint tidak ditemukan" });

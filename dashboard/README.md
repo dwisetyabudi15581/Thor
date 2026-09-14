@@ -32,7 +32,9 @@ Browser ──> Dashboard Next.js (login Discord OAuth2)
 
 - **Login Discord (OAuth2)** — masuk dengan akun Discord, tanpa password
 - **Pemilih server** — daftar server yang kamu kelola + status bot (aktif/belum)
-- **19 modul konfigurasi** (v3.20.0): Command Manager (ala Dyno — aktif/nonaktifkan
+- **20 modul konfigurasi** (v3.21.0): **Panduan Cepat** (checklist setup server 6
+  langkah — role via pilih/ID, produk, pasang panel, channel log; langsung
+  diterapkan bot ke server), Command Manager (ala Dyno — aktif/nonaktifkan
   tiap slash command per server), **Custom Command** (bikin slash command sendiri
   dari web → otomatis terdaftar di Discord), **Embed Builder** (lengkap + pratinjau
   live ala Discord), Backup, Moderasi (warn + modlog), Kunci VIP,

@@ -21,13 +21,16 @@ import {
   Hammer, Loader2, ArrowLeft, Save, X, CheckCircle2, AlertTriangle,
   LayoutDashboard, Settings2, Ticket, Hash, TrendingUp, MessageSquareReply,
   Palette, Mic, Megaphone, Handshake, BarChart3, Terminal, Archive,
-  ShieldAlert, KeyRound, Gift, SquarePen, Vote, Wand2,
+  ShieldAlert, KeyRound, Gift, SquarePen, Vote, Wand2, Rocket,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { AutoModConfig, DashboardPayload, GuildMeta } from "@/lib/bot-api";
 import {
   GeneralModule, TicketsModule, AutoModModule, LevelingModule, MidmanModule, type ModuleFormProps,
 } from "./modules/module-forms";
+// v3.21.0: Panduan Cepat — checklist setup server dari web (mirror kategori
+// 🚀 di /help): form per langkah → bot menerapkan langsung ke server.
+import { QuickStartModule } from "./modules/module-quickstart";
 import {
   RespondersModule, SelfRolesModule, AnnounceModule, TempVoiceModule, ServerStatsModule, ModuleOverview,
   type ModuleActionProps,
@@ -44,7 +47,7 @@ import {
 type ToastState = { msg: string; tone: "ok" | "err"; id: number } | null;
 
 type ModuleId =
-  | "overview" | "general" | "tickets" | "automod" | "leveling"
+  | "overview" | "quickstart" | "general" | "tickets" | "automod" | "leveling"
   | "responders" | "selfroles" | "announce" | "tempvoice" | "midman" | "serverstats"
   // v3.19.0
   | "commands" | "backup" | "moderation" | "keys" | "giveaway" | "embed" | "poll"
@@ -53,6 +56,8 @@ type ModuleId =
 
 const MODULES: Array<{ id: ModuleId; label: string; icon: typeof LayoutDashboard; group: string }> = [
   { id: "overview", label: "Ringkasan", icon: LayoutDashboard, group: "Server" },
+  // v3.21.0: mirror kategori 🚀 Panduan Cepat (/help) — form setup langsung dari web.
+  { id: "quickstart", label: "Panduan Cepat", icon: Rocket, group: "Server" },
   { id: "general", label: "Umum", icon: Settings2, group: "Server" },
   { id: "commands", label: "Command Manager", icon: Terminal, group: "Server" },
   { id: "backup", label: "Backup", icon: Archive, group: "Server" },
@@ -75,6 +80,7 @@ const MODULES: Array<{ id: ModuleId; label: string; icon: typeof LayoutDashboard
 
 const MODULE_DESC: Record<ModuleId, { title: string; desc: string }> = {
   overview: { title: "Ringkasan", desc: "Gambaran status seluruh modul server ini." },
+  quickstart: { title: "Panduan Cepat", desc: "Setup server dari nol lewat checklist 6 langkah — role (pilih atau tempel ID), produk, panel tiket & verifikasi, channel log. Tiap form langsung diterapkan bot ke server, persis kategori 🚀 di /help." },
   general: { title: "Pengaturan Umum", desc: "Role penting, channel sistem, pesan otomatis, dan warna embed." },
   tickets: { title: "Tiket & Produk", desc: "Panel tiket, kategori, dan daftar produk/price list." },
   automod: { title: "AutoMod", desc: "Anti-spam, blokir link & kata, batas mention." },
@@ -115,6 +121,8 @@ export function GuildDashboard({ guildId }: { guildId: string }) {
   const [module, setModule] = useState<ModuleId>("overview");
   const [toast, setToast] = useState<ToastState>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // v3.21.0: auto-landing Panduan Cepat — hanya sekali per kunjungan.
+  const landingChecked = useRef(false);
 
   // Draft + dirty tracking
   const [draft, setDraft] = useState<DashboardPayload | null>(null);
@@ -158,6 +166,17 @@ export function GuildDashboard({ guildId }: { guildId: string }) {
     setConfigUpdates({});
     setAutomodPatch({});
     setLoadError(null);
+
+    // v3.21.0: auto-landing Panduan Cepat — server yang belum di-setup (belum
+    // ada role admin & belum ada produk) langsung dibawa ke checklist setup.
+    // Sekali per kunjungan — refresh/save berikutnya tidak menimpa pilihan
+    // modul yang sudah dipilih user.
+    if (!landingChecked.current) {
+      landingChecked.current = true;
+      if (!data.config.roles?.admin && (data.config.products?.length ?? 0) === 0) {
+        setModule("quickstart");
+      }
+    }
   }, [guildId, router]);
 
   useEffect(() => {
@@ -365,6 +384,8 @@ export function GuildDashboard({ guildId }: { guildId: string }) {
           </div>
 
           {module === "overview" ? <ModuleOverview draft={draft} meta={meta} /> : null}
+          {/* v3.21.0: Panduan Cepat — semua aksi langsung (call → refresh). */}
+          {module === "quickstart" && actionProps ? <QuickStartModule {...actionProps} goTo={(m) => setModule(m as ModuleId)} /> : null}
           {module === "general" && formProps ? <GeneralModule {...formProps} /> : null}
           {module === "tickets" && formProps ? <TicketsModule {...formProps} /> : null}
           {module === "automod" && formProps ? <AutoModModule {...formProps} /> : null}

@@ -310,6 +310,19 @@ export type CustomCommand = {
   useCount?: number;
 };
 
+// ==== v3.21.0: Panduan Cepat — panel tiket terpasang (status checklist) ====
+
+/** Panel tiket terpasang (bentuk slim — tanpa body besar; untuk checklist). */
+export type TicketPanelInfo = {
+  id: string;
+  channelId: string;
+  messageId: string | null;
+  title: string | null;
+  categoryIds: string[];
+  useDropdown: boolean;
+  createdAt: number | null;
+};
+
 export type DashboardPayload = {
   config: GuildConfig;
   automod: AutoModConfig;
@@ -327,6 +340,8 @@ export type DashboardPayload = {
   keys: KeyRecord[];
   // v3.20.0
   customCommands: CustomCommand[];
+  // v3.21.0: panel tiket terpasang — status langkah "pasang panel tiket".
+  panels: TicketPanelInfo[];
 };
 
 export type GuildMeta = {

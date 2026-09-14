@@ -36,6 +36,8 @@
  *   DELETE /guilds/:id/selfroles/:panelId       → hapus panel + message
  *   POST   /guilds/:id/serverstats/refresh      → paksa refresh counter
  *   DELETE /guilds/:id/tempvoice                → lepas setup temp voice (config saja)
+ *   POST   /guilds/:id/panels                   → pasang panel tiket ke channel (v3.21.0)
+ *   POST   /guilds/:id/verify-panel             → pasang panel verifikasi (v3.21.0)
  *
  * Actor audit: setiap operasi tulis menerima `actor: { id, tag }` (user
  * dashboard yang login) — dicatat ke console + audit log kalau memungkinkan,
@@ -72,6 +74,11 @@ const { COMMAND_TO_DOMAIN } = require('../commands/index.js');
 const customCommandManager = require('../data/customCommandManager');
 const { syncGuildCustomCommands } = require('../services/customCommandSync');
 const { normalizeEmbedDef, buildEmbedFromDef, isEmbedEmpty } = require('./embedPayload');
+// v3.21.0: modul Panduan Cepat (web) — pasang panel tiket + verifikasi.
+// Builder + storage yang SAMA dengan slash command (paritas penuh dua arah:
+// panel dipasang dari web = panel dipasang dari /setup-ticket-panel).
+const panelManager = require('../data/panelManager');
+const { buildTicketPanel } = require('../commands/panels');
 const {
     EmbedBuilder,
     ActionRowBuilder,
@@ -531,7 +538,22 @@ function createDashHandler({ client, token, log = () => {} }) {
                 .getAllKeys()
                 .filter((k) => k.guildId === guildId)
                 .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
-                .slice(0, 100)
+                .slice(0, 100),
+            // v3.21.0: panel tiket terpasang — dipakai modul Panduan Cepat
+            // sebagai status checklist (langkah "pasang panel tiket").
+            // Bentuk slim supaya payload tetap ringan (body panel bisa 4000 char).
+            panels: panelManager
+                .getPanelsByGuild(guildId)
+                .slice(0, 50)
+                .map((p) => ({
+                    id: p.id,
+                    channelId: p.channelId,
+                    messageId: p.messageId,
+                    title: p.title,
+                    categoryIds: Array.isArray(p.categoryIds) ? p.categoryIds : [],
+                    useDropdown: !!p.useDropdown,
+                    createdAt: p.createdAt || null
+                }))
         };
     }
 
@@ -1232,6 +1254,140 @@ function createDashHandler({ client, token, log = () => {} }) {
                         log(`[dash] ${removedKeys} key + ${removedSched} schedule dihapus untuk user ${userId} di ${guildId}`);
                         return sendJson(res, 200, { ok: true, removedKeys, removedSchedules: removedSched, warnings });
                     }
+                }
+
+                // ========================================================
+                // ==== v3.21.0: PANDUAN CEPAT (WEB)                    ====
+                // ==== Paritas /setup-ticket-panel & /setup-verify     ====
+                // ========================================================
+
+                // ---- Pasang panel tiket ke channel (paritas /setup-ticket-panel) ----
+                // Validasi bisnis IDENTIK dengan slash command: roles.admin wajib,
+                // minimal 1 kategori, channel harus text channel. Builder yang
+                // sama (buildTicketPanel) → panel web = panel Discord, satu storage.
+                if (method === 'POST' && rest[0] === 'panels' && rest.length === 1) {
+                    if (!g) return sendJson(res, 404, { error: 'Bot tidak ada di server ini' });
+                    const body = await readBody(req);
+                    const config = getConfig(guildId);
+
+                    if (!config.roles.admin) {
+                        return sendJson(res, 422, { error: 'Role Admin Bot belum di-set — isi dulu langkah 1 Panduan Cepat (Role Admin).' });
+                    }
+                    const allCategories = config.ticketCategories || [];
+                    if (allCategories.length === 0) {
+                        return sendJson(res, 422, { error: 'Belum ada kategori tiket — tambahkan dulu di langkah 3 Panduan Cepat / modul Tiket & Produk.' });
+                    }
+
+                    const channelId = String(body?.channelId || '');
+                    if (!SNOWFLAKE_RE.test(channelId)) return sendJson(res, 400, { error: 'channelId tidak valid' });
+
+                    // Filter kategori opsional (array id); tanpa filter = semua.
+                    const requested = Array.isArray(body?.categoryIds) ? body.categoryIds.map(String) : null;
+                    const categoriesToShow = requested ? allCategories.filter((c) => requested.includes(c.id)) : allCategories;
+                    if (categoriesToShow.length === 0) {
+                        return sendJson(res, 400, { error: 'Tidak ada kategori yang cocok dengan categoryIds yang diminta' });
+                    }
+
+                    // Kustomisasi opsional (semua aman-default persis slash command).
+                    const title = body?.title ? String(body.title).slice(0, 256) : null;
+                    const panelBody = body?.body ? normalizeNewlines(String(body.body).slice(0, 4000)) : null;
+                    const useDropdown = body?.useDropdown === true;
+                    let color = null;
+                    if (body?.color !== undefined && body?.color !== null && body?.color !== '') {
+                        const raw = String(body.color).replace('#', '');
+                        if (!/^[0-9a-fA-F]{6}$/.test(raw)) {
+                            return sendJson(res, 400, { error: 'color harus hex 6 digit (mis. #e67e22)' });
+                        }
+                        color = parseInt(raw, 16);
+                    }
+
+                    const channel = await client.channels.fetch(channelId).catch(() => null);
+                    if (!channel || channel.type !== ChannelType.GuildText) {
+                        return sendJson(res, 400, { error: 'Channel harus berupa text channel' });
+                    }
+
+                    const panelMeta = {
+                        guildId,
+                        channelId,
+                        title,
+                        body: panelBody,
+                        color,
+                        imageUrl: null,
+                        thumbnailUrl: null,
+                        footerText: null,
+                        categoryIds: categoriesToShow.map((c) => c.id),
+                        useDropdown,
+                        createdBy: String(body?.actor?.id || 'dash')
+                    };
+
+                    let build;
+                    try {
+                        build = buildTicketPanel(panelMeta, { guild: g, client, config });
+                    } catch (err) {
+                        return sendJson(res, 422, { error: `Gagal build panel: ${err.message}` });
+                    }
+
+                    // Render-first + rollback (pola P0-5): entry hanya tersimpan
+                    // kalau pesan benar-benar terkirim — tidak ada panel hantu.
+                    const sent = await channel
+                        .send({ embeds: [build.embed], components: build.components })
+                        .catch(() => null);
+                    if (!sent) {
+                        return sendJson(res, 502, { error: 'Gagal kirim panel — pastikan bot punya permission Send Messages + Embed Links di channel itu.' });
+                    }
+                    const saved = panelManager.upsertPanel({ ...panelMeta, messageId: sent.id });
+                    log(`[dash] panel tiket dipasang di ${channelId} (${guildId}, panel ${saved.id}) oleh ${body?.actor?.tag || 'unknown'}`);
+                    return sendJson(res, 201, { ok: true, panel: saved, url: sent.url });
+                }
+
+                // ---- Pasang panel verifikasi ke channel (paritas /setup-verify) ----
+                // Render identik: embed verifyTitle/verifyBody + tombol dari
+                // config.verifyButton — sumber config sama, hasil sama persis.
+                if (method === 'POST' && rest[0] === 'verify-panel' && rest.length === 1) {
+                    if (!g) return sendJson(res, 404, { error: 'Bot tidak ada di server ini' });
+                    const body = await readBody(req);
+                    const config = getConfig(guildId);
+
+                    if (!config.roles.verified) {
+                        return sendJson(res, 422, { error: 'Role Terverifikasi belum di-set — isi dulu langkah 2 Panduan Cepat (Role Verified).' });
+                    }
+
+                    const channelId = String(body?.channelId || '');
+                    if (!SNOWFLAKE_RE.test(channelId)) return sendJson(res, 400, { error: 'channelId tidak valid' });
+                    const channel = await client.channels.fetch(channelId).catch(() => null);
+                    if (!channel || channel.type !== ChannelType.GuildText) {
+                        return sendJson(res, 400, { error: 'Channel harus berupa text channel' });
+                    }
+
+                    const embed = new EmbedBuilder()
+                        .setTitle(config.messages.verifyTitle)
+                        .setDescription(String(config.messages.verifyBody || '').replace(/\{server\}/g, g.name))
+                        .setColor(0x2ecc71)
+                        .setFooter({
+                            text: client.user?.username || 'Community Bot',
+                            iconURL: client.user?.displayAvatarURL({ dynamic: true })
+                        })
+                        .setTimestamp();
+                    const btnConfig = config.verifyButton || {};
+                    const styleMap = {
+                        Primary: ButtonStyle.Primary,
+                        Secondary: ButtonStyle.Secondary,
+                        Success: ButtonStyle.Success,
+                        Danger: ButtonStyle.Danger
+                    };
+                    const verifyBtn = new ButtonBuilder()
+                        .setCustomId('btn_verify')
+                        .setLabel(String(btnConfig.label || 'Verifikasi Saya').slice(0, 80))
+                        .setEmoji(btnConfig.emoji || '✅')
+                        .setStyle(styleMap[btnConfig.style] || ButtonStyle.Success);
+                    const row = new ActionRowBuilder().addComponents(verifyBtn);
+
+                    const sent = await channel.send({ embeds: [embed], components: [row] }).catch(() => null);
+                    if (!sent) {
+                        return sendJson(res, 502, { error: 'Gagal kirim panel — pastikan bot punya permission Send Messages + Embed Links di channel itu.' });
+                    }
+                    log(`[dash] panel verifikasi dipasang di ${channelId} (${guildId}) oleh ${body?.actor?.tag || 'unknown'}`);
+                    return sendJson(res, 201, { ok: true, messageId: sent.id, url: sent.url });
                 }
             }
 
