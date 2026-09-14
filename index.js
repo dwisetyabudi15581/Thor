@@ -91,6 +91,14 @@ const client = new Client({
 const { attachToClient } = require('./src/services/schedulerTasks');
 attachToClient(client);
 
+// === DASH API SERVER (v3.16.0) — untuk dashboard web ala Dyno ===
+// HTTP API kecil (default 127.0.0.1) — dibaca/ditulis dashboard Next.js.
+// Tidak jalan tanpa DASH_API_TOKEN (aman default). Bot TIDAK perlu ready
+// untuk start server — endpoint guild baru berguna setelah cache terisi,
+// tapi /health sudah bisa menjawab (berguna untuk uptime monitor).
+const { startDashServer, stopDashServer } = require('./src/infra/dashServer');
+startDashServer(client);
+
 // === ERROR HANDLER GLOBAL ===
 // v3.9.8: uncaughtException → graceful shutdown (bot lanjut jalan di state rusak berisiko korup data).
 process.on('unhandledRejection', reason => {
@@ -176,6 +184,9 @@ async function gracefulShutdown(signal, exitCode = 0) {
     console.log(`\n⚠️ Received ${signal}, flushing stats & shutting down...`);
     try {
         await Promise.race([Promise.resolve(shutdownStats()), new Promise(resolve => setTimeout(resolve, 3000))]);
+    } catch (_) {}
+    try {
+        stopDashServer(); // v3.16.0: tutup DASH API sebelum destroy client
     } catch (_) {}
     try {
         client.destroy();

@@ -2,7 +2,8 @@
  * Unit tests untuk premiumGate (v3.15.0) + integrasi router.
  *
  * Verify:
- *   - isGateEnabled: auto (default) → on hanya di mode publik; on/off override
+ *   - isGateEnabled: off (DEFAULT v3.16.0 — bot free); on / auto = aktif
+ *     (auto → on hanya di mode publik)
  *   - FREE_COMMANDS berisi moderasi inti + komunitas dasar
  *   - checkCommandAccess: no-guild pass, bypass guild pass, premium admin
  *     pass, free command pass, guild berlangganan pass, guild free blocked
@@ -101,14 +102,26 @@ async function withEnv(env, fn) {
 // === isGateEnabled ===
 // ====================================================
 
-test('gate: auto (default) — aktif saat mode publik (GUILD_ID kosong)', async () => {
+test('gate: DEFAULT (tanpa PREMIUM_GATE) — MATI walau mode publik (v3.16.0: bot free)', async () => {
     await withEnv({ GUILD_ID: '' }, () => {
+        assert.strictEqual(gate.isGateEnabled(), false, 'default off → semua fitur terbuka');
+    });
+});
+
+test('gate: DEFAULT (tanpa PREMIUM_GATE) — nilai tak dikenal juga mati (safe default)', async () => {
+    await withEnv({ GUILD_ID: '', PREMIUM_GATE: 'nonsense' }, () => {
+        assert.strictEqual(gate.isGateEnabled(), false, 'nilai tak dikenal → off');
+    });
+});
+
+test('gate: PREMIUM_GATE=auto — aktif saat mode publik (GUILD_ID kosong)', async () => {
+    await withEnv({ GUILD_ID: '', PREMIUM_GATE: 'auto' }, () => {
         assert.strictEqual(gate.isGateEnabled(), true, 'mode publik → gate aktif');
     });
 });
 
-test('gate: auto (default) — mati saat mode 1 server (GUILD_ID terisi)', async () => {
-    await withEnv({ GUILD_ID: GUILD_HOME }, () => {
+test('gate: PREMIUM_GATE=auto — mati saat mode 1 server (GUILD_ID terisi)', async () => {
+    await withEnv({ GUILD_ID: GUILD_HOME, PREMIUM_GATE: 'auto' }, () => {
         assert.strictEqual(gate.isGateEnabled(), false, 'mode 1 server → gate mati (perilaku lama)');
     });
 });
@@ -151,7 +164,7 @@ test('gate: fitur jualan/otomasi TIDAK ada di FREE_COMMANDS', () => {
 // ====================================================
 
 test('gate: interaksi tanpa guild (DM/mock) dibiarkan lewat', async () => {
-    await withEnv({ GUILD_ID: '' }, () => {
+    await withEnv({ GUILD_ID: '', PREMIUM_GATE: 'on' }, () => {
         const r = gate.checkCommandAccess(makeMockInteraction({ commandName: 'giveaway' }));
         assert.strictEqual(r.allowed, true);
         assert.strictEqual(r.reason, 'no-guild');
@@ -159,7 +172,7 @@ test('gate: interaksi tanpa guild (DM/mock) dibiarkan lewat', async () => {
 });
 
 test('gate: bypass guild (server rumah pemilik) selalu lolos', async () => {
-    await withEnv({ GUILD_ID: '', PREMIUM_BYPASS_GUILDS: GUILD_HOME }, () => {
+    await withEnv({ GUILD_ID: '', PREMIUM_GATE: 'on', PREMIUM_BYPASS_GUILDS: GUILD_HOME }, () => {
         const r = gate.checkCommandAccess(makeMockInteraction({ commandName: 'giveaway', guildId: GUILD_HOME }));
         assert.strictEqual(r.allowed, true);
         assert.strictEqual(r.reason, 'bypass-guild');
@@ -167,7 +180,7 @@ test('gate: bypass guild (server rumah pemilik) selalu lolos', async () => {
 });
 
 test('gate: pemilik bot (PREMIUM_ADMIN_IDS) lolos di guild manapun', async () => {
-    await withEnv({ GUILD_ID: '', PREMIUM_ADMIN_IDS: OWNER_ID }, () => {
+    await withEnv({ GUILD_ID: '', PREMIUM_GATE: 'on', PREMIUM_ADMIN_IDS: OWNER_ID }, () => {
         const r = gate.checkCommandAccess(
             makeMockInteraction({ commandName: 'setup-ticket', guildId: GUILD_FREE, userId: OWNER_ID })
         );
@@ -177,7 +190,7 @@ test('gate: pemilik bot (PREMIUM_ADMIN_IDS) lolos di guild manapun', async () =>
 });
 
 test('gate: command free lolos di guild tanpa langganan', async () => {
-    await withEnv({ GUILD_ID: '' }, () => {
+    await withEnv({ GUILD_ID: '', PREMIUM_GATE: 'on' }, () => {
         const r = gate.checkCommandAccess(makeMockInteraction({ commandName: 'timeout', guildId: GUILD_FREE }));
         assert.strictEqual(r.allowed, true);
         assert.strictEqual(r.reason, 'free-command');
@@ -185,7 +198,7 @@ test('gate: command free lolos di guild tanpa langganan', async () => {
 });
 
 test('gate: command premium DIBLOKIR di guild tanpa langganan', async () => {
-    await withEnv({ GUILD_ID: '' }, () => {
+    await withEnv({ GUILD_ID: '', PREMIUM_GATE: 'on' }, () => {
         const r = gate.checkCommandAccess(makeMockInteraction({ commandName: 'giveaway', guildId: GUILD_FREE }));
         assert.strictEqual(r.allowed, false);
         assert.strictEqual(r.reason, 'blocked');
@@ -193,7 +206,7 @@ test('gate: command premium DIBLOKIR di guild tanpa langganan', async () => {
 });
 
 test('gate: command premium LOLOS di guild berlangganan', async () => {
-    await withEnv({ GUILD_ID: '' }, () => {
+    await withEnv({ GUILD_ID: '', PREMIUM_GATE: 'on' }, () => {
         gpm.activateGuildKey({ guildId: GUILD_SUB, keyCode: 'TESTA-TESTB-TESTC', plan: 'premium30' });
         const r = gate.checkCommandAccess(makeMockInteraction({ commandName: 'giveaway', guildId: GUILD_SUB }));
         assert.strictEqual(r.allowed, true);
@@ -226,7 +239,7 @@ test('gate: upsell embed menyebut cara aktivasi + status command', () => {
 // ====================================================
 
 test('router: command premium di guild free → diblokir gate dengan embed upsell', async () => {
-    await withEnv({ GUILD_ID: '' }, async () => {
+    await withEnv({ GUILD_ID: '', PREMIUM_GATE: 'on' }, async () => {
         const routeCommand = require('../../src/commands');
         const interaction = makeMockInteraction({ commandName: 'giveaway', guildId: GUILD_FREE, isAdmin: true });
         await routeCommand(interaction);
@@ -238,7 +251,7 @@ test('router: command premium di guild free → diblokir gate dengan embed upsel
 });
 
 test('router: command free (timeout) di guild free → TIDAK diblokir gate', async () => {
-    await withEnv({ GUILD_ID: '' }, async () => {
+    await withEnv({ GUILD_ID: '', PREMIUM_GATE: 'on' }, async () => {
         const routeCommand = require('../../src/commands');
         const interaction = makeMockInteraction({ commandName: 'timeout', guildId: GUILD_FREE, isAdmin: true });
         // Mock has()=true → lolos cek admin AND cek moderator (MODERATION_COMMANDS);

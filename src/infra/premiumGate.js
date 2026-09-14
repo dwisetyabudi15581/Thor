@@ -6,12 +6,12 @@
  * announce, backup, dll.) hanya terbuka setelah server berlangganan:
  * /premium activate <key> oleh admin server (permission ManageGuild).
  *
- * Kapan gate AKTIF? (PREMIUM_GATE di .env: auto [default] | on | off)
- *   - auto → AKTIF hanya di MODE PUBLIK (GUILD_ID kosong). Mode 1 server
- *     (deployment privat) tidak di-gate — perilaku bot tidak berubah
- *     setelah upgrade ke v3.15.0.
+ * Kapan gate AKTIF? (PREMIUM_GATE di .env: off [DEFAULT v3.16.0] | on | auto)
+ *   - off → MATI (default) — bot free untuk siapa pun, SEMUA fitur terbuka.
+ *     (v3.16.0: model langganan dibekukan; kode premium tetap utuh.)
  *   - on  → paksa aktif (mode publik + privat).
- *   - off → paksa mati (semua fitur terbuka, mis. untuk self-host bebas).
+ *   - auto → AKTIF hanya di MODE PUBLIK (GUILD_ID kosong). Mode 1 server
+ *     (deployment privat) tidak di-gate — perilaku v3.15.0.
  *
  * Bypass (tidak pernah di-gate):
  *   - PREMIUM_BYPASS_GUILDS: comma-separated guild id milik pemilik bot
@@ -82,13 +82,22 @@ function parseIdList(raw) {
         .filter(Boolean);
 }
 
-/** PREMIUM_GATE: 'auto' (default) | 'on' | 'off'. */
+/**
+ * PREMIUM_GATE: 'off' (DEFAULT, v3.16.0) | 'on' | 'auto'.
+ *
+ * v3.16.0: arah produk berubah — bot FREE untuk siapa pun (ala Dyno),
+ * sistem langganan DIBEKUKAN (kode tetap utuh, tinggal set 'on'/'auto'
+ * untuk menghidupkan lagi). Default 'off' = SEMUA fitur terbuka di
+ * server mana pun.
+ */
 function isGateEnabled() {
-    const flag = (process.env.PREMIUM_GATE || 'auto').trim().toLowerCase();
+    const flag = (process.env.PREMIUM_GATE || 'off').trim().toLowerCase();
     if (flag === 'on') return true;
-    if (flag === 'off') return false;
-    // auto: hanya mode publik (GUILD_ID kosong) yang di-gate.
-    return getPrimaryGuildId() === null;
+    if (flag === 'auto') {
+        // auto: hanya mode publik (GUILD_ID kosong) yang di-gate.
+        return getPrimaryGuildId() === null;
+    }
+    return false; // 'off' & nilai tak dikenal → mati (aman default).
 }
 
 /** Guild bypass permanen (server sendiri pemilik bot). */
