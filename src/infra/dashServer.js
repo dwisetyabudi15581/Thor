@@ -56,6 +56,9 @@ const serverstatsManager = require('../data/serverstatsManager');
 const { buildPanelEmbed, buildPanelComponents } = require('../ui/selfRolePanelBuilder');
 const { normalizeNewlines } = require('./text');
 
+// Versi langsung dari package.json — tidak pernah basi (v3.17.0).
+const BOT_VERSION = require('../../package.json').version;
+
 const MAX_BODY_BYTES = 256 * 1024; // 256KB — cukup untuk messages panjang, kecil untuk abuse
 const SNOWFLAKE_RE = /^\d{5,25}$/;
 const BUTTON_STYLES = ['Primary', 'Secondary', 'Success', 'Danger'];
@@ -482,7 +485,7 @@ function createDashHandler({ client, token, log = () => {} }) {
                 ready: !!client?.isReady?.() || !!client?.ws?.status,
                 guildCount: guildSummaries().length,
                 uptimeSec: Math.floor(process.uptime()),
-                version: '3.16.0'
+                version: BOT_VERSION
             });
         }
 
