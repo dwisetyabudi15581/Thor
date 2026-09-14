@@ -2,7 +2,7 @@
 
 Bot Discord serbaguna untuk komunitas apa pun — server jualan, gaming, content creator, hingga komunitas umum. Semua konfigurasi dapat diatur langsung dari Discord melalui slash command, tanpa mengedit file.
 
-> **v3.17.0** · 92 slash command · 639 unit test · discord.js v14 · Node.js 18+ · mode 1 server / publik (ala Dyno) · **100% GRATIS — semua fitur terbuka**
+> **v3.18.0** · 92 slash command · 639 unit test · discord.js v14 · Node.js 20+ · mode 1 server / publik (ala Dyno) · **100% GRATIS — semua fitur terbuka** · **+ dashboard web DI DALAM REPO INI**
 >
 > 📖 **[Panduan Admin Lengkap](./docs/ADMIN_GUIDE.md)** — setup, operasional harian, troubleshooting
 > 📜 **[Changelog](./CHANGELOG.md)** — riwayat semua versi
@@ -11,12 +11,21 @@ Bot Discord serbaguna untuk komunitas apa pun — server jualan, gaming, content
 
 ## ✨ Fitur Utama
 
-### 🌐 Dashboard Web (ala Dyno) — v3.16.0
+### 🌐 Dashboard Web (ala Dyno) — v3.18.0: SATU REPO BOT + WEB
 
-- **Dua cara mengatur bot**: langsung via **slash command** di Discord, atau via **dashboard web Next.js** — keduanya menulis ke SATU sumber data yang sama (`data/config/<guildId>.json`), jadi tidak pernah bentrok.
-- **DASH API built-in** (`src/infra/dashServer.js`): HTTP API kecil di `127.0.0.1:8788` dengan token rahasia (`DASH_API_TOKEN`) — dibaca/tulis oleh dashboard web untuk 11 modul: Umum, Tiket & Produk, AutoMod, Leveling, Rekber, Responder, Self-Role, Announce, Temp Voice, Server Stats, Ringkasan.
-- **Aman by default**: tanpa `DASH_API_TOKEN` server API tidak jalan; semua tulisan tervalidasi (whitelist section + guard prototype pollution) + tercatat siapa actor-nya.
+- **Dashboard web sekarang ada DI DALAM REPO INI** (folder `dashboard/` — Next.js 16 + Prisma SQLite, dependensi ramping 12 paket). Clone sekali → `./setup.sh` → `./start.sh` — bot + web jalan bersamaan, tanpa repo terpisah.
+- **Dua cara mengatur bot**: langsung via **slash command** di Discord, atau via **dashboard web** — keduanya menulis ke SATU sumber data yang sama (`data/config/<guildId>.json`), jadi tidak pernah bentrok.
+- **DASH API built-in** (`src/infra/dashServer.js`): HTTP API kecil di `127.0.0.1:8788` dengan token rahasia (`DASH_API_TOKEN`) — dibaca/tulis oleh dashboard web untuk 11 modul: Ringkasan, Umum, Tiket & Produk, AutoMod, Leveling, Rekber, Responder, Self-Role, Announce, Temp Voice, Server Stats.
+- **Akses dijaga Discord**: user hanya melihat server tempat dia punya izin **Manage Server**; semua tulisan tervalidasi bot (whitelist section + guard prototype pollution) + tercatat siapa actor-nya.
 - **Bot 100% GRATIS** (v3.17.0): semua fitur terbuka untuk siapa pun — tidak ada tier, tidak ada langganan, tidak ada key aktivasi bot.
+
+```bash
+./setup.sh   # install bot + dashboard + siapkan kedua .env
+./start.sh   # production: bot + dashboard sekali jalan (Ctrl+C stop keduanya)
+./dev.sh     # pengembangan: nodemon (bot) + next dev (web) hot-reload
+```
+
+Detail lengkap (login OAuth Discord, pm2, domain + HTTPS): **[DEPLOY.md](./DEPLOY.md)** · dokumentasi dashboard: **[dashboard/README.md](./dashboard/README.md)**
 
 ### 🎫 Tiket & Transaksi
 
@@ -89,6 +98,9 @@ Thor/
 ├── data/                         # Runtime JSON files (gitignored)
 ├── docs/                         # ADMIN_GUIDE + index dokumen
 ├── tests/unit/                   # 639 unit test (node:test)
+├── dashboard/                    # 🌐 Dashboard web Next.js (v3.18.0 — satu repo)
+├── setup.sh · start.sh · dev.sh  # Instalasi & menjalankan bot + web bersamaan
+├── ecosystem.config.cjs          # pm2: thor-bot + thor-dash 24/7
 ├── CHANGELOG.md                  # Riwayat versi
 ├── .env.example
 ├── eslint.config.js
@@ -101,7 +113,7 @@ Thor/
 
 ### Prasyarat
 
-- Node.js v18+ (disarankan v20+)
+- Node.js v20+ (bot saja bisa jalan di 18+, tapi dashboard web bawaan butuh 20+)
 - Discord bot token ([cara mendapatkan](https://discord.com/developers/applications))
 - **3 Privileged Intents** diaktifkan di Discord Developer Portal (tab **Bot** → _Privileged Gateway Intents_):
     - ✅ **Server Members Intent** — untuk welcome/goodbye, auto-role
@@ -113,21 +125,19 @@ Thor/
 ### Instalasi
 
 ```bash
-# 1. Clone repo
+# 1. Clone repo (bot + dashboard web SATU repo)
 git clone https://github.com/dwisetyabudi15581/Thor.git
 cd Thor
 
-# 2. Install dependencies
-npm install
+# 2. Install SEMUA (bot + dashboard + kedua .env dari contoh)
+./setup.sh
 
-# 3. Siapkan environment
-cp .env.example .env
-# Isi .env (SATU tempat mengatur server — ganti server = ganti baris ini):
-#   DISCORD_TOKEN=token_bot_anda
-#   GUILD_ID=id_server_discord_anda   ← kosongkan untuk mode publik (ala Dyno)
-#
-# 4. Jalankan bot
-npm start
+# 3. Isi environment
+nano .env             # DISCORD_TOKEN + GUILD_ID (kosong = mode publik ala Dyno) + DASH_API_TOKEN
+nano dashboard/.env   # OAuth Discord + DASH_API_TOKEN (SAMA dengan .env bot)
+
+# 4. Jalankan bot + dashboard bersamaan
+./start.sh            # atau ./dev.sh untuk pengembangan
 ```
 
 Registrasi slash command berlangsung instan ke guild yang ditentukan `GUILD_ID`. Kalau `GUILD_ID` dikosongkan, bot jalan **mode publik ala Dyno**: command didaftarkan global dan muncul otomatis di semua server yang meng-invite bot (±1 jam propagasi) — tanpa memasukkan guild id manual di mana pun. Untuk development dengan auto-restart: `npm run dev`.
@@ -156,15 +166,20 @@ Panduan lengkap termasuk contoh produk, kategori custom, dan operasional harian:
 
 ## 🧪 Development
 
-| Script           | Deskripsi                              |
-| ---------------- | -------------------------------------- |
-| `npm start`      | Jalankan bot                           |
-| `npm run dev`    | Jalankan dengan nodemon (auto-restart) |
-| `npm test`       | Jalankan semua unit test (639 test)    |
-| `npm run lint`   | ESLint check                           |
-| `npm run format` | Prettier format semua file             |
+| Script             | Deskripsi                                          |
+| ------------------ | -------------------------------------------------- |
+| `npm start`        | Jalankan bot                                       |
+| `npm run dev`      | Jalankan dengan nodemon (auto-restart)             |
+| `npm test`         | Jalankan semua unit test (639 test)                |
+| `npm run lint`     | ESLint check                                       |
+| `npm run format`   | Prettier format semua file                         |
+| `./setup.sh`       | Install bot + dashboard + siapkan kedua .env       |
+| `./start.sh`       | Production: bot + dashboard web bersamaan          |
+| `./dev.sh`         | Pengembangan: nodemon + next dev bersamaan         |
+| `npm run dash:dev` | Dashboard web saja (next dev :3000)                |
+| `npm run dash:mock`| Dashboard + DASH API tiruan (data demo, tanpa bot) |
 
-Test memakai `node:test` bawaan Node.js v18+ — tidak perlu dependensi tambahan. Semua test berjalan dalam sandbox (snapshot/restore) sehingga aman dijalankan di server live. CI (GitHub Actions) menjalankan lint + test pada setiap push untuk Node 18/20/22.
+Test memakai `node:test` bawaan Node.js — tidak perlu dependensi tambahan. Semua test berjalan dalam sandbox (snapshot/restore) sehingga aman dijalankan di server live. CI (GitHub Actions) menjalankan lint + test pada setiap push untuk Node 18/20/22.
 
 ---
 

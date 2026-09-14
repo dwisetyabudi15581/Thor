@@ -1,0 +1,25 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Pengguna dashboard — identitas dari Discord OAuth (atau mode demo saat setup)
+model User {
+  id          String   @id @default(cuid())
+  discordId   String   @unique
+  username    String
+  globalName  String?
+  avatar      String?
+  isAdmin     Boolean  @default(false)
+  // v2 (dashboard ala Dyno): token OAuth user (scope identify+guilds) —
+  // dipakai /api/guilds untuk daftar server + cek permission ManageGuild.
+  accessToken  String?
+  refreshToken String?
+  tokenExpiresAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}

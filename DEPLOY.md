@@ -1,108 +1,192 @@
-# 🚀 Panduan Deploy — Thor Bot (v3.17.0)
+# 🚀 Panduan Deploy — Thor Bot + Dashboard Web (SATU REPO)
 
-Bot Discord 100% gratis, mode 1 server atau publik (ala Dyno) + DASH API
-untuk dashboard web. Panduan lengkap bot + dashboard + domain + HTTPS ada di
-repo dashboard: **[thor-dashboard/DEPLOY.md](https://github.com/dwisetyabudi15581/thor-dashboard)**.
+Sejak v3.18.0, bot dan dashboard web **satu repo** — clone sekali, `./setup.sh`
+sekali, langsung jalan. Bot 100% gratis (mode 1 server atau publik ala Dyno).
 
-Dokumen ini fokus deploy **bot-nya saja** (tanpa dashboard).
+Arsitektur produksi yang dituju (semua komponen **satu VPS**):
+
+```
+                        Internet
+                           │
+                    domain.com :443
+                    (Caddy — auto-HTTPS)
+                           │
+                    Dashboard Next.js :3000
+                    (folder dashboard/, login Discord OAuth2)
+                           │  http://127.0.0.1:8788 (DASH_API_TOKEN)
+                           ▼
+                    Bot Thor (node index.js, root repo)
+                    └─ DASH API :8788 (localhost only)
+                    └─ data/config/<guildId>.json  ← SATU sumber data
+```
+
+- **Bot + web menulis konfigurasi ke file yang sama** lewat DASH API — slash
+  command di Discord dan dashboard web tidak pernah bentrok.
+- Dashboard bisa jalan **tanpa bot** (banner "Bot offline") — tapi untuk
+  menyimpan perubahan, bot harus nyala.
 
 ---
 
-## 1. Prasyarat
+## 0. Yang perlu disiapkan
 
-| Kebutuhan | Minimum | Catatan |
+| Kebutuhan | Contoh | Biaya |
 | --- | --- | --- |
-| VPS / hosting Node.js | 1 vCPU · 1 GB RAM · 10 GB disk | Node.js **18+** (disarankan 20/22). VPS lokal Indonesia ±Rp 50–100rb/bln; internasional (Hetzner/Vultr/DO) ±$4–6/bln |
-| Discord bot token | — | https://discord.com/developers/applications → aplikasi → **Bot** → Reset Token |
-| 2 Privileged Intents | — | Tab **Bot** → aktifkan **SERVER MEMBERS INTENT** + **MESSAGE CONTENT INTENT** (tanpa ini login gagal / fitur mati) |
+| VPS 1 vCPU / 1 GB / Node.js 20+ | VPS lokal ID (Niagahoster/RackGema dsb.) atau Hetzner/Vultr/DO | ±Rp 50–100rb / $5 per bulan |
+| Domain | `thor.domainmu.com` | ±Rp 20–150rb/tahun |
+| Aplikasi Discord (sudah ada) | Client ID + Client Secret + token bot | gratis |
 
-> Bot bisa juga dijalankan tanpa VPS di hosting Node.js (Railway, Render,
-> Pterodactyl gratisan) — yang penting prosesnya **jalan terus 24/7**, bukan
-> serverless/fungsional (data disimpan di file `data/`).
-
-## 2. Install di VPS
+## 1. Setup VPS (sekali saja)
 
 ```bash
-# masuk VPS sebagai user biasa (bukan root)
-sudo apt update && sudo apt install -y nodejs npm git   # atau NodeSource untuk Node 20/22
-node -v   # harus >= 18
+ssh root@IP_VPS
 
-git clone https://github.com/dwisetyabudi15581/Thor.git
-cd Thor
-npm install
-cp .env.example .env
-nano .env
+# user harian (jangan jalan sebagai root)
+adduser thor && usermod -aG sudo thor
+su - thor
+
+# Node.js 22 (NodeSource)
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+sudo apt install -y nodejs git
+sudo npm install -g pm2
+
+# firewall — port 3000 & 8788 TIDAK perlu dibuka (localhost only)
+sudo ufw allow OpenSSH && sudo ufw allow 80 && sudo ufw allow 443
+sudo ufw enable
 ```
 
-### Isi `.env`
+## 2. Clone + install (SATU repo, sekali jalan)
+
+```bash
+cd ~
+git clone https://github.com/dwisetyabudi15581/Thor.git
+cd Thor
+./setup.sh        # install bot + dashboard + buat kedua .env dari contoh
+```
+
+## 3. Isi kedua file .env
+
+Buat token acak yang SAMA untuk kedua sisi (jembatan bot ⇄ web):
+
+```bash
+openssl rand -hex 32   # simpan hasilnya — dipakai di DUA tempat
+```
+
+**`.env` (bot — root repo):**
 
 ```ini
 DISCORD_TOKEN=token_bot_dari_developer_portal
+GUILD_ID=                          # KOSONG = mode publik ala Dyno
 
-# MODE SERVER — satu-satunya variabel yang menentukan perilaku:
-#  TERISI  = mode 1 server: command instan, event server lain diabaikan
-#  KOSONG  = MODE PUBLIK ala Dyno: command global, muncul otomatis di
-#            semua server yang meng-invite bot (propagasi ±1 jam)
-GUILD_ID=
-
-# DASH API (WAJIB diisi kalau dashboard web dipakai; tanpa ini server
-# API internal tidak jalan — bot tetap normal via slash command):
 DASH_API_HOST=127.0.0.1
 DASH_API_PORT=8788
-DASH_API_TOKEN=hasil-openssl-rand-hex-32
+DASH_API_TOKEN=HASIL-OPENSSL-RAND-HEX-32-DI-ATAS
 ```
 
-Buat token acak: `openssl rand -hex 32`.
+**`dashboard/.env` (web):**
 
-## 3. Uji dulu, lalu jalankan 24/7 (pm2)
+```ini
+DATABASE_URL=file:db/custom.db
+SESSION_SECRET=HASIL-OPENSSL-RAND-HEX-32-YANG-BARU   # secret BARU, bukan yang DASH
+DEMO_MODE=false
+DISCORD_CLIENT_ID=1548297613969985546
+DISCORD_CLIENT_SECRET=client_secret_dari_portal
+PUBLIC_ORIGIN=https://thor.domainmu.com
+ADMIN_DISCORD_IDS=1290700587373039619
+
+DASH_API_URL=http://127.0.0.1:8788
+DASH_API_TOKEN=HASIL-OPENSSL-RAND-HEX-32-DI-ATAS     # SAMA PERSIS dengan .env bot
+```
+
+> ⚠️ Kesalahan paling umum: `DASH_API_TOKEN` beda antara kedua .env →
+> dashboard tampil "Bot offline" dan save tidak berpengaruh. Samakan lalu
+> restart kedua proses.
+
+## 4. Uji dulu, lalu jalankan 24/7
 
 ```bash
-npm test          # 639 unit test harus hijau semua
-npm start         # uji manual: bot online, /help jalan
+npm test                    # 639 unit test bot harus hijau semua
 
-# lanjut pakai pm2 (auto-restart + start saat boot)
-sudo npm install -g pm2
-pm2 start index.js --name thor-bot
-pm2 save
-pm2 startup        # jalankan perintah yang muncul sekali saja
+# cara cepat (cek kedua komponen hidup):
+./start.sh                  # Ctrl+C untuk berhenti
+
+# produksi 24/7 via pm2:
+(cd dashboard && npm run build)
+pm2 start ecosystem.config.cjs
+pm2 save && pm2 startup
+pm2 logs thor-bot           # pastikan: bot online + DASH API listening :8788
 ```
 
-Log: `pm2 logs thor-bot`. Restart: `pm2 restart thor-bot`.
-
-## 4. Invite bot ke server
-
-Pakai URL berikut (permission least-privilege, ganti `CLIENT_ID` bila perlu):
-
-```
-https://discord.com/oauth2/authorize?client_id=1548297613969985546&permissions=1099800112150&scope=bot+applications.commands
-```
-
-Setelah bot masuk:
-1. Role bot harus **di atas** semua role yang bot kelola (drag di Server Settings → Roles)
-2. `/set-role admin @role` → role admin bot
-3. `/setup-verify` → panel verifikasi
-4. `/setup-ticket` → panel tiket
-5. `/config-show` → cek semua setting
-
-Panduan admin lengkap: **[docs/ADMIN_GUIDE.md](./docs/ADMIN_GUIDE.md)**.
-
-## 5. Bot publik (ala Dyno) — checklist
-
-- [ ] `GUILD_ID=` **kosong** di `.env`
-- [ ] Kedua Privileged Intents aktif
-- [ ] Command global muncul ±1 jam setelah restart (normal, propagasi Discord)
-- [ ] `data/config/<guildId>.json` otomatis terpisah per server — admin server A tidak bisa menimpa server B
-- [ ] Discord mewajibkan verifikasi bot setelah **100 server** (form + info pemilik di Developer Portal)
-
-## 6. Backup & update
+## 5. Domain + HTTPS (Caddy)
 
 ```bash
-# data penting semuanya di folder data/ — backup cukup rsync:
-rsync -av user@vps:Thor/data/ ./backup-thor-data/
-
-# update versi baru:
-cd Thor && git pull && npm install && npm test && pm2 restart thor-bot
+# A record domain: thor.domainmu.com → IP_VPS
+sudo apt install -y caddy
+sudo nano /etc/caddy/Caddyfile
 ```
 
-Backup otomatis internal (maks 7 snapshot, tiap 24 jam + saat start) tetap
-berjalan sendiri via `/backup-now` — folder `data/` adalah sumber kebenaran.
+Isi (ganti domain):
+
+```
+thor.domainmu.com {
+    reverse_proxy 127.0.0.1:3000
+}
+```
+
+```bash
+sudo systemctl reload caddy
+# Caddy otomatis mengurus sertifikat HTTPS (Let's Encrypt) — tunggu ±30 detik
+```
+
+## 6. Discord Developer Portal (penting!)
+
+1. https://discord.com/developers/applications → aplikasi bot
+2. **Bot** → *Privileged Gateway Intents* → aktifkan:
+   - ✅ SERVER MEMBERS INTENT
+   - ✅ MESSAGE CONTENT INTENT
+3. **OAuth2** → *Redirects* → tambah:
+   ```
+   https://thor.domainmu.com/api/auth/discord/callback
+   ```
+   (dashboard juga menampilkan URI persis ini di footer landing — salin dari sana)
+4. Simpan.
+
+## 7. Verifikasi end-to-end (5 menit)
+
+1. Buka `https://thor.domainmu.com` → landing muncul
+2. **Login dengan Discord** → otorisasi → masuk daftar server
+3. Pilih server tempat bot sudah di-invite → dashboard 11 modul terbuka
+4. Ubah satu setting (mis. modul **Umum** → Simpan) → cek di Discord dengan
+   `/config-show` → nilai harus sama (bukti slash command & web satu sumber)
+5. `pm2 logs thor-bot` → request DASH API tercatat
+
+## 8. Operasional harian
+
+```bash
+pm2 status                 # thor-bot + thor-dash harus online
+pm2 logs thor-bot          # log bot
+pm2 logs thor-dash         # log dashboard
+pm2 restart all            # restart keduanya
+
+# update ke versi baru:
+cd ~/Thor && git pull
+./setup.sh                 # install ulang deps bila berubah
+npm test
+(cd dashboard && npm run build)
+pm2 restart all
+
+# backup SEMUA data (bot): cukup folder data/
+rsync -av thor@IP_VPS:~/Thor/data/ ./backup-thor/
+# backup dashboard (user login): file dashboard/db/custom.db
+```
+
+## Troubleshooting cepat
+
+| Gejala | Penyebab umum | Solusi |
+| --- | --- | --- |
+| Bot tidak online | DISCORD_TOKEN salah / intent mati | cek token + 2 intent, `pm2 logs thor-bot` |
+| Slash command tidak muncul | GUILD_ID terisi salah / propagasi global ±1 jam | kosongkan GUILD_ID untuk mode publik, tunggu 1 jam |
+| Login Discord gagal | Redirect URI beda / client secret salah | samakan persis dengan yang dashboard tampilkan |
+| Daftar server kosong | OAuth login sebelum scope `guilds` aktif | logout → login ulang |
+| "Bot offline" di dashboard | DASH_API_TOKEN beda / bot mati | samakan token, `pm2 status` |
+| Save di web tidak berpengaruh | token beda (tulis ditolak) | sama seperti atas — cek `pm2 logs` |
+| `npm install` gagal di dashboard | Node < 20 | upgrade Node (setup.sh mengecek) |

@@ -1,12 +1,14 @@
 # 📚 Dokumentasi — Thor Bot
 
-Kumpulan dokumen resmi untuk **Thor — All-in-One Discord Community Bot** (v3.17.0).
+Kumpulan dokumen resmi untuk **Thor — All-in-One Discord Community Bot** (v3.18.0).
 
 | Dokumen                            | Isi                                                                                                                                            |
 | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | [README.md](../README.md)          | Ringkasan project: fitur, instalasi, konfigurasi awal, development, troubleshooting dasar                                                      |
 | [ADMIN_GUIDE.md](./ADMIN_GUIDE.md) | Panduan admin lengkap: setup server, manajemen produk & VIP, operasional harian, moderation, backup & restore, troubleshooting, best practices |
-| [CHANGELOG.md](../CHANGELOG.md)    | Riwayat lengkap semua versi (v3.9.0 – v3.17.0)                                                                                                 |
+| [CHANGELOG.md](../CHANGELOG.md)    | Riwayat lengkap semua versi (v3.9.0 – v3.18.0)                                                                                                 |
+| [../DEPLOY.md](../DEPLOY.md)       | Panduan deploy SATU repo: VPS + pm2 + domain/HTTPS + OAuth + verifikasi end-to-end                                                             |
+| [../dashboard/](../dashboard/)     | Dashboard web ala Dyno (Next.js) — dokumentasi & cara menjalankan ada di `dashboard/README.md`                                                  |
 
 ## Mulai Cepat
 

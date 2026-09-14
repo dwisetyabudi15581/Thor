@@ -5,6 +5,18 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 Legend: 🔴 critical · 🟠 high · 🟡 medium · 🟢 improvement
 
+## [3.18.0] — 2026-09-14
+
+### Added — 🌐 DASHBOARD WEB MASUK REPO BOT (SATU REPO, SATU SETUP)
+
+Monorepo: dashboard web ala Dyno kini hidup di folder `dashboard/` repo ini — tidak lagi repo terpisah. Clone sekali → `./setup.sh` → `./start.sh` → bot + dashboard jalan bersamaan.
+
+- 🟢 **`dashboard/` — Next.js 16 + TypeScript + Tailwind 4 + Prisma SQLite** (login Discord OAuth2, pemilih server, 11 modul konfigurasi: Ringkasan, Umum, Tiket & Produk, AutoMod, Leveling, Rekber, Responder, Self-Roles, Announce, Temp Voice, Server Stats; CRUD langsung + SaveBar draft ala Dyno).
+- 🟢 **Dependensi dashboard dirampingkan total:** 60+ → 12 paket runtime (fresh install 419 paket, ±46 detik); 44 komponen UI boilerplate tak terpakai dihapus (tinggal accordion/badge/button/toast/toaster); workaround sandbox `/api/me2` dihapus → `/api/me` biasa; kredensial fallback sandbox dikosongkan (aman untuk repo publik).
+- 🟢 **Script kenyamanan di root:** `setup.sh` (install bot + web + siapkan kedua `.env`), `start.sh` (production: keduanya sekali jalan, Ctrl+C stop bersama), `dev.sh` (nodemon + next dev), `ecosystem.config.cjs` (pm2 `thor-bot` + `thor-dash` 24/7), plus npm scripts `dash:install/dev/build/start/mock`.
+- 🟢 **DEPLOY.md dirombak jadi panduan SATU repo** (VPS + pm2 + Caddy + OAuth + verifikasi end-to-end + troubleshooting); README diperbarui (badge v3.18.0, struktur folder, tabel script, seksi dashboard monorepo).
+- 🟢 **Bot & test tidak berubah:** 92 command, 639/639 unit test tetap hijau; `DASH_API_TOKEN` di `.env` bot wajib sama dengan `dashboard/.env`.
+
 ## [3.17.0] — 2026-09-14
 
 ### Removed — 🗑️ SISTEM LANGGANAN PREMIUM DIHAPUS BERSIH (BOT 100% GRATIS)
