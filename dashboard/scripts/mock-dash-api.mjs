@@ -60,8 +60,8 @@ function defaultConfig() {
     ],
     midman: { feeMode: "percent", feeValue: 5, category: "🤝 REKBER" },
     products: [
-      { label: "VIP 30 Hari", value: "vip30", price: "Rp 15.000", duration: "30 hari", category: "transaction", requiresKey: true },
-      { label: "VIP 90 Hari", value: "vip90", price: "Rp 35.000", duration: "90 hari", category: "transaction", requiresKey: true },
+      { label: "VIP 30 Hari", value: "vip30", price: "Rp 15.000", duration: "30 hari", category: "transaction", requiresKey: true, roleId: "111111111111111111", days: 30 },
+      { label: "VIP 90 Hari", value: "vip90", price: "Rp 35.000", duration: "90 hari", category: "transaction", requiresKey: true, roleId: "111111111111111111", days: 90 },
       { label: "Jasa Setup Bot", value: "setup", price: "Rp 50.000", category: "transaction", requiresKey: false },
     ],
   };
@@ -111,6 +111,58 @@ function makeMeta({ id, name, icon, memberCount }) {
     ],
   };
 }
+
+// v3.19.0: katalog command demo untuk modul Command Manager (subset
+// representatif — bot asli mengirim semua 93 command dari registry).
+const COMMAND_CATALOG = [
+  ["help", "Pusat bantuan: pilih kategori atau cari command", "help"],
+  ["setup-verify", "Setup panel verifikasi member baru", "config"],
+  ["setup-ticket", "Setup panel tiket 1 kategori (legacy)", "config"],
+  ["set-role", "Set role sistem (verified/admin/midman/booster)", "config"],
+  ["set-channel", "Set channel sistem (welcome/invoice/log/dll)", "config"],
+  ["set-message", "Set teks pesan sistem", "config"],
+  ["config-show", "Lihat semua konfigurasi", "config"],
+  ["reset-config", "Reset semua konfigurasi (2-step)", "config"],
+  ["test-welcome", "Diagnosis + preview welcome/goodbye", "config"],
+  ["add-product", "Tambah produk ke price list", "products"],
+  ["list-products", "Lihat daftar produk", "products"],
+  ["set-product-role", "Set auto-role produk + durasi", "products"],
+  ["set-key", "Beri key produk ke member", "keys"],
+  ["list-keys", "Lihat key member", "keys"],
+  ["clear-schedule", "Hapus schedule/key user", "keys"],
+  ["add-category", "Tambah kategori tiket", "categories"],
+  ["setup-ticket-panel", "Pasang panel tiket multi-kategori", "panels"],
+  ["list-panels", "Lihat semua panel", "panels-mgmt"],
+  ["setup-selfrole", "Buat panel self-role", "selfrole"],
+  ["selfrole-list", "Lihat panel self-role", "selfrole"],
+  ["announce", "Kirim pengumuman embed", "announce"],
+  ["announce-schedule", "Jadwalkan pengumuman", "announce"],
+  ["embed-builder", "Bangun embed interaktif", "embed"],
+  ["send-message", "Kirim embed via form", "send-message"],
+  ["backup-now", "Backup data sekarang", "backup"],
+  ["restore-backup", "Pulihkan dari backup", "backup"],
+  ["giveaway", "Kelola giveaway (create/list/end/reroll)", "giveaway"],
+  ["poll", "Buat poll dengan tombol vote", "poll"],
+  ["warn", "Beri peringatan member", "warn"],
+  ["warn-list", "Riwayat warn member", "warn"],
+  ["timeout", "Mute member sementara", "moderation"],
+  ["kick", "Keluarkan member", "moderation"],
+  ["ban", "Blokir member", "moderation"],
+  ["purge", "Hapus massal pesan", "moderation"],
+  ["stats", "Statistik server live", "stats"],
+  ["leaderboard", "Top 10 member", "stats"],
+  ["boosters", "Daftar booster + riwayat", "stats"],
+  ["serverstats", "Channel counter live", "serverstats"],
+  ["setup-tempvoice", "Setup temporary voice", "tempvoice"],
+  ["add-responder", "Tambah auto-responder", "responder"],
+  ["set-automod", "Konfigurasi auto-mod", "automod"],
+  ["afk", "Set status AFK", "afk"],
+  ["setup-leveling", "Aktifkan XP & level", "leveling"],
+  ["rank", "Lihat level & XP", "leveling"],
+  ["set-midman-fee", "Set fee rekber", "midman"],
+  ["midman-deals", "Lihat deal rekber aktif", "midman"],
+  ["commands", "Kelola aktif/nonaktif command (ala Dyno)", "commands"],
+];
 
 function seedGuild({ id, name, icon, memberCount }) {
   const meta = makeMeta({ id, name, icon, memberCount });
@@ -167,6 +219,142 @@ function seedGuild({ id, name, icon, memberCount }) {
       },
     ],
     serverstats: { enabled: true, config: { enabled: true } },
+    // v3.19.0: Command Manager + modul baru (data demo).
+    commands: {
+      list: COMMAND_CATALOG.map(([name, description, domain]) => ({ name, description, domain })),
+      disabled: ["giveaway", "afk-list"],
+      protected: ["commands"],
+    },
+    giveaways: [
+      {
+        id: `gw_${id}_1`,
+        guildId: id,
+        channelId: meta.channels[0].id,
+        messageId: "112233445566778899",
+        prize: "VIP 30 Hari",
+        winnersCount: 2,
+        endsAt: Date.now() + 7200_000,
+        ended: false,
+        winnerIds: [],
+        participantIds: ["111111111111111111", "222222222222222222", "333333333333333333"],
+        hostId: "333333333333333333",
+        hostTag: "Owner#0001",
+        requiredRoleId: null,
+        createdAt: Date.now() - 3600_000,
+      },
+      {
+        id: `gw_${id}_2`,
+        guildId: id,
+        channelId: meta.channels[1].id,
+        messageId: "112233445566778800",
+        prize: "Nitro 1 Bulan",
+        winnersCount: 1,
+        endsAt: Date.now() - 86400_000,
+        ended: true,
+        winnerIds: ["222222222222222222"],
+        participantIds: ["111111111111111111", "222222222222222222"],
+        hostId: "333333333333333333",
+        hostTag: "Owner#0001",
+        requiredRoleId: null,
+        createdAt: Date.now() - 172800_000,
+      },
+    ],
+    polls: [
+      {
+        id: `poll_${id}_1`,
+        guildId: id,
+        channelId: meta.channels[1].id,
+        messageId: "998877665544332200",
+        question: "Event berikutnya main apa?",
+        options: [
+          { label: "Mobile Legends", emoji: "1\u20e3", votes: ["111111111111111111"] },
+          { label: "Valorant", emoji: "2\u20e3", votes: ["222222222222222222", "333333333333333333"] },
+        ],
+        multiple: false,
+        closed: false,
+        createdAt: Date.now() - 1800_000,
+        closedAt: null,
+        creatorId: "333333333333333333",
+        creatorTag: "Owner#0001",
+      },
+    ],
+    backups: [
+      { name: "2026-09-14_08-30-00", size: 24576, fileCount: 12, mtime: Date.now() - 86400_000 },
+      { name: "2026-09-13_08-30-00", size: 23552, fileCount: 12, mtime: Date.now() - 172800_000 },
+      { name: "pre-restore_2026-09-12_10-15-00", size: 23040, fileCount: 11, mtime: Date.now() - 259200_000 },
+    ],
+    warns: [
+      {
+        id: `warn_${id}_1`,
+        reason: "Spam link di channel umum",
+        warnedBy: "333333333333333333",
+        warnedByTag: "Owner#0001",
+        guildId: id,
+        userId: "999222999222999222",
+        createdAt: Date.now() - 5400_000,
+        actionTaken: null,
+      },
+      {
+        id: `warn_${id}_2`,
+        reason: "Bahasa kasar",
+        warnedBy: "444444444444444444",
+        warnedByTag: "Moderator#0002",
+        guildId: id,
+        userId: "888777888777888777",
+        createdAt: Date.now() - 172800_000,
+        actionTaken: null,
+      },
+    ],
+    modlogs: [
+      {
+        id: `mod_${id}_1`,
+        type: "timeout",
+        reason: "Spam setelah peringatan",
+        durationMs: 3600000,
+        moderatorId: "444444444444444444",
+        moderatorTag: "Moderator#0002",
+        guildId: id,
+        userId: "999222999222999222",
+        createdAt: Date.now() - 5300_000,
+      },
+      {
+        id: `mod_${id}_2`,
+        type: "kick",
+        reason: "Iklan server lain",
+        durationMs: null,
+        moderatorId: "333333333333333333",
+        moderatorTag: "Owner#0001",
+        guildId: id,
+        userId: "777666777666777666",
+        createdAt: Date.now() - 259200_000,
+      },
+    ],
+    keys: [
+      {
+        id: `key_${id}_1`,
+        key: "ABCDE-FGHIJ-KLMNO",
+        userId: "111111111111111111",
+        username: "Budi#1234",
+        roleId: "111111111111111111",
+        productName: "VIP 30 Hari",
+        days: 30,
+        expireAt: Date.now() + 2592000_000,
+        createdAt: Date.now() - 86400000,
+        guildId: id,
+      },
+      {
+        id: `key_${id}_2`,
+        key: "PQRST-UVWXY-Z0123",
+        userId: "222222222222222222",
+        username: "Sari#5678",
+        roleId: "111111111111111111",
+        productName: "VIP 90 Hari",
+        days: 90,
+        expireAt: null,
+        createdAt: Date.now() - 172800000,
+        guildId: id,
+      },
+    ],
   };
   guilds.set(id, { meta, data });
   return guilds.get(id);
@@ -260,6 +448,144 @@ const server = http.createServer(async (req, res) => {
     delete body.actor;
     entry.data.automod = { ...entry.data.automod, ...body };
     return send(200, { ok: true, automod: entry.data.automod });
+  }
+
+  // v3.19.0: Command Manager — simpan daftar disabled
+  if (req.method === "PUT" && rest[0] === "commands" && rest.length === 1) {
+    const body = await readBody();
+    const disabled = Array.isArray(body?.disabled) ? body.disabled : null;
+    if (!disabled) return send(422, { error: "Daftar command tidak valid (harus array)" });
+    const known = new Set(entry.data.commands.list.map((c) => c.name));
+    const bad = disabled.filter((n) => !known.has(String(n)));
+    if (bad.length) return send(422, { error: `Command \`${bad[0]}\` tidak dikenal` });
+    if (disabled.includes("commands")) return send(422, { error: "Command `/commands` tidak bisa dinonaktifkan — itu pintu manajemen command" });
+    entry.data.commands.disabled = [...new Set(disabled.map(String))];
+    return send(200, { ok: true, disabled: entry.data.commands.disabled, total: entry.data.commands.list.length });
+  }
+
+  // v3.19.0: Giveaway dari web
+  if (req.method === "POST" && rest[0] === "giveaway" && rest.length === 1) {
+    const body = await readBody();
+    const channelId = String(body?.channelId || "");
+    const prize = String(body?.prize || "").trim();
+    const winners = Number(body?.winners ?? 1);
+    const durationMin = Number(body?.durationMin);
+    if (!/^\d{5,25}$/.test(channelId)) return send(400, { error: "channelId tidak valid" });
+    if (!prize || prize.length > 200) return send(400, { error: "Prize wajib diisi, maksimal 200 karakter" });
+    if (!Number.isInteger(durationMin) || durationMin < 1 || durationMin > 43200) return send(400, { error: "Durasi 1 menit sampai 30 hari (43200 menit)" });
+    if (!Number.isInteger(winners) || winners < 1 || winners > 20) return send(400, { error: "Jumlah pemenang 1-20" });
+    const gw = {
+      id: `gw_${guildId}_${Date.now()}`,
+      guildId,
+      channelId,
+      messageId: `mock_${Date.now()}`,
+      prize,
+      winnersCount: winners,
+      endsAt: Date.now() + durationMin * 60000,
+      ended: false,
+      winnerIds: [],
+      participantIds: [],
+      hostId: String(body?.actor?.id || "dash"),
+      hostTag: String(body?.actor?.tag || "Dashboard"),
+      requiredRoleId: body?.requiredRoleId ? String(body.requiredRoleId) : null,
+      createdAt: Date.now(),
+    };
+    entry.data.giveaways.unshift(gw);
+    return send(201, { ok: true, giveaway: gw });
+  }
+
+  // v3.19.0: Poll dari web
+  if (req.method === "POST" && rest[0] === "poll" && rest.length === 1) {
+    const body = await readBody();
+    const channelId = String(body?.channelId || "");
+    const question = String(body?.question || "").trim();
+    const rawOptions = Array.isArray(body?.options) ? body.options : [];
+    if (!/^\d{5,25}$/.test(channelId)) return send(400, { error: "channelId tidak valid" });
+    if (!question || question.length > 250) return send(400, { error: "Pertanyaan wajib diisi, maksimal 250 karakter" });
+    if (rawOptions.length < 2 || rawOptions.length > 10) return send(400, { error: "Poll butuh 2-10 opsi" });
+    const poll = {
+      id: `poll_${guildId}_${Date.now()}`,
+      guildId,
+      channelId,
+      messageId: `mock_${Date.now()}`,
+      question,
+      options: rawOptions.map((o, i) => ({ label: String(o.label || "").slice(0, 80), emoji: o.emoji ? String(o.emoji).slice(0, 64) : `${i + 1}\u20e3`, votes: [] })),
+      multiple: !!body?.multiple,
+      closed: false,
+      createdAt: Date.now(),
+      closedAt: null,
+      creatorId: String(body?.actor?.id || "dash"),
+      creatorTag: String(body?.actor?.tag || "Dashboard"),
+    };
+    entry.data.polls.unshift(poll);
+    return send(201, { ok: true, poll });
+  }
+
+  // v3.19.0: Embed dari web
+  if (req.method === "POST" && rest[0] === "embed" && rest.length === 1) {
+    const body = await readBody();
+    const channelId = String(body?.channelId || "");
+    const title = String(body?.title || "").trim();
+    const description = String(body?.description || "").trim();
+    if (!/^\d{5,25}$/.test(channelId)) return send(400, { error: "channelId tidak valid" });
+    if (!title && !description) return send(400, { error: "Minimal title atau description harus diisi" });
+    return send(201, { ok: true, messageId: `mock_${Date.now()}`, url: "https://discord.com/channels/mock/mock" });
+  }
+
+  // v3.19.0: Backup dari web
+  if (rest[0] === "backups") {
+    if (req.method === "POST" && rest.length === 1) {
+      await readBody();
+      const name = new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 19).replace(/[T:]/g, (c) => (c === "T" ? "_" : "-"));
+      entry.data.backups.unshift({ name, size: 24000 + Math.floor(Math.random() * 4000), fileCount: 12, mtime: Date.now() });
+      return send(201, { ok: true, backupName: name, filesCopied: 12 });
+    }
+    if (req.method === "POST" && rest.length === 3 && rest[2] === "restore") {
+      await readBody();
+      const name = rest[1];
+      if (!entry.data.backups.some((b) => b.name === name)) return send(422, { error: `Restore gagal: backup '${name}' tidak ditemukan` });
+      return send(200, { ok: true, filesRestored: 12, note: "Data bot sudah di-restore dari backup (mock)." });
+    }
+  }
+
+  // v3.19.0: Keys dari web
+  if (rest[0] === "keys") {
+    if (req.method === "POST" && rest.length === 1) {
+      const body = await readBody();
+      const userId = String(body?.userId || "");
+      const value = String(body?.value || "");
+      if (!/^\d{5,25}$/.test(userId)) return send(400, { error: "userId (ID Discord) tidak valid" });
+      const product = entry.data.config.products.find((p) => p.value === value);
+      if (!product) return send(404, { error: `Produk value "${value}" tidak ditemukan` });
+      if (!product.roleId) return send(422, { error: `Produk ${product.label} belum punya role — atur dulu di modul Tiket & Produk` });
+      const keyValue =
+        (typeof body?.key === "string" ? body.key.trim() : "") ||
+        Array.from({ length: 3 }, () => Array.from({ length: 5 }, () => "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"[Math.floor(Math.random() * 32)]).join("")).join("-");
+      const days = product.days || 0;
+      const keyEntry = {
+        id: `key_${guildId}_${Date.now()}`,
+        key: keyValue,
+        userId,
+        username: `User#${userId.slice(-4)}`,
+        roleId: product.roleId,
+        productName: product.label,
+        days,
+        expireAt: days > 0 ? Date.now() + days * 86400000 : null,
+        createdAt: Date.now(),
+        guildId,
+      };
+      entry.data.keys.unshift(keyEntry);
+      return send(201, { ok: true, key: keyEntry.key, expireAt: keyEntry.expireAt, warnings: [] });
+    }
+    if (req.method === "DELETE" && rest.length === 1) {
+      const userId = url.searchParams.get("userId");
+      if (!userId || !/^\d{5,25}$/.test(userId)) return send(400, { error: "Parameter userId (ID Discord) wajib" });
+      const before = entry.data.keys.length;
+      entry.data.keys = entry.data.keys.filter((k) => k.userId !== userId);
+      const removedKeys = before - entry.data.keys.length;
+      if (removedKeys === 0) return send(404, { error: "Tidak ada key / schedule untuk user ini di server itu" });
+      return send(200, { ok: true, removedKeys, removedSchedules: removedKeys, warnings: [] });
+    }
   }
 
   if (rest[0] === "responders") {

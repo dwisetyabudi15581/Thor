@@ -20,7 +20,8 @@ import { useRouter } from "next/navigation";
 import {
   Hammer, Loader2, ArrowLeft, Save, X, CheckCircle2, AlertTriangle,
   LayoutDashboard, Settings2, Ticket, Hash, TrendingUp, MessageSquareReply,
-  Palette, Mic, Megaphone, Handshake, BarChart3,
+  Palette, Mic, Megaphone, Handshake, BarChart3, Terminal, Archive,
+  ShieldAlert, KeyRound, Gift, SquarePen, Vote,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { AutoModConfig, DashboardPayload, GuildMeta } from "@/lib/bot-api";
@@ -31,25 +32,40 @@ import {
   RespondersModule, SelfRolesModule, AnnounceModule, TempVoiceModule, ServerStatsModule, ModuleOverview,
   type ModuleActionProps,
 } from "./modules/module-actions";
+// v3.19.0: modul baru — Command Manager (ala Dyno) + Giveaway/Poll/Embed/
+// Backup/Moderasi/Keys. Semua aksi langsung via call() (paritas Discord↔web).
+import {
+  CommandManagerModule, GiveawayModule, PollModule, EmbedModule,
+  BackupModule, ModerationModule, KeysModule,
+} from "./modules/module-tools";
 
 type ToastState = { msg: string; tone: "ok" | "err"; id: number } | null;
 
 type ModuleId =
   | "overview" | "general" | "tickets" | "automod" | "leveling"
-  | "responders" | "selfroles" | "announce" | "tempvoice" | "midman" | "serverstats";
+  | "responders" | "selfroles" | "announce" | "tempvoice" | "midman" | "serverstats"
+  // v3.19.0
+  | "commands" | "backup" | "moderation" | "keys" | "giveaway" | "embed" | "poll";
 
 const MODULES: Array<{ id: ModuleId; label: string; icon: typeof LayoutDashboard; group: string }> = [
   { id: "overview", label: "Ringkasan", icon: LayoutDashboard, group: "Server" },
   { id: "general", label: "Umum", icon: Settings2, group: "Server" },
+  { id: "commands", label: "Command Manager", icon: Terminal, group: "Server" },
+  { id: "backup", label: "Backup", icon: Archive, group: "Server" },
   { id: "automod", label: "AutoMod", icon: Hash, group: "Proteksi" },
   { id: "midman", label: "Rekber", icon: Handshake, group: "Proteksi" },
+  { id: "moderation", label: "Moderasi", icon: ShieldAlert, group: "Proteksi" },
   { id: "tickets", label: "Tiket & Produk", icon: Ticket, group: "Komunitas" },
+  { id: "keys", label: "Kunci VIP", icon: KeyRound, group: "Komunitas" },
   { id: "leveling", label: "Leveling", icon: TrendingUp, group: "Komunitas" },
   { id: "responders", label: "Auto-Responder", icon: MessageSquareReply, group: "Komunitas" },
   { id: "selfroles", label: "Self Roles", icon: Palette, group: "Komunitas" },
   { id: "announce", label: "Announce", icon: Megaphone, group: "Komunitas" },
+  { id: "giveaway", label: "Giveaway", icon: Gift, group: "Komunitas" },
   { id: "tempvoice", label: "Temp Voice", icon: Mic, group: "Komunitas" },
   { id: "serverstats", label: "Server Stats", icon: BarChart3, group: "Komunitas" },
+  { id: "embed", label: "Embed", icon: SquarePen, group: "Alat" },
+  { id: "poll", label: "Poll", icon: Vote, group: "Alat" },
 ];
 
 const MODULE_DESC: Record<ModuleId, { title: string; desc: string }> = {
@@ -64,6 +80,13 @@ const MODULE_DESC: Record<ModuleId, { title: string; desc: string }> = {
   tempvoice: { title: "Temporary Voice", desc: "Channel suara privat per member." },
   midman: { title: "Rekber / Escrow", desc: "Fee dan kategori deal 3-pihak." },
   serverstats: { title: "Server Stats", desc: "Counter live di nama channel." },
+  commands: { title: "Command Manager", desc: "Aktif/nonaktifkan tiap slash command di server ini — persis ala Dyno. Berlaku untuk penggunaan lewat Discord." },
+  backup: { title: "Backup", desc: "Buat backup sekarang dan pulihkan slot lama." },
+  moderation: { title: "Moderasi", desc: "Riwayat warn dan tindakan moderator (timeout/kick/ban)." },
+  keys: { title: "Kunci VIP", desc: "Beri key produk ke member — role + auto-expire otomatis." },
+  giveaway: { title: "Giveaway", desc: "Mulai giveaway dengan tombol Join/Leave langsung dari web." },
+  embed: { title: "Kirim Embed", desc: "Buat & kirim embed ke channel mana pun." },
+  poll: { title: "Poll", desc: "Buat poll dengan tombol vote interaktif." },
 };
 
 function setPath(obj: Record<string, unknown>, dotPath: string, value: unknown) {
@@ -346,6 +369,14 @@ export function GuildDashboard({ guildId }: { guildId: string }) {
           {module === "announce" && actionProps ? <AnnounceModule {...actionProps} /> : null}
           {module === "tempvoice" && actionProps ? <TempVoiceModule {...actionProps} /> : null}
           {module === "serverstats" && actionProps ? <ServerStatsModule {...actionProps} /> : null}
+          {/* v3.19.0 */}
+          {module === "commands" && actionProps ? <CommandManagerModule {...actionProps} /> : null}
+          {module === "backup" && actionProps ? <BackupModule {...actionProps} /> : null}
+          {module === "moderation" && actionProps ? <ModerationModule {...actionProps} /> : null}
+          {module === "keys" && actionProps ? <KeysModule {...actionProps} /> : null}
+          {module === "giveaway" && actionProps ? <GiveawayModule {...actionProps} /> : null}
+          {module === "embed" && actionProps ? <EmbedModule {...actionProps} /> : null}
+          {module === "poll" && actionProps ? <PollModule {...actionProps} /> : null}
         </main>
       </div>
 

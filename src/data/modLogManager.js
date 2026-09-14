@@ -117,6 +117,22 @@ function getModLogCount(guildId, userId) {
 }
 
 /**
+ * v3.19.0: semua modlog di satu guild (untuk web dashboard — modul Moderasi).
+ * Flatten per-user store, sort terbaru dulu, cap `limit` (payload ringan).
+ */
+function getGuildModLogs(guildId, limit = 50) {
+    const store = load();
+    const prefix = `${guildId}:`;
+    const out = [];
+    for (const [key, logs] of Object.entries(store)) {
+        if (!key.startsWith(prefix) || !Array.isArray(logs)) continue;
+        for (const l of logs) out.push(l);
+    }
+    out.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    return typeof limit === 'number' && limit > 0 ? out.slice(0, limit) : out;
+}
+
+/**
  * Label tipe tindakan (dipakai /warn-list & DM).
  */
 function modLogTypeLabel(type) {
@@ -153,6 +169,7 @@ function reload() {
 module.exports = {
     addModLog,
     getModLogs,
+    getGuildModLogs,
     getModLogCount,
     modLogTypeLabel,
     reload,

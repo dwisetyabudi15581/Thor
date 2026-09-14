@@ -55,6 +55,25 @@ const announcements = require('../data/scheduledAnnouncements');
 const serverstatsManager = require('../data/serverstatsManager');
 const { buildPanelEmbed, buildPanelComponents } = require('../ui/selfRolePanelBuilder');
 const { normalizeNewlines } = require('./text');
+// v3.19.0: modul-modul baru untuk Command Manager + modul web Giveaway /
+// Poll / Embed / Backup / Moderasi / Keys.
+const giveawayManager = require('../data/giveawayManager');
+const pollManager = require('../data/pollManager');
+const backupManager = require('../data/backupManager');
+const warnManager = require('../data/warnManager');
+const modLogManager = require('../data/modLogManager');
+const keyManager = require('../data/keyManager');
+const roleScheduler = require('../data/roleScheduler');
+const { getCommands } = require('../commands/registry');
+const { normalizeDisabledList, PROTECTED_COMMANDS } = require('../commands/commands');
+const { COMMAND_TO_DOMAIN } = require('../commands/index.js');
+const {
+    EmbedBuilder,
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle,
+    ChannelType
+} = require('discord.js');
 
 // Versi langsung dari package.json — tidak pernah basi (v3.17.0).
 const BOT_VERSION = require('../../package.json').version;
@@ -210,6 +229,17 @@ const SECTION_VALIDATORS = {
             if (p.duration && !isStr(String(p.duration), 100)) return { ok: false, error: 'Durasi tidak valid' };
             if (p.category && !/^[a-z0-9_-]{2,32}$/.test(String(p.category))) return { ok: false, error: 'Kategori produk tidak valid' };
             if (p.requiresKey !== undefined && typeof p.requiresKey !== 'boolean') return { ok: false, error: 'requiresKey harus boolean' };
+            // v3.19.0 FIX (data loss): roleId + days sebelumnya DIHAPUS saat
+            // produk disimpan dari web — padahal /set-product-role menyimpannya
+            // di objek produk. Edit price list via web diam-diam melepas semua
+            // auto-role mapping. Sekarang keduanya dipertahankan + divalidasi
+            // (paritas penuh antara interface Discord dan web).
+            if (p.roleId !== undefined && p.roleId !== null && !SNOWFLAKE_RE.test(String(p.roleId))) {
+                return { ok: false, error: 'roleId produk harus ID Discord yang valid' };
+            }
+            if (p.days !== undefined && p.days !== null && (!Number.isInteger(Number(p.days)) || Number(p.days) < 0 || Number(p.days) > 3650)) {
+                return { ok: false, error: 'days produk harus integer 0-3650 (0 = permanen)' };
+            }
         }
         return {
             ok: true,
@@ -222,6 +252,9 @@ const SECTION_VALIDATORS = {
                     requiresKey: !!p.requiresKey
                 };
                 if (p.duration) out.duration = String(p.duration);
+                // v3.19.0: pertahankan mapping role (set via /set-product-role).
+                if (p.roleId) out.roleId = String(p.roleId);
+                if (p.days !== undefined && p.days !== null) out.days = Number(p.days);
                 return out;
             })
         };
@@ -439,8 +472,9 @@ function createDashHandler({ client, token, log = () => {} }) {
 
     function dashboardPayload(guildId) {
         const tempVoiceCfg = tempVoiceManager.getGuildConfig(guildId);
+        const config = getConfig(guildId);
         return {
-            config: getConfig(guildId),
+            config,
             automod: automodManager.getGuildConfig(guildId),
             responders: responderManager.getGuildResponders(guildId),
             selfroles: selfRoleManager.getPanelsByGuild(guildId),
@@ -455,7 +489,30 @@ function createDashHandler({ client, token, log = () => {} }) {
             serverstats: {
                 enabled: serverstatsManager.isEnabled(),
                 config: serverstatsManager.getConfig()
-            }
+            },
+            // v3.19.0: Command Manager — daftar command (dari registry, satu
+            // sumber kebenaran) + status disabled per guild. `protected` =
+            // command yang tidak bisa didisable (pintu manajemen).
+            commands: {
+                list: getCommands().map((c) => ({
+                    name: c.name,
+                    description: c.description,
+                    domain: COMMAND_TO_DOMAIN[c.name] || 'other'
+                })),
+                disabled: Array.isArray(config?.disabledCommands) ? config.disabledCommands : [],
+                protected: PROTECTED_COMMANDS
+            },
+            // v3.19.0: data modul baru (read-only; aksi tulis via endpoint).
+            giveaways: giveawayManager.getByGuild(guildId),
+            polls: pollManager.getByGuild(guildId),
+            backups: backupManager.listBackups().slice(0, 25),
+            warns: warnManager.getGuildWarns(guildId, 50),
+            modlogs: modLogManager.getGuildModLogs(guildId, 50),
+            keys: keyManager
+                .getAllKeys()
+                .filter((k) => k.guildId === guildId)
+                .sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0))
+                .slice(0, 100)
         };
     }
 
@@ -750,6 +807,348 @@ function createDashHandler({ client, token, log = () => {} }) {
                     const ok = tempVoiceManager.removeGuild(guildId);
                     if (!ok) return sendJson(res, 404, { error: 'Setup temp voice tidak ditemukan' });
                     return sendJson(res, 200, { ok: true, note: 'Config dilepas; channel fisik tidak dihapus — hapus manual bila perlu.' });
+                }
+
+                // ========================================================
+                // ==== v3.19.0: COMMAND MANAGER + MODUL BARU (WEB)     ====
+                // ========================================================
+
+                // ---- Command Manager: simpan daftar disabled ----
+                // Aturan identik dengan /commands toggle (normalizeDisabledList
+                // dipakai bersama — single source of truth antar interface).
+                if (method === 'PUT' && rest[0] === 'commands' && rest.length === 1) {
+                    const body = await readBody(req);
+                    const normalized = normalizeDisabledList(body?.disabled ?? []);
+                    if (!normalized.ok) return sendJson(res, 422, { error: normalized.error });
+                    const config = getConfig(guildId);
+                    config.disabledCommands = normalized.value;
+                    saveConfig(guildId, config);
+                    log(`[dash] command manager ${guildId}: ${normalized.value.length} command dinonaktifkan oleh ${body?.actor?.tag || 'unknown'}`);
+                    return sendJson(res, 200, {
+                        ok: true,
+                        disabled: normalized.value,
+                        total: getCommands().length
+                    });
+                }
+
+                // ---- Giveaway: buat dari web (paritas /giveaway create) ----
+                if (method === 'POST' && rest[0] === 'giveaway' && rest.length === 1) {
+                    if (!g) return sendJson(res, 404, { error: 'Bot tidak ada di server ini' });
+                    const body = await readBody(req);
+                    const channelId = String(body?.channelId || '');
+                    const prize = String(body?.prize || '').trim();
+                    const winners = Number(body?.winners ?? 1);
+                    const durationMin = Number(body?.durationMin);
+                    const requiredRoleId = body?.requiredRoleId ? String(body.requiredRoleId) : null;
+
+                    // Validasi identik dengan /giveaway create (supaya perilaku
+                    // web dan Discord tidak bisa berbeda).
+                    if (!SNOWFLAKE_RE.test(channelId)) return sendJson(res, 400, { error: 'channelId tidak valid' });
+                    if (!isStr(prize, 200)) return sendJson(res, 400, { error: 'Prize wajib diisi, maksimal 200 karakter' });
+                    if (!Number.isInteger(durationMin) || durationMin < 1 || durationMin > 60 * 24 * 30) {
+                        return sendJson(res, 400, { error: 'Durasi 1 menit sampai 30 hari (43200 menit)' });
+                    }
+                    if (!Number.isInteger(winners) || winners < 1 || winners > 20) {
+                        return sendJson(res, 400, { error: 'Jumlah pemenang 1-20' });
+                    }
+                    if (requiredRoleId && !SNOWFLAKE_RE.test(requiredRoleId)) {
+                        return sendJson(res, 400, { error: 'requiredRoleId tidak valid' });
+                    }
+
+                    const channel = await client.channels.fetch(channelId).catch(() => null);
+                    if (!channel || channel.type !== ChannelType.GuildText) {
+                        return sendJson(res, 400, { error: 'Channel harus berupa text channel' });
+                    }
+
+                    const endsAt = Date.now() + durationMin * 60000;
+                    const gw = giveawayManager.create({
+                        guildId,
+                        channelId,
+                        prize,
+                        winnersCount: winners,
+                        endsAt,
+                        hostId: String(body?.actor?.id || 'dash'),
+                        hostTag: String(body?.actor?.tag || 'Dashboard'),
+                        requiredRoleId
+                    });
+
+                    // Embed + tombol identik dengan versi Discord.
+                    const embed = new EmbedBuilder()
+                        .setTitle('🎉 GIVEAWAY!')
+                        .setDescription(
+                            `🎁 **Prize:** ${prize}\n\n` +
+                                `👥 **Pemenang:** ${winners}\n` +
+                                `⏰ **Berakhir:** <t:${Math.floor(endsAt / 1000)}:R> (<t:${Math.floor(endsAt / 1000)}:F>)\n` +
+                                `🎟️ **Peserta:** 0\n` +
+                                (requiredRoleId ? `🔐 **Syarat:** Punya role <@&${requiredRoleId}>\n` : '') +
+                                `\n👇 Klik tombol **🎉 Join** di bawah untuk ikut!`
+                        )
+                        .setColor(0xf1c40f)
+                        .setFooter({ text: `Host: ${body?.actor?.tag || 'Dashboard'} | ID: ${gw.id}` })
+                        .setTimestamp();
+                    const row = new ActionRowBuilder().addComponents(
+                        new ButtonBuilder().setCustomId(`gw_join:${gw.id}`).setLabel('🎉 Join').setStyle(ButtonStyle.Success),
+                        new ButtonBuilder().setCustomId(`gw_leave:${gw.id}`).setLabel('🚪 Leave').setStyle(ButtonStyle.Secondary)
+                    );
+                    const msg = await channel
+                        .send({ embeds: [embed], components: [row], content: '🎉 **GIVEAWAY BARU!**' })
+                        .catch(() => null);
+                    if (!msg) {
+                        // Rollback entry (pola P0-5 — sama dengan /giveaway create).
+                        try {
+                            giveawayManager.remove(gw.id);
+                        } catch (_) { /* best-effort */ }
+                        return sendJson(res, 502, { error: 'Gagal kirim pesan giveaway — cek permission bot di channel itu. Entry dibatalkan.' });
+                    }
+                    giveawayManager.setMessageId(gw.id, msg.id);
+                    log(`[dash] giveaway dibuat di ${guildId} (${gw.id}) oleh ${body?.actor?.tag || 'unknown'}`);
+                    return sendJson(res, 201, { ok: true, giveaway: giveawayManager.get(gw.id) });
+                }
+
+                // ---- Poll: buat dari web (paritas /poll create via modal) ----
+                if (method === 'POST' && rest[0] === 'poll' && rest.length === 1) {
+                    if (!g) return sendJson(res, 404, { error: 'Bot tidak ada di server ini' });
+                    const body = await readBody(req);
+                    const channelId = String(body?.channelId || '');
+                    const question = String(body?.question || '').trim();
+                    const multiple = !!body?.multiple;
+                    const rawOptions = Array.isArray(body?.options) ? body.options : [];
+
+                    if (!SNOWFLAKE_RE.test(channelId)) return sendJson(res, 400, { error: 'channelId tidak valid' });
+                    if (!isStr(question, 250)) return sendJson(res, 400, { error: 'Pertanyaan wajib diisi, maksimal 250 karakter' });
+                    if (rawOptions.length < 2 || rawOptions.length > 10) {
+                        return sendJson(res, 400, { error: 'Poll butuh 2-10 opsi' });
+                    }
+                    const options = [];
+                    for (const [i, o] of rawOptions.entries()) {
+                        const label = String(o?.label || '').trim();
+                        const emoji = o?.emoji ? String(o.emoji).slice(0, 64) : `${i + 1}️⃣`;
+                        if (!isStr(label, 80)) return sendJson(res, 400, { error: `Opsi #${i + 1}: label wajib 1-80 karakter` });
+                        options.push({ label, emoji });
+                    }
+
+                    const channel = await client.channels.fetch(channelId).catch(() => null);
+                    if (!channel || channel.type !== ChannelType.GuildText) {
+                        return sendJson(res, 400, { error: 'Channel harus berupa text channel' });
+                    }
+
+                    // Render-first (pola v3.9.26): entry persist SETELAH embed
+                    // berhasil dibangun; id dibuat di depan supaya tombol konsisten.
+                    const pollId = `poll_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+                    const createdAt = Date.now();
+                    const lines = options
+                        .map((opt) => `${opt.emoji} **${opt.label}** — 0 votes (0%)\n\`${'░'.repeat(10)}\``)
+                        .join('\n\n');
+                    const embed = new EmbedBuilder()
+                        .setTitle(`📊 ${question}`)
+                        .setDescription(
+                            `${lines}\n\n` +
+                                `🗳️ Total votes: **0**\n` +
+                                `🔄 Mode: ${multiple ? 'Multi-vote (boleh pilih banyak)' : 'Single-vote (pilih satu)'}\n` +
+                                `⏰ Dibuat: <t:${Math.floor(createdAt / 1000)}:R>\n\n` +
+                                `👇 Klik tombol di bawah untuk vote (toggle)`
+                        )
+                        .setColor(0x5865f2)
+                        .setFooter({ text: `Poll by ${body?.actor?.tag || 'Dashboard'} | ID: ${pollId}` })
+                        .setTimestamp();
+                    const rows = [];
+                    for (let i = 0; i < options.length; i += 5) {
+                        const row = new ActionRowBuilder();
+                        for (let j = i; j < Math.min(i + 5, options.length); j++) {
+                            row.addComponents(
+                                new ButtonBuilder()
+                                    .setCustomId(`poll_vote:${pollId}:${j}`)
+                                    .setLabel(options[j].label.slice(0, 80))
+                                    .setEmoji(options[j].emoji)
+                                    .setStyle(ButtonStyle.Primary)
+                            );
+                        }
+                        rows.push(row);
+                    }
+
+                    const poll = pollManager.create({
+                        id: pollId,
+                        guildId,
+                        channelId,
+                        question,
+                        options,
+                        multiple,
+                        creatorId: String(body?.actor?.id || 'dash'),
+                        creatorTag: String(body?.actor?.tag || 'Dashboard')
+                    });
+                    const msg = await channel
+                        .send({
+                            embeds: [embed],
+                            components: rows,
+                            content: `📊 **POLL BARU** oleh ${body?.actor?.tag || 'Dashboard'}`
+                        })
+                        .catch(() => null);
+                    if (!msg) {
+                        try {
+                            pollManager.remove(poll.id);
+                        } catch (_) { /* best-effort */ }
+                        return sendJson(res, 502, { error: 'Gagal kirim pesan poll — cek permission bot di channel itu. Entry dibatalkan.' });
+                    }
+                    pollManager.setMessageId(poll.id, msg.id);
+                    log(`[dash] poll dibuat di ${guildId} (${poll.id}) oleh ${body?.actor?.tag || 'unknown'}`);
+                    return sendJson(res, 201, { ok: true, poll: pollManager.get(poll.id) });
+                }
+
+                // ---- Embed: kirim embed ke channel (paritas /embed-builder) ----
+                if (method === 'POST' && rest[0] === 'embed' && rest.length === 1) {
+                    if (!g) return sendJson(res, 404, { error: 'Bot tidak ada di server ini' });
+                    const body = await readBody(req);
+                    const channelId = String(body?.channelId || '');
+                    const title = String(body?.title || '').trim();
+                    const description = String(body?.description || '').trim();
+                    if (!SNOWFLAKE_RE.test(channelId)) return sendJson(res, 400, { error: 'channelId tidak valid' });
+                    if (!title && !description) return sendJson(res, 400, { error: 'Minimal title atau description harus diisi' });
+                    if (title.length > 256) return sendJson(res, 400, { error: 'Title maksimal 256 karakter' });
+                    if (description.length > 4096) return sendJson(res, 400, { error: 'Description maksimal 4096 karakter' });
+                    const color = Number.isInteger(body?.color) && body.color >= 0 && body.color <= 0xffffff ? body.color : 0x5865f2;
+                    const footer = body?.footer ? String(body.footer).slice(0, 2048) : null;
+                    const image = body?.image ? String(body.image).slice(0, 500) : null;
+                    const thumbnail = body?.thumbnail ? String(body.thumbnail).slice(0, 500) : null;
+
+                    const channel = await client.channels.fetch(channelId).catch(() => null);
+                    if (!channel || channel.type !== ChannelType.GuildText) {
+                        return sendJson(res, 400, { error: 'Channel harus berupa text channel' });
+                    }
+
+                    const embed = new EmbedBuilder().setColor(color).setTimestamp();
+                    if (title) embed.setTitle(title);
+                    if (description) embed.setDescription(normalizeNewlines(description));
+                    if (footer) embed.setFooter({ text: footer });
+                    if (image) embed.setImage(image);
+                    if (thumbnail) embed.setThumbnail(thumbnail);
+
+                    const msg = await channel.send({ embeds: [embed] }).catch(() => null);
+                    if (!msg) return sendJson(res, 502, { error: 'Gagal kirim embed — cek permission bot di channel itu' });
+                    log(`[dash] embed dikirim ke ${channelId} (${guildId}) oleh ${body?.actor?.tag || 'unknown'}`);
+                    return sendJson(res, 201, { ok: true, messageId: msg.id, url: msg.url });
+                }
+
+                // ---- Backup: buat sekarang + restore (paritas /backup-now, /restore-backup) ----
+                if (rest[0] === 'backups') {
+                    if (method === 'POST' && rest.length === 1) {
+                        const body = await readBody(req);
+                        const result = backupManager.createBackup();
+                        if (!result.ok) {
+                            return sendJson(res, 500, {
+                                error: `Backup ${result.partial ? 'sebagian gagal' : 'gagal total'}: ${result.errors.join('; ') || 'tidak diketahui'}`
+                            });
+                        }
+                        log(`[dash] backup dibuat untuk ${guildId} (${result.backupName}) oleh ${body?.actor?.tag || 'unknown'}`);
+                        return sendJson(res, 201, { ok: true, backupName: result.backupName, filesCopied: result.filesCopied });
+                    }
+                    if (method === 'POST' && rest.length === 3 && rest[2] === 'restore') {
+                        const body = await readBody(req);
+                        const result = await backupManager.restoreBackup(rest[1]);
+                        if (!result.ok) {
+                            return sendJson(res, 422, { error: `Restore gagal: ${result.errors.join('; ') || 'backup tidak ditemukan / format nama salah'}` });
+                        }
+                        log(`[dash] backup ${rest[1]} di-restore (guild ${guildId}) oleh ${body?.actor?.tag || 'unknown'}`);
+                        return sendJson(res, 200, { ok: true, filesRestored: result.filesRestored, note: 'Data bot sudah di-restore dari backup. Dashboard memuat ulang otomatis saat refresh.' });
+                    }
+                }
+
+                // ---- Keys: kelola VIP key dari web (paritas /set-key & /clear-schedule) ----
+                if (rest[0] === 'keys') {
+                    if (method === 'POST' && rest.length === 1) {
+                        if (!g) return sendJson(res, 404, { error: 'Bot tidak ada di server ini' });
+                        const body = await readBody(req);
+                        const userId = String(body?.userId || '');
+                        const value = String(body?.value || '');
+                        if (!SNOWFLAKE_RE.test(userId)) return sendJson(res, 400, { error: 'userId (ID Discord) tidak valid' });
+
+                        // Produk harus terdaftar + punya role (aturan sama dengan
+                        // /set-key — web tidak bisa membuat role dari udara).
+                        const config = getConfig(guildId);
+                        const product = (config.products || []).find((p) => p.value === value);
+                        if (!product) return sendJson(res, 404, { error: `Produk value "${value}" tidak ditemukan` });
+                        if (!product.roleId) {
+                            return sendJson(res, 422, { error: `Produk ${product.label} belum punya role — atur dulu di modul Tiket & Produk` });
+                        }
+
+                        const member = await g.members.fetch(userId).catch(() => null);
+                        if (!member) return sendJson(res, 404, { error: 'User tidak ada di server ini' });
+
+                        // Key custom (opsional) atau auto-generate format XXXXX-XXXXX-XXXXX.
+                        const keyValue = (typeof body?.key === 'string' ? body.key.trim() : '') ||
+                            Array.from({ length: 3 }, () =>
+                                Array.from({ length: 5 }, () => 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.floor(Math.random() * 32)]).join('')
+                            ).join('-');
+
+                        let keyEntry;
+                        try {
+                            keyEntry = keyManager.addKey({
+                                key: keyValue,
+                                userId: member.id,
+                                username: member.user?.tag || member.id,
+                                roleId: product.roleId,
+                                productName: product.label,
+                                days: product.days || 0,
+                                guildId
+                            });
+                        } catch (err) {
+                            return sendJson(res, 500, { error: `Gagal simpan key: ${err.message}` });
+                        }
+
+                        // Beri role (kalau bot punya izin) + schedule expire —
+                        // best-effort dengan warning di response (pola /set-key).
+                        const warnings = [];
+                        try {
+                            if (!member.roles.cache.has(product.roleId)) await member.roles.add(product.roleId);
+                        } catch (_) {
+                            warnings.push('Key tersimpan TANPA role — posisi role bot harus di ATAS role produk.');
+                        }
+                        try {
+                            roleScheduler.scheduleRoleRemoval({
+                                userId: member.id,
+                                roleId: product.roleId,
+                                guildId,
+                                days: product.days || 0,
+                                expireAt: keyEntry.expireAt,
+                                productName: product.label
+                            });
+                        } catch (err) {
+                            warnings.push(`Schedule auto-expire gagal: ${err.message}`);
+                        }
+
+                        log(`[dash] key dibuat untuk user ${userId} di ${guildId} oleh ${body?.actor?.tag || 'unknown'}`);
+                        return sendJson(res, 201, { ok: true, key: keyEntry.key, expireAt: keyEntry.expireAt, warnings });
+                    }
+
+                    if (method === 'DELETE' && rest.length === 1) {
+                        if (!g) return sendJson(res, 404, { error: 'Bot tidak ada di server ini' });
+                        const userId = url.searchParams.get('userId');
+                        if (!userId || !SNOWFLAKE_RE.test(userId)) {
+                            return sendJson(res, 400, { error: 'Parameter userId (ID Discord) wajib' });
+                        }
+                        const removedSched = roleScheduler.removeAllByUser(userId, guildId);
+                        const removedKeys = keyManager.removeAllKeysByUser(userId, guildId);
+                        if (removedKeys === 0 && removedSched === 0) {
+                            return sendJson(res, 404, { error: 'Tidak ada key / schedule untuk user ini di server itu' });
+                        }
+                        // Lepas role produk user (best-effort) — pola /clear-schedule.
+                        const warnings = [];
+                        try {
+                            const member = await g.members.fetch(userId).catch(() => null);
+                            const config = getConfig(guildId);
+                            if (member) {
+                                const productRoleIds = new Set((config.products || []).map((p) => p.roleId).filter(Boolean));
+                                for (const roleId of member.roles.cache.map((r) => r.id)) {
+                                    if (productRoleIds.has(roleId)) {
+                                        await member.roles.remove(roleId).catch(() => {
+                                            warnings.push(`Gagal melepas role <@&${roleId}> — lepaskan manual.`);
+                                        });
+                                    }
+                                }
+                            }
+                        } catch (_) { /* best-effort */ }
+                        log(`[dash] ${removedKeys} key + ${removedSched} schedule dihapus untuk user ${userId} di ${guildId}`);
+                        return sendJson(res, 200, { ok: true, removedKeys, removedSchedules: removedSched, warnings });
+                    }
                 }
             }
 

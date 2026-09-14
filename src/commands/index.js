@@ -74,6 +74,9 @@ const midmanHandler = require('./midman');
 const moderationHandler = require('./moderation');
 // v3.9.51: channel counter server stats live (/serverstats setup|remove|refresh)
 const serverstatsHandler = require('./serverstats');
+// v3.19.0: Command Manager ala Dyno (/commands list|toggle|enable-all)
+const commandsHandler = require('./commands');
+const { getConfig } = require('../data/configManager');
 
 const DOMAIN_HANDLERS = {
     help: helpHandler,
@@ -105,7 +108,9 @@ const DOMAIN_HANDLERS = {
     // v3.9.43
     moderation: moderationHandler,
     // v3.9.51: channel counter server stats live
-    serverstats: serverstatsHandler
+    serverstats: serverstatsHandler,
+    // v3.19.0: command manager
+    commands: commandsHandler
 };
 
 // Mapping commandName → domain key (di DOMAIN_HANDLERS).
@@ -259,7 +264,10 @@ const COMMAND_TO_DOMAIN = {
     'list-level-roles': 'leveling',
     'remove-level-role': 'leveling',
     rank: 'leveling',
-    'leaderboard-level': 'leveling'
+    'leaderboard-level': 'leveling',
+
+    // v3.19.0: command manager ala Dyno
+    commands: 'commands'
 };
 
 // Command yang boleh dipakai member biasa (bukan admin).
@@ -299,6 +307,30 @@ async function routeCommand(interaction) {
                 '🚫 **Akses Ditolak.**\n\nSlash command hanya bisa dipakai oleh **Admin/Staff**.\n\nKalau kamu merasa ini salah, hubungi server admin.',
             flags: MessageFlags.Ephemeral
         });
+    }
+
+    // === v3.19.0: COMMAND MANAGER GATE (ala Dyno) ===
+    // Command yang dinonaktifkan admin (via /commands atau web dashboard)
+    // ditolak di sini dengan pesan ephemeral yang jelas. `/commands` sendiri
+    // kebal disable supaya admin tidak pernah terkunci dari sisi Discord
+    // (web dashboard juga selalu bisa mengaktifkan kembali).
+    if (interaction.guildId && interaction.commandName !== 'commands') {
+        let cfg = null;
+        try {
+            cfg = getConfig(interaction.guildId);
+        } catch (_) {
+            /* guild tanpa config (belum pernah setup) → anggap semua aktif */
+        }
+        const disabled = Array.isArray(cfg?.disabledCommands) ? cfg.disabledCommands : [];
+        if (disabled.includes(interaction.commandName)) {
+            if (interaction.deferred || interaction.replied) return;
+            return interaction.reply({
+                content:
+                    `⛔ Command \`/${interaction.commandName}\` dinonaktifkan oleh admin server ini.\n` +
+                    `Minta admin mengaktifkannya lewat \`/commands toggle\` atau web dashboard.`,
+                flags: MessageFlags.Ephemeral
+            });
+        }
     }
 
     // === DOMAIN DISPATCH ===

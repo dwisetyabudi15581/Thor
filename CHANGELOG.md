@@ -5,6 +5,28 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 Legend: 🔴 critical · 🟠 high · 🟡 medium · 🟢 improvement
 
+## [3.19.0] — 2026-09-15
+
+### Added — 🧩 COMMAND MANAGER ALA DYNO + DASHBOARD 18 MODUL (WEB = DISCORD, PILIH SALAH SATU)
+
+Semua slash command kini bisa diatur dari web ATAU Discord — keduanya menulis ke config yang sama. Plus 7 modul dashboard baru.
+
+- 🟢 **Command Manager (ala Dyno)**: aktif/nonaktifkan **tiap slash command per-server**. Dari web: modul baru dengan pencarian + grup per-domain + aksi massal per grup + "Aktifkan Semua". Dari Discord: command baru **`/commands list|toggle|enable-all`**. Command nonaktif ditolak router dengan pesan ephemeral yang jelas.
+- 🟢 **Anti-lockout by design**: `/commands` kebal-disable (guard di handler, router, dan validator DASH API — satu aturan `normalizeDisabledList` dipakai bersama). Web dashboard selalu bisa mengaktifkan kembali — admin tidak pernah terkunci dari dua-duanya.
+- 🟢 **7 modul dashboard baru** (11 → 18): **Backup** (buat sekarang + restore + konfirmasi dua-langkah), **Moderasi** (riwayat warn + tindakan moderator, read-only), **Kunci VIP** (beri key produk — role + schedule auto-expire otomatis, paritas `/set-key`), **Giveaway** (buat dari web, embed + tombol Join/Leave identik versi Discord), **Embed** (kirim embed + pratinjau live), **Poll** (2-10 opsi + multi-vote), dan Command Manager itu sendiri.
+- 🟢 **DASH API baru**: `PUT /guilds/:id/commands`, `POST /guilds/:id/giveaway`, `POST /guilds/:id/poll`, `POST /guilds/:id/embed`, `POST /guilds/:id/backups` (+ `/:name/restore`), `POST/DELETE /guilds/:id/keys` — semua tervalidasi ketat (whitelist produk, snowflake, batas karakter) dengan actor tercatat.
+- 🟢 **Payload dashboard diperkaya**: `commands` (list 93 + disabled + protected dari registry), `giveaways`, `polls`, `backups`, `warns` (50 terbaru), `modlogs` (50 terbaru), `keys` (per-guild).
+
+### Fixed
+
+- 🟡 **Data loss diam-diam di validator `products`**: `roleId` + `days` (dipasang via `/set-product-role`) IKUT TERHAPUS setiap kali daftar produk disimpan dari web — auto-role mapping hilang senyap. Kini keduanya dipertahankan + divalidasi (roleId = snowflake, days = 0-3650).
+- 🟡 **Build dashboard di dalam repo dengan .git parent ganda** (Thor/.git + my-project/.git): Turbopack gagal mendeteksi workspace root → fix `turbopack.root` eksplisit di `next.config.ts`.
+
+### Changed
+
+- 🟢 Registry 92 → **93 command** (`/commands`); unit test 639 → **670** (31 baru: 19 endpoint DASH API + 12 command manager & router gate). Baris help dikompak supaya embed "Semua Command" tetap ≤ 5800 karakter dengan 20 kategori utuh.
+- 🟢 Landing page dashboard: 12 → **16 kartu modul** (grid "Semua Modul").
+
 ## [3.18.0] — 2026-09-14
 
 ### Added — 🌐 DASHBOARD WEB MASUK REPO BOT (SATU REPO, SATU SETUP)

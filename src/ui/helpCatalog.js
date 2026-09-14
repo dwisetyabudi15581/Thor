@@ -118,7 +118,7 @@ const HELP_CATEGORIES = [
             '• `/warn user reason` — peringatan (3=mute 1j, 5=mute 1h, 7=kick)',
             '• `/warn-list user` — riwayat warn + sanksi · `/warn-remove` `/warn-clear`',
             '**Tindakan langsung:**',
-            '• `/timeout user menit reason` — mute (maks 40320 = 28 hari) · `/untimeout`',
+            '• `/timeout user menit reason` — mute (maks 28 hari) · `/untimeout`',
             '• `/kick` keluarkan · `/ban` blokir · `/unban` buka blokir',
             '• `/purge amount:100 user?` — hapus massal pesan (1-100)',
             '💡 Tercatat otomatis di `/warn-list` + log server. Role lebih tinggi kebal tindakan.'
@@ -195,7 +195,7 @@ const HELP_CATEGORIES = [
         name: 'Panel Tiket & Verifikasi',
         short: 'Pasang panel tiket & verifikasi member',
         lines: [
-            '• `/setup-ticket-panel` — panel multi-kategori (opsi: `title` `body` `categories` `color` `image` `footer` `channel` `use_dropdown`)',
+            '• `/setup-ticket-panel` — panel multi-kategori (`title` `body` `categories` `color` `image` `footer` `channel` `use_dropdown`)',
             '• `/list-panels` `/update-panel` `/refresh-panel` `/delete-panel` — kelola panel',
             '• `/setup-verify` — verifikasi member baru · `/set-verify-button` — kustom tombol',
             '• `/setup-ticket` — panel legacy 1 kategori'
@@ -226,7 +226,7 @@ const HELP_CATEGORIES = [
             '• `/add-category id:jasa label:"Jasa" emoji:🎮 style:Success requires_key:false`',
             '• `/update-category id:jasa label:...` — edit · `/remove-category` · `/list-categories`',
             '💡 Berproduk → dropdown; tanpa produk → langsung buat tiket.',
-            '**Auto-Split** 3 kategori: 🎫 TRANSAKSI (produk) · 🎫 BANTUAN (help/report) · 🤝 REKBER (deal). Nama custom: `ticketCategoryKey` `ticketCategoryNoKey` `midman.category`'
+            '**Auto-Split** 3 kategori: 🎫 TRANSAKSI (produk) · 🎫 BANTUAN · 🤝 REKBER (deal). Nama custom: `ticketCategoryKey` `ticketCategoryNoKey` `midman.category`'
         ],
         // v3.9.53: panduan lengkap mandiri (tampilan kategori = detail saja).
         detail: [
@@ -249,7 +249,7 @@ const HELP_CATEGORIES = [
             '• `/set-role midman @role` — WAJIB di-set sebelum deal dibuka',
             '• `/set-midman-fee mode:Persen value:5` — fee per deal (persen/flat, 0=gratis)',
             '• `/midman-deals` — semua deal aktif',
-            '💡 Escrow 3-pihak: pembeli ⇄ penjual, midman pegang dana. Buka lewat tombol **🤝 Rekber** di panel — 3 langkah sampai kedua pihak **Setuju Deal**.'
+            '💡 Escrow 3-pihak: pembeli ⇄ penjual, midman pegang dana. Buka via tombol **🤝 Rekber** di panel — 3 langkah sampai 2x **Setuju Deal**.'
         ],
         // v3.9.53: panduan lengkap mandiri (tampilan kategori = detail saja).
         detail: [
@@ -500,9 +500,10 @@ const HELP_CATEGORIES = [
         name: 'Backup & Maintenance',
         short: 'Backup data, restore, reset konfigurasi',
         lines: [
-            '• `/backup-now` — backup sekarang (auto 24 jam, maks 7 slot)',
+            '• `/backup-now` — backup sekarang (auto 24 jam, maks 7)',
             '• `/backup-list` `/restore-backup` — lihat & pulihkan',
-            '• `/reset-config` — ⚠️ HAPUS SEMUA konfigurasi (2-step)'
+            '• `/reset-config` — ⚠️ HAPUS SEMUA konfigurasi (2-step)',
+            '• `/commands` — 🆕 aktif/nonaktifkan command (ala Dyno)'
         ],
         // v3.9.53: panduan lengkap mandiri (tampilan kategori = detail saja).
         detail: [
@@ -511,6 +512,9 @@ const HELP_CATEGORIES = [
             '• `/backup-list` — slot backup (maks 7, terlama terdorong keluar) dengan nama + waktunya.',
             '• `/restore-backup name` — pulihkan semuanya dari satu slot. Backup keamanan baru dibuat DULU sebelum restore — selalu bisa mundur.',
             '• `/reset-config` — ⚠️ kembalikan SEMUA pengaturan ke awal (role, channel, produk, pesan). Konfirmasi 2 langkah — jalankan `/backup-now` dulu!',
+            '• `/commands list` — lihat command mana yang dinonaktifkan di server ini.',
+            '• `/commands toggle command enabled` — nonaktifkan (false) / aktifkan (true) satu command. Member yang memakai command nonaktif melihat pesan bahwa command dimatikan admin.',
+            '• `/commands enable-all` — aktifkan kembali semuanya sekaligus. Bisa juga lewat **web dashboard → modul Command Manager** (sama saja, satu data).',
             '❓ **Cache langsung bersih setelah restore** — bot memuat ulang data yang dipulihkan saat itu juga, tanpa restart.',
             '❓ **Filennya di mana?** `data/backups/` — jangan diedit manual; pakai command-nya.'
         ]

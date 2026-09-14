@@ -1640,6 +1640,47 @@ function getCommands() {
         {
             name: 'leaderboard-level',
             description: 'Top 10 member dengan level tertinggi (public)'
+        },
+        // v3.19.0: Command Manager ala Dyno — aktif/nonaktifkan command
+        // per-server dari Discord atau web dashboard. Command ini sendiri
+        // kebal disable (guard di handler + validator DASH API) supaya
+        // admin tidak pernah terkunci dari sisi Discord.
+        {
+            name: 'commands',
+            description: 'Kelola aktif/nonaktif command bot di server ini (ala Dyno)',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
+            options: [
+                {
+                    type: 1,
+                    name: 'list',
+                    description: 'Lihat command mana saja yang dinonaktifkan'
+                },
+                {
+                    type: 1,
+                    name: 'toggle',
+                    description: 'Aktifkan / nonaktifkan satu command',
+                    options: [
+                        {
+                            type: 3,
+                            name: 'command',
+                            description: 'Nama command tanpa slash (mis. giveaway)',
+                            required: true,
+                            max_length: 40
+                        },
+                        {
+                            type: 5,
+                            name: 'enabled',
+                            description: 'true = aktifkan, false = nonaktifkan',
+                            required: true
+                        }
+                    ]
+                },
+                {
+                    type: 1,
+                    name: 'enable-all',
+                    description: 'Aktifkan kembali SEMUA command yang dinonaktifkan'
+                }
+            ]
         }
     ];
 }

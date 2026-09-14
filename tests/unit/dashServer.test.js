@@ -28,7 +28,11 @@ const http = require('http');
 // === Snapshot & restore file data yang disentuh test ===
 const dataDir = path.join(__dirname, '..', '..', 'data');
 const configDir = path.join(dataDir, 'config');
-const TOUCHED = ['automod.json', 'responders.json', 'selfRoles.json', 'scheduledAnnouncements.json'];
+const TOUCHED = [
+    'automod.json', 'responders.json', 'selfRoles.json', 'scheduledAnnouncements.json',
+    // v3.19.0: file yang disentuh modul baru (giveaway/poll/keys/schedule)
+    'giveaways.json', 'polls.json', 'keys.json', 'scheduledRoles.json'
+];
 const backups = {}; // path -> konten lama (null = belum ada)
 let configDirBackup = null; // nama file lama di data/config/
 
@@ -88,6 +92,18 @@ function makeMockClient({ failChannelFetch = false } = {}) {
                 ['888000111222333444', { id: '888000111222333444', name: 'Member', color: 0, position: 1 }],
                 ['888000111222333555', { id: '888000111222333555', name: 'Admin', color: 0xff0000, position: 5 }]
             ])
+        },
+        // v3.19.0: modul keys perlu member fetch (role add/remove best-effort).
+        members: {
+            fetch: async (id) => ({
+                id,
+                user: { id, tag: 'Tester#0001' },
+                roles: {
+                    cache: new Map(),
+                    add: async () => {},
+                    remove: async () => {}
+                }
+            })
         }
     };
     return {
@@ -98,7 +114,8 @@ function makeMockClient({ failChannelFetch = false } = {}) {
                 if (failChannelFetch) throw new Error('channel hilang');
                 return {
                     id,
-                    send: async (opts) => ({ id: `msg_${Date.now()}`, opts }),
+                    type: 0, // v3.19.0: GuildText — endpoint giveaway/poll/embed cek tipe
+                    send: async (opts) => ({ id: `msg_${Date.now()}`, opts, url: 'https://discord.com/channels/x/y' }),
                     messages: {
                         fetch: async () => ({ edit: async () => {}, delete: async () => {} })
                     }
@@ -473,4 +490,239 @@ test('dash: POST selfroles gagal kirim → rollback entry', async () => {
 test('dash: endpoint tak dikenal → 404', async () => {
     const res = await api('GET', '/tidak-ada');
     assert.strictEqual(res.status, 404);
+});
+
+// ====================================================
+// === v3.19.0: Command Manager ===
+// ====================================================
+
+test('dash: payload dashboard memuat commands (list + disabled + protected)', async () => {
+    const res = await api('GET', `/guilds/${GUILD_ID}/dashboard`);
+    assert.strictEqual(res.status, 200);
+    const data = await res.json();
+    assert.strictEqual(data.commands.list.length, 93, 'semua command dari registry');
+    assert.ok(Array.isArray(data.commands.disabled), 'disabled selalu array');
+    assert.ok(data.commands.protected.includes('commands'), '/commands kebal disable');
+    // Setiap command punya domain yang valid (untuk grouping UI ala Dyno)
+    const domains = new Set(data.commands.list.map((c) => c.domain));
+    assert.ok(domains.has('config') && domains.has('moderation') && domains.has('leveling'));
+});
+
+test('dash: PUT /commands — simpan daftar disabled', async () => {
+    const res = await api('PUT', `/guilds/${GUILD_ID}/commands`, {
+        body: { disabled: ['giveaway', 'poll', 'giveaway'] } // duplikat harus didedupe
+    });
+    assert.strictEqual(res.status, 200);
+    const data = await res.json();
+    assert.deepStrictEqual(data.disabled, ['giveaway', 'poll']);
+    assert.strictEqual(data.total, 93);
+
+    // Terbaca balik di payload
+    const dash = await (await api('GET', `/guilds/${GUILD_ID}/dashboard`)).json();
+    assert.deepStrictEqual(dash.commands.disabled, ['giveaway', 'poll']);
+});
+
+test('dash: PUT /commands — command tak dikenal → 422', async () => {
+    const res = await api('PUT', `/guilds/${GUILD_ID}/commands`, {
+        body: { disabled: ['giveaway', 'command-palsu'] }
+    });
+    assert.strictEqual(res.status, 422);
+});
+
+test('dash: PUT /commands — /commands (protected) tidak bisa didisable → 422', async () => {
+    const res = await api('PUT', `/guilds/${GUILD_ID}/commands`, {
+        body: { disabled: ['commands'] }
+    });
+    assert.strictEqual(res.status, 422);
+});
+
+test('dash: PUT /commands — non-array → 422', async () => {
+    const res = await api('PUT', `/guilds/${GUILD_ID}/commands`, {
+        body: { disabled: 'giveaway' }
+    });
+    assert.strictEqual(res.status, 422);
+});
+
+test('dash: PUT /commands — reset ke kosong (aktifkan semua)', async () => {
+    const res = await api('PUT', `/guilds/${GUILD_ID}/commands`, { body: { disabled: [] } });
+    assert.strictEqual(res.status, 200);
+    assert.deepStrictEqual((await res.json()).disabled, []);
+});
+
+// ====================================================
+// === v3.19.0: Giveaway dari web ===
+// ====================================================
+
+test('dash: POST /giveaway — valid → 201 + entry tersimpan', async () => {
+    const res = await api('POST', `/guilds/${GUILD_ID}/giveaway`, {
+        body: {
+            channelId: '777000111222333444',
+            prize: 'VIP 30 Hari',
+            durationMin: 60,
+            winners: 2
+        }
+    });
+    assert.strictEqual(res.status, 201);
+    const data = await res.json();
+    assert.strictEqual(data.giveaway.prize, 'VIP 30 Hari');
+    assert.strictEqual(data.giveaway.winnersCount, 2);
+    assert.ok(data.giveaway.messageId, 'messageId tersimpan setelah kirim');
+});
+
+test('dash: POST /giveaway — durasi tidak valid → 400', async () => {
+    const res = await api('POST', `/guilds/${GUILD_ID}/giveaway`, {
+        body: { channelId: '777000111222333444', prize: 'X', durationMin: 0, winners: 1 }
+    });
+    assert.strictEqual(res.status, 400);
+});
+
+test('dash: POST /giveaway — prize kosong → 400', async () => {
+    const res = await api('POST', `/guilds/${GUILD_ID}/giveaway`, {
+        body: { channelId: '777000111222333444', prize: '', durationMin: 10, winners: 1 }
+    });
+    assert.strictEqual(res.status, 400);
+});
+
+// ====================================================
+// === v3.19.0: Poll dari web ===
+// ====================================================
+
+test('dash: POST /poll — valid → 201', async () => {
+    const res = await api('POST', `/guilds/${GUILD_ID}/poll`, {
+        body: {
+            channelId: '777000111222333444',
+            question: 'Makan siang apa hari ini?',
+            multiple: false,
+            options: [{ label: 'Nasi goreng' }, { label: 'Mie ayam' }, { label: 'Bakso' }]
+        }
+    });
+    assert.strictEqual(res.status, 201);
+    const data = await res.json();
+    assert.strictEqual(data.poll.options.length, 3);
+    assert.ok(data.poll.messageId);
+});
+
+test('dash: POST /poll — kurang dari 2 opsi → 400', async () => {
+    const res = await api('POST', `/guilds/${GUILD_ID}/poll`, {
+        body: { channelId: '777000111222333444', question: 'Q?', options: [{ label: 'satu saja' }] }
+    });
+    assert.strictEqual(res.status, 400);
+});
+
+// ====================================================
+// === v3.19.0: Embed dari web ===
+// ====================================================
+
+test('dash: POST /embed — valid → 201', async () => {
+    const res = await api('POST', `/guilds/${GUILD_ID}/embed`, {
+        body: {
+            channelId: '777000111222333444',
+            title: 'Pengumuman',
+            description: 'Halo **semua**!',
+            color: 0xf1c40f,
+            footer: 'Dari web dashboard'
+        }
+    });
+    assert.strictEqual(res.status, 201);
+    const data = await res.json();
+    assert.ok(data.messageId);
+});
+
+test('dash: POST /embed — tanpa title & description → 400', async () => {
+    const res = await api('POST', `/guilds/${GUILD_ID}/embed`, {
+        body: { channelId: '777000111222333444', title: '', description: '' }
+    });
+    assert.strictEqual(res.status, 400);
+});
+
+// ====================================================
+// === v3.19.0: Backup (restore nama invalid aman) ===
+// ====================================================
+
+test('dash: POST /backups/:name/restore — nama invalid → 422 (tanpa efek samping)', async () => {
+    const res = await api('POST', `/guilds/${GUILD_ID}/backups/bukan-format-valid/restore`, { body: {} });
+    assert.strictEqual(res.status, 422);
+});
+
+// ====================================================
+// === v3.19.0: Keys dari web ===
+// ====================================================
+
+test('dash: POST /keys — produk tanpa role → 422', async () => {
+    // Set produk TANPA roleId dulu
+    const put = await api('PUT', `/guilds/${GUILD_ID}/config`, {
+        body: { updates: { products: [{ label: 'VIP 30 Hari', value: 'vip30', price: '25000' }] } }
+    });
+    assert.strictEqual(put.status, 200, 'setup produk via config');
+
+    const res = await api('POST', `/guilds/${GUILD_ID}/keys`, {
+        body: { userId: '111222333444555666', value: 'vip30' }
+    });
+    assert.strictEqual(res.status, 422);
+});
+
+test('dash: POST /keys — produk dengan role → 201 + key terbaca di payload', async () => {
+    // Produk dengan roleId + days (v3.19.0: roleId kini dipertahankan validator)
+    const put = await api('PUT', `/guilds/${GUILD_ID}/config`, {
+        body: {
+            updates: {
+                products: [
+                    { label: 'VIP 30 Hari', value: 'vip30', price: '25000', roleId: '888000111222333444', days: 30 }
+                ]
+            }
+        }
+    });
+    assert.strictEqual(put.status, 200, 'setup produk + role');
+
+    const res = await api('POST', `/guilds/${GUILD_ID}/keys`, {
+        body: { userId: '111222333444555666', value: 'vip30', key: 'TESTK-EY001-ABCDE' }
+    });
+    assert.strictEqual(res.status, 201);
+    const data = await res.json();
+    assert.strictEqual(data.key, 'TESTK-EY001-ABCDE');
+    assert.ok(data.expireAt > Date.now(), 'expireAt dihitung dari days produk');
+
+    // Terbaca di payload dashboard
+    const dash = await (await api('GET', `/guilds/${GUILD_ID}/dashboard`)).json();
+    assert.strictEqual(dash.keys.length, 1);
+    assert.strictEqual(dash.keys[0].key, 'TESTK-EY001-ABCDE');
+});
+
+test('dash: DELETE /keys?userId — hapus key + schedule → 200', async () => {
+    const res = await api('DELETE', `/guilds/${GUILD_ID}/keys?userId=111222333444555666`);
+    assert.strictEqual(res.status, 200);
+    const data = await res.json();
+    assert.strictEqual(data.removedKeys, 1);
+
+    const dash = await (await api('GET', `/guilds/${GUILD_ID}/dashboard`)).json();
+    assert.strictEqual(dash.keys.length, 0, 'key hilang dari payload');
+});
+
+// ====================================================
+// === v3.19.0: Validator products pertahankan roleId ===
+// ====================================================
+
+test('dash: PUT config products — roleId & days dipertahankan (fix data loss v3.19.0)', async () => {
+    const put = await api('PUT', `/guilds/${GUILD_ID}/config`, {
+        body: {
+            updates: {
+                products: [
+                    { label: 'VIP', value: 'vip1', price: '10000', roleId: '888000111222333444', days: 7 }
+                ]
+            }
+        }
+    });
+    assert.strictEqual(put.status, 200);
+    const data = await put.json();
+    assert.strictEqual(data.config.products[0].roleId, '888000111222333444', 'roleId tidak hilang');
+    assert.strictEqual(data.config.products[0].days, 7, 'days tidak hilang');
+});
+
+test('dash: PUT config products — roleId tidak valid → 422', async () => {
+    const res = await api('PUT', `/guilds/${GUILD_ID}/config`, {
+        body: {
+            updates: { products: [{ label: 'VIP', value: 'vip2', price: '10000', roleId: 'bukan-id' }] }
+        }
+    });
+    assert.strictEqual(res.status, 422);
 });

@@ -30,6 +30,9 @@ import {
   UserCheck,
   Bot,
   Globe,
+  Gift,
+  KeyRound,
+  Vote,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -387,6 +390,10 @@ const MODULES = [
   { icon: Activity, name: "Server Stats", desc: "Counter member/boost/role live di nama channel." },
   { icon: UserCheck, name: "Verifikasi", desc: "Gate anti-raid dengan tombol verifikasi + role otomatis." },
   { icon: Globe, name: "Backup", desc: "Snapshot struktur server, restore saat darurat." },
+  { icon: Terminal, name: "Command Manager", desc: "Aktif/nonaktifkan tiap slash command per server — ala Dyno." },
+  { icon: Gift, name: "Giveaway", desc: "Mulai giveaway dengan tombol Join/Leave dari web." },
+  { icon: KeyRound, name: "Kunci VIP", desc: "Beri key produk — role + auto-expire otomatis." },
+  { icon: Vote, name: "Poll", desc: "Polling interaktif dengan tombol vote." },
 ];
 
 function ModulesSection() {
@@ -397,7 +404,7 @@ function ModulesSection() {
           Semua Modul
         </motion.p>
         <motion.h2 {...fadeUp} className="mt-3 max-w-2xl text-2xl md:text-3xl font-semibold tracking-tight text-zinc-50">
-          12 modul. Semuanya gratis. Semuanya bisa diatur dari web.
+          16 modul. Semuanya gratis. Semuanya bisa diatur dari web.
         </motion.h2>
         <div className="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {MODULES.map((m) => (

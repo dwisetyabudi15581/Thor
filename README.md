@@ -2,7 +2,7 @@
 
 Bot Discord serbaguna untuk komunitas apa pun — server jualan, gaming, content creator, hingga komunitas umum. Semua konfigurasi dapat diatur langsung dari Discord melalui slash command, tanpa mengedit file.
 
-> **v3.18.0** · 92 slash command · 639 unit test · discord.js v14 · Node.js 20+ · mode 1 server / publik (ala Dyno) · **100% GRATIS — semua fitur terbuka** · **+ dashboard web DI DALAM REPO INI**
+> **v3.19.0** · 93 slash command · 670 unit test · discord.js v14 · Node.js 20+ · mode 1 server / publik (ala Dyno) · **100% GRATIS — semua fitur terbuka** · **+ dashboard web DI DALAM REPO INI**
 >
 > 📖 **[Panduan Admin Lengkap](./docs/ADMIN_GUIDE.md)** — setup, operasional harian, troubleshooting
 > 📜 **[Changelog](./CHANGELOG.md)** — riwayat semua versi
@@ -11,11 +11,13 @@ Bot Discord serbaguna untuk komunitas apa pun — server jualan, gaming, content
 
 ## ✨ Fitur Utama
 
-### 🌐 Dashboard Web (ala Dyno) — v3.18.0: SATU REPO BOT + WEB
+### 🌐 Dashboard Web (ala Dyno) — v3.19.0: Command Manager + 18 Modul
 
 - **Dashboard web sekarang ada DI DALAM REPO INI** (folder `dashboard/` — Next.js 16 + Prisma SQLite, dependensi ramping 12 paket). Clone sekali → `./setup.sh` → `./start.sh` — bot + web jalan bersamaan, tanpa repo terpisah.
 - **Dua cara mengatur bot**: langsung via **slash command** di Discord, atau via **dashboard web** — keduanya menulis ke SATU sumber data yang sama (`data/config/<guildId>.json`), jadi tidak pernah bentrok.
-- **DASH API built-in** (`src/infra/dashServer.js`): HTTP API kecil di `127.0.0.1:8788` dengan token rahasia (`DASH_API_TOKEN`) — dibaca/tulis oleh dashboard web untuk 11 modul: Ringkasan, Umum, Tiket & Produk, AutoMod, Leveling, Rekber, Responder, Self-Role, Announce, Temp Voice, Server Stats.
+- **🧩 Command Manager ala Dyno (v3.19.0)** — aktif/nonaktifkan **tiap slash command per-server** dari web (pencarian + grup + aksi massal) atau dari Discord (`/commands list|toggle|enable-all`). Command nonaktif ditolak bot dengan pesan jelas; `/commands` sendiri kebal-disable supaya admin tidak pernah terkunci.
+- **18 modul dashboard** (v3.19.0, dari 11): + **Command Manager**, **Backup** (buat/restore dari web), **Moderasi** (riwayat warn + tindakan moderator), **Kunci VIP** (beri key produk + auto-expire), **Giveaway** (mulai dari web), **Embed** (kirim embed + pratinjau), **Poll** (polling interaktif).
+- **DASH API built-in** (`src/infra/dashServer.js`): HTTP API kecil di `127.0.0.1:8788` dengan token rahasia (`DASH_API_TOKEN`) — dibaca/tulis oleh dashboard web untuk semua modul di atas.
 - **Akses dijaga Discord**: user hanya melihat server tempat dia punya izin **Manage Server**; semua tulisan tervalidasi bot (whitelist section + guard prototype pollution) + tercatat siapa actor-nya.
 - **Bot 100% GRATIS** (v3.17.0): semua fitur terbuka untuk siapa pun — tidak ada tier, tidak ada langganan, tidak ada key aktivasi bot.
 
@@ -97,8 +99,8 @@ Thor/
 │   └── infra/                    # safeWrite, safeReply, userLock, permissions, auditLog
 ├── data/                         # Runtime JSON files (gitignored)
 ├── docs/                         # ADMIN_GUIDE + index dokumen
-├── tests/unit/                   # 639 unit test (node:test)
-├── dashboard/                    # 🌐 Dashboard web Next.js (v3.18.0 — satu repo)
+├── tests/unit/                   # 670 unit test (node:test)
+├── dashboard/                    # 🌐 Dashboard web Next.js (v3.19.0 — satu repo)
 ├── setup.sh · start.sh · dev.sh  # Instalasi & menjalankan bot + web bersamaan
 ├── ecosystem.config.cjs          # pm2: thor-bot + thor-dash 24/7
 ├── CHANGELOG.md                  # Riwayat versi
@@ -170,7 +172,7 @@ Panduan lengkap termasuk contoh produk, kategori custom, dan operasional harian:
 | ------------------ | -------------------------------------------------- |
 | `npm start`        | Jalankan bot                                       |
 | `npm run dev`      | Jalankan dengan nodemon (auto-restart)             |
-| `npm test`         | Jalankan semua unit test (639 test)                |
+| `npm test`         | Jalankan semua unit test (670 test)                |
 | `npm run lint`     | ESLint check                                       |
 | `npm run format`   | Prettier format semua file                         |
 | `./setup.sh`       | Install bot + dashboard + siapkan kedua .env       |

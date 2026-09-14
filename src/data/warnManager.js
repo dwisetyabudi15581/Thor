@@ -173,6 +173,24 @@ function getWarns(guildId, userId) {
     return all[keyFor(guildId, userId)] || [];
 }
 
+/**
+ * v3.19.0: semua warn di satu guild (untuk web dashboard — modul Moderasi).
+ * Store di-key per `${guildId}:${userId}`; fungsi ini flatten + sort terbaru
+ * dulu + cap `limit` supaya payload dashboard tidak membengkak di server
+ * dengan riwayat panjang.
+ */
+function getGuildWarns(guildId, limit = 50) {
+    const all = load();
+    const prefix = `${guildId}:`;
+    const out = [];
+    for (const [key, warns] of Object.entries(all)) {
+        if (!key.startsWith(prefix) || !Array.isArray(warns)) continue;
+        for (const w of warns) out.push(w);
+    }
+    out.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    return typeof limit === 'number' && limit > 0 ? out.slice(0, limit) : out;
+}
+
 function getWarnCount(guildId, userId) {
     return getWarns(guildId, userId).length;
 }
@@ -217,6 +235,7 @@ function markActionTaken(guildId, userId, warnId, action) {
 module.exports = {
     addWarn,
     getWarns,
+    getGuildWarns,
     getWarnCount,
     removeWarn,
     clearWarns,
