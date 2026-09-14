@@ -1,4 +1,4 @@
-# 📖 Admin Guide — Thor Bot v3.14.0
+# 📖 Admin Guide — Thor Bot v3.17.0
 
 Panduan lengkap untuk admin server Discord yang menjalankan bot ini — cocok untuk admin baru yang pertama kali setup, maupun admin yang sudah berjalan sebagai referensi harian.
 
@@ -1032,10 +1032,12 @@ Cooldown bersifat **per-user** — user A memicu tidak memengaruhi user B.
 
 ## 11. Riwayat Versi
 
-Riwayat lengkap semua versi (v3.9.0 – v3.14.0) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
+Riwayat lengkap semua versi (v3.9.0 – v3.17.0) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
 
 Ringkasan semua versi:
 
+- **v3.17.0** (2026-09-14) — 🗑️ **SISTEM LANGGANAN PREMIUM DIHAPUS BERSIH — BOT 100% GRATIS (permintaan pemilik)**. `premiumGate`, `guildPremiumManager`, command `/premium`, scheduler sweep langganan, variabel `PREMIUM_*`, dan payload premium DASH API dihapus menyeluruh. Registry 93 → **92 command**, test 674 → **639**. Router kembali murni permission-check tanpa gate. Fitur toko server (`/set-key`, produk, tiket) TETAP ADA — itu fitur jualan milik admin server masing-masing, bukan langganan bot.
+- **v3.16.0** (2026-09-14) — 🌐 **DASH API + DASHBOARD WEB ALA DYNO**. Bot menjalankan HTTP API localhost (token `DASH_API_TOKEN`) yang dibaca/tulis dashboard web Next.js — dua cara mengatur bot (slash command / web) menulis satu sumber data yang sama. Payload semua modul, PUT config dot-path tervalidasi, CRUD responders/announce/selfroles, semua tulis ter-audit actor-nya. +25 test.
 - **v3.14.0** (2026-09-13) — 🗑️ **STOK KEY MANDIRI DIHAPUS (permintaan user)**. Key premium user bersumber dari **website VIP eksternal** (dipakai login web) — key buatan bot tidak berlaku di sana, jadi `/gen-key` `/redeem` `/list-stock` `/revoke-key` + baris stok `/config-show` dihapus menyeluruh (command 96 → 92, test 644 → 616; 28 test fitur ikut dihapus). **Alur klasik `/set-key` di tiket tetap sah tanpa perubahan** — jembatan key web eksternal → role Discord. Monetisasi premium lanjut di web dashboard terpisah.
 - **v3.13.0** (2026-09-12) — 💰 **PREMIUM SAAS: STOK KEY + PENUKARAN MANDIRI**. Jualan key tanpa staf online 24 jam: `/gen-key` (admin) mengarang key stok crypto-secure `XXXXX-XXXXX-XXXXX`; pembeli menukar sendiri lewat `/redeem` (PUBLIK) → role + jadwal expire otomatis, **durasi mulai saat ditukar**. `/list-stock` + `/revoke-key` untuk kelola stok; baris stok muncul di `/config-show`. Keamanan: rate limiter 5 kegagalan/10 menit, pesan error generik (anti enumerasi), konsumsi atomic, key guild-scoped, key tak pernah bocor di audit. Registry 92 → 96 command; +28 test (total **644**). Tanpa breaking change — alur `/set-key` klasik tetap.
 - **v3.12.0** (2026-09-12) — 🎯 **SATU GUILD ID + FASE 3: MODE PUBLIK (ala Dyno)**. `.env` kini hanya punya **satu variabel server: `GUILD_ID`** — allowlist `ALLOWED_GUILD_IDS` (v3.11.0) dihapus total (anti bingung: ganti server = ganti satu baris). **Terisi** = mode 1 server (command instan, event server lain diabaikan); **kosong** = mode publik ala Dyno/MEE6 (command global — muncul otomatis di semua server ±1 jam, tanpa guild id manual). `src/infra/guild.js` disederhanakan (`getPrimaryGuildId()`); gerbang klaim config legacy + registrasi command + startup mengikuti; log skip join/leave kini menyebut `GUILD_ID`. Docs: seksi baru **12 — Mode Publik + Developer Portal** (cara kerja Dyno, OAuth2 URL + scope `applications.commands`, verifikasi Discord 100 server, checklist keamanan). Test `guildGuard.test.js` rewrite + 3 PIN ANTI-BINGUNG (allowlist tak boleh muncul lagi; `.env.example` satu variabel; kontrak ekspor). +3 test (total **616**).

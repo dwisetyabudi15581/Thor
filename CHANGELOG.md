@@ -5,6 +5,28 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 Legend: 🔴 critical · 🟠 high · 🟡 medium · 🟢 improvement
 
+## [3.17.0] — 2026-09-14
+
+### Removed — 🗑️ SISTEM LANGGANAN PREMIUM DIHAPUS BERSIH (BOT 100% GRATIS)
+
+Keputusan pemilik bot: monetisasi diurungkan — **semua fitur Thor kini gratis untuk siapa pun**, tanpa gate, tanpa key langganan, tanpa tier. Bot publik murni ala Dyno/MEE6.
+
+- 🟠 **Dihapus menyeluruh:** `src/infra/premiumGate.js` (gate free/premium + embed upsell), `src/data/guildPremiumManager.js` (langganan per-server + pool key), command `/premium` (status/activate/gen/keys/revoke), `processExpiredSubscriptions` dari scheduler + startup catch-up, 5 variabel `PREMIUM_*` dari `.env.example`, dan payload `premium` dari DASH API `/guilds/:id/dashboard`.
+- 🟠 **Registry 93 → 92 command.** Router kembali murni permission-check (admin/public/moderator) tanpa gate apa pun sebelumnya.
+- 🟢 **+Catatan desain:** fitur **toko server** (`/set-key`, `/list-keys`, produk, tiket, role VIP auto-expire) TIDAK dihapus — itu fitur jualan untuk admin server masing-masing (member jual produk sendiri), bukan langganan Thor.
+- 🟢 **Unit test 674 → 639** (35 test premium dihapus bersama modulnya: `premiumGate.test.js` 19 + `guildPremiumManager.test.js` 16). Dua kontrak jumlah command di-update ke 92.
+
+## [3.16.0] — 2026-09-14
+
+### Added — 🌐 DASH API UNTUK DASHBOARD WEB ALA DYNO
+
+Bot kini menjalankan HTTP API kecil (default `127.0.0.1:8788`) yang dibaca/tulis dashboard web Next.js — **dua cara mengatur bot: slash command langsung di Discord ATAU dashboard web**, keduanya menulis ke SATU sumber data yang sama (`data/config/<guildId>.json` + managers).
+
+- 🟢 **`src/infra/dashServer.js`:** token timing-safe (`DASH_API_TOKEN` — tanpa token, server tidak jalan), GET `health` / `guilds` / `guilds/:id/meta` / `guilds/:id/dashboard` (payload semua modul sekali tarik), PUT `config` (dot-path update dengan whitelist section + validasi tipe + guard prototype pollution), PUT `automod` (merge patch tervalidasi), CRUD `responders` / `announce` / `selfroles`, POST `serverstats/refresh`, DELETE `tempvoice`. Setiap tulis menyuntik identitas actor user web (audit).
+- 🟢 **Validasi bisnis tetap di bot** — dashboard tidak pernah bisa menulis bentuk data yang tidak sah lewat slash command pun (single source of truth).
+- 🟢 **Bot gratis untuk siapa pun** (premis v3.16.0; premium dianggap dormant) — dilanjutkan v3.17.0 dengan penghapusan total.
+- 🟢 **+25 unit test `dashServer.test.js`** (auth 401, payload, config valid/invalid/pollution, automod, responders 409, announce waktu lampau, selfrole + rollback, 404).
+
 ## [3.15.0] — 2026-09-14
 
 ### Added — 🔒 LANGGANAN PREMIUM PER-SERVER (ALA DYNO)

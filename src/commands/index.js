@@ -34,7 +34,6 @@
  *   - poll                               → poll.js
  *   - setup-tempvoice, tempvoice-remove  → tempvoice.js
  *   - send-message                       → send-message.js
- *   - premium (v3.15.0)                  → premium.js
  *
  * Status: FULL SPLIT (v3.9.9). Semua command sudah di-domain-kan.
  * handlers/commandHandler.js di-deprecate — tidak dipakai router ini lagi.
@@ -42,8 +41,6 @@
 
 const { MessageFlags, PermissionFlagsBits } = require('discord.js');
 const { isAdmin: checkIsAdmin } = require('../infra/permissions');
-// v3.15.0: gate premium per-server (ala Dyno).
-const { checkCommandAccess, buildUpsellEmbed } = require('../infra/premiumGate');
 
 // === Domain handlers ===
 // Tiap file export satu async function (interaction) → void.
@@ -77,8 +74,6 @@ const midmanHandler = require('./midman');
 const moderationHandler = require('./moderation');
 // v3.9.51: channel counter server stats live (/serverstats setup|remove|refresh)
 const serverstatsHandler = require('./serverstats');
-// v3.15.0: langganan premium per-server ala Dyno (/premium status|activate|gen|keys|revoke)
-const premiumHandler = require('./premium');
 
 const DOMAIN_HANDLERS = {
     help: helpHandler,
@@ -110,18 +105,13 @@ const DOMAIN_HANDLERS = {
     // v3.9.43
     moderation: moderationHandler,
     // v3.9.51: channel counter server stats live
-    serverstats: serverstatsHandler,
-    // v3.15.0
-    premium: premiumHandler
+    serverstats: serverstatsHandler
 };
 
 // Mapping commandName → domain key (di DOMAIN_HANDLERS).
 const COMMAND_TO_DOMAIN = {
     // help
     help: 'help',
-
-    // v3.15.0: premium (langganan per-server ala Dyno)
-    premium: 'premium',
 
     // config
     'setup-verify': 'config',
@@ -274,9 +264,7 @@ const COMMAND_TO_DOMAIN = {
 
 // Command yang boleh dipakai member biasa (bukan admin).
 // v3.9.13: tambah afk, afk-clear, rank, leaderboard-level (public community features)
-// v3.15.0: 'premium' publik — member bebas lihat status server (subcommand
-// berat di-guard di handler: activate=ManageGuild, gen/keys/revoke=pemilik bot).
-const PUBLIC_COMMANDS = ['leaderboard', 'my-stats', 'boosters', 'afk', 'afk-clear', 'rank', 'leaderboard-level', 'premium'];
+const PUBLIC_COMMANDS = ['leaderboard', 'my-stats', 'boosters', 'afk', 'afk-clear', 'rank', 'leaderboard-level'];
 
 // v3.9.43: command moderasi — boleh dipakai moderator non-admin selama punya
 // Discord permission yang sesuai (role hierarchy tetap dicek di handler).
@@ -296,18 +284,6 @@ const MODERATION_COMMANDS = {
  */
 async function routeCommand(interaction) {
     if (!interaction.isChatInputCommand()) return;
-
-    // === PREMIUM GATE (v3.15.0 — ala Dyno) ===
-    // Urutan sengaja SEBELUM permission check: pesan upsell premium lebih
-    // jelas buat member umum daripada pesan "Akses Ditolak admin". Gate
-    // hanya aktif di mode publik (lihat infra/premiumGate.js header).
-    const gate = checkCommandAccess(interaction);
-    if (!gate.allowed) {
-        return interaction.reply({
-            embeds: [buildUpsellEmbed(interaction.guild?.name)],
-            flags: MessageFlags.Ephemeral
-        });
-    }
 
     // === PERMISSION CHECK ===
     const modPerm = MODERATION_COMMANDS[interaction.commandName];
@@ -351,7 +327,5 @@ routeCommand.COMMAND_TO_DOMAIN = COMMAND_TO_DOMAIN;
 routeCommand.DOMAIN_HANDLERS = DOMAIN_HANDLERS;
 // v3.9.49: diekspor untuk test kontrak (daftar public command harus sinkron).
 routeCommand.PUBLIC_COMMANDS = PUBLIC_COMMANDS;
-// v3.15.0: diekspor untuk test gate premium.
-routeCommand.PREMIUM_GATE = require('../infra/premiumGate');
 
 module.exports = routeCommand;

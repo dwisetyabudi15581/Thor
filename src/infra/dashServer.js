@@ -53,7 +53,6 @@ const selfRoleManager = require('../data/selfRoleManager');
 const tempVoiceManager = require('../data/tempVoiceManager');
 const announcements = require('../data/scheduledAnnouncements');
 const serverstatsManager = require('../data/serverstatsManager');
-const guildPremiumManager = require('../data/guildPremiumManager');
 const { buildPanelEmbed, buildPanelComponents } = require('../ui/selfRolePanelBuilder');
 const { normalizeNewlines } = require('./text');
 
@@ -437,7 +436,6 @@ function createDashHandler({ client, token, log = () => {} }) {
 
     function dashboardPayload(guildId) {
         const tempVoiceCfg = tempVoiceManager.getGuildConfig(guildId);
-        const premium = guildPremiumManager.getGuildStatus(guildId);
         return {
             config: getConfig(guildId),
             automod: automodManager.getGuildConfig(guildId),
@@ -454,8 +452,7 @@ function createDashHandler({ client, token, log = () => {} }) {
             serverstats: {
                 enabled: serverstatsManager.isEnabled(),
                 config: serverstatsManager.getConfig()
-            },
-            premium // dormant (v3.16.0 free) — disertakan untuk transparansi status
+            }
         };
     }
 

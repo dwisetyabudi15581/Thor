@@ -2,7 +2,7 @@
 
 Bot Discord serbaguna untuk komunitas apa pun — server jualan, gaming, content creator, hingga komunitas umum. Semua konfigurasi dapat diatur langsung dari Discord melalui slash command, tanpa mengedit file.
 
-> **v3.15.0** · 93 slash command · 649 unit test · discord.js v14 · Node.js 18+ · mode 1 server / publik (ala Dyno)
+> **v3.17.0** · 92 slash command · 639 unit test · discord.js v14 · Node.js 18+ · mode 1 server / publik (ala Dyno) · **100% GRATIS — semua fitur terbuka**
 >
 > 📖 **[Panduan Admin Lengkap](./docs/ADMIN_GUIDE.md)** — setup, operasional harian, troubleshooting
 > 📜 **[Changelog](./CHANGELOG.md)** — riwayat semua versi
@@ -11,14 +11,12 @@ Bot Discord serbaguna untuk komunitas apa pun — server jualan, gaming, content
 
 ## ✨ Fitur Utama
 
-### 🔒 Premium per-Server (ala Dyno) — v3.15.0
+### 🌐 Dashboard Web (ala Dyno) — v3.16.0
 
-- **Model langganan SaaS**: server yang meng-invite bot dapat tier **Free** — moderasi inti (`/timeout` `/purge` `/kick` `/ban` `/warn`), verifikasi anti-raid, `/rank` `/leaderboard` `/my-stats` `/afk` `/boosters`. Akses **penuh** (tiket jualan, produk + key VIP, rekber, automod, giveaway, poll, self-role, temp voice, announce, backup, server stats) hanya untuk server berlangganan.
-- **`/premium status`** (publik — semua member bisa cek) · **`/premium activate <key>`** (admin server) · **`gen` `keys` `revoke`** (pemilik bot — `PREMIUM_ADMIN_IDS`).
-- **3 paket**: 30 hari / 90 hari / **Lifetime** (terkunci selamanya). Model **MAX EXTEND** — paket baru ditaruh setelah sisa terpanjang.
-- **Provider key ganda**: pool lokal (`/premium gen`, key crypto-secure identik format web) **atau** REST API dashboard web (`PREMIUM_API_URL` + `PREMIUM_API_TOKEN`, key scope `guild` dibuat admin di web).
-- **Auto-expire < 60 detik** (scheduler sweep) + notifikasi "Langganan Berakhir" ke server + cara perpanjang.
-- **Gate cerdas**: aktif otomatis hanya di mode publik (`GUILD_ID` kosong) — deployment 1 server tidak berubah; bypass `PREMIUM_BYPASS_GUILDS` untuk server rumah; embed upsell ephemeral yang menjelaskan cara aktivasi (bukan error).
+- **Dua cara mengatur bot**: langsung via **slash command** di Discord, atau via **dashboard web Next.js** — keduanya menulis ke SATU sumber data yang sama (`data/config/<guildId>.json`), jadi tidak pernah bentrok.
+- **DASH API built-in** (`src/infra/dashServer.js`): HTTP API kecil di `127.0.0.1:8788` dengan token rahasia (`DASH_API_TOKEN`) — dibaca/tulis oleh dashboard web untuk 11 modul: Umum, Tiket & Produk, AutoMod, Leveling, Rekber, Responder, Self-Role, Announce, Temp Voice, Server Stats, Ringkasan.
+- **Aman by default**: tanpa `DASH_API_TOKEN` server API tidak jalan; semua tulisan tervalidasi (whitelist section + guard prototype pollution) + tercatat siapa actor-nya.
+- **Bot 100% GRATIS** (v3.17.0): semua fitur terbuka untuk siapa pun — tidak ada tier, tidak ada langganan, tidak ada key aktivasi bot.
 
 ### 🎫 Tiket & Transaksi
 
@@ -90,7 +88,7 @@ Thor/
 │   └── infra/                    # safeWrite, safeReply, userLock, permissions, auditLog
 ├── data/                         # Runtime JSON files (gitignored)
 ├── docs/                         # ADMIN_GUIDE + index dokumen
-├── tests/unit/                   # 486 unit test (node:test)
+├── tests/unit/                   # 639 unit test (node:test)
 ├── CHANGELOG.md                  # Riwayat versi
 ├── .env.example
 ├── eslint.config.js
@@ -162,7 +160,7 @@ Panduan lengkap termasuk contoh produk, kategori custom, dan operasional harian:
 | ---------------- | -------------------------------------- |
 | `npm start`      | Jalankan bot                           |
 | `npm run dev`    | Jalankan dengan nodemon (auto-restart) |
-| `npm test`       | Jalankan semua unit test (616 test)    |
+| `npm test`       | Jalankan semua unit test (639 test)    |
 | `npm run lint`   | ESLint check                           |
 | `npm run format` | Prettier format semua file             |
 

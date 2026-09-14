@@ -16,8 +16,7 @@
  *     kalau channel fetch gagal
  *
  * Server test jalan di ephemeral port (listen(0)) dengan client mock —
- * tidak menyentuh Discord. File data produksi di-snapshot & restore
- * (pola guildPremiumManager.test.js).
+ * tidak menyentuh Discord. File data produksi di-snapshot & restore.
  */
 
 const test = require('node:test');
@@ -191,7 +190,7 @@ test('dash: GET /guilds/:id/dashboard — semua modul hadir', async () => {
     const res = await api('GET', `/guilds/${GUILD_ID}/dashboard`);
     assert.strictEqual(res.status, 200);
     const data = await res.json();
-    for (const key of ['config', 'automod', 'responders', 'selfroles', 'tempvoice', 'announces', 'serverstats', 'premium']) {
+    for (const key of ['config', 'automod', 'responders', 'selfroles', 'tempvoice', 'announces', 'serverstats']) {
         assert.ok(key in data, `payload.${key} harus ada`);
     }
     // Config ter-merge dengan DEFAULTS (pola getConfig)
