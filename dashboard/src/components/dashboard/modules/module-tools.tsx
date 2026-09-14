@@ -2,6 +2,10 @@
 
 // Modul-alat dashboard v3.19.0 — Command Manager (ala Dyno) + modul baru:
 // Giveaway, Poll, Embed, Backup, Moderasi (warn/modlog), Keys (VIP).
+// v3.20.0 — Embed Builder LENGKAP (paritas /embed-builder: author, fields,
+// image, thumbnail, timestamp + pratinjau live gaya Discord) + modul
+// Custom Command: bikin command sendiri di web → jadi slash command ASLI
+// di server (ala Custom Commands Dyno).
 //
 // Semua aksi LANGSUNG lewat call() → proxy web → DASH API bot (tanpa
 // SaveBar), mengikuti kontrak ModuleActionProps di module-actions.tsx.
@@ -13,14 +17,19 @@ import { useMemo, useState } from "react";
 import {
   Plus, Trash2, Loader2, RefreshCw, Search, ToggleLeft, ToggleRight,
   CheckCircle2, XCircle, KeyRound, Gift, BarChart3, ShieldAlert, Download,
+  Wand2, Pencil, RotateCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Field, Section, TextInput, TextArea, Toggle, Select, ChannelSelect,
   RoleSelect, ColorInput, Pill, channelLabel, roleLabel,
 } from "../fields";
-import type { DashboardPayload, GuildMeta } from "@/lib/bot-api";
+import type { CustomCommand, DashboardPayload, GuildMeta } from "@/lib/bot-api";
 import type { ModuleActionProps } from "./module-actions";
+import {
+  EmbedEditor, EmbedLivePreview, EMPTY_EMBED, embedDraftFromDef, embedDraftToApi,
+  isEmbedDraftEmpty, type EmbedDraft,
+} from "./embed-editor";
 
 /* ============================================================
  * Label domain command (grouping ala Dyno)
@@ -52,6 +61,9 @@ const DOMAIN_META: Array<{ key: string; label: string }> = [
   { key: "serverstats", label: "Server Stats" },
   { key: "tempvoice", label: "Temp Voice" },
   { key: "afk", label: "AFK" },
+  // v3.20.0: command buatan admin (dibuat lewat web) — tampil di paling
+  // bawah supaya jelas mana bawaan mana buatan sendiri.
+  { key: "custom", label: "Command Kustom" },
 ];
 
 function domainLabel(key: string) {
@@ -483,28 +495,21 @@ export function PollModule({ draft, meta, call, refresh, toast }: ModuleActionPr
 }
 
 /* ============================================================
- * MODUL: Embed Builder (kirim embed)
+ * MODUL: Embed Builder (kirim embed LENGKAP — paritas /embed-builder)
  * ============================================================ */
 
 export function EmbedModule({ meta, call, toast }: ModuleActionProps) {
   const [channelId, setChannelId] = useState<string | null>(null);
-  const [title, setTitle] = useState("");
-  const [description, setDescription] = useState("");
-  const [footer, setFooter] = useState("");
-  const [color, setColor] = useState(0x5865f2);
+  const [draftEmbed, setDraftEmbed] = useState<EmbedDraft>({ ...EMPTY_EMBED, fields: [] });
   const [busy, setBusy] = useState(false);
   const [lastUrl, setLastUrl] = useState<string | null>(null);
 
   async function send() {
     setBusy(true);
     try {
-      const res = (await call("embed", "POST", { channelId, title: title.trim(), description: description.trim(), footer: footer.trim() || undefined, color })) as {
-        url?: string;
-      };
+      const api = embedDraftToApi(draftEmbed);
+      const res = (await call("embed", "POST", { channelId, ...api })) as { url?: string };
       setLastUrl(res?.url ?? null);
-      setTitle("");
-      setDescription("");
-      setFooter("");
       toast("Embed terkirim ke channel.");
     } catch (e) {
       toast(e instanceof Error ? e.message : "Gagal mengirim embed.", "err");
@@ -515,46 +520,40 @@ export function EmbedModule({ meta, call, toast }: ModuleActionProps) {
 
   return (
     <div className="space-y-5">
-      <Section title="Kirim Embed" desc="Alternatif cepat /embed-builder & /send-message — cocok untuk pengumuman satu kali.">
-        <Field label="Channel">
+      <Section
+        title="Kirim Embed"
+        desc="Bikin embed lengkap di sini lalu kirim ke channel mana pun — persis kemampuan /embed-builder & /send-message, tanpa buka Discord."
+      >
+        <Field label="Channel Tujuan">
           <ChannelSelect value={channelId} onChange={setChannelId} channels={meta.channels} />
         </Field>
-        <Field label="Judul" hint="Opsional kalau description diisi. Maks 256.">
-          <TextInput value={title} onChange={setTitle} placeholder="Judul embed" />
-        </Field>
-        <Field label="Warna">
-          <ColorInput value={color} onChange={setColor} />
-        </Field>
-        <div className="md:col-span-2">
-          <Field label="Isi (description)" hint="Mendukung **bold**, *italic*, dan baris baru. Maks 4096.">
-            <TextArea value={description} onChange={setDescription} rows={5} placeholder="Tulis isi pesan di sini…" />
-          </Field>
-        </div>
-        <div className="md:col-span-2">
-          <Field label="Footer (opsional)">
-            <TextInput value={footer} onChange={setFooter} placeholder="mis. Dari Admin" />
-          </Field>
-        </div>
-        <div className="flex items-end md:col-span-2">
+        <div className="flex items-end gap-2">
           <Button
             onClick={send}
-            disabled={busy || !channelId || (!title.trim() && !description.trim())}
-            className="w-full bg-amber-400 text-zinc-950 hover:bg-amber-300 font-semibold"
+            disabled={busy || !channelId || (!draftEmbed.content.trim() && isEmbedDraftEmpty(draftEmbed))}
+            className="bg-amber-400 text-zinc-950 hover:bg-amber-300 font-semibold"
           >
             {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Plus className="h-4 w-4" aria-hidden="true" />}
             Kirim Embed
           </Button>
+          <Button
+            variant="outline"
+            onClick={() => setDraftEmbed({ ...EMPTY_EMBED, fields: [] })}
+            disabled={busy}
+            className="border-zinc-700 bg-transparent text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
+          >
+            <RotateCcw className="h-4 w-4" aria-hidden="true" /> Reset
+          </Button>
         </div>
       </Section>
 
+      <EmbedEditor value={draftEmbed} onChange={setDraftEmbed} />
+
       <section className="rounded-2xl border border-zinc-800/80 bg-zinc-900/30 p-5 md:p-6">
-        <h3 className="text-sm font-semibold text-zinc-100">Pratinjau</h3>
-        <div className="mt-4 overflow-hidden rounded-lg border-l-4 bg-zinc-800/40 p-4" style={{ borderColor: `#${color.toString(16).padStart(6, "0")}` }}>
-          <p className="text-sm font-semibold text-zinc-100">{title.trim() || <span className="text-zinc-600">(tanpa judul)</span>}</p>
-          <p className="mt-1.5 whitespace-pre-wrap text-[13px] leading-relaxed text-zinc-300">
-            {description.trim() || <span className="text-zinc-600">(tanpa isi)</span>}
-          </p>
-          {footer.trim() ? <p className="mt-3 text-[11px] text-zinc-500">{footer.trim()}</p> : null}
+        <h3 className="text-sm font-semibold text-zinc-100">Pratinjau (tampilan Discord)</h3>
+        <p className="mt-1 text-xs text-zinc-500">Perkiraan tampilan pesan di Discord — formatasi markdown (bold/italic) dirender Discord saat kirim.</p>
+        <div className="mt-4">
+          <EmbedLivePreview draft={draftEmbed} />
         </div>
         {lastUrl ? (
           <a href={lastUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-1.5 text-xs text-amber-300 hover:underline">
@@ -562,6 +561,241 @@ export function EmbedModule({ meta, call, toast }: ModuleActionProps) {
           </a>
         ) : null}
       </section>
+    </div>
+  );
+}
+
+/* ============================================================
+ * MODUL: Custom Command (bikin command sendiri → slash command asli)
+ * ============================================================ */
+
+type CustomFormState = {
+  name: string;
+  description: string;
+  ephemeral: boolean;
+  embedDraft: EmbedDraft;
+};
+
+function formFromCommand(c: CustomCommand): CustomFormState {
+  return {
+    name: c.name,
+    description: c.description,
+    ephemeral: c.ephemeral === true,
+    embedDraft: { ...embedDraftFromDef(c.embed), content: c.content ?? "" },
+  };
+}
+
+function emptyForm(): CustomFormState {
+  return { name: "", description: "", ephemeral: false, embedDraft: { ...EMPTY_EMBED, fields: [] } };
+}
+
+export function CustomCommandsModule({ draft, call, refresh, toast }: ModuleActionProps) {
+  const [form, setForm] = useState<CustomFormState | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
+  const customCommands = draft.customCommands ?? [];
+  const maxReached = customCommands.length >= 20;
+
+  async function save() {
+    if (!form) return;
+    setBusy(true);
+    try {
+      const api = embedDraftToApi(form.embedDraft);
+      const res = (await call("custom-commands", "POST", {
+        name: form.name.trim().toLowerCase(),
+        description: form.description.trim(),
+        ephemeral: form.ephemeral,
+        content: api.content,
+        embed: api.embed,
+      })) as { synced?: boolean; syncError?: string; command?: { name: string } };
+      const name = res?.command?.name ?? form.name.trim().toLowerCase();
+      await refresh();
+      setForm(null);
+      toast(
+        res?.synced === false
+          ? `/${name} tersimpan, TAPI gagal sinkron ke Discord: ${res.syncError ?? "coba restart bot"} — data aman.`
+          : `/${name} tersimpan & terdaftar di Discord — member langsung bisa pakai.`
+      );
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Gagal menyimpan custom command.", "err");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove(name: string) {
+    setBusy(true);
+    try {
+      const res = (await call(`custom-commands/${encodeURIComponent(name)}`, "DELETE")) as { synced?: boolean; syncError?: string };
+      await refresh();
+      setConfirmDelete(null);
+      toast(res?.synced === false ? `/${name} dihapus, tapi sinkron Discord gagal — restart bot untuk menyegarkan.` : `/${name} dihapus dari server.`);
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Gagal menghapus.", "err");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const canSave =
+    !!form &&
+    /^[a-z0-9_-]{1,32}$/.test(form.name.trim().toLowerCase()) &&
+    form.description.trim().length > 0 &&
+    form.description.trim().length <= 100 &&
+    (form.embedDraft.content.trim().length > 0 || !isEmbedDraftEmpty(form.embedDraft));
+
+  return (
+    <div className="space-y-5">
+      <Section
+        title="Custom Command"
+        desc={
+          <>
+            Bikin slash command sendiri untuk server ini — <span className="text-zinc-300">persis fitur Custom Commands Dyno</span>.
+            Setelah disimpan, command langsung terdaftar di Discord (biasanya &lt; 1 menit) dan bisa dipakai semua member.
+          </>
+        }
+      >
+        <div className="flex flex-wrap items-end gap-2 md:col-span-2">
+          <Button
+            onClick={() => setForm(emptyForm())}
+            disabled={busy || maxReached}
+            className="bg-amber-400 text-zinc-950 hover:bg-amber-300 font-semibold"
+          >
+            <Wand2 className="h-4 w-4" aria-hidden="true" /> Command Baru
+          </Button>
+          {maxReached ? <Pill tone="red">Maks 20 tercapai</Pill> : <Pill>{customCommands.length}/20 dibuat</Pill>}
+        </div>
+        <div className="md:col-span-2">
+          <p className="text-[11px] leading-relaxed text-zinc-500">
+            Nonaktifkan sementara lewat Command Manager (atau <code className="rounded bg-zinc-800 px-1 text-[10px] text-amber-200">/commands toggle</code>),
+            hapus permanen lewat tombol di daftar. Semua perubahan otomatis sinkron ke Discord.
+          </p>
+        </div>
+      </Section>
+
+      {/* Daftar command yang sudah ada */}
+      <section className="rounded-2xl border border-zinc-800/80 bg-zinc-900/30 p-5">
+        <h3 className="text-sm font-semibold text-zinc-100">
+          Daftar Custom Command <span className="font-normal text-zinc-500">({customCommands.length})</span>
+        </h3>
+        {customCommands.length === 0 ? (
+          <p className="mt-3 rounded-lg border border-dashed border-zinc-800 px-4 py-3 text-xs text-zinc-500">
+            Belum ada custom command. Contoh pemakaian: <code className="text-amber-200">/sosmed</code> (link sosial media),{" "}
+            <code className="text-amber-200">/harga</code> (price list), <code className="text-amber-200">/aturan</code> (rules server) — balasannya bisa teks, embed, atau keduanya.
+          </p>
+        ) : (
+          <div className="mt-4 space-y-2">
+            {customCommands.map((c) => (
+              <div key={c.name} className="rounded-xl border border-zinc-800/80 bg-zinc-950/40 p-3.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="font-mono text-sm font-semibold text-amber-200">/{c.name}</p>
+                    <p className="mt-0.5 truncate text-xs text-zinc-400">{c.description}</p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {c.content?.trim() ? <Pill>teks</Pill> : null}
+                    {c.embed && !isEmbedDraftEmpty(embedDraftFromDef(c.embed)) ? <Pill>embed</Pill> : null}
+                    {c.ephemeral ? <Pill tone="amber">ephemeral</Pill> : null}
+                    {draft.commands.disabled.includes(c.name) ? <Pill tone="red">nonaktif</Pill> : null}
+                    <span className="text-[10px] text-zinc-600">{c.useCount ?? 0}x dipakai</span>
+                  </div>
+                </div>
+                <div className="mt-2.5 flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-[10px] text-zinc-600">
+                    dibuat {c.createdByTag ?? "—"} · diubah {fmtDate(c.updatedAt)}
+                  </span>
+                  <div className="flex gap-1.5">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setForm(formFromCommand(c))}
+                      disabled={busy}
+                      className="h-8 border-zinc-700 bg-transparent text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100"
+                    >
+                      <Pencil className="h-3.5 w-3.5" aria-hidden="true" /> Edit
+                    </Button>
+                    {confirmDelete === c.name ? (
+                      <>
+                        <Button variant="outline" size="sm" onClick={() => setConfirmDelete(null)} disabled={busy} className="h-8 border-zinc-700 bg-transparent text-zinc-400">
+                          Batal
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => void remove(c.name)} disabled={busy} className="h-8 border-red-500/40 bg-red-950/30 text-red-300 hover:bg-red-950/50">
+                          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" /> Yakin hapus
+                        </Button>
+                      </>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setConfirmDelete(c.name)}
+                        disabled={busy}
+                        className="h-8 border-zinc-700 bg-transparent text-red-300/90 hover:bg-red-950/40 hover:text-red-300"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" aria-hidden="true" /> Hapus
+                      </Button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Form buat/edit */}
+      {form ? (
+        <>
+          <Section title={form.name && customCommands.some((c) => c.name === form.name) ? `Edit /${form.name}` : "Command Baru"}>
+            <Field
+              label="Nama Command"
+              hint="Huruf kecil, angka, - dan _ (maks 32). Jadi /<nama> di Discord. Tidak boleh sama dengan command bawaan."
+            >
+              <TextInput
+                value={form.name}
+                onChange={(v) => setForm({ ...form, name: v.toLowerCase() })}
+                placeholder="mis. sosmed"
+                invalid={form.name.length > 0 && !/^[a-z0-9_-]{1,32}$/.test(form.name)}
+              />
+            </Field>
+            <Field label="Deskripsi" hint="Tampil di Discord saat member mengetik command (1-100 karakter).">
+              <TextInput
+                value={form.description}
+                onChange={(v) => setForm({ ...form, description: v })}
+                placeholder="mis. Link semua sosial media server"
+                invalid={form.description.length > 100}
+              />
+            </Field>
+            <div className="md:col-span-2">
+              <Toggle
+                checked={form.ephemeral}
+                onChange={(v) => setForm({ ...form, ephemeral: v })}
+                label="Balasan hanya terlihat pemakai (ephemeral)"
+                desc="Aktif = balasan muncul sebentar cuma buat yang memakai command (cocok untuk info pribadi). Nonaktif = balasan terlihat semua orang di channel."
+              />
+            </div>
+          </Section>
+
+          <p className="text-[13px] font-medium text-zinc-300">Balasan Command</p>
+          <EmbedEditor value={form.embedDraft} onChange={(d) => setForm({ ...form, embedDraft: d })} />
+
+          <section className="rounded-2xl border border-zinc-800/80 bg-zinc-900/30 p-5 md:p-6">
+            <h3 className="text-sm font-semibold text-zinc-100">Pratinjau (tampilan Discord)</h3>
+            <div className="mt-4">
+              <EmbedLivePreview draft={form.embedDraft} />
+            </div>
+          </section>
+
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={() => void save()} disabled={busy || !canSave} className="bg-amber-400 text-zinc-950 hover:bg-amber-300 font-semibold">
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <CheckCircle2 className="h-4 w-4" aria-hidden="true" />}
+              Simpan &amp; Daftarkan ke Discord
+            </Button>
+            <Button variant="outline" onClick={() => setForm(null)} disabled={busy} className="border-zinc-700 bg-transparent text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100">
+              Batal
+            </Button>
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }

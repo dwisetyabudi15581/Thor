@@ -33,6 +33,8 @@ import {
   Gift,
   KeyRound,
   Vote,
+  SquarePen,
+  Wand2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -291,7 +293,7 @@ function Hero({ config, busy, onLoginDiscord }: LandingProps) {
         <div className="mt-14 grid grid-cols-2 divide-zinc-800/70 border-y border-zinc-800/70 md:grid-cols-4 md:divide-x">
           {[
             { v: "90+", l: "slash command siap pakai" },
-            { v: "12", l: "modul yang bisa diatur dari web" },
+            { v: "18", l: "modul yang bisa diatur dari web" },
             { v: "670+", l: "unit test — stabil & teruji" },
             { v: "Rp 0", l: "gratis selamanya, tanpa tier" },
           ].map((s) => (
@@ -393,6 +395,8 @@ const MODULES = [
   { icon: Terminal, name: "Command Manager", desc: "Aktif/nonaktifkan tiap slash command per server — ala Dyno." },
   { icon: Gift, name: "Giveaway", desc: "Mulai giveaway dengan tombol Join/Leave dari web." },
   { icon: KeyRound, name: "Kunci VIP", desc: "Beri key produk — role + auto-expire otomatis." },
+  { icon: SquarePen, name: "Embed Builder", desc: "Bikin embed lengkap dengan pratinjau live ala Discord, kirim ke channel mana pun." },
+  { icon: Wand2, name: "Custom Command", desc: "Bikin slash command sendiri dari web — langsung terdaftar di Discord untuk member." },
   { icon: Vote, name: "Poll", desc: "Polling interaktif dengan tombol vote." },
 ];
 
@@ -404,7 +408,7 @@ function ModulesSection() {
           Semua Modul
         </motion.p>
         <motion.h2 {...fadeUp} className="mt-3 max-w-2xl text-2xl md:text-3xl font-semibold tracking-tight text-zinc-50">
-          16 modul. Semuanya gratis. Semuanya bisa diatur dari web.
+          18 modul. Semuanya gratis. Semuanya bisa diatur dari web.
         </motion.h2>
         <div className="mt-10 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {MODULES.map((m) => (

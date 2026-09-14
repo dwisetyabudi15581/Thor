@@ -76,6 +76,10 @@ const moderationHandler = require('./moderation');
 const serverstatsHandler = require('./serverstats');
 // v3.19.0: Command Manager ala Dyno (/commands list|toggle|enable-all)
 const commandsHandler = require('./commands');
+// v3.20.0: custom command buatan admin (dibuat dari web dashboard) —
+// dinamis per-guild, tidak bisa di-map statis di COMMAND_TO_DOMAIN.
+const customHandler = require('./custom');
+const customCommandManager = require('../data/customCommandManager');
 const { getConfig } = require('../data/configManager');
 
 const DOMAIN_HANDLERS = {
@@ -297,10 +301,17 @@ async function routeCommand(interaction) {
     const modPerm = MODERATION_COMMANDS[interaction.commandName];
     const allowedModerator =
         modPerm && interaction.member?.permissions?.has(modPerm);
+    // v3.20.0: custom command = command PUBLIK by default (informasi server,
+    // dibuat admin untuk dipakai semua member — persis model Custom Commands
+    // Dyno). Lookup murah: cache read-through di customCommandManager.
+    const isCustomCommand =
+        !!interaction.guildId &&
+        !!customCommandManager.getCommand(interaction.guildId, interaction.commandName);
     if (
         !checkIsAdmin(interaction.member) &&
         !PUBLIC_COMMANDS.includes(interaction.commandName) &&
-        !allowedModerator
+        !allowedModerator &&
+        !isCustomCommand
     ) {
         return interaction.reply({
             content:
@@ -338,6 +349,16 @@ async function routeCommand(interaction) {
     const handler = domain ? DOMAIN_HANDLERS[domain] : null;
     if (handler) {
         return handler(interaction);
+    }
+
+    // === v3.20.0: CUSTOM COMMAND DISPATCH ===
+    // Nama tidak ada di mapping bawaan → cek apakah ini custom command guild
+    // ini (dibuat admin dari web dashboard). Gate disabledCommands di atas
+    // sudah berjalan duluan — command kustom yang dinonaktifkan admin via
+    // Command Manager ditolak dengan pesan yang sama. Paritas penuh:
+    // enable/disable custom command bisa dari web ATAU /commands toggle.
+    if (isCustomCommand) {
+        return customHandler(interaction);
     }
 
     // Unknown command — kirim ephemeral error supaya admin tahu command belum didukung.

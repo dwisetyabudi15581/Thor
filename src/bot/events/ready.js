@@ -240,6 +240,22 @@ async function onReady(client) {
         }
     }
 
+    // === 1c. v3.20.0: sinkron custom command per-guild (dibuat dari web) ===
+    // Custom command disimpan di data/customCommands/<guildId>.json dan
+    // didaftarkan di LEVEL GUILD (per-server, persis model Dyno). File bisa
+    // berubah saat bot mati (restore backup / edit manual) → sinkron startup
+    // mencegah drift: daftar Discord disamakan dengan file data. Guild tanpa
+    // custom command dilewati (tidak ada yang perlu disinkron).
+    try {
+        const { syncAllGuilds } = require('../../services/customCommandSync');
+        const res = await syncAllGuilds(client, (m) => console.log(m));
+        if (res.synced > 0 || res.failed > 0) {
+            console.log(`🧪 Custom command sinkron: ${res.synced} guild OK, ${res.failed} gagal.`);
+        }
+    } catch (err) {
+        console.warn('⚠️ Sinkronisasi custom command startup gagal:', err.message);
+    }
+
     // v3.9.24 FIX (PENTING): langkah-langkah startup di bawah sebelumnya dibungkus
     // SATU try/catch raksasa. Kalau langkah awal throw (mis. removeExpiredKeys →
     // saveKeys → disk full), maka auto-backup, auto-flush, dan SELURUH scheduler

@@ -5,6 +5,24 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 Legend: 🔴 critical · 🟠 high · 🟡 medium · 🟢 improvement
 
+## [3.20.0] — 2026-09-15
+
+### Added — 🪄 CUSTOM COMMAND DARI WEB + EMBED BUILDER LENGKAP (BUAT DI WEB, TERUSKAN KE SERVER)
+
+Ala Dyno: sekarang admin bisa MEMBUAT konten dari dashboard web lalu bot meneruskannya ke server — custom command jadi slash command ASLI, embed dibangun lengkap dengan pratinjau live ala Discord.
+
+- 🟢 **Custom Command (modul dashboard baru, 18 → 19)**: bikin slash command sendiri dari web — nama, deskripsi, balasan teks + embed, opsi ephemeral. Setelah disimpan, command **otomatis terdaftar di Discord** (registrasi per-guild via `guild.commands.set`, muncul ± 1 menit) dan bisa dipakai semua member. Maks 20 per server; nama tidak boleh bentrok command bawaan; semua validasi terpusat di `customCommandManager`.
+- 🟢 **Sinkronisasi otomatis dua arah**: create/update/delete dari web → registrasi Discord diperbarui seketika (`customCommandSync.js`); startup juga sinkron (anti drift setelah restore backup). Mode 1 server: custom digabung dengan command bawaan di guild utama; mode publik: custom didaftarkan per-guild (bawaan tetap global).
+- 🟢 **Paritas Command Manager**: custom command ikut muncul di daftar Command Manager web DAN `/commands toggle` di Discord — bisa dinonaktifkan sementara dari mana saja (`normalizeDisabledList` kini menerima nama custom guild itu).
+- 🟢 **Embed Builder lengkap (upgrade modul Embed)**: paritas penuh `/embed-builder` — teks di luar embed, author (nama + icon URL), title, warna, **fields** (tambah/hapus/geser/sejajar 3-per-baris, maks 25), thumbnail, image, footer (teks + icon), timestamp. **Pratinjau live meniru chat Discord** (avatar bot, badge BOT, warna sidebar, layout fields inline) — admin tahu persis hasilnya sebelum kirim.
+- 🟢 **Validasi embed terpusat** (`embedPayload.js`): semua batas Discord API ditegakkan di SATU tempat (title 256, description 4096, footer 2048, fields 25×(256/1024), total 6000, URL http/https) — dipakai bersama oleh endpoint embed web, custom command, dan router — tidak ada perbedaan aturan antara web dan Discord.
+- 🟢 **DASH API baru**: `POST /guilds/:id/custom-commands` (upsert + sinkron), `DELETE /guilds/:id/custom-commands/:name` (hapus + sinkron); `POST /guilds/:id/embed` kini menerima bentuk lengkap (`content` + objek `embed` — field datar lama tetap kompatibel). Payload dashboard + `customCommands` (definisi lengkap) + entri custom di `commands.list`.
+- 🟢 **Data `data/customCommands/<guildId>.json`** per-server (read-through cache 15s, pola responderManager); **ikut backup/restore** (`FILES_TO_BACKUP` + invalidasi cache pasca-restore — tanpa ini restore senyap menghapus semua custom command).
+
+### Changed
+
+- 🟢 Unit test 670 → **693** (23 baru: validasi embed caps/URL/total, upsert/delete/isolasi guild, paritas normalizeDisabledList); landing page 16 → **18 kartu modul** (Embed Builder + Custom Command).
+
 ## [3.19.0] — 2026-09-15
 
 ### Added — 🧩 COMMAND MANAGER ALA DYNO + DASHBOARD 18 MODUL (WEB = DISCORD, PILIH SALAH SATU)

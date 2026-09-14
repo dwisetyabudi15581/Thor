@@ -21,7 +21,7 @@ import {
   Hammer, Loader2, ArrowLeft, Save, X, CheckCircle2, AlertTriangle,
   LayoutDashboard, Settings2, Ticket, Hash, TrendingUp, MessageSquareReply,
   Palette, Mic, Megaphone, Handshake, BarChart3, Terminal, Archive,
-  ShieldAlert, KeyRound, Gift, SquarePen, Vote,
+  ShieldAlert, KeyRound, Gift, SquarePen, Vote, Wand2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { AutoModConfig, DashboardPayload, GuildMeta } from "@/lib/bot-api";
@@ -34,9 +34,11 @@ import {
 } from "./modules/module-actions";
 // v3.19.0: modul baru — Command Manager (ala Dyno) + Giveaway/Poll/Embed/
 // Backup/Moderasi/Keys. Semua aksi langsung via call() (paritas Discord↔web).
+// v3.20.0: + CustomCommandsModule — bikin command sendiri dari web, otomatis
+// jadi slash command asli di Discord.
 import {
   CommandManagerModule, GiveawayModule, PollModule, EmbedModule,
-  BackupModule, ModerationModule, KeysModule,
+  BackupModule, ModerationModule, KeysModule, CustomCommandsModule,
 } from "./modules/module-tools";
 
 type ToastState = { msg: string; tone: "ok" | "err"; id: number } | null;
@@ -45,7 +47,9 @@ type ModuleId =
   | "overview" | "general" | "tickets" | "automod" | "leveling"
   | "responders" | "selfroles" | "announce" | "tempvoice" | "midman" | "serverstats"
   // v3.19.0
-  | "commands" | "backup" | "moderation" | "keys" | "giveaway" | "embed" | "poll";
+  | "commands" | "backup" | "moderation" | "keys" | "giveaway" | "embed" | "poll"
+  // v3.20.0
+  | "custom";
 
 const MODULES: Array<{ id: ModuleId; label: string; icon: typeof LayoutDashboard; group: string }> = [
   { id: "overview", label: "Ringkasan", icon: LayoutDashboard, group: "Server" },
@@ -65,6 +69,7 @@ const MODULES: Array<{ id: ModuleId; label: string; icon: typeof LayoutDashboard
   { id: "tempvoice", label: "Temp Voice", icon: Mic, group: "Komunitas" },
   { id: "serverstats", label: "Server Stats", icon: BarChart3, group: "Komunitas" },
   { id: "embed", label: "Embed", icon: SquarePen, group: "Alat" },
+  { id: "custom", label: "Custom Command", icon: Wand2, group: "Alat" },
   { id: "poll", label: "Poll", icon: Vote, group: "Alat" },
 ];
 
@@ -85,7 +90,8 @@ const MODULE_DESC: Record<ModuleId, { title: string; desc: string }> = {
   moderation: { title: "Moderasi", desc: "Riwayat warn dan tindakan moderator (timeout/kick/ban)." },
   keys: { title: "Kunci VIP", desc: "Beri key produk ke member — role + auto-expire otomatis." },
   giveaway: { title: "Giveaway", desc: "Mulai giveaway dengan tombol Join/Leave langsung dari web." },
-  embed: { title: "Kirim Embed", desc: "Buat & kirim embed ke channel mana pun." },
+  embed: { title: "Embed Builder", desc: "Bikin embed lengkap (author, fields, gambar, footer) dengan pratinjau live ala Discord, lalu kirim ke channel mana pun." },
+  custom: { title: "Custom Command", desc: "Bikin slash command sendiri dari web — otomatis terdaftar di Discord dan bisa dipakai semua member (ala Custom Commands Dyno)." },
   poll: { title: "Poll", desc: "Buat poll dengan tombol vote interaktif." },
 };
 
@@ -376,6 +382,8 @@ export function GuildDashboard({ guildId }: { guildId: string }) {
           {module === "keys" && actionProps ? <KeysModule {...actionProps} /> : null}
           {module === "giveaway" && actionProps ? <GiveawayModule {...actionProps} /> : null}
           {module === "embed" && actionProps ? <EmbedModule {...actionProps} /> : null}
+          {/* v3.20.0 */}
+          {module === "custom" && actionProps ? <CustomCommandsModule {...actionProps} /> : null}
           {module === "poll" && actionProps ? <PollModule {...actionProps} /> : null}
         </main>
       </div>

@@ -355,6 +355,61 @@ function seedGuild({ id, name, icon, memberCount }) {
         guildId: id,
       },
     ],
+    // v3.20.0: custom command demo — contoh nyata hasil modul Custom Command.
+    customCommands: [
+      {
+        name: "sosmed",
+        description: "Link semua sosial media server",
+        ephemeral: false,
+        content: "Follow sosial media kita ya!",
+        embed: {
+          title: "📱 SOSIAL MEDIA SERVER",
+          description: "Semua channel resmi kami ada di sini.",
+          color: 5793266,
+          authorName: "",
+          authorIconURL: "",
+          thumbnail: "",
+          image: "",
+          footerText: "Diupdate rutin oleh admin",
+          footerIconURL: "",
+          timestamp: true,
+          fields: [
+            { name: "Instagram", value: "@thorbot", inline: true },
+            { name: "TikTok", value: "@thorbot", inline: true },
+            { name: "YouTube", value: "Thor Community", inline: true },
+          ],
+        },
+        createdBy: "333333333333333333",
+        createdByTag: "Owner#0001",
+        createdAt: Date.now() - 345600000,
+        updatedAt: Date.now() - 86400000,
+        useCount: 47,
+      },
+      {
+        name: "aturan",
+        description: "Aturan singkat server",
+        ephemeral: true,
+        content: "",
+        embed: {
+          title: "📜 ATURAN SERVER",
+          description: "1. Sopan\n2. No spam\n3. No iklan tanpa izin\n4. Ikuti channel masing-masing",
+          color: 15105570,
+          authorName: "",
+          authorIconURL: "",
+          thumbnail: "",
+          image: "",
+          footerText: "Pelanggaran = warn / mute / ban",
+          footerIconURL: "",
+          timestamp: false,
+          fields: [],
+        },
+        createdBy: "333333333333333333",
+        createdByTag: "Owner#0001",
+        createdAt: Date.now() - 691200000,
+        updatedAt: Date.now() - 691200000,
+        useCount: 128,
+      },
+    ],
   };
   guilds.set(id, { meta, data });
   return guilds.get(id);
@@ -430,7 +485,20 @@ const server = http.createServer(async (req, res) => {
     return entry ? send(200, entry.meta) : send(404, { error: "Bot tidak ada di server ini" });
   }
   if (req.method === "GET" && rest[0] === "dashboard") {
-    return entry ? send(200, entry.data) : send(404, { error: "Bot tidak ada di server ini" });
+    if (!entry) return send(404, { error: "Bot tidak ada di server ini" });
+    // v3.20.0: custom command ikut masuk daftar Command Manager (domain
+    // 'custom') — sama seperti payload bot asli (dashServer.js).
+    const payload = {
+      ...entry.data,
+      commands: {
+        ...entry.data.commands,
+        list: [
+          ...entry.data.commands.list,
+          ...entry.data.customCommands.map((c) => ({ name: c.name, description: c.description, domain: "custom", custom: true })),
+        ],
+      },
+    };
+    return send(200, payload);
   }
 
   if (!entry) return send(404, { error: "Bot tidak ada di server ini" });
@@ -451,16 +519,80 @@ const server = http.createServer(async (req, res) => {
   }
 
   // v3.19.0: Command Manager — simpan daftar disabled
+  // v3.20.0: custom command guild ini juga sah dinonaktifkan.
   if (req.method === "PUT" && rest[0] === "commands" && rest.length === 1) {
     const body = await readBody();
     const disabled = Array.isArray(body?.disabled) ? body.disabled : null;
     if (!disabled) return send(422, { error: "Daftar command tidak valid (harus array)" });
-    const known = new Set(entry.data.commands.list.map((c) => c.name));
+    const known = new Set([...entry.data.commands.list.map((c) => c.name), ...entry.data.customCommands.map((c) => c.name)]);
     const bad = disabled.filter((n) => !known.has(String(n)));
     if (bad.length) return send(422, { error: `Command \`${bad[0]}\` tidak dikenal` });
     if (disabled.includes("commands")) return send(422, { error: "Command `/commands` tidak bisa dinonaktifkan — itu pintu manajemen command" });
     entry.data.commands.disabled = [...new Set(disabled.map(String))];
-    return send(200, { ok: true, disabled: entry.data.commands.disabled, total: entry.data.commands.list.length });
+    return send(200, { ok: true, disabled: entry.data.commands.disabled, total: known.size });
+  }
+
+  // v3.20.0: Custom Commands — buat/update + hapus dari web
+  if (rest[0] === "custom-commands") {
+    if (req.method === "POST" && rest.length === 1) {
+      const body = await readBody();
+      const name = String(body?.name || "").trim().toLowerCase();
+      const description = String(body?.description || "").trim();
+      const content = String(body?.content || "").trim();
+      const embed = body?.embed && typeof body.embed === "object" ? body.embed : {};
+      if (!/^[a-z0-9_-]{1,32}$/.test(name)) return send(422, { error: "Nama command hanya boleh huruf kecil, angka, - dan _ (1-32 karakter)" });
+      if (entry.data.commands.list.some((c) => c.name === name)) return send(422, { error: `Nama \`/${name}\` sudah dipakai command bawaan bot — pilih nama lain` });
+      if (!description || description.length > 100) return send(422, { error: "Deskripsi wajib diisi (1-100 karakter)" });
+      const embedHasContent = [embed.title, embed.description, embed.authorName, embed.footerText, embed.image, embed.thumbnail].some((v) => String(v || "").trim()) || (Array.isArray(embed.fields) && embed.fields.length > 0);
+      if (!content && !embedHasContent) return send(422, { error: "Minimal isi teks balasan ATAU embed — keduanya kosong" });
+      if (!entry.data.customCommands.some((c) => c.name === name) && entry.data.customCommands.length >= 20) {
+        return send(422, { error: "Maksimal 20 custom command per server" });
+      }
+      const now = Date.now();
+      const existing = entry.data.customCommands.find((c) => c.name === name);
+      const normalizedEmbed = {
+        title: String(embed.title || ""),
+        description: String(embed.description || ""),
+        color: Number.isInteger(embed.color) ? embed.color : 0x5865f2,
+        authorName: String(embed.authorName || ""),
+        authorIconURL: String(embed.authorIconURL || ""),
+        thumbnail: String(embed.thumbnail || ""),
+        image: String(embed.image || ""),
+        footerText: String(embed.footerText || ""),
+        footerIconURL: String(embed.footerIconURL || ""),
+        timestamp: embed.timestamp === true,
+        fields: (Array.isArray(embed.fields) ? embed.fields : []).filter((f) => String(f?.name || "").trim() || String(f?.value || "").trim()).map((f) => ({ name: String(f.name || ""), value: String(f.value || ""), inline: f.inline === true })),
+      };
+      let command;
+      if (existing) {
+        Object.assign(existing, { description, ephemeral: body?.ephemeral === true, content, embed: normalizedEmbed, updatedAt: now });
+        command = existing;
+      } else {
+        command = {
+          name,
+          description,
+          ephemeral: body?.ephemeral === true,
+          content,
+          embed: normalizedEmbed,
+          createdBy: String(body?.actor?.id || "mock"),
+          createdByTag: String(body?.actor?.tag || "Dashboard"),
+          createdAt: now,
+          updatedAt: now,
+          useCount: 0,
+        };
+        entry.data.customCommands.push(command);
+      }
+      return send(existing ? 200 : 201, { ok: true, command, synced: true });
+    }
+    if (req.method === "DELETE" && rest.length === 2) {
+      const name = decodeURIComponent(rest[1]);
+      const before = entry.data.customCommands.length;
+      entry.data.customCommands = entry.data.customCommands.filter((c) => c.name !== name);
+      if (entry.data.customCommands.length === before) return send(404, { error: `Custom command \`/${name}\` tidak ditemukan` });
+      // Nonaktif-tandai juga dibersihkan dari daftar disabled.
+      entry.data.commands.disabled = entry.data.commands.disabled.filter((n) => n !== name);
+      return send(200, { ok: true, synced: true });
+    }
   }
 
   // v3.19.0: Giveaway dari web
@@ -521,14 +653,15 @@ const server = http.createServer(async (req, res) => {
     return send(201, { ok: true, poll });
   }
 
-  // v3.19.0: Embed dari web
+  // v3.19.0: Embed dari web — v3.20.0: bentuk lengkap (content + embed objek)
   if (req.method === "POST" && rest[0] === "embed" && rest.length === 1) {
     const body = await readBody();
     const channelId = String(body?.channelId || "");
-    const title = String(body?.title || "").trim();
-    const description = String(body?.description || "").trim();
     if (!/^\d{5,25}$/.test(channelId)) return send(400, { error: "channelId tidak valid" });
-    if (!title && !description) return send(400, { error: "Minimal title atau description harus diisi" });
+    const content = String(body?.content || "").trim();
+    const embed = body?.embed && typeof body.embed === "object" ? body.embed : { title: body?.title, description: body?.description };
+    const hasEmbed = [embed.title, embed.description, embed.authorName, embed.footerText, embed.image, embed.thumbnail].some((v) => String(v || "").trim()) || (Array.isArray(embed.fields) && embed.fields.some((f) => String(f?.name || "").trim() || String(f?.value || "").trim()));
+    if (!content && !hasEmbed) return send(400, { error: "Minimal title, description, atau content harus diisi" });
     return send(201, { ok: true, messageId: `mock_${Date.now()}`, url: "https://discord.com/channels/mock/mock" });
   }
 

@@ -67,6 +67,11 @@ const roleScheduler = require('../data/roleScheduler');
 const { getCommands } = require('../commands/registry');
 const { normalizeDisabledList, PROTECTED_COMMANDS } = require('../commands/commands');
 const { COMMAND_TO_DOMAIN } = require('../commands/index.js');
+// v3.20.0: Custom Commands (dibuat dari web → slash command asli di server)
+// + embed builder lengkap (validasi terpusat di embedPayload.js).
+const customCommandManager = require('../data/customCommandManager');
+const { syncGuildCustomCommands } = require('../services/customCommandSync');
+const { normalizeEmbedDef, buildEmbedFromDef, isEmbedEmpty } = require('./embedPayload');
 const {
     EmbedBuilder,
     ActionRowBuilder,
@@ -494,14 +499,28 @@ function createDashHandler({ client, token, log = () => {} }) {
             // sumber kebenaran) + status disabled per guild. `protected` =
             // command yang tidak bisa didisable (pintu manajemen).
             commands: {
-                list: getCommands().map((c) => ({
-                    name: c.name,
-                    description: c.description,
-                    domain: COMMAND_TO_DOMAIN[c.name] || 'other'
-                })),
+                // v3.20.0: custom command guild ini ditambahkan ke daftar
+                // (domain 'custom') supaya bisa di-toggle dari Command Manager
+                // web — paritas penuh dengan /commands toggle di Discord.
+                list: [
+                    ...getCommands().map((c) => ({
+                        name: c.name,
+                        description: c.description,
+                        domain: COMMAND_TO_DOMAIN[c.name] || 'other'
+                    })),
+                    ...customCommandManager.getGuildCommands(guildId).map((c) => ({
+                        name: c.name,
+                        description: c.description,
+                        domain: 'custom',
+                        custom: true
+                    }))
+                ],
                 disabled: Array.isArray(config?.disabledCommands) ? config.disabledCommands : [],
                 protected: PROTECTED_COMMANDS
             },
+            // v3.20.0: definisi lengkap custom command (modul Custom Command —
+            // create/edit/delete di sini, aksi tulis via endpoint di bawah).
+            customCommands: customCommandManager.getGuildCommands(guildId),
             // v3.19.0: data modul baru (read-only; aksi tulis via endpoint).
             giveaways: giveawayManager.getByGuild(guildId),
             polls: pollManager.getByGuild(guildId),
@@ -818,7 +837,10 @@ function createDashHandler({ client, token, log = () => {} }) {
                 // dipakai bersama — single source of truth antar interface).
                 if (method === 'PUT' && rest[0] === 'commands' && rest.length === 1) {
                     const body = await readBody(req);
-                    const normalized = normalizeDisabledList(body?.disabled ?? []);
+                    // v3.20.0: custom command guild ini ikut diizinkan di daftar
+                    // disabled (aturan yang sama dengan /commands toggle).
+                    const customNames = customCommandManager.getGuildCommands(guildId).map((c) => c.name);
+                    const normalized = normalizeDisabledList(body?.disabled ?? [], customNames);
                     if (!normalized.ok) return sendJson(res, 422, { error: normalized.error });
                     const config = getConfig(guildId);
                     config.disabledCommands = normalized.value;
@@ -827,8 +849,48 @@ function createDashHandler({ client, token, log = () => {} }) {
                     return sendJson(res, 200, {
                         ok: true,
                         disabled: normalized.value,
-                        total: getCommands().length
+                        total: getCommands().length + customNames.length
                     });
+                }
+
+                // ---- v3.20.0: Custom Commands — buat/update dari web ----
+                // Definisi → data/customCommands/<guildId>.json → sinkron
+                // registrasi ke Discord (guild.commands.set) → command muncul
+                // sebagai slash command ASLI di server dalam hitungan detik.
+                if (method === 'POST' && rest[0] === 'custom-commands' && rest.length === 1) {
+                    if (!g) return sendJson(res, 404, { error: 'Bot tidak ada di server ini' });
+                    const body = await readBody(req);
+                    const builtinNames = getCommands().map((c) => c.name);
+                    const result = customCommandManager.upsertCommand(guildId, body, builtinNames, {
+                        id: String(body?.actor?.id || 'web'),
+                        tag: String(body?.actor?.tag || 'web dashboard')
+                    });
+                    if (!result.ok) return sendJson(res, 422, { error: result.error });
+
+                    // Sinkron ke Discord (best-effort: data sudah tersimpan;
+                    // kegagalan sinkron dilaporkan tapi tidak membatalkan).
+                    const sync = await syncGuildCustomCommands(client, guildId);
+                    log(
+                        `[dash] custom command ${result.created ? 'dibuat' : 'diperbarui'}: /${result.command.name} (${guildId}) oleh ${body?.actor?.tag || 'unknown'}` +
+                            (sync.ok ? '' : ` — SINKRON GAGAL: ${sync.error}`)
+                    );
+                    return sendJson(res, result.created ? 201 : 200, {
+                        ok: true,
+                        command: result.command,
+                        synced: sync.ok,
+                        syncError: sync.ok ? undefined : sync.error
+                    });
+                }
+
+                // ---- v3.20.0: Custom Commands — hapus dari web ----
+                if (method === 'DELETE' && rest[0] === 'custom-commands' && rest.length === 2) {
+                    if (!g) return sendJson(res, 404, { error: 'Bot tidak ada di server ini' });
+                    const name = decodeURIComponent(rest[1]);
+                    const result = customCommandManager.deleteCommand(guildId, name);
+                    if (!result.ok) return sendJson(res, 404, { error: result.error });
+                    const sync = await syncGuildCustomCommands(client, guildId);
+                    log(`[dash] custom command dihapus: /${name} (${guildId})` + (sync.ok ? '' : ` — SINKRON GAGAL: ${sync.error}`));
+                    return sendJson(res, 200, { ok: true, synced: sync.ok, syncError: sync.ok ? undefined : sync.error });
                 }
 
                 // ---- Giveaway: buat dari web (paritas /giveaway create) ----
@@ -994,35 +1056,56 @@ function createDashHandler({ client, token, log = () => {} }) {
                     return sendJson(res, 201, { ok: true, poll: pollManager.get(poll.id) });
                 }
 
-                // ---- Embed: kirim embed ke channel (paritas /embed-builder) ----
+                // ---- Embed: kirim embed LENGKAP ke channel (paritas /embed-builder) ----
+                // v3.20.0: menerima bentuk penuh (content + embed {title,
+                // description, color, authorName, authorIconURL, fields[],
+                // thumbnail, image, footerText, footerIconURL, timestamp}).
+                // Field datar lama (title/description/footer/color/image/
+                // thumbnail di body root) tetap diterima — modul web versi
+                // lama dan client pihak ketiga tidak rusak.
                 if (method === 'POST' && rest[0] === 'embed' && rest.length === 1) {
                     if (!g) return sendJson(res, 404, { error: 'Bot tidak ada di server ini' });
                     const body = await readBody(req);
                     const channelId = String(body?.channelId || '');
-                    const title = String(body?.title || '').trim();
-                    const description = String(body?.description || '').trim();
                     if (!SNOWFLAKE_RE.test(channelId)) return sendJson(res, 400, { error: 'channelId tidak valid' });
-                    if (!title && !description) return sendJson(res, 400, { error: 'Minimal title atau description harus diisi' });
-                    if (title.length > 256) return sendJson(res, 400, { error: 'Title maksimal 256 karakter' });
-                    if (description.length > 4096) return sendJson(res, 400, { error: 'Description maksimal 4096 karakter' });
-                    const color = Number.isInteger(body?.color) && body.color >= 0 && body.color <= 0xffffff ? body.color : 0x5865f2;
-                    const footer = body?.footer ? String(body.footer).slice(0, 2048) : null;
-                    const image = body?.image ? String(body.image).slice(0, 500) : null;
-                    const thumbnail = body?.thumbnail ? String(body.thumbnail).slice(0, 500) : null;
+
+                    const content = body?.content ? String(body.content).slice(0, 2000).trim() : '';
+
+                    // Bentuk lama → digabung ke embed baru (backward compat).
+                    const rawEmbed =
+                        body?.embed && typeof body.embed === 'object'
+                            ? body.embed
+                            : {
+                                  title: body?.title,
+                                  description: body?.description,
+                                  color: body?.color,
+                                  footerText: body?.footer ? String(body.footer).slice(0, 2048) : undefined,
+                                  image: body?.image,
+                                  thumbnail: body?.thumbnail
+                              };
+
+                    const embedRes = normalizeEmbedDef(rawEmbed);
+                    if (!embedRes.ok) return sendJson(res, 400, { error: embedRes.error });
+                    const def = embedRes.value;
+
+                    if (!content && isEmbedEmpty(def)) {
+                        return sendJson(res, 400, { error: 'Minimal title, description, atau content harus diisi' });
+                    }
 
                     const channel = await client.channels.fetch(channelId).catch(() => null);
                     if (!channel || channel.type !== ChannelType.GuildText) {
                         return sendJson(res, 400, { error: 'Channel harus berupa text channel' });
                     }
 
-                    const embed = new EmbedBuilder().setColor(color).setTimestamp();
-                    if (title) embed.setTitle(title);
-                    if (description) embed.setDescription(normalizeNewlines(description));
-                    if (footer) embed.setFooter({ text: footer });
-                    if (image) embed.setImage(image);
-                    if (thumbnail) embed.setThumbnail(thumbnail);
+                    const embed = buildEmbedFromDef(def, EmbedBuilder);
+                    // Fallback warna kalau embed sama sekali tanpa warna eksplisit
+                    // (normalizeEmbedDef selalu set default 0x5865f2, jadi ini
+                    // cuma jaring pengaman).
+                    const payload = {};
+                    if (content) payload.content = normalizeNewlines(content);
+                    if (!isEmbedEmpty(def)) payload.embeds = [embed];
 
-                    const msg = await channel.send({ embeds: [embed] }).catch(() => null);
+                    const msg = await channel.send(payload).catch(() => null);
                     if (!msg) return sendJson(res, 502, { error: 'Gagal kirim embed — cek permission bot di channel itu' });
                     log(`[dash] embed dikirim ke ${channelId} (${guildId}) oleh ${body?.actor?.tag || 'unknown'}`);
                     return sendJson(res, 201, { ok: true, messageId: msg.id, url: msg.url });

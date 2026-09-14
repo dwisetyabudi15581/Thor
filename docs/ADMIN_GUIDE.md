@@ -1,4 +1,4 @@
-# 📖 Admin Guide — Thor Bot v3.19.0
+# 📖 Admin Guide — Thor Bot v3.20.0
 
 Panduan lengkap untuk admin server Discord yang menjalankan bot ini — cocok untuk admin baru yang pertama kali setup, maupun admin yang sudah berjalan sebagai referensi harian.
 
@@ -827,7 +827,7 @@ Bot membalas pesan otomatis saat pesan member cocok dengan trigger (case-insensi
 /backup-now
 ```
 
-Bot membuat folder `backups/YYYY-MM-DD_HH-mm-ss/` berisi salinan **semua data** dari folder `data/`: folder `config/` per-guild (v3.10.0 — satu file per server, di-copy recursive) + 19 file lain: keys, scheduledRoles, selfRoles, giveaways, polls, warns, stats, scheduledAnns, tempVoice, tickets, automod, levels, responders, afk, panels, deals, boosts, serverstats, modlogs (v3.9.60 — riwayat moderasi). Backup lama (pre-v3.10.0, config.json datar) tetap bisa di-restore — file legacy diklaim migrasi otomatis, tanpa menimpa config guild yang sudah aktif.
+Bot membuat folder `backups/YYYY-MM-DD_HH-mm-ss/` berisi salinan **semua data** dari folder `data/`: folder `config/` per-guild (v3.10.0 — satu file per server, di-copy recursive) + folder `customCommands/` per-guild (v3.20.0 — definisi custom command buatan web) + 19 file lain: keys, scheduledRoles, selfRoles, giveaways, polls, warns, stats, scheduledAnns, tempVoice, tickets, automod, levels, responders, afk, panels, deals, boosts, serverstats, modlogs (v3.9.60 — riwayat moderasi). Backup lama (pre-v3.10.0, config.json datar) tetap bisa di-restore — file legacy diklaim migrasi otomatis, tanpa menimpa config guild yang sudah aktif.
 
 ### Auto-Backup
 
@@ -1032,10 +1032,11 @@ Cooldown bersifat **per-user** — user A memicu tidak memengaruhi user B.
 
 ## 11. Riwayat Versi
 
-Riwayat lengkap semua versi (v3.9.0 – v3.19.0) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
+Riwayat lengkap semua versi (v3.9.0 – v3.20.0) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
 
 Ringkasan semua versi:
 
+- **v3.20.0** (2026-09-15) — 🪄 **CUSTOM COMMAND DARI WEB + EMBED BUILDER LENGKAP**. Admin kini bisa MEMBUAT konten dari dashboard lalu bot meneruskannya ke server — ala Dyno: modul **Custom Command** (bikin slash command sendiri: nama, deskripsi, balasan teks + embed, ephemeral; setelah disimpan otomatis terdaftar di Discord ± 1 menit, maks 20/server) dan modul **Embed** di-upgrade jadi builder lengkap (author, fields sejajar/full + urutan, thumbnail, image, footer, timestamp, teks luar embed) dengan **pratinjau live meniru chat Discord**. Custom command bisa dinonaktifkan lewat Command Manager web / `/commands toggle` — paritas penuh. Data baru `data/customCommands/<guildId>.json` ikut backup/restore. Endpoint DASH API baru `POST/DELETE /guilds/:id/custom-commands`; `POST /guilds/:id/embed` menerima bentuk lengkap. Dashboard 18 → 19 modul; test 670 → 693.
 - **v3.19.0** (2026-09-15) — 🧩 **COMMAND MANAGER ALA DYNO + DASHBOARD 18 MODUL**. Semua 93 slash command kini bisa diaktifkan/dinonaktifkan per-server dari web (modul Command Manager: pencarian + grup + aksi massal) atau Discord (`/commands list|toggle|enable-all`) — satu config, dua interface. 7 modul dashboard baru: Backup (buat/restore), Moderasi (riwayat warn + modlog), Kunci VIP (paritas /set-key), Giveaway, Embed, Poll, + Command Manager. FIX data loss validator products (roleId/days tidak lagi terhapus saat simpan dari web). Registry 92 → 93 command, test 639 → 670.
 - **v3.18.0** (2026-09-14) — 🌐 **DASHBOARD WEB MASUK REPO BOT (MONOREPO)**. Dashboard ala Dyno kini hidup di folder `dashboard/` (Next.js 16 + Prisma SQLite, 11 modul, dependensi ramping 12 paket) — clone sekali, `./setup.sh`, `./start.sh`, bot + web jalan bersamaan. Script root baru (`setup.sh` / `start.sh` / `dev.sh` / `ecosystem.config.cjs` pm2), DEPLOY.md jadi panduan satu repo. Bot & test tidak berubah (92 command, 639 test).
 - **v3.17.0** (2026-09-14) — 🗑️ **SISTEM LANGGANAN PREMIUM DIHAPUS BERSIH — BOT 100% GRATIS (permintaan pemilik)**. `premiumGate`, `guildPremiumManager`, command `/premium`, scheduler sweep langganan, variabel `PREMIUM_*`, dan payload premium DASH API dihapus menyeluruh. Registry 93 → **92 command**, test 674 → **639**. Router kembali murni permission-check tanpa gate. Fitur toko server (`/set-key`, produk, tiket) TETAP ADA — itu fitur jualan milik admin server masing-masing, bukan langganan bot.

@@ -80,7 +80,14 @@ const FILES_TO_BACKUP = [
     // → /backup-now melewatinya dan /restore-backup senyap kehilangan seluruh
     // riwayat moderasi. Cache in-memory-nya di-invalidate pasca-restore
     // (lihat _restoreBackupImpl) — pola yang sama dengan boosts di bawah.
-    'modlogs.json'
+    'modlogs.json',
+    // v3.20.0: customCommands/ — direktori per-guild (satu JSON per server)
+    // berisi definisi custom command buatan admin (dibuat dari web dashboard).
+    // Tanpa ini, restore-backup senyap menghapus SEMUA custom command server
+    // (command hilang dari Discord setelah sinkronisasi berikutnya). Di-copy
+    // recursive seperti 'config'; cache customCommandManager di-invalidate
+    // pasca-restore + sinkron ulang (dilakukan caller ready-ish).
+    'customCommands'
 ];
 
 // v3.9.10: helper untuk resolve path file data (ke data/ folder).
@@ -443,7 +450,16 @@ function _restoreBackupImpl(name) {
     // v3.9.26: invalidate cache manager yang baru dapat read-through cache
     // (automod/afk/responders/levels). Semua file ini ikut di-restore — tanpa
     // invalidasi, hot path masih baca cache 15 detik yang isinya data LAMA.
-    for (const mod of ['./automodManager', './afkManager', './responderManager', './levelManager']) {
+    // v3.20.0: customCommandManager ditambahkan (folder customCommands/
+    // ikut di-restore; cache guild-nya harus dibuang supaya command hasil
+    // restore langsung terlihat router + sinkronisasi Discord).
+    for (const mod of [
+        './automodManager',
+        './afkManager',
+        './responderManager',
+        './levelManager',
+        './customCommandManager'
+    ]) {
         try {
             const m = require(mod);
             if (typeof m.invalidateCache === 'function') m.invalidateCache();
