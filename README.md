@@ -145,6 +145,8 @@ nano dashboard/.env   # OAuth Discord + DASH_API_TOKEN (SAMA dengan .env bot)
 ./start.sh            # atau ./dev.sh untuk pengembangan
 ```
 
+> 📱 **HP Android (Termux)?** Bot + dashboard bisa jalan penuh di HP — build otomatis pakai Webpack dan penyimpanan user pakai JSON. Langkah lengkap: lihat seksi **"Menjalankan di HP Android (Termux)"** di [DEPLOY.md](DEPLOY.md).
+
 Registrasi slash command berlangsung instan ke guild yang ditentukan `GUILD_ID`. Kalau `GUILD_ID` dikosongkan, bot jalan **mode publik ala Dyno**: command didaftarkan global dan muncul otomatis di semua server yang meng-invite bot (±1 jam propagasi) — tanpa memasukkan guild id manual di mana pun. Untuk development dengan auto-restart: `npm run dev`.
 
 ### Konfigurasi Awal (setelah bot online)

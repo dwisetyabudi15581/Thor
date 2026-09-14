@@ -5,6 +5,18 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 Legend: 🔴 critical · 🟠 high · 🟡 medium · 🟢 improvement
 
+## [3.21.1] — 2026-09-15
+
+### Added — 📱 DUKUNGAN TERMUX/ANDROID: BOT + DASHBOARD JALAN DI HP
+
+Dashboard web kini bisa di-build dan dijalankan langsung di HP Android lewat Termux — tanpa VPS. Terdeteksi otomatis lewat `process.platform === "android"`, tanpa konfigurasi tambahan.
+
+- 🟢 **`dashboard/scripts/build.mjs`** menggantikan script build shell: di Android build otomatis pakai **Webpack** (`next build --webpack`) karena Turbopack butuh binary native yang tidak tersedia untuk android/arm64; di Linux/VPS tetap Turbopack. Penyalinan `static`/`public` ke standalone kini pakai `fs.cpSync` (tidak lagi bergantung `cp -r`).
+- 🟢 **`dashboard/src/lib/db.ts`:** di Android, penyimpanan user dashboard otomatis beralih ke **file JSON** (`db/custom-users.json` — antarmuka sama: findUnique/create/update/upsert/count, tulis atomik) karena mesin Prisma butuh binary glibc yang tidak bisa dimuat di Android (bionic libc). Platform lain tetap Prisma SQLite — **tanpa perubahan perilaku**.
+- 🟢 **`dashboard/scripts/start-server.mjs`:** `prisma db push` dilewati otomatis di Android (tidak diperlukan — penyimpanan JSON tanpa schema).
+- 🟢 **`dashboard/scripts/dev.mjs`:** `next dev` dengan fallback `--webpack` untuk Termux.
+- 🟢 **DEPLOY.md:** seksi baru **"Menjalankan di HP Android (Termux)"** — langkah pasang, `termux-wake-lock`, pengoptimalan baterai, Termux:Boot, dan akses tunnel.
+
 ## [3.21.0] — 2026-09-15
 
 ### Added — 🚀 MODUL PANDUAN CEPAT: SETUP SERVER LANGSUNG DARI WEB (MIRROR KATEGORI /HELP)

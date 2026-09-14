@@ -179,6 +179,36 @@ rsync -av thor@IP_VPS:~/Thor/data/ ./backup-thor/
 # backup dashboard (user login): file dashboard/db/custom.db
 ```
 
+## Menjalankan di HP Android (Termux) — gratis, tanpa VPS
+
+Thor bisa jalan penuh di HP Android lewat [Termux](https://termux.dev) sejak v3.21.1 — bot + dashboard web sama-sama jalan, dashboard dibuka di `http://localhost:3000` (browser HP).
+
+```bash
+# 1. Pasang Termux dari F-Droid (versi Play Store usang — jangan dipakai),
+#    lalu di Termux:
+pkg update && pkg install nodejs git
+node -v                   # harus >= 20
+
+# 2. Clone + setup (sama seperti VPS)
+git clone https://github.com/dwisetyabudi15581/Thor.git
+cd Thor && ./setup.sh
+
+# 3. Isi kedua .env (sama seperti Langkah 3 di atas)
+nano .env && nano dashboard/.env
+
+# 4. Jalankan — build otomatis pakai Webpack di Android
+./start.sh
+```
+
+Catatan khusus Android:
+
+- **Build lebih lama** — Turbopack tidak tersedia di Android; build otomatis pakai Webpack + SWC WASM. Build pertama bisa 3–10 menit tergantung HP; build berikutnya lebih cepat.
+- **Penyimpanan user dashboard otomatis JSON** (`db/custom-users.json`) — mesin database Prisma butuh binary native yang tidak ada di Android. Fitur dashboard lain tidak berubah (konfigurasi server tetap lewat DASH API bot).
+- **Agar tidak mati saat layar mati:** jalankan `termux-wake-lock`, lalu matikan pengoptimalan baterai untuk Termux (Settings → Apps → Termux → Battery → Unrestricted).
+- **pm2 bisa dipasang** (`npm i -g pm2`) dan berguna untuk auto-restart, tapi `pm2 startup` tidak berfungsi (Android tidak punya systemd). Untuk auto-start setelah reboot HP, pakai aplikasi [Termux:Boot](https://wiki.termux.com/wiki/Termux:Boot) dengan script `~/.termux/boot/start-thor.sh` berisi `cd ~/Thor && ./start.sh`.
+- **Dashboard hanya bisa diakses dari HP itu sendiri** (localhost). Untuk dibuka dari luar, gunakan tunnel gratis, mis.: `pkg install cloudflared && cloudflared tunnel --url http://localhost:3000`.
+- Untuk produksi 24/7 yang stabil (domain + HTTPS + uptime), tetap disarankan VPS (Langkah 1–8 di atas).
+
 ## Troubleshooting cepat
 
 | Gejala | Penyebab umum | Solusi |

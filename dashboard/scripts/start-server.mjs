@@ -21,11 +21,18 @@ if (raw.startsWith("file:") && !raw.startsWith("file:/")) {
 }
 
 // 1) Siapkan database (buat tabel bila belum ada)
-const push = spawnSync("npx", ["prisma", "db", "push", "--skip-generate", "--accept-data-loss"], {
-  stdio: "inherit",
-  env: { ...process.env, DATABASE_URL: dbUrl },
-});
-if (push.status !== 0) process.exit(push.status ?? 1);
+if (process.platform === "android") {
+  // Termux/Android: schema engine Prisma adalah binary glibc yang tidak
+  // bisa jalan di Android. Dashboard otomatis memakai penyimpanan JSON
+  // untuk user (lihat src/lib/db.ts) — prisma db push tidak diperlukan.
+  console.log("[Termux] Melewati prisma db push — penyimpanan user pakai JSON (db/custom-users.json).");
+} else {
+  const push = spawnSync("npx", ["prisma", "db", "push", "--skip-generate", "--accept-data-loss"], {
+    stdio: "inherit",
+    env: { ...process.env, DATABASE_URL: dbUrl },
+  });
+  if (push.status !== 0) process.exit(push.status ?? 1);
+}
 
 // 2) Jalankan server standalone Next (mewarisi PORT dari env bila di-set)
 const server = spawn(process.execPath, [".next/standalone/server.js"], {
