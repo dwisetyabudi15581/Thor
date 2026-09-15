@@ -5,6 +5,12 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 Legend: 🔴 critical · 🟠 high · 🟡 medium · 🟢 improvement
 
+## [3.21.2] — 2026-09-15
+
+### Fixed — 🟠 EDIT `.env` SETELAH BUILD KINI CUKUP DI-RESTART (TANPA BUILD ULANG)
+
+- 🟠 **`dashboard/scripts/start-server.mjs`:** script kini memuat `dashboard/.env` ke `process.env` sebelum menyalakan server standalone. Selama ini server standalone hanya membaca **salinan `.env` yang di-bake ke `.next/standalone/` saat build**, sehingga mengedit `dashboard/.env` (contoh nyata: mengganti `PUBLIC_ORIGIN` setelah pindah ke domain — OAuth `redirect_uri` tetap menunjuk alamat lama dan login gagal dengan `DNS_PROBE_FINISHED_BAD_CONFIG`) **tidak berefek sampai rebuild penuh**. Nilai yang sudah diekspor di shell tetap diutamakan; @next/env tidak pernah menimpa variabel yang sudah ada di `process.env`, jadi file baru selalu menang atas salinan lama hasil build. Diverifikasi end-to-end: build dengan `PUBLIC_ORIGIN` basi, edit file, restart → `[oauth] redirect_uri=` langsung mengikuti nilai baru.
+
 ## [3.21.1] — 2026-09-15
 
 ### Added — 📱 DUKUNGAN TERMUX/ANDROID: BOT + DASHBOARD JALAN DI HP
