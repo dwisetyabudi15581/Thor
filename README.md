@@ -74,8 +74,7 @@ Detail lengkap (login OAuth Discord, pm2, domain + HTTPS): **[DEPLOY.md](./DEPLO
 
 ### 🎭 Lainnya
 
-- **Verifikasi** — tombol customizable (label, emoji, style), auto-swap role Unverified → Verified.
-- **Self-Role** — panel button/select, mode exclusive/multi, prerequisite role bertingkat.
+- **Auto-Role & Self-Role** — role otomatis saat member join (`/set-autorole`, maks 10) + toggle "role join hilang saat member dapat role lain" (pengganti role Unverified); panel self-role button/select, mode exclusive/multi, prerequisite role bertingkat.
 - **Temp Voice** — channel voice pribadi otomatis + panel kontrol (rename, kick, limit, lock, transfer).
 - **Giveaway** — required role, multiple winners, reroll, per-user lock anti double-join.
 - **Poll** — live bar chart, single/multi choice, toggle vote.
@@ -152,8 +151,8 @@ Registrasi slash command berlangsung instan ke guild yang ditentukan `GUILD_ID`.
 ### Konfigurasi Awal (setelah bot online)
 
 1. `/set-role admin @role` — role admin bot
-2. `/set-role verified @role` — role member terverifikasi
-3. `/set-role unverified @role` — role default member baru
+2. `/set-autorole action:add role:@Member` — auto-role saat member join (maks 10)
+3. `/set-autorole action:toggle` — (opsional) role join hilang otomatis saat member dapat role lain — pengganti role Unverified
 4. `/set-channel welcome #channel` — channel welcome
 5. `/set-channel goodbye #channel` — channel goodbye
 6. `/test-welcome tipe:welcome` — pastikan welcome berfungsi (diagnosis + preview langsung)
@@ -163,7 +162,7 @@ Registrasi slash command berlangsung instan ke guild yang ditentukan `GUILD_ID`.
 10. `/set-channel server-booster #channel` — notifikasi boost (opsional — `/boosters` tetap jalan tanpa ini)
 11. `/set-role booster @Booster` — auto role booster: dapat role saat boost, hilang saat boost berakhir (opsional — diterapkan langsung ke booster yang sudah ada; `/test-booster` bisa mengecek rantainya)
 12. `/serverstats setup` — channel counter live (opsional — counter gaya `👥 Member: 123` di paling atas daftar channel, ter-update otomatis; pilih counter mana yang mau ditampilkan lewat opsi boolean `members`/`bots`/`boosts`/`roles`/`channels`)
-13. `/setup-verify` — pasang panel verifikasi
+13. `/setup-selfrole` + `/selfrole-add role:@Verified` — pasang panel self-role (mis. panel Verifikasi — member klik untuk dapat role)
 14. `/setup-ticket` — pasang panel tiket
 15. `/config-show` — verifikasi semua setting
 

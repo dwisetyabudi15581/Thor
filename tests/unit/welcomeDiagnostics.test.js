@@ -52,7 +52,7 @@ process.on('exit', () => {
 // === Helper                                        ===
 // ====================================================
 
-/** Tulis config.json dengan channels/roles tertentu. */
+/** Tulis config.json dengan channels/roles/autorole tertentu. */
 function writeConfig(partial = {}) {
     fs.writeFileSync(
         configPath,
@@ -60,6 +60,7 @@ function writeConfig(partial = {}) {
             {
                 channels: partial.channels || {},
                 roles: partial.roles || {},
+                autorole: partial.autorole || { roleIds: [] },
                 messages: {
                     welcomeTitle: '👋 WELCOME!',
                     welcomeBody: 'Halo {user}! Selamat datang di **{server}** — member #{count}',
@@ -119,7 +120,7 @@ function makeWorld({ channels = {}, auditEntries = [] } = {}) {
         name: 'Chronos',
         memberCount: 42,
         iconURL: () => null,
-        roles: { cache: new Map([['role_unverified', { id: 'role_unverified', name: 'Unverified' }]]) },
+        roles: { cache: new Map([['role_member', { id: 'role_member', name: 'Member' }]]) },
         channels: { cache },
         members: { me: null },
         fetchAuditLogs: async () => ({ entries: auditEntries })
@@ -180,7 +181,8 @@ test('buildGoodbyeEmbed: variabel action terisi (keluar/dikeluarkan)', () => {
 
 test('onMemberAdd end-to-end: welcome terkirim ke channel yang di-set', async () => {
     const welcome = makeChannel('ch_w');
-    writeConfig({ channels: { welcome: 'ch_w' }, roles: { unverified: 'role_unverified' } });
+    // v3.23.0: role join = murni daftar autorole (konsep unverified dihapus).
+    writeConfig({ channels: { welcome: 'ch_w' }, autorole: { roleIds: ['role_member'] } });
     const world = makeWorld({ channels: { welcome } });
 
     const rows = await captureConsole(() => require('../../src/bot/memberHandler').onMemberAdd(world.member));
@@ -188,7 +190,7 @@ test('onMemberAdd end-to-end: welcome terkirim ke channel yang di-set', async ()
     assert.strictEqual(welcome.sent.length, 1, 'tepat satu pesan welcome');
     assert.strictEqual(welcome.sent[0].content, '<@user_new>');
     assert.match(welcome.sent[0].embeds[0].data.title, /WELCOME/);
-    assert.deepStrictEqual(world.roleAdds, ['role_unverified'], 'role unverified diberikan');
+    assert.deepStrictEqual(world.roleAdds, ['role_member'], 'role join (autorole) diberikan');
     assert.ok(rows.some(r => r[0] === 'log' && /Welcome terkirim/.test(r[1])), 'sukses ter-log (kelihatan)');
 });
 

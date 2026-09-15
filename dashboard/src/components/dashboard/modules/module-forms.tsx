@@ -45,6 +45,9 @@ export function GeneralModule({ draft, meta, setConfig }: ModuleFormProps) {
   // v3.22.0: state lokal picker untuk editor daftar auto-role.
   const [autorolePick, setAutorolePick] = useState<string | null>(null);
   const autoroleIds = c.autorole?.roleIds ?? [];
+  // v3.23.0: toggle "role join hilang saat member dapat role lain" —
+  // pengganti konsep role penanda Unverified yang dihapus.
+  const removeOnNewRole = c.autorole?.removeOnNewRole ?? false;
 
   const addAutorole = () => {
     if (!autorolePick || autoroleIds.includes(autorolePick)) return;
@@ -57,20 +60,17 @@ export function GeneralModule({ draft, meta, setConfig }: ModuleFormProps) {
 
   return (
     <div className="space-y-5">
-      <Section title="Role Penting" desc="Penanda Unverified dan role admin bot. Pilih dari daftar role server.">
-        <Field label="Role Penanda Unverified" hint="Diberikan otomatis saat join; dihapus otomatis begitu member menerima role lain APA PUN (self-role, role level, pemberian admin…).">
-          <RoleSelect value={c.roles.unverified ?? null} onChange={(v) => setConfig("roles.unverified", v)} roles={meta.roles} />
-        </Field>
+      <Section title="Role Penting" desc="Role admin bot. Pilih dari daftar role server.">
         <Field label="Role Admin Bot" hint="Pemegang role ini bisa memakai seluruh command admin di server.">
           <RoleSelect value={c.roles.admin ?? null} onChange={(v) => setConfig("roles.admin", v)} roles={meta.roles} />
         </Field>
       </Section>
 
-      <Section title="Auto-Role Saat Join" desc="Role yang diberikan otomatis ke setiap member baru (≙ /set-autorole, maks 10). Penanda Unverified di atas juga diberikan saat join kalau di-set — ia BUKAN bagian daftar ini.">
+      <Section title="Auto-Role Saat Join" desc="Role yang diberikan otomatis ke setiap member baru (≙ /set-autorole, maks 10). Nyalakan toggle di bawah kalau mau role-nya hilang begitu member mendapat role lain.">
         <div className="md:col-span-2">
           <div className="flex flex-wrap gap-2">
             {autoroleIds.length === 0 ? (
-              <span className="text-xs text-zinc-500">Belum ada role join — tambahkan satu di bawah (mis. @Member).</span>
+              <span className="text-xs text-zinc-500">Belum ada role join — tambahkan satu di bawah (mis. @Member, atau @Unverified sebagai penanda member baru).</span>
             ) : (
               autoroleIds.map((id) => (
                 <span key={id} className="flex items-center gap-1 rounded-lg border border-zinc-700/70 bg-zinc-900/60 px-2.5 py-1 text-xs text-zinc-300">
@@ -82,7 +82,7 @@ export function GeneralModule({ draft, meta, setConfig }: ModuleFormProps) {
             )}
           </div>
         </div>
-        <Field label="Tambah role ke daftar join" hint={`${autoroleIds.length}/10 role` + (c.roles.unverified ? " — penanda Unverified diberikan otomatis di atas daftar ini." : "")}>
+        <Field label="Tambah role ke daftar join" hint={`${autoroleIds.length}/10 role`}>
           <div className="flex gap-2">
             <RoleSelect value={autorolePick} onChange={setAutorolePick} roles={meta.roles} placeholder="— pilih role —" />
             <Button
@@ -96,6 +96,14 @@ export function GeneralModule({ draft, meta, setConfig }: ModuleFormProps) {
             </Button>
           </div>
         </Field>
+        <div className="md:col-span-2">
+          <Toggle
+            checked={removeOnNewRole}
+            onChange={(v) => setConfig("autorole.removeOnNewRole", v)}
+            label="Hapus role join saat member dapat role lain"
+            desc="Saat aktif: SEMUA role di daftar di atas otomatis dilepas begitu member menerima role lain apa pun (panel self-role, reward level, pemberian admin, bot lain…). Cocok untuk role penanda member baru. Saat mati: role join permanen ala Dyno."
+          />
+        </div>
       </Section>
 
       <Section title="Channel Sistem" desc="Tujuan pesan otomatis bot.">

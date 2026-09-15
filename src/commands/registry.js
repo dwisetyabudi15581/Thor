@@ -39,31 +39,37 @@ function getCommands() {
             defaultMemberPermissions: PermissionFlagsBits.ManageGuild
         },
 
-        // === SET AUTOROLE (v3.22.0 — auto-role saat join, ala Dyno) ===
-        // Fitur verifikasi khusus DIHAPUS (v3.22.0): "verified" kini hanya
-        // role biasa di panel self-role, dan penanda Unverified hilang
-        // otomatis begitu member menerima role lain. Command ini mengelola
-        // role yang diberikan saat join.
+        // === SET AUTOROLE (v3.23.0 — auto-role saat join ala Dyno + toggle) ===
+        // Konsep role penanda Unverified DIHAPUS (v3.23.0): role "penanda"
+        // kini cukup masuk daftar auto-role + toggle removeOnNewRole — role
+        // join otomatis hilang begitu member menerima role lain.
         {
             name: 'set-autorole',
-            description: 'Kelola role yang diberikan otomatis saat member join (plus penanda Unverified)',
+            description: 'Kelola auto-role saat join + toggle "role hilang saat dapat role baru"',
             defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
             options: [
                 {
                     type: 3,
                     name: 'action',
-                    description: 'Tambah / hapus role dari daftar join, atau lihat daftarnya',
+                    description: 'Tambah / hapus role join, lihat daftarnya, atau balik toggle hapus-saat-role-baru',
                     required: true,
                     choices: [
                         { name: 'Tambah role', value: 'add' },
                         { name: 'Hapus role', value: 'remove' },
-                        { name: 'Lihat daftar', value: 'list' }
+                        { name: 'Lihat daftar', value: 'list' },
+                        { name: 'Toggle: hapus saat role baru', value: 'toggle' }
                     ]
                 },
                 {
                     type: 8,
                     name: 'role',
-                    description: 'Role yang ditambah/dihapus (tidak perlu untuk Lihat daftar)',
+                    description: 'Role yang ditambah/dihapus (tidak perlu untuk Lihat daftar / Toggle)',
+                    required: false
+                },
+                {
+                    type: 5,
+                    name: 'enabled',
+                    description: 'Khusus toggle: aktif / nonaktif — kosongkan untuk membalik nilai sekarang',
                     required: false
                 }
             ]
@@ -72,7 +78,7 @@ function getCommands() {
         // === SET ROLE ===
         {
             name: 'set-role',
-            description: 'Atur role (unverified / admin / midman / booster)',
+            description: 'Atur role (admin / midman / booster)',
             defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
             options: [
                 {
@@ -81,10 +87,10 @@ function getCommands() {
                     description: 'Pilih tipe role',
                     required: true,
                     choices: [
-                        // v3.22.0: 'verified' DIHAPUS — verifikasi kini panel
-                        // self-role; "Verified" hanya role biasa yang admin
-                        // tambahkan ke panel via /selfrole-add.
-                        { name: 'Unverified (hilang saat role pertama)', value: 'unverified' },
+                        // v3.23.0: 'verified' & 'unverified' DIHAPUS — konsep
+                        // role verify/unverified tidak ada lagi (verified =
+                        // panel self-role; penanda member baru = /set-autorole
+                        // + toggle removeOnNewRole).
                         { name: 'Admin', value: 'admin' },
                         // v3.9.32: role midman/rekber — pegang deal escrow 3-pihak.
                         { name: 'Midman (Rekber)', value: 'midman' },
@@ -150,7 +156,7 @@ function getCommands() {
         // === SET PESAN ===
         {
             name: 'set-message',
-            description: 'Ubah teks embed welcome / goodbye / verify / ticket',
+            description: 'Ubah teks embed welcome / goodbye / ticket',
             defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
             options: [
                 {
@@ -163,8 +169,6 @@ function getCommands() {
                         { name: 'Welcome Body', value: 'welcomeBody' },
                         { name: 'Goodbye Title', value: 'goodbyeTitle' },
                         { name: 'Goodbye Body', value: 'goodbyeBody' },
-                        { name: 'Verify Title', value: 'verifyTitle' },
-                        { name: 'Verify Body', value: 'verifyBody' },
                         { name: 'Ticket Title', value: 'ticketTitle' },
                         { name: 'Ticket Body', value: 'ticketBody' },
                         // v3.9.11 Phase 1: ticket price header configurable
@@ -415,8 +419,6 @@ function getCommands() {
                         { name: 'Welcome Body', value: 'welcomeBody' },
                         { name: 'Goodbye Title', value: 'goodbyeTitle' },
                         { name: 'Goodbye Body', value: 'goodbyeBody' },
-                        { name: 'Verify Title', value: 'verifyTitle' },
-                        { name: 'Verify Body', value: 'verifyBody' },
                         { name: 'Ticket Title', value: 'ticketTitle' },
                         { name: 'Ticket Body', value: 'ticketBody' },
                         { name: 'Ticket Price Header', value: 'ticketPriceHeader' }
@@ -546,7 +548,7 @@ function getCommands() {
         // === REMOVE ROLE (hapus role dari config) ===
         {
             name: 'remove-role',
-            description: 'Hapus role dari config (verified / unverified / admin / midman / booster)',
+            description: 'Hapus role dari config (admin / midman / booster)',
             defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
             options: [
                 {
@@ -555,8 +557,8 @@ function getCommands() {
                     description: 'Pilih tipe role yang dihapus',
                     required: true,
                     choices: [
-                        { name: 'Verified', value: 'verified' },
-                        { name: 'Unverified', value: 'unverified' },
+                        // v3.23.0: 'verified' & 'unverified' DIHAPUS — konsepnya
+                        // sudah dibersihkan otomatis dari config lama.
                         { name: 'Admin', value: 'admin' },
                         // v3.9.32: hapus role midman dari config.
                         { name: 'Midman (Rekber)', value: 'midman' },
@@ -647,8 +649,6 @@ function getCommands() {
                         { name: 'Welcome Body', value: 'welcomeBody' },
                         { name: 'Goodbye Title', value: 'goodbyeTitle' },
                         { name: 'Goodbye Body', value: 'goodbyeBody' },
-                        { name: 'Verify Title', value: 'verifyTitle' },
-                        { name: 'Verify Body', value: 'verifyBody' },
                         { name: 'Ticket Title', value: 'ticketTitle' },
                         { name: 'Ticket Body', value: 'ticketBody' },
                         { name: '⚡ Reset SEMUA', value: 'ALL' }

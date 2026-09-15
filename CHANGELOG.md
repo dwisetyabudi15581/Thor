@@ -5,6 +5,19 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 Legend: 🔴 critical · 🟠 high · 🟡 medium · 🟢 improvement
 
+## [3.23.0] — 2026-09-15
+
+### Changed — 🎭 AUTO-ROLE TERPADU: KONSEP ROLE UNVERIFIED DIHAPUS — TINGGAL DAFTAR JOIN + SATU TOGGLE
+
+Permintaan pemilik: *"jangan set role unverified — pakai saja auto role join, terus ada toggle untuk role hilang ketika ada role baru."* Dua konfigurasi terpisah (daftar `/set-autorole` + penanda `/set-role unverified`) kini jadi SATU: role "penanda member baru" cukup ditaruh di daftar auto-role, dan toggle yang menentukan apakah role join bersifat sementara atau permanen.
+
+- 🟠 **`/set-autorole action:toggle` (BARU, + opsi `enabled`):** menyalakan/mematikan **"hapus role join saat member dapat role lain"**. Saat AKTIF: SEMUA role join yang member pegang otomatis dilepas begitu dia menerima role LAIN apa pun — panel self-role, reward level up, pembelian VIP, boost, admin memberi manual, bahkan bot lain (senyap + server log ROLE_UPDATE standar). Saat MATI (default): role join permanen ala Dyno. Tanpa opsi `enabled` → nilai dibalik (nyala↔mati sekali ketik). `action:list` kini menampilkan status toggle.
+- 🟠 **KONSEP ROLE UNVERIFIED DIHAPUS MENYELURUH:** pilihan `unverified`/`verified` di `/set-role` & `/remove-role` dihapus; `roles.unverified` dibersihkan otomatis dari config lama saat load (v1 `unverifiedRoleId` juga tidak lagi dipetakan); aturan universal v3.22.0 ("penanda hilang saat role pertama") digantikan aturan toggle di atas; `joinRoleIds()` = murni `autorole.roleIds`; `/config-show` tidak lagi menampilkan baris Unverified. **Migrasi server yang sudah jalan:** taruh role penanda lama (mis. @Unverified) ke `/set-autorole action:add` lalu jalankan `action:toggle` — perilaku lamanya tetap sama persis.
+- 🟡 **DASH API:** `PUT /guilds/:id/config` menerima path baru **`autorole.removeOnNewRole`** (boolean, 422 kalau bukan boolean); set array utuh `autorole` kini MERGE (bukan replace) — keduanya bisa datang dalam satu PUT tanpa toggle hilang; `roles.unverified`/`roles.verified` ditolak **422 dengan arahan** ke penggantinya (dashboard basi tidak lagi menyimpan nilai yang diam-diam dibersihkan).
+- 🟢 **Dashboard:** modul Umum — editor Auto-Role Saat Join kini punya **toggle "Hapus role join saat member dapat role lain"** dan kehilangan field role Unverified; Panduan Cepat Langkah 2 = "Auto-Role Saat Join" (form role + toggle langsung terpasang); overview modul & kartu fitur landing diperbarui; mock dev API mengikuti.
+- 🟢 **Bersih-bersih sisa v3.22.0:** pilihan `Verify Title`/`Verify Body` di `/set-message`, `/list-messages`, `/reset-message` (dan modal edit pesan) dihapus — key-nya memang sudah dibersihkan otomatis, jadi menawarkannya hanya menyesatkan admin.
+- 🟢 Test: **735** (dari 727) — `unifiedRoles.test.js` dirombak untuk semantik toggle (7 skenario aturan termasuk pengecualian join, boost, multi-role, toggle mati), 2 test `/set-autorole action:toggle`, 4 test DASH API baru (boolean valid/invalid, 422 roles.unverified, PUT gabungan array+toggle), PIN anti-regresi diperbarui.
+
 ## [3.22.0] — 2026-09-15
 
 ### Changed — 🎭 SATU SISTEM ROLE TERPADU: penanda Unverified + auto-role saat join + panel self-role

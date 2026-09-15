@@ -86,9 +86,10 @@ async function handleSelfRoleButton(interaction) {
     const hasRole = member.roles.cache.has(roleId);
 
     // v3.22.0: semua grant/revoke lewat Role Engine — cek, log kegagalan, dan
-    // perilaku sama dengan semua fitur lain. Memberi role di sini JUGA
-    // menghapus penanda Unverified member secara otomatis (aturan universal
-    // di guildMemberUpdate) — tidak perlu penanganan khusus.
+    // perilaku sama dengan semua fitur lain. Memberi role di sini JUGA bisa
+    // memicu pelepasan role join member secara otomatis (toggle
+    // autorole.removeOnNewRole di guildMemberUpdate) — tidak perlu penanganan
+    // khusus.
     if (panel.exclusive && !hasRole) {
         // Mode exclusive: hapus semua role panel lain dulu, lalu tambahkan yang ini
         const toRemove = panel.roles

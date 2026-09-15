@@ -389,7 +389,7 @@ const MODULES = [
   { icon: Mic, name: "Temporary Voice", desc: "Channel suara privat per member, kontrol via tombol." },
   { icon: Megaphone, name: "Announce Terjadwal", desc: "Pengumuman sekali atau berulang harian/mingguan." },
   { icon: Activity, name: "Server Stats", desc: "Counter member/boost/role live di nama channel." },
-  { icon: Gift, name: "Auto-Role & Unverified", desc: "Role otomatis saat join; penanda Unverified hilang saat role pertama member." },
+  { icon: Gift, name: "Auto-Role", desc: "Role otomatis saat member join + toggle role hilang saat dapat role lain." },
   { icon: Globe, name: "Backup", desc: "Snapshot struktur server, restore saat darurat." },
   { icon: Terminal, name: "Command Manager", desc: "Aktif/nonaktifkan tiap slash command per server — ala Dyno." },
   { icon: Gift, name: "Giveaway", desc: "Mulai giveaway dengan tombol Join/Leave dari web." },

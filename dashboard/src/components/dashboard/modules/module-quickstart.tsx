@@ -11,16 +11,16 @@
 // Discord. Paritas penuh dengan slash command:
 //
 //   Langkah 1  Role Admin Bot       ≙ /set-role admin
-//   Langkah 2  Role Unverified      ≙ /set-role unverified    (v3.22.0)
+//   Langkah 2  Auto-Role Saat Join   ≙ /set-autorole            (v3.23.0)
 //   Langkah 3  Kategori & Produk    ≙ /add-category + /add-product
 //   Langkah 4  Pasang Panel Tiket   ≙ /setup-ticket-panel
 //   Langkah 5  Panel Self-Role      ≙ /setup-selfrole          (v3.22.0)
 //   Langkah 6  Channel Log Server   ≙ /set-channel server-log
 //
-// v3.22.0: fitur verifikasi khusus DIHAPUS — "verified" kini hanya role di
-// panel self-role, dan penanda Unverified hilang otomatis begitu member
-// menerima role lain apa pun. Langkah 2 mendaftarkan penandanya; Langkah 5
-// mengarahkan admin ke modul Self Roles untuk memasang panel (mis. Verifikasi).
+// v3.23.0: konsep role penanda Unverified DIHAPUS — Langkah 2 kini murni
+// auto-role saat join + toggle "role join hilang saat member dapat role
+// lain" (pengganti role Unverified); Langkah 5 mengarahkan admin ke modul
+// Self Roles untuk memasang panel (mis. Verifikasi).
 //
 // Di bawahnya: "Langkah lanjutan" — pintasan ke modul kategori lain
 // (serverstats / leveling / tempvoice / responder / selfrole) supaya web
@@ -33,7 +33,7 @@ import { useState, type ReactNode } from "react";
 import { CheckCircle2, Circle, Loader2, Plus, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
-  Field, TextInput, Select, ChannelSelect, RoleSelect, Pill, channelLabel, roleLabel,
+  Field, TextInput, Select, ChannelSelect, RoleSelect, Pill, Toggle, channelLabel, roleLabel,
 } from "../fields";
 import type { ModuleActionProps } from "./module-actions";
 
@@ -102,8 +102,8 @@ export function QuickStartModule({
   // Langkah 1-2: role (dropdown + kolom ID manual — nilai awal = yang tersimpan)
   const [adminPick, setAdminPick] = useState<string | null>(c.roles.admin ?? null);
   const [adminId, setAdminId] = useState("");
-  const [unverifiedPick, setUnverifiedPick] = useState<string | null>(c.roles.unverified ?? null);
-  const [unverifiedId, setUnverifiedId] = useState("");
+  const [joinPick, setJoinPick] = useState<string | null>(null);
+  const [joinId, setJoinId] = useState("");
 
   // Langkah 3: produk cepat
   const [prdLabel, setPrdLabel] = useState("");
@@ -127,7 +127,7 @@ export function QuickStartModule({
 
   const done = {
     admin: !!c.roles.admin,
-    unverified: !!c.roles.unverified,
+    autorole: (c.autorole?.roleIds?.length ?? 0) > 0,
     catalog: products.length > 0,
     panel: panels.length > 0,
     selfrole: selfrolePanels.length > 0,
@@ -176,6 +176,37 @@ export function QuickStartModule({
       return;
     }
     void applyUpdates(step, { [dotPath]: v }, okMsg);
+  }
+
+  /** Langkah 2: tambah role ke daftar auto-role join (array utuh, anti-duplikat). */
+  function applyJoinRole(pick: string | null, manualId: string) {
+    const v = manualId.trim() || pick || "";
+    if (!v) {
+      toast("Pilih role dari daftar atau tempel ID role-nya dulu.", "err");
+      return;
+    }
+    if (!SNOWFLAKE_RE.test(v)) {
+      toast("ID role tidak valid — angka 5-25 digit. Aktifkan Developer Mode di Discord, klik kanan role → Copy ID.", "err");
+      return;
+    }
+    const current = c.autorole?.roleIds ?? [];
+    if (current.includes(v)) {
+      toast("Role itu sudah ada di daftar auto-role.", "err");
+      return;
+    }
+    void applyUpdates("autorole", { autorole: [...current, v] }, "Role join didaftarkan — setiap member baru menerimanya otomatis.");
+  }
+
+  /** Langkah 2: balik toggle "hapus role join saat member dapat role lain". */
+  function toggleRemoveOnNewRole() {
+    const next = !(c.autorole?.removeOnNewRole ?? false);
+    void applyUpdates(
+      "autoroleToggle",
+      { "autorole.removeOnNewRole": next },
+      next
+        ? "Toggle AKTIF — role join otomatis hilang saat member dapat role lain."
+        : "Toggle MATI — role join bersifat permanen."
+    );
   }
 
   async function installTicketPanel() {
@@ -280,29 +311,37 @@ export function QuickStartModule({
         </Field>
       </StepCard>
 
-      {/* Langkah 2 — Role penanda Unverified (v3.22.0) */}
+      {/* Langkah 2 — Auto-Role saat join + toggle (v3.23.0) */}
       <StepCard
         n={2}
-        title="Role Penanda Unverified"
-        desc={<>Diberikan otomatis ke setiap member baru dan dihapus otomatis begitu mereka menerima role lain apa pun (self-role, role level, pemberian admin — apa pun). Verifikasi tanpa tombol khusus. ≙ <code className="text-amber-300/80">/set-role unverified</code></>}
-        done={done.unverified}
+        title="Auto-Role Saat Join"
+        desc={<>Role yang diberikan otomatis ke setiap member baru. Nyalakan toggle di bawah kalau mau role-nya hilang begitu member mendapat role lain apa pun (self-role, role level, pemberian admin) — pengganti role Unverified, tanpa setup terpisah. ≙ <code className="text-amber-300/80">/set-autorole</code></>}
+        done={done.autorole}
       >
-        <Field label="Pilih dari daftar role" hint={done.unverified ? `Tersimpan: ${roleLabel(meta.roles, c.roles.unverified)}` : undefined}>
-          <RoleSelect value={unverifiedPick} onChange={setUnverifiedPick} roles={meta.roles} />
+        <Field label="Pilih dari daftar role" hint={done.autorole ? `Tersimpan: ${(c.autorole?.roleIds ?? []).map((id) => roleLabel(meta.roles, id)).join(", ")}` : undefined}>
+          <RoleSelect value={joinPick} onChange={setJoinPick} roles={meta.roles} />
         </Field>
         <Field label="…atau masukkan ID role manual" hint={ID_HINT}>
           <div className="flex gap-2">
-            <TextInput value={unverifiedId} onChange={setUnverifiedId} placeholder="mis. 888000111222333444" />
+            <TextInput value={joinId} onChange={setJoinId} placeholder="mis. 888000111222333444" />
             <Button
-              onClick={() => applyRole("unverified", "roles.unverified", unverifiedPick, unverifiedId, "Penanda Unverified didaftarkan — member baru mendapatkannya saat join, dan hilang saat role pertama mereka.")}
-              disabled={busy === "unverified"}
+              onClick={() => applyJoinRole(joinPick, joinId)}
+              disabled={busy === "autorole"}
               className="shrink-0 bg-amber-400 font-semibold text-zinc-950 hover:bg-amber-300"
             >
-              {busy === "unverified" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
+              {busy === "autorole" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
               Daftarkan
             </Button>
           </div>
         </Field>
+        <div className="md:col-span-2">
+          <Toggle
+            checked={c.autorole?.removeOnNewRole ?? false}
+            onChange={() => toggleRemoveOnNewRole()}
+            label="Hapus role join saat member dapat role lain"
+            desc="AKTIF: semua role di daftar otomatis dilepas begitu member menerima role lain apa pun — cocok untuk penanda member baru. MATI: role join permanen ala Dyno."
+          />
+        </div>
       </StepCard>
 
       {/* Langkah 3 — Kategori & Produk */}

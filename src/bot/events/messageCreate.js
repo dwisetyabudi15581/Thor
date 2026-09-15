@@ -420,8 +420,8 @@ async function hookLeveling(message) {
         if (toAdd.length > 0) {
             // v3.22.0: grant role level lewat Role Engine — gerbang yang sama
             // dengan self-role/auto-role, dengan cek hierarki/managed dan log
-            // kegagalan yang bisa ditindaklanjuti. Memberi role level juga
-            // menghapus penanda Unverified member otomatis (aturan universal).
+            // kegagalan yang bisa ditindaklanjuti. Memberi role level juga bisa
+            // memicu pelepasan role join (toggle autorole.removeOnNewRole).
             const { grantRoles } = require('../../services/roleEngine');
             const res = await grantRoles(message.member, toAdd, {
                 reason: `naik level — cap level ${newLevel}`

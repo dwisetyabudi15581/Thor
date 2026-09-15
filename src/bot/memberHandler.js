@@ -7,14 +7,14 @@
  *   - src/commands/config.js (/test-welcome preview, v3.9.48)
  *
  * Logic:
- *   - onMemberAdd: beri role join (daftar auto-role + penanda Unverified)
- *     lewat Role Engine + kirim welcome embed ke channel welcome.
+ *   - onMemberAdd: beri role join (daftar auto-role /set-autorole) lewat
+ *     Role Engine + kirim welcome embed ke channel welcome.
  *   - onMemberRemove: cek audit log (kick/ban vs leave sukarela) + kirim goodbye embed.
  *
- * v3.22.0: grant saat join kini lewat Role Engine (satu gerbang untuk semua
- * grant role) dan memuat daftar /set-autorole admin, bukan cuma role
- * Unverified. Penanda Unverified dihapus otomatis oleh guildMemberUpdate
- * begitu member menerima role LAIN apa pun.
+ * v3.23.0: grant saat join kini MURNI daftar /set-autorole (konsep role
+ * penanda Unverified dihapus). Jika toggle autorole.removeOnNewRole aktif,
+ * role-role join ini dilepas otomatis oleh guildMemberUpdate begitu member
+ * menerima role LAIN apa pun.
  *
  * v3.9.0 FIX: skip bot account.
  * v3.9.8 FIX: AuditLogEvent enum (bukan magic number 20/22), 10s window (was 5s),
@@ -91,10 +91,11 @@ async function onMemberAdd(member) {
         recordJoin(guild.id, user.id);
     } catch (_) {}
 
-    // v3.22.0: auto-role saat join — daftar /set-autorole admin PLUS role
-    // penanda Unverified (saan di-set), diberikan dalam SATU panggilan engine.
-    // Cek hierarki / managed / @everyone dan log kegagalan yang bisa
-    // ditindaklanjuti ada di engine — handler ini tetap ramping.
+    // v3.23.0: auto-role saat join — daftar /set-autorole admin, diberikan
+    // dalam SATU panggilan engine. Cek hierarki / managed / @everyone dan log
+    // kegagalan yang bisa ditindaklanjuti ada di engine — handler ini tetap
+    // ramping. Toggle "hapus saat dapat role lain" (autorole.removeOnNewRole)
+    // ditangani guildMemberUpdate.
     const joinIds = joinRoleIds(config);
     if (joinIds.length > 0) {
         const res = await grantRoles(member, joinIds, { reason: 'auto-role saat join' });

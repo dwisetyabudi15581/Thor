@@ -124,9 +124,8 @@ async function handleResetConfigConfirm(interaction) {
             content:
                 '⚠️ **SEMUA konfigurasi berhasil direset.**\n\n' +
                 'Sekarang config.json kosong. Silakan set ulang:\n' +
-                '• `/set-role verified @role`\n' +
-                '• `/set-role unverified @role`\n' +
                 '• `/set-role admin @role`\n' +
+                '• `/set-autorole action:add role:@Member` (+ `action:toggle` kalau mau hilang saat dapat role lain)\n' +
                 '• `/set-channel welcome #channel`\n' +
                 '• `/set-channel goodbye #channel`\n' +
                 '• `/set-channel invoice #channel`\n' +

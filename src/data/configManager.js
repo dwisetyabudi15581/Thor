@@ -44,13 +44,15 @@ const DEFAULTS = {
         // v3.9.11 Phase 1: ticket header configurable (sebelumnya hardcoded "PRICE LIST KEY")
         ticketPriceHeader: '💰 PRICE LIST 💰'
     },
-    // v3.22.0: auto-role saat join (ala Dyno). Role pilihan admin diberikan
-    // otomatis ke setiap member baru. Role penanda Unverified
-    // (roles.unverified, di-set via /set-role unverified) juga diberikan saat
-    // join dan dihapus otomatis begitu member menerima role LAIN apa pun
-    // (lihat bot/events/guildMemberUpdate.js — aturan universal).
+    // v3.23.0: auto-role saat join (ala Dyno). Role pilihan admin diberikan
+    // otomatis ke setiap member baru. Toggle removeOnNewRole (default MATI):
+    // saat aktif, SEMUA role join dilepas otomatis begitu member menerima
+    // role LAIN apa pun (lihat bot/events/guildMemberUpdate.js). Konsep role
+    // penanda Unverified (roles.unverified) DIHAPUS — role "penanda" kini
+    // cukup ditaruh di daftar ini + toggle dinyalakan.
     autorole: {
-        roleIds: []
+        roleIds: [],
+        removeOnNewRole: false
     },
     // v3.9.18: ticket categories (default 4 kategori built-in)
     // - "Bantuan Staff" → "Help" (rename, lebih simpel & internasional)
@@ -229,9 +231,9 @@ function getConfig(guildId) {
     let didV1Migration = false;
     if (raw.verifiedRoleId || raw.invoiceChannelId) {
         if (!raw.roles) raw.roles = {};
-        // v3.22.0: verifiedRoleId tidak lagi dipetakan ke mana pun — fitur
-        // verifikasi khusus dihapus (verified kini panel self-role).
-        if (raw.unverifiedRoleId && !raw.roles.unverified) raw.roles.unverified = raw.unverifiedRoleId;
+        // v3.23.0: verifiedRoleId / unverifiedRoleId tidak lagi dipetakan ke
+        // mana pun — konsep role verified & unverified dihapus (verified =
+        // role biasa di panel self-role; unverified = auto-role + toggle).
         if (raw.adminRoleId && !raw.roles.admin) raw.roles.admin = raw.adminRoleId;
 
         if (!raw.channels) raw.channels = {};
@@ -258,15 +260,16 @@ function getConfig(guildId) {
         didV1Migration = true;
     }
 
-    // === MIGRASI v3.22.0: fitur verifikasi khusus DIHAPUS ===
-    // (role verified + tombol verify + panel verify → member kini mengambil
-    // role dari panel self-role; "verified" hanya role biasa di panel).
-    // Key-key basi dari config lama dibersihkan di sini supaya tidak
-    // menetap selamanya di data/config/<guildId>.json. roles.unverified TETAP —
-    // itu role penanda untuk aturan universal role-pertama.
+    // === MIGRASI v3.23.0: konsep role penanda Unverified DIHAPUS ===
+    // (permintaan admin: "jangan set role unverified — pakai saja auto-role
+    // join + toggle role hilang saat dapat role baru"). Key basi dibersihkan
+    // di sini supaya tidak menetap di data/config/<guildId>.json: kalau dulu
+    // memakai @Unverified sebagai penanda, tambahkan role itu ke daftar
+    // /set-autorole lalu nyalakan toggle removeOnNewRole — perilakinya sama.
     let didVerifyCleanup = false;
-    if (raw.roles && 'verified' in raw.roles) {
+    if (raw.roles && ('verified' in raw.roles || 'unverified' in raw.roles)) {
         delete raw.roles.verified;
+        delete raw.roles.unverified;
         didVerifyCleanup = true;
     }
     if (raw.messages && ('verifyTitle' in raw.messages || 'verifyBody' in raw.messages)) {
@@ -279,7 +282,7 @@ function getConfig(guildId) {
         didVerifyCleanup = true;
     }
     if (didVerifyCleanup) {
-        console.log('🧹 [v3.22.0] Config verifikasi lama guild ini dihapus (verify kini panel self-role).');
+        console.log('🧹 [v3.23.0] Config role verify/unverified lama guild ini dihapus (kini: autorole + toggle, verify = panel self-role).');
     }
 
     // === MERGE dengan DEFAULTS (deep untuk messages) ===

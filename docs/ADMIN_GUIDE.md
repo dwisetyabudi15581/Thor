@@ -64,19 +64,18 @@ Urutan berikut adalah **rekomendasi** untuk server baru. Lewati langkah yang sud
 ### Step 1: Set Role
 
 ```
-/set-role verified @Verified
-/set-role unverified @Unverified
 /set-role admin @Staff
 /set-role booster @Booster
+/set-autorole action:add role:@Member
+/set-autorole action:toggle
 ```
 
 **Penjelasan:**
 
-- Role `verified` — role yang didapat member setelah menekan tombol verifikasi
-- Role `unverified` — role default member baru (dilepas setelah verifikasi)
 - Role `admin` — role staff yang mendapat akses channel tiket + panel admin
 - Perubahan admin role langsung efektif (cache di-invalidate otomatis)
 - Role `booster` — (v3.9.59, opsional) **auto role booster**: member yang boost server otomatis dapat role ini, dan kehilangannya saat boost berakhir — semantik yang sama dengan role Server Booster bawaan Discord, tapi pakai role sendiri (urutan/warna bisa diatur). Saat di-set, role langsung diterapkan ke semua member yang SEDANG boost (retroaktif — reply menyebut jumlahnya). Boost yang mulai/berakhir saat bot offline ikut disinkronkan saat startup. **Syarat:** role harus DI BAWAH role bot + bot punya permission **Manage Roles**; `/test-booster` mengecek seluruh rantainya. `/remove-role booster` hanya mematikan otomatisasi — role yang sudah terpasang tidak dicabut.
+- **Auto-role saat join** (v3.23.0) — `/set-autorole action:add` mendaftarkan role yang diberikan otomatis ke setiap member baru (maks 10, ala Dyno). `action:toggle` menyalakan **"role join hilang saat member dapat role lain"** — pengganti role Unverified lama: taruh role penanda member baru (mis. @Unverified/@Newbie) di daftar ini + nyalakan toggle, maka role itu otomatis dilepas begitu member menerima role lain apa pun (panel self-role, reward level, pemberian admin, bot lain). Toggle mati = role join permanen. Kelola juga dari dashboard (modul Umum / Panduan Cepat Langkah 2).
 
 ### Step 2: Set Channel
 
@@ -104,13 +103,14 @@ Urutan berikut adalah **rekomendasi** untuk server baru. Lewati langkah yang sud
 
 > 🧪 **Pastikan langsung berfungsi (v3.9.48):** jalankan `/test-welcome tipe:welcome` (atau `tipe:goodbye`) — bot mengecek seluruh rantainya (channel sudah di-set → masih ada → permission bot) dan mengirim **preview langsung** persis seperti embed yang diterima member baru. Tidak perlu menunggu member beneran join.
 
-### Step 3: Pasang Panel Verifikasi
+### Step 3: Pasang Panel Self-Role (Verifikasi)
 
 ```
-/setup-verify
+/setup-selfrole title:Verifikasi description:Klik di bawah untuk verifikasi
+/selfrole-add panel_id:<id> role:@Verified label:Verifikasi Saya emoji:✅ style:Success
 ```
 
-Bot mengirim embed + tombol "Verifikasi Saya" ke channel tempat command dijalankan. Member baru menekan tombol → mendapat role Verified + role Unverified dilepas.
+Bot mengirim panel tombol ke channel tempat command dijalankan. Member baru menekan tombol → mendapat role Verified. Kombinasikan dengan Langkah 1: taruh role penanda member baru di `/set-autorole` + nyalakan `action:toggle` — penanda itu hilang otomatis begitu member klik tombol ini (atau dapat role lain dari mana pun).
 
 **Rekomendasi:** pasang di channel `#information` atau `#rules`, lalu pin pesannya.
 
@@ -1032,10 +1032,12 @@ Cooldown bersifat **per-user** — user A memicu tidak memengaruhi user B.
 
 ## 11. Riwayat Versi
 
-Riwayat lengkap semua versi (v3.9.0 – v3.21.0) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
+Riwayat lengkap semua versi (v3.9.0 – v3.23.0) tersedia di **[CHANGELOG.md](../CHANGELOG.md)**.
 
 Ringkasan semua versi:
 
+- **v3.23.0** (2026-09-15) — 🎭 **AUTO-ROLE TERPADU: KONSEP ROLE UNVERIFIED DIHAPUS — tinggal daftar join + toggle** (permintaan pemilik: "jangan set role unverified, pakai saja auto role join terus ada toggle untuk role hilang ketika ada role baru"). `/set-autorole` kini punya aksi keempat **`action:toggle`** (+ opsi `enabled`): saat aktif, SEMUA role join yang member pegang otomatis dilepas begitu dia menerima role lain apa pun — panel self-role, leveling, pembelian VIP, boost, admin manual, bot lain; saat mati, role join permanen ala Dyno. `roles.unverified` (dan pilihan verified/unverified di `/set-role` //`/remove-role`) dihapus menyertakan pembersihan otomatis config lama; migrasi: taruh role penanda lama ke `/set-autorole action:add` lalu `action:toggle`. DASH API: `PUT autorole.removeOnNewRole` (boolean) + set array utuh kini merge (toggle tidak pernah terhapus); `roles.unverified` ditolak 422 dengan arahan. Dashboard: editor Auto-Role punya toggle, Panduan Cepat Langkah 2 = auto-role + toggle, kartu landing & overview modul diperbarui. Bersih-bersih sisa v3.22.0: pilihan Verify Title/Body di `/set-message` `/reset-message` (dan modal) dihapus. Registry tetap 92 command; test 727 → **735**.
+- **v3.22.0** (2026-09-15) — 🎭 **SATU SISTEM ROLE TERPADU**: Role Engine (satu gerbang semua grant/revoke), aturan universal penanda Unverified, `/set-autorole` (add/remove/list), fitur verifikasi khusus DIHAPUS (verified = role biasa di panel self-role; tombol lama dapat stub migrasi). Test 698 → 727.
 - **v3.21.0** (2026-09-15) — 🚀 **MODUL PANDUAN CEPAT: SETUP SERVER LANGSUNG DARI WEB**. Mirror kategori 🚀 Panduan Cepat di `/help` jadi checklist 6 langkah di dashboard: role admin & verifikasi (**pilih dropdown atau tempel ID di kolom teks**), kategori & produk (form tambah produk cepat), pasang panel tiket (pilih channel + layout), pasang panel verifikasi, channel log — tiap form LANGSUNG diterapkan bot ke server dengan toast konfirmasi; progress bar X/6; server belum setup otomatis mendarat di modul ini. Modul Umum kini punya channel Log Server/Booster/Transcript (paritas kategori Log & Channel). Endpoint DASH API baru `POST /guilds/:id/panels` + `POST /guilds/:id/verify-panel` (paritas penuh `/setup-ticket-panel` & `/setup-verify`, render-first + rollback); payload dashboard + `panels` (slim). Dashboard 19 → 20 modul; test 693 → 698; smoke test `scripts/smoke-v321.mjs`; alat pratinjau `scripts/dev-sandbox.cjs`.
 - **v3.20.0** (2026-09-15) — 🪄 **CUSTOM COMMAND DARI WEB + EMBED BUILDER LENGKAP**. Admin kini bisa MEMBUAT konten dari dashboard lalu bot meneruskannya ke server — ala Dyno: modul **Custom Command** (bikin slash command sendiri: nama, deskripsi, balasan teks + embed, ephemeral; setelah disimpan otomatis terdaftar di Discord ± 1 menit, maks 20/server) dan modul **Embed** di-upgrade jadi builder lengkap (author, fields sejajar/full + urutan, thumbnail, image, footer, timestamp, teks luar embed) dengan **pratinjau live meniru chat Discord**. Custom command bisa dinonaktifkan lewat Command Manager web / `/commands toggle` — paritas penuh. Data baru `data/customCommands/<guildId>.json` ikut backup/restore. Endpoint DASH API baru `POST/DELETE /guilds/:id/custom-commands`; `POST /guilds/:id/embed` menerima bentuk lengkap. Dashboard 18 → 19 modul; test 670 → 693.
 - **v3.19.0** (2026-09-15) — 🧩 **COMMAND MANAGER ALA DYNO + DASHBOARD 18 MODUL**. Semua 93 slash command kini bisa diaktifkan/dinonaktifkan per-server dari web (modul Command Manager: pencarian + grup + aksi massal) atau Discord (`/commands list|toggle|enable-all`) — satu config, dua interface. 7 modul dashboard baru: Backup (buat/restore), Moderasi (riwayat warn + modlog), Kunci VIP (paritas /set-key), Giveaway, Embed, Poll, + Command Manager. FIX data loss validator products (roleId/days tidak lagi terhapus saat simpan dari web). Registry 92 → 93 command, test 639 → 670.

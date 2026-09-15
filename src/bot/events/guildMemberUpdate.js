@@ -32,7 +32,8 @@ const { Events } = require('discord.js');
 const { logServerEvent, snip } = require('../../infra/serverLog');
 // v3.12.0: guard GUILD_ID tunggal (mode 1 server / mode publik).
 const { isGuildAllowed } = require('../../infra/guild');
-// v3.22.0: aturan universal Unverified — Role Engine + config guild.
+// v3.23.0: aturan "role join hilang saat member dapat role lain" — Role
+// Engine + config guild (toggle autorole.removeOnNewRole).
 const { revokeRoles, joinRoleIds } = require('../../services/roleEngine');
 const { getConfig } = require('../../data/configManager');
 // v3.9.49: notifikasi boost (channel server-booster + server log + riwayat).
@@ -82,38 +83,43 @@ async function onEvent(oldMember, newMember) {
                 r => !newMember.roles.cache.has(r.id)
             );
 
-            // === v3.22.0: ATURAN UNIVERSAL UNVERIFIED ===
-            // Member yang memegang role penanda Unverified dianggap terverifikasi
-            // begitu menerima role LAIN apa pun — dari sumber MANA PUN: panel
-            // self-role, admin memberi manual, leveling, pembelian VIP, boost,
-            // atau bot lain. Role Unverified dihapus senyap (pilihan admin:
-            // diam + tercatat di log).
+            // === v3.23.0: TOGGLE "ROLE JOIN HILANG SAAT ROLE BARU" ===
+            // Menggantikan konsep role penanda Unverified (v3.22.0 — dihapus
+            // atas permintaan admin: "jangan set role unverified, pakai saja
+            // auto role join + toggle"). Saat `autorole.removeOnNewRole`
+            // aktif, SEMUA role join yang member pegang dicabut begitu dia
+            // menerima role LAIN — dari sumber MANA PUN: panel self-role,
+            // admin memberi manual, leveling, pembelian VIP, boost, atau bot
+            // lain. Penghapusan senyap (pilihan admin: diam + tercatat di log).
             //
-            // Pengecualian (role yang TIDAK dihitung sebagai "role pertama"):
-            //   - role Unverified itu sendiri (diberikan saat join)
-            //   - role-role join yang sistem berikan saat member masuk (daftar
-            //     /set-autorole) — kalau tidak, memberi @Member + @Unverified
-            //     saat join langsung "memverifikasi" semua orang dan penandanya
-            //     jadi tidak berguna.
+            // Pengecualian (role yang TIDAK dihitung sebagai "role baru"):
+            //   - role join itu sendiri (diberikan/di-configure ulang saat
+            //     join) — kalau tidak, grant @Member saat join langsung
+            //     melepas role-nya sendiri dan toggle jadi tidak berguna.
+            // Toggle MATI (default) → tidak ada yang dicabut: auto-role
+            // bersifat permanen ala Dyno.
             const config = getConfig(newMember.guild.id);
-            const unverifiedId = config.roles.unverified;
+            const joinIds = joinRoleIds(config);
             if (
-                unverifiedId &&
+                config.autorole?.removeOnNewRole === true &&
+                joinIds.length > 0 &&
                 added.length > 0 &&
-                newMember.roles.cache.has(unverifiedId) &&
-                added.some(r => r.id !== unverifiedId && !joinRoleIds(config).includes(r.id))
+                added.some(r => !joinIds.includes(r.id))
             ) {
-                const res = await revokeRoles(newMember, [unverifiedId], {
-                    reason: 'Penanda Unverified dihapus otomatis — role pertama diterima'
-                });
-                if (res.revoked.length > 0) {
-                    console.log(
-                        `✅ [auto-verify] ${user.tag} menerima role — penanda Unverified dihapus.`
-                    );
+                const held = joinIds.filter(id => newMember.roles.cache.has(id));
+                if (held.length > 0) {
+                    const res = await revokeRoles(newMember, held, {
+                        reason: 'Role join dilepas otomatis — member menerima role lain'
+                    });
+                    if (res.revoked.length > 0) {
+                        console.log(
+                            `✅ [auto-role] ${user.tag} menerima role lain — ${res.revoked.length} role join dilepas.`
+                        );
+                    }
+                    // Penghapusan itu sendiri memicu guildMemberUpdate lagi → server
+                    // log ROLE_UPDATE standar di bawah mencatatnya di putaran itu
+                    // (➖ role join). Tanpa DM, tanpa pengumuman — pilihan admin.
                 }
-                // Penghapusan itu sendiri memicu guildMemberUpdate lagi → server
-                // log ROLE_UPDATE standar di bawah mencatatnya di putaran itu
-                // (➖ Unverified). Tanpa DM, tanpa pengumuman — pilihan admin.
             }
 
             if (added.length > 0 || removed.length > 0) {

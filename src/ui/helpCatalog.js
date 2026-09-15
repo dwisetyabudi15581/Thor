@@ -82,7 +82,7 @@ const HELP_CATEGORIES = [
         short: 'Baru pakai bot? Urutan setup server dari nol',
         lines: [
             '**Baru pakai bot? Ikuti urutan ini:**',
-            '1️⃣ `/set-role unverified @Unverified` — role penanda member baru',
+            '1️⃣ `/set-autorole action:add role:@Member` — auto-role saat join · `action:toggle` = hilang saat role baru',
             '2️⃣ `/add-category` + `/add-product` — siapkan katalog',
             '3️⃣ `/setup-ticket-panel` — pasang panel tiket',
             '4️⃣ `/setup-selfrole` + `/selfrole-add` — panel self-role (mis. panel Verifikasi)',
@@ -92,7 +92,7 @@ const HELP_CATEGORIES = [
         // v3.9.53: panduan lengkap mandiri (tampilan kategori = detail saja).
         detail: [
             '**Baru pakai bot ini? Setup server dengan urutan ini (sekali saja):**',
-            '1️⃣ `/set-role tipe:unverified role:@Unverified` — role penanda yang diberikan saat join, hilang otomatis begitu member dapat role lain apa pun',
+            '1️⃣ `/set-autorole action:add role:@Member` — role yang diberikan otomatis saat join; nyalakan `action:toggle` kalau mau role-nya hilang begitu member dapat role lain apa pun',
             '2️⃣ `/add-category` + `/add-product` — siapkan produk jualan (lihat kategori Produk)',
             '3️⃣ `/setup-ticket-panel` — pasang panel order yang diklik member untuk beli',
             '4️⃣ `/setup-selfrole` + `/selfrole-add` — pasang panel self-role (mis. Verifikasi: member klik untuk dapat role Verified)',
@@ -207,10 +207,10 @@ const HELP_CATEGORIES = [
             '• `/refresh-panel id` — render ulang dengan kategori/produk TERBARU (jalankan ini setelah tambah produk — kalau tidak, embed masih memakai daftar lama).',
             '• `/delete-panel id` — hapus panel (pesan + config).',
             '',
-            '**Verifikasi member (v3.22.0 — kini berbasis self-role)**',
+            '**Verifikasi member (v3.23.0 — kini murni self-role + auto-role)**',
             '• `/setup-selfrole title:Verifikasi` + `/selfrole-add role:@Verified label:Verifikasi Saya` — panel self-role yang diklik member untuk dapat role Verified.',
-            '• `/set-role tipe:unverified role:@Unverified` — member baru otomatis dapat penanda ini; hilang begitu mereka menerima role lain apa pun.',
-            '• `/set-autorole action:add role:@Member` — role tambahan yang diberikan otomatis saat join.',
+            '• `/set-autorole action:add role:@Member` — role yang diberikan otomatis saat join (maks 10).',
+            '• `/set-autorole action:toggle` — nyalakan/matikan "role join hilang saat member dapat role lain" — pengganti role Unverified lama, cukup satu daftar + satu toggle.',
             '• `/setup-ticket` — panel legacy 1 kategori (dipertahankan untuk setup lama; utamakan `/setup-ticket-panel`).',
             '',
             '❓ **Panel masih menampilkan harga lama?** Jalankan `/refresh-panel id` — atau `/update-panel` untuk teksnya.',
@@ -351,7 +351,7 @@ const HELP_CATEGORIES = [
         name: 'Role & Self-Role',
         short: 'Role sistem + panel role pilihan member',
         lines: [
-            '• `/set-role verified @role` — role sistem (verified/unverified/admin/midman/**booster**) · `/remove-role`',
+            '• `/set-role admin @role` — role sistem (admin/midman/**booster**) · `/set-autorole add/toggle` — role join',
             '• `/setup-selfrole title:... type:button` — panel role pilihan member',
             '• `/selfrole-add` `/selfrole-remove` — kelola daftar · `/selfrole-list` `/selfrole-delete`',
             '💡 `requires_role:@Verified` — role terkunci syarat'
@@ -359,7 +359,8 @@ const HELP_CATEGORIES = [
         // v3.9.53: panduan lengkap mandiri (tampilan kategori = detail saja).
         detail: [
             '**Role sistem (logika bot)** — `/set-role tipe role`:',
-            '• `tipe:verified` — diberikan setelah verifikasi · `tipe:unverified` — disandang sebelum verifikasi · `tipe:admin` — siapa yang boleh pakai command admin · `tipe:midman` — petugas rekber. `/remove-role tipe` menghapus satu.',
+            '• `tipe:admin` — siapa yang boleh pakai command admin · `tipe:midman` — petugas rekber · `tipe:booster` — auto role boost. `/remove-role tipe` menghapus satu. (Konsep verified/unverified dihapus v3.23.0.)',
+            '• `/set-autorole action:add role:@Member` — role otomatis saat join (maks 10); `action:toggle` = "role join hilang saat member dapat role lain" — cocok untuk penanda member baru.',
             '• `tipe:booster` (v3.9.59) — role Booster: **otomatis** diberikan saat member boost & dihapus saat boost berakhir; saat di-set langsung diterapkan ke booster yang ada. Tes rantainya: `/test-booster`.',
             '',
             '**Panel self-role (pilihan member)** — member klik sendiri untuk ambil/lepas role:',

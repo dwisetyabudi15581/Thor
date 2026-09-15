@@ -82,7 +82,7 @@ async function apply(member, roleIds, mode, options = {}) {
     }
     if (!Array.isArray(roleIds) || roleIds.length === 0) return result;
 
-    // Dedupe while preserving order (a join list may repeat the unverified id).
+    // Dedupe while preserving order (a join list may repeat an id).
     const seen = new Set();
     const ids = roleIds.filter(id => {
         if (id == null || seen.has(id)) return false;
@@ -172,19 +172,18 @@ function revokeRoles(member, roleIds, options = {}) {
 }
 
 /**
- * Daftar lengkap role saat join untuk config sebuah guild: auto-role
- * milik admin PLUS role penanda Unverified (saan di-set) — dedupe, urutan
- * terjaga. v3.22.0: daftar ini JUGA jadi set pengecualian untuk aturan
- * universal "role pertama menghapus Unverified" (guildMemberUpdate) — role
- * yang sistem berikan sendiri saat join tidak boleh dihitung sebagai
- * "role pertama" milik member.
+ * Daftar role saat join untuk config sebuah guild — isi `autorole.roleIds`
+ * (daftar /set-autorole), dedupe, urutan terjaga. v3.23.0: konsep role
+ * penanda Unverified DIHAPUS — daftar ini kini murni auto-role join, dan
+ * aturan "role join hilang saat member dapat role lain" dikendalikan toggle
+ * `autorole.removeOnNewRole` (guildMemberUpdate). Role yang sistem berikan
+ * sendiri saat join tidak boleh dihitung sebagai "role lain" oleh aturan itu
+ * — memberi @Member saat join tidak boleh langsung melepasnya sendiri.
  */
 function joinRoleIds(config) {
     const ids = [];
     const autorole = Array.isArray(config?.autorole?.roleIds) ? config.autorole.roleIds.filter(Boolean) : [];
     for (const id of autorole) if (!ids.includes(id)) ids.push(id);
-    const unverified = config?.roles?.unverified;
-    if (unverified && !ids.includes(unverified)) ids.push(unverified);
     return ids;
 }
 

@@ -126,8 +126,9 @@ export type GuildConfig = {
   messages: Record<string, string>;
   colors: Record<string, number>;
   // v3.22.0: verifyButton DIHAPUS — verifikasi kini panel self-role.
-  // autorole = daftar auto-role saat join (paritas /set-autorole).
-  autorole: { roleIds: string[] };
+  // v3.23.0: konsep role Unverified dihapus — autorole = daftar role join
+  // + toggle removeOnNewRole (role join hilang saat member dapat role lain).
+  autorole: { roleIds: string[]; removeOnNewRole: boolean };
   ticketCategories: TicketCategory[];
   leveling: {
     enabled: boolean;

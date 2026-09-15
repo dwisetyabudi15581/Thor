@@ -52,18 +52,19 @@ module.exports = async function (interaction) {
     const guildId = resolveGuildId(interaction);
     const config = getConfig(guildId);
 
-    // === SET AUTOROLE (v3.22.0 — auto-role saat join, ala Dyno) ===
-    // Satu command, tiga aksi: add / remove / list. Daftar ini (plus role
-    // penanda Unverified) diberikan otomatis ke setiap member baru oleh
-    // memberHandler → Role Engine.
+    // === SET AUTOROLE (v3.23.0 — auto-role saat join ala Dyno + toggle) ===
+    // Satu command, empat aksi: add / remove / list / toggle. Daftar ini
+    // diberikan otomatis ke setiap member baru oleh memberHandler → Role
+    // Engine. Toggle removeOnNewRole (pengganti konsep role Unverified yang
+    // dihapus): saat aktif, role join dilepas begitu member dapat role lain.
     if (interaction.commandName === 'set-autorole') {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-        const action = interaction.options.getString('action'); // add | remove | list
+        const action = interaction.options.getString('action'); // add | remove | list | toggle
         const role = interaction.options.getRole('role');
         const MAX_AUTOROLE = 10;
 
-        if (action !== 'list' && !role) {
+        if ((action === 'add' || action === 'remove') && !role) {
             return safeEditReply(interaction, {
                 content: '❌ `add` / `remove` butuh role. Pakai `/set-autorole action:list` untuk melihat daftarnya saja.'
             });
@@ -77,13 +78,38 @@ module.exports = async function (interaction) {
                 current.length > 0
                     ? current.map(id => `• <@&${id}>`).join('\n')
                     : '_kosong — belum ada auto-role saat join_';
-            const unverifiedNote = config.roles.unverified
-                ? `\n\n🎭 Penanda Unverified (juga diberikan saat join, dihapus otomatis begitu member dapat role lain): <@&${config.roles.unverified}>`
-                : '';
+            const toggleState =
+                config.autorole?.removeOnNewRole === true
+                    ? 'AKTIF ✅ — role join otomatis hilang begitu member dapat role lain'
+                    : 'MATI ⛔ — role join permanen (ala Dyno)';
             return safeEditReply(interaction, {
                 content:
-                    `🎁 **AUTO-ROLE SAAT JOIN** (${current.length}/${MAX_AUTOROLE})\n${list}${unverifiedNote}\n\n` +
-                    `💡 \`/set-autorole action:add role:@role\` untuk menambah · \`/set-autorole action:remove role:@role\` untuk menghapus.`
+                    `🎁 **AUTO-ROLE SAAT JOIN** (${current.length}/${MAX_AUTOROLE})\n${list}\n\n` +
+                    `♻️ Hapus saat dapat role lain: ${toggleState}\n\n` +
+                    '💡 `action:add role:@role` menambah · `action:remove` menghapus · `action:toggle` membalik toggle.'
+            });
+        }
+
+        // ---- TOGGLE (v3.23.0 — pengganti konsep role penanda Unverified) ----
+        // "Hapus role join saat member dapat role lain". Tanpa opsi enabled →
+        // balik nilai sekarang (nyala↔mati) — satu ketikan, tanpa mikir.
+        if (action === 'toggle') {
+            const explicit = interaction.options.getBoolean('enabled');
+            const next = typeof explicit === 'boolean' ? explicit : config.autorole?.removeOnNewRole !== true;
+            setField(guildId, 'autorole.removeOnNewRole', next);
+            await logAudit(interaction.client, {
+                action: 'SET_AUTOROLE',
+                actorId: interaction.user.id,
+                actorTag: interaction.user.tag,
+                details: `Auto-role saat join: toggle "hapus saat dapat role lain" → ${next ? 'AKTIF' : 'MATI'}`,
+                guildId: interaction.guild.id
+            });
+            return safeEditReply(interaction, {
+                content:
+                    `✅ **Hapus role join saat member dapat role lain: ${next ? 'AKTIF ✅' : 'MATI ⛔'}**\n\n` +
+                    (next
+                        ? 'Semua role di daftar auto-role otomatis dilepas begitu member menerima role lain apa pun — panel self-role, reward level, pemberian admin, bahkan bot lain. Cocok untuk role penanda "member baru".'
+                        : 'Role auto-role bersifat permanen — menempel di member sampai dilepas manual.')
             });
         }
 
@@ -154,7 +180,7 @@ module.exports = async function (interaction) {
                 `✅ ${role} dihapus dari daftar auto-role.\n\n` +
                 (current.length > 0
                     ? `Daftar sekarang:\n${current.map(id => `• <@&${id}>`).join('\n')}`
-                    : 'Daftar kini kosong — member baru hanya menerima penanda Unverified (kalau di-set).')
+                    : 'Daftar kini kosong — tidak ada role yang diberikan otomatis saat join.')
         });
     }
 
@@ -652,7 +678,6 @@ module.exports = async function (interaction) {
                     name: '🎭 Roles',
                     value: capFieldValue(
                         [
-                            `• Unverified: ${fmt(config.roles.unverified, '@&')}`,
                             `• Admin: ${fmt(config.roles.admin, '@&')}`,
                             `• Midman (Rekber): ${fmt(config.roles.midman, '@&')}`,
                             // v3.9.59: role booster auto (diberikan saat boost,

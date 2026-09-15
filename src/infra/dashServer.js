@@ -114,6 +114,12 @@ function isStr(v, max) {
  */
 const SECTION_VALIDATORS = {
     roles: (key, value) => {
+        // v3.23.0: konsep role verify/unverified DIHAPUS — tolak dengan pesan
+        // yang mengarahkan ke penggantinya (dashboard lama masih bisa
+        // mengirim key ini dari state basi).
+        if (key === 'verified' || key === 'unverified') {
+            return { ok: false, error: `roles.${key} dihapus di v3.23.0 — role join kini via autorole (daftar + toggle removeOnNewRole)` };
+        }
         if (!/^[a-z][a-zA-Z0-9_-]{0,39}$/.test(key)) return { ok: false, error: `Nama role key tidak valid: ${key}` };
         if (!isSnowflakeOrNull(value)) return { ok: false, error: `roles.${key} harus ID Discord atau null` };
         return { ok: true, value: value || null };
@@ -137,9 +143,11 @@ const SECTION_VALIDATORS = {
     // v3.22.0: section verifyButton DIHAPUS — fitur verifikasi dihapus (kini
     // panel self-role). Dashboard lama yang masih mengirim verifyButton.*
     // dapat 422 "Unknown section" yang bersih.
-    // v3.22.0: autorole — daftar auto-role saat join (paritas web /set-autorole).
+    // v3.23.0: autorole — daftar auto-role saat join (paritas web
+    // /set-autorole) + toggle removeOnNewRole (path keyed, lihat
+    // validateUpdate).
     autorole: (key, value) => {
-        if (key !== '__array__') return { ok: false, error: 'autorole hanya bisa di-set sebagai array utuh (autorole.roleIds)' };
+        if (key !== '__array__') return { ok: false, error: 'autorole hanya bisa di-set sebagai array utuh (autorole.roleIds) atau toggle autorole.removeOnNewRole' };
         if (!Array.isArray(value)) return { ok: false, error: 'autorole harus array of role ID' };
         if (value.length > 10) return { ok: false, error: 'autorole maksimal 10 role' };
         for (const id of value) {
@@ -288,6 +296,13 @@ function validateUpdate(dotPath, value) {
     if (!validator) return { ok: false, error: `Section tidak dikenal: ${section}` };
 
     // Section array (levelRoles / ticketCategories / products) — selalu array utuh.
+    // v3.23.0: autorole punya DUA bentuk: array utuh (daftar role join) dan
+    // path keyed `autorole.removeOnNewRole` (toggle boolean). Keduanya bisa
+    // datang bersamaan dalam satu PUT dari SaveBar.
+    if (section === 'autorole' && parts.length === 2 && parts[1] === 'removeOnNewRole') {
+        if (typeof value !== 'boolean') return { ok: false, error: 'autorole.removeOnNewRole harus boolean (true/false)' };
+        return { ok: true, section: 'autorole', key: 'removeOnNewRole', value };
+    }
     if (['levelRoles', 'ticketCategories', 'products', 'autorole'].includes(section)) {
         if (parts.length !== 1) return { ok: false, error: `${section} hanya bisa di-set sebagai array utuh` };
         const r = validator('__array__', value);
@@ -310,7 +325,14 @@ function applyUpdates(config, updates) {
             continue;
         }
         if (v.key === null) {
-            config[v.section] = v.value; // array utuh
+            // v3.23.0: set array utuh autorole TIDAK boleh menghapus toggle
+            // removeOnNewRole — kedua path (autorole + autorole.removeOnNewRole)
+            // bisa datang bersamaan dalam satu PUT; merge, bukan replace.
+            if (v.section === 'autorole') {
+                config.autorole = { ...(config.autorole || {}), ...v.value };
+            } else {
+                config[v.section] = v.value; // array utuh
+            }
             // Semantik /remove-category: kategori bawaan claim_giveaway &
             // midman otomatis di-re-add oleh getConfig() selama flag dismissal
             // tidak diset. Dashboard harus set/unset flag yang sama supaya
