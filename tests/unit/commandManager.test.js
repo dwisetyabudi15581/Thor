@@ -76,9 +76,9 @@ test('cmdmgr: normalize — lebih dari 100 entri ditolak', () => {
     assert.match(result.error, /100/);
 });
 
-test('cmdmgr: registry — /commands terdaftar (93) & ter-map ke domain sendiri', () => {
+test('cmdmgr: registry — /commands terdaftar (92) & ter-map ke domain sendiri', () => {
     const cmds = getCommands();
-    assert.strictEqual(cmds.length, 93);
+    assert.strictEqual(cmds.length, 92);
     assert.ok(cmds.some((c) => c.name === 'commands'));
     assert.strictEqual(routeCommand.COMMAND_TO_DOMAIN.commands, 'commands');
 });

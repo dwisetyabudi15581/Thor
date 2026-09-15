@@ -611,7 +611,7 @@ test('KONTRAK registry/router: /serverstats terdaftar dengan 3 subcommand, admin
     resetManager();
     const { getCommands } = require('../../src/commands/registry');
     const cmds = getCommands();
-    assert.strictEqual(cmds.length, 93, '93 command (/premium dihapus v3.17.0, /commands ditambah v3.19.0 — command manager ala Dyno)');
+    assert.strictEqual(cmds.length, 92, '92 command (v3.22.0 — command verify dihapus, set-autorole ditambah)');
 
     const cmd = cmds.find(c => c.name === 'serverstats');
     assert.ok(cmd, '/serverstats ada di registry');

@@ -126,9 +126,9 @@ test('registry: /set-transcript-channel TIDAK lagi terdaftar (digabung ke /set-c
     assert.ok(!names.includes('set-transcript-channel'), 'command lama harus hilang dari registry');
 });
 
-test('registry: total command tepat 93 (/premium dihapus v3.17.0, /commands ditambah v3.19.0)', () => {
+test('registry: total command tepat 92 (v3.22.0 — command verify dihapus, set-autorole ditambah)', () => {
     const { getCommands } = require('../../src/commands/registry');
-    assert.strictEqual(getCommands().length, 93);
+    assert.strictEqual(getCommands().length, 92);
 });
 
 test('registry: /set-channel punya choice tipe "transcript" + deskripsi menyebut transcript', () => {

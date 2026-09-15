@@ -11,11 +11,16 @@
 // Discord. Paritas penuh dengan slash command:
 //
 //   Langkah 1  Role Admin Bot       ≙ /set-role admin
-//   Langkah 2  Role Terverifikasi   ≙ /set-role verified
+//   Langkah 2  Role Unverified      ≙ /set-role unverified    (v3.22.0)
 //   Langkah 3  Kategori & Produk    ≙ /add-category + /add-product
 //   Langkah 4  Pasang Panel Tiket   ≙ /setup-ticket-panel
-//   Langkah 5  Pasang Verifikasi    ≙ /setup-verify
+//   Langkah 5  Panel Self-Role      ≙ /setup-selfrole          (v3.22.0)
 //   Langkah 6  Channel Log Server   ≙ /set-channel server-log
+//
+// v3.22.0: fitur verifikasi khusus DIHAPUS — "verified" kini hanya role di
+// panel self-role, dan penanda Unverified hilang otomatis begitu member
+// menerima role lain apa pun. Langkah 2 mendaftarkan penandanya; Langkah 5
+// mengarahkan admin ke modul Self Roles untuk memasang panel (mis. Verifikasi).
 //
 // Di bawahnya: "Langkah lanjutan" — pintasan ke modul kategori lain
 // (serverstats / leveling / tempvoice / responder / selfrole) supaya web
@@ -97,8 +102,8 @@ export function QuickStartModule({
   // Langkah 1-2: role (dropdown + kolom ID manual — nilai awal = yang tersimpan)
   const [adminPick, setAdminPick] = useState<string | null>(c.roles.admin ?? null);
   const [adminId, setAdminId] = useState("");
-  const [verifiedPick, setVerifiedPick] = useState<string | null>(c.roles.verified ?? null);
-  const [verifiedId, setVerifiedId] = useState("");
+  const [unverifiedPick, setUnverifiedPick] = useState<string | null>(c.roles.unverified ?? null);
+  const [unverifiedId, setUnverifiedId] = useState("");
 
   // Langkah 3: produk cepat
   const [prdLabel, setPrdLabel] = useState("");
@@ -110,8 +115,6 @@ export function QuickStartModule({
   // Langkah 4-5: panel
   const [panelChannel, setPanelChannel] = useState<string | null>(null);
   const [panelDropdown, setPanelDropdown] = useState(false);
-  const [verifyChannel, setVerifyChannel] = useState<string | null>(null);
-  const [verifySentTo, setVerifySentTo] = useState<string | null>(null);
 
   // Langkah 6: channel log
   const [logPick, setLogPick] = useState<string | null>(c.channels["server-log"] ?? null);
@@ -120,13 +123,14 @@ export function QuickStartModule({
   const cats = c.ticketCategories;
   const products = c.products;
   const panels = draft.panels ?? [];
+  const selfrolePanels = draft.selfroles ?? [];
 
   const done = {
     admin: !!c.roles.admin,
-    verified: !!c.roles.verified,
+    unverified: !!c.roles.unverified,
     catalog: products.length > 0,
     panel: panels.length > 0,
-    verify: verifySentTo !== null,
+    selfrole: selfrolePanels.length > 0,
     log: !!c.channels["server-log"],
   };
   const doneCount = Object.values(done).filter(Boolean).length;
@@ -184,23 +188,6 @@ export function QuickStartModule({
       await call("panels", "POST", { channelId: panelChannel, useDropdown: panelDropdown });
       await refresh();
       toast(`Panel tiket dipasang di ${channelLabel(meta.channels, panelChannel)} — cek Discord.`);
-    } catch (e) {
-      toast(e instanceof Error ? e.message : "Gagal memasang panel.", "err");
-    } finally {
-      setBusy(null);
-    }
-  }
-
-  async function installVerifyPanel() {
-    if (!verifyChannel) {
-      toast("Pilih channel tujuan panel verifikasi dulu.", "err");
-      return;
-    }
-    setBusy("verify");
-    try {
-      await call("verify-panel", "POST", { channelId: verifyChannel });
-      setVerifySentTo(verifyChannel);
-      toast(`Panel verifikasi dipasang di ${channelLabel(meta.channels, verifyChannel)} — cek Discord.`);
     } catch (e) {
       toast(e instanceof Error ? e.message : "Gagal memasang panel.", "err");
     } finally {
@@ -293,25 +280,25 @@ export function QuickStartModule({
         </Field>
       </StepCard>
 
-      {/* Langkah 2 — Role Verified */}
+      {/* Langkah 2 — Role penanda Unverified (v3.22.0) */}
       <StepCard
         n={2}
-        title="Role Terverifikasi"
-        desc={<>Role yang didapat member setelah klik tombol verifikasi. Wajib sebelum memasang panel verifikasi. ≙ <code className="text-amber-300/80">/set-role verified</code></>}
-        done={done.verified}
+        title="Role Penanda Unverified"
+        desc={<>Diberikan otomatis ke setiap member baru dan dihapus otomatis begitu mereka menerima role lain apa pun (self-role, role level, pemberian admin — apa pun). Verifikasi tanpa tombol khusus. ≙ <code className="text-amber-300/80">/set-role unverified</code></>}
+        done={done.unverified}
       >
-        <Field label="Pilih dari daftar role" hint={done.verified ? `Tersimpan: ${roleLabel(meta.roles, c.roles.verified)}` : undefined}>
-          <RoleSelect value={verifiedPick} onChange={setVerifiedPick} roles={meta.roles} />
+        <Field label="Pilih dari daftar role" hint={done.unverified ? `Tersimpan: ${roleLabel(meta.roles, c.roles.unverified)}` : undefined}>
+          <RoleSelect value={unverifiedPick} onChange={setUnverifiedPick} roles={meta.roles} />
         </Field>
         <Field label="…atau masukkan ID role manual" hint={ID_HINT}>
           <div className="flex gap-2">
-            <TextInput value={verifiedId} onChange={setVerifiedId} placeholder="mis. 888000111222333444" />
+            <TextInput value={unverifiedId} onChange={setUnverifiedId} placeholder="mis. 888000111222333444" />
             <Button
-              onClick={() => applyRole("verified", "roles.verified", verifiedPick, verifiedId, "Role Verified didaftarkan — member baru bisa diverifikasi.")}
-              disabled={busy === "verified"}
+              onClick={() => applyRole("unverified", "roles.unverified", unverifiedPick, unverifiedId, "Penanda Unverified didaftarkan — member baru mendapatkannya saat join, dan hilang saat role pertama mereka.")}
+              disabled={busy === "unverified"}
               className="shrink-0 bg-amber-400 font-semibold text-zinc-950 hover:bg-amber-300"
             >
-              {busy === "verified" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
+              {busy === "unverified" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
               Daftarkan
             </Button>
           </div>
@@ -439,31 +426,27 @@ export function QuickStartModule({
         </Field>
       </StepCard>
 
-      {/* Langkah 5 — Panel Verifikasi */}
+      {/* Langkah 5 — Panel self-role (v3.22.0: menggantikan panel verifikasi lama) */}
       <StepCard
         n={5}
-        title="Pasang Panel Verifikasi"
-        desc={<>Gerbang verifikasi: member baru klik tombol → dapat role Verified. Teks &amp; tombolnya diatur di modul Umum. ≙ <code className="text-amber-300/80">/setup-verify</code></>}
-        done={done.verify}
+        title="Panel Self-Role (mis. Verifikasi)"
+        desc={<>Panel tempat member mengambil role sendiri lewat tombol — tambahkan role Verified-mu di sini dan itu jadi gerbang verifikasi, dengan style/label/emoji sesukamu. ≙ <code className="text-amber-300/80">/setup-selfrole</code> + <code className="text-amber-300/80">/selfrole-add</code></>}
+        done={done.selfrole}
       >
         <Field
-          label="Channel tujuan"
-          hint={verifySentTo ? `Terakhir dipasang di: ${channelLabel(meta.channels, verifySentTo)} — boleh pasang ulang kapan pun.` : "Biasanya channel rules/welcome."}
+          label="Panel self-role"
+          hint={done.selfrole ? `${selfrolePanels.length} panel terpasang — kelola di modul Self Roles.` : "Belum ada — buat satu di modul Self Roles."}
         >
-          <ChannelSelect value={verifyChannel} onChange={setVerifyChannel} channels={meta.channels} placeholder="— pilih channel —" />
-        </Field>
-        <Field label="Tombol verifikasi" hint={`Label saat ini: "${c.verifyButton.label}" — ubah di modul Umum.`}>
           <div className="flex items-center">
             <span className="mr-2 rounded-lg border border-emerald-500/40 bg-emerald-500/10 px-3 py-1.5 text-xs font-medium text-emerald-300">
-              {c.verifyButton.emoji} {c.verifyButton.label}
+              🎭 {selfrolePanels.length} panel
             </span>
             <Button
-              onClick={installVerifyPanel}
-              disabled={busy === "verify"}
+              onClick={() => goTo("selfroles")}
               className="ml-auto bg-amber-400 font-semibold text-zinc-950 hover:bg-amber-300"
             >
-              {busy === "verify" ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : null}
-              Pasang
+              <ArrowRight className="h-4 w-4" aria-hidden="true" />
+              Buat / Kelola
             </Button>
           </div>
         </Field>

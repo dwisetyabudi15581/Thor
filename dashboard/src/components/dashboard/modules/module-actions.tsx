@@ -614,7 +614,7 @@ export function ModuleOverview({ draft, meta }: { draft: DashboardPayload; meta:
   const mods = [
     { name: "AutoMod", on: draft.automod.enabled, note: draft.automod.blockLinks ? "spam + link + kata" : "spam + kata" },
     { name: "Leveling", on: c.leveling.enabled, note: `${c.levelRoles.length} role reward` },
-    { name: "Verifikasi", on: Boolean(c.roles.verified), note: c.roles.verified ? "role terpasang" : "belum set role" },
+    { name: "Auto-Role", on: Boolean(c.roles.unverified) || (c.autorole?.roleIds?.length ?? 0) > 0, note: c.roles.unverified ? `penanda terpasang${(c.autorole?.roleIds?.length ?? 0) > 0 ? ` + ${(c.autorole?.roleIds?.length ?? 0)} role join` : ""}` : `${c.autorole?.roleIds?.length ?? 0} role join` },
     { name: "Tiket", on: c.ticketCategories.length > 0, note: `${c.ticketCategories.length} kategori · ${c.products.length} produk` },
     { name: "Rekber", on: true, note: `${c.midman.feeMode === "percent" ? `${c.midman.feeValue}%` : `flat ${c.midman.feeValue}`} fee` },
     { name: "Responder", on: draft.responders.length > 0, note: `${draft.responders.length} pemicu` },

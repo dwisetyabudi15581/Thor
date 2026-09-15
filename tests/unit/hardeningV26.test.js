@@ -145,17 +145,18 @@ test('v3.9.26 migrasi v1→v2: field modern tidak lagi DROPPED', () => {
             { id: 'jasa', label: 'Jasa', emoji: '🛠️', style: 'Success', requiresKey: false, isDefault: false }
         ],
         leveling: { enabled: true, xpPerMessage: 25 },
-        verifyButton: { label: 'Klik Aku', style: 'Danger' },
+        autorole: { roleIds: ['r_member'] },
         customFieldAdmin: 'preserve-me'
     });
 
     const config = getConfig('g_v26');
-    // Flat v1 → dipindah ke nested
-    assert.strictEqual(config.roles.verified, 'r_verified_old');
+    // Flat v1 → dipindah ke nested. v3.22.0: verifiedRoleId tidak lagi dipetakan
+    // ke mana pun (konsep role verified dihapus).
+    assert.strictEqual(config.roles.verified, undefined, 'v3.22.0: verified dibuang (fitur dihapus)');
     assert.strictEqual(config.channels.invoice, 'c_invoice_old');
     // Field modern harus ada di hasil merge
     assert.strictEqual(config.leveling.enabled, true);
-    assert.strictEqual(config.verifyButton.label, 'Klik Aku');
+    assert.deepStrictEqual(config.autorole.roleIds, ['r_member']);
     assert.strictEqual(config.customFieldAdmin, 'preserve-me');
     const ids = config.ticketCategories.map(c => c.id);
     assert.ok(ids.includes('jasa'), 'ticketCategories custom harus preserve');

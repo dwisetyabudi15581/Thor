@@ -5,6 +5,20 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 Legend: 🔴 critical · 🟠 high · 🟡 medium · 🟢 improvement
 
+## [3.22.0] — 2026-09-15
+
+### Changed — 🎭 SATU SISTEM ROLE TERPADU: penanda Unverified + auto-role saat join + panel self-role
+
+Tiga "cara mendapat role" (verifikasi, self-role, auto-role join) tadinya satu fitur yang sama diimplementasi tiga kali. Kini jadi SATU sistem: **semua grant role lewat Role Engine, dan verifikasi cukup "menerima role pertama" — dari sumber mana pun.**
+
+- 🟠 **ATURAN UNIVERSAL UNVERIFIED:** member yang memegang **role penanda Unverified** (`/set-role unverified`) otomatis tidak lagi ditandai begitu menerima **role lain apa pun** — klik panel self-role, reward level up, pembelian VIP, boost, admin memberi manual, bahkan bot lain. Penghapusan senyap + server log ROLE_UPDATE standar (pilihan admin). Role yang sistem berikan sendiri saat join dikecualikan, jadi `@Member + @Unverified` saat join tidak langsung "memverifikasi" semua orang.
+- 🟠 **`/set-autorole` (BARU, ala Dyno):** kelola role yang diberikan otomatis ke setiap member baru (`action:add / remove / list`, maks 10, validasi sama dengan `/set-role`). Penanda Unverified tetap diberikan saat join di atas daftar ini.
+- 🟠 **`src/services/roleEngine.js` (BARU):** satu gerbang untuk semua grant/revoke role — cek @everyone / managed / hierarki, idempotensi, batch dengan retry per-role, hasil terstruktur, log kegagalan yang bisa ditindaklanjuti. Call site yang dimigrasi: auto-role join, tombol & select self-role, reward level up. (Flow booster/VIP/produk tetap memakai logic khususnya yang sudah diperkeras — memang disengaja.)
+- 🟠 **FITUR VERIFIKASI KHUSUS DIHAPUS** (keputusan admin — "verified hanya role biasa di panel self-role"): `/setup-verify`, `/set-verify-button`, handler `btn_verify` (kini stub deprecation yang mengarahkan admin ke `/setup-selfrole` + `/selfrole-add`), `POST /guilds/:id/verify-panel` di DASH API, dan config `verifyButton`/`verifyTitle`/`verifyBody` (dibersihkan otomatis dari config lama saat load; `roles.unverified` tetap sebagai penanda). **Migrasi untuk server yang sudah jalan:** buat panel self-role dan tambahkan role Verified ke sana — 2 perintah, detailnya ada di balasan stub dan di `/help`.
+- 🟢 **Paritas dashboard web:** Langkah 2 Panduan Cepat kini penanda Unverified, Langkah 5 mengarah ke modul Self Roles (menggantikan "Pasang Verifikasi"); modul Umum mendapat editor **Auto-Role Saat Join** dan kehilangan seksi tombol verify; `PUT /guilds/:id/config` menerima `autorole` sebagai array utuh; kartu fitur landing diperbarui.
+- 🟢 Teks welcome default: "Silakan verifikasi dirimu" → "Ambil role untuk mendapatkan akses penuh" (verifikasi tidak lagi berbasis tombol).
+- 🟢 Test: **727** (dari 698) — baru `tests/unit/unifiedRoles.test.js` (perilaku engine, aturan universal termasuk pengecualian join & boost, grant join, `/set-autorole` add/remove/list, stub, PIN anti-regresi).
+
 ## [3.21.2] — 2026-09-15
 
 ### Fixed — 🟠 EDIT `.env` SETELAH BUILD KINI CUKUP DI-RESTART (TANPA BUILD ULANG)

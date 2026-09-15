@@ -1,5 +1,5 @@
 /**
- * Member Handler — welcome/goodbye + auto-role unverified.
+ * Member Handler — welcome/goodbye + auto-role saat join.
  *
  * Dipanggil oleh:
  *   - src/bot/events/guildMemberAdd.js
@@ -7,8 +7,14 @@
  *   - src/commands/config.js (/test-welcome preview, v3.9.48)
  *
  * Logic:
- *   - onMemberAdd: beri role Unverified + kirim welcome embed ke channel welcome.
+ *   - onMemberAdd: beri role join (daftar auto-role + penanda Unverified)
+ *     lewat Role Engine + kirim welcome embed ke channel welcome.
  *   - onMemberRemove: cek audit log (kick/ban vs leave sukarela) + kirim goodbye embed.
+ *
+ * v3.22.0: grant saat join kini lewat Role Engine (satu gerbang untuk semua
+ * grant role) dan memuat daftar /set-autorole admin, bukan cuma role
+ * Unverified. Penanda Unverified dihapus otomatis oleh guildMemberUpdate
+ * begitu member menerima role LAIN apa pun.
  *
  * v3.9.0 FIX: skip bot account.
  * v3.9.8 FIX: AuditLogEvent enum (bukan magic number 20/22), 10s window (was 5s),
@@ -22,6 +28,8 @@
 
 const { EmbedBuilder, AuditLogEvent } = require('discord.js');
 const { getConfig, fillTemplate } = require('../data/configManager');
+// v3.22.0: Role Engine — satu gerbang untuk semua grant/revoke role.
+const { grantRoles, joinRoleIds } = require('../services/roleEngine');
 
 /**
  * Variabel template welcome/goodbye (v3.9.48 — dipakai bersama oleh event
@@ -83,17 +91,15 @@ async function onMemberAdd(member) {
         recordJoin(guild.id, user.id);
     } catch (_) {}
 
-    if (config.roles.unverified) {
-        const unverifiedRole = guild.roles.cache.get(config.roles.unverified);
-        if (unverifiedRole) {
-            try {
-                await member.roles.add(unverifiedRole);
-                console.log(`✅ Role Unverified diberikan ke ${user.tag}`);
-            } catch (err) {
-                console.error(`❌ Gagal tambah role unverified untuk ${user.tag}:`, err.message);
-            }
-        } else {
-            console.warn(`⚠️ Role unverified (ID: ${config.roles.unverified}) tidak ditemukan.`);
+    // v3.22.0: auto-role saat join — daftar /set-autorole admin PLUS role
+    // penanda Unverified (saan di-set), diberikan dalam SATU panggilan engine.
+    // Cek hierarki / managed / @everyone dan log kegagalan yang bisa
+    // ditindaklanjuti ada di engine — handler ini tetap ramping.
+    const joinIds = joinRoleIds(config);
+    if (joinIds.length > 0) {
+        const res = await grantRoles(member, joinIds, { reason: 'auto-role saat join' });
+        if (res.granted.length > 0) {
+            console.log(`✅ Role join diberikan ke ${user.tag}: ${res.granted.length} role.`);
         }
     }
 

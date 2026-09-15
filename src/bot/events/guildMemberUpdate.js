@@ -32,6 +32,9 @@ const { Events } = require('discord.js');
 const { logServerEvent, snip } = require('../../infra/serverLog');
 // v3.12.0: guard GUILD_ID tunggal (mode 1 server / mode publik).
 const { isGuildAllowed } = require('../../infra/guild');
+// v3.22.0: aturan universal Unverified — Role Engine + config guild.
+const { revokeRoles, joinRoleIds } = require('../../services/roleEngine');
+const { getConfig } = require('../../data/configManager');
 // v3.9.49: notifikasi boost (channel server-booster + server log + riwayat).
 // v3.9.59: applyBoostRole — auto role booster (dipanggil SETELAH notifikasi
 // supaya riwayat tetap tercatat walau penugasan role gagal).
@@ -78,6 +81,41 @@ async function onEvent(oldMember, newMember) {
             const removed = [...oldMember.roles.cache.values()].filter(
                 r => !newMember.roles.cache.has(r.id)
             );
+
+            // === v3.22.0: ATURAN UNIVERSAL UNVERIFIED ===
+            // Member yang memegang role penanda Unverified dianggap terverifikasi
+            // begitu menerima role LAIN apa pun — dari sumber MANA PUN: panel
+            // self-role, admin memberi manual, leveling, pembelian VIP, boost,
+            // atau bot lain. Role Unverified dihapus senyap (pilihan admin:
+            // diam + tercatat di log).
+            //
+            // Pengecualian (role yang TIDAK dihitung sebagai "role pertama"):
+            //   - role Unverified itu sendiri (diberikan saat join)
+            //   - role-role join yang sistem berikan saat member masuk (daftar
+            //     /set-autorole) — kalau tidak, memberi @Member + @Unverified
+            //     saat join langsung "memverifikasi" semua orang dan penandanya
+            //     jadi tidak berguna.
+            const config = getConfig(newMember.guild.id);
+            const unverifiedId = config.roles.unverified;
+            if (
+                unverifiedId &&
+                added.length > 0 &&
+                newMember.roles.cache.has(unverifiedId) &&
+                added.some(r => r.id !== unverifiedId && !joinRoleIds(config).includes(r.id))
+            ) {
+                const res = await revokeRoles(newMember, [unverifiedId], {
+                    reason: 'Penanda Unverified dihapus otomatis — role pertama diterima'
+                });
+                if (res.revoked.length > 0) {
+                    console.log(
+                        `✅ [auto-verify] ${user.tag} menerima role — penanda Unverified dihapus.`
+                    );
+                }
+                // Penghapusan itu sendiri memicu guildMemberUpdate lagi → server
+                // log ROLE_UPDATE standar di bawah mencatatnya di putaran itu
+                // (➖ Unverified). Tanpa DM, tanpa pengumuman — pilihan admin.
+            }
+
             if (added.length > 0 || removed.length > 0) {
                 const lines = [];
                 if (added.length > 0) lines.push(`➕ ${added.map(r => `\`${r.name}\``).join(', ')}`);

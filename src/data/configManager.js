@@ -32,13 +32,10 @@ const DEFAULTS = {
     messages: {
         welcomeTitle: '👋 SELAMAT DATANG!',
         welcomeBody:
-            'Halo {user}!\n\nSelamat datang di **{server}** 🎉\n\n🔐 Silakan verifikasi dirimu untuk mendapatkan akses penuh ke server.\n\n📊 Kamu adalah member ke-**{count}**!',
+            'Halo {user}!\n\nSelamat datang di **{server}** 🎉\n\n🔐 Ambil role untuk mendapatkan akses penuh ke server.\n\n📊 Kamu adalah member ke-**{count}**!',
         goodbyeTitle: '👋 SELAMAT JALAN',
         goodbyeBody:
             '**{username}** telah {action} dari server.\n\nSampai jumpa lagi! 👋\n\n📊 Sisa member: **{count}**',
-        verifyTitle: '✅ VERIFIKASI SERVER',
-        verifyBody:
-            'Selamat datang di **{server}**!\nKlik tombol di bawah untuk diverifikasi dan mendapatkan akses penuh ke seluruh channel.',
         ticketTitle: '🎫 SISTEM TIKET & PRICE LIST',
         // v3.9.12: ticket body sekarang support template variables.
         // Variabel tersedia: {server}, {price_list}, {price_list:<category>}, {price_header}, {categories_list}
@@ -47,11 +44,13 @@ const DEFAULTS = {
         // v3.9.11 Phase 1: ticket header configurable (sebelumnya hardcoded "PRICE LIST KEY")
         ticketPriceHeader: '💰 PRICE LIST 💰'
     },
-    // v3.9.11 Phase 1: verify button configurable (sebelumnya hardcoded label/emoji/style)
-    verifyButton: {
-        label: 'Verifikasi Saya',
-        emoji: '✅',
-        style: 'Success' // Primary | Secondary | Success | Danger
+    // v3.22.0: auto-role saat join (ala Dyno). Role pilihan admin diberikan
+    // otomatis ke setiap member baru. Role penanda Unverified
+    // (roles.unverified, di-set via /set-role unverified) juga diberikan saat
+    // join dan dihapus otomatis begitu member menerima role LAIN apa pun
+    // (lihat bot/events/guildMemberUpdate.js — aturan universal).
+    autorole: {
+        roleIds: []
     },
     // v3.9.18: ticket categories (default 4 kategori built-in)
     // - "Bantuan Staff" → "Help" (rename, lebih simpel & internasional)
@@ -230,7 +229,8 @@ function getConfig(guildId) {
     let didV1Migration = false;
     if (raw.verifiedRoleId || raw.invoiceChannelId) {
         if (!raw.roles) raw.roles = {};
-        if (raw.verifiedRoleId && !raw.roles.verified) raw.roles.verified = raw.verifiedRoleId;
+        // v3.22.0: verifiedRoleId tidak lagi dipetakan ke mana pun — fitur
+        // verifikasi khusus dihapus (verified kini panel self-role).
         if (raw.unverifiedRoleId && !raw.roles.unverified) raw.roles.unverified = raw.unverifiedRoleId;
         if (raw.adminRoleId && !raw.roles.admin) raw.roles.admin = raw.adminRoleId;
 
@@ -258,8 +258,32 @@ function getConfig(guildId) {
         didV1Migration = true;
     }
 
+    // === MIGRASI v3.22.0: fitur verifikasi khusus DIHAPUS ===
+    // (role verified + tombol verify + panel verify → member kini mengambil
+    // role dari panel self-role; "verified" hanya role biasa di panel).
+    // Key-key basi dari config lama dibersihkan di sini supaya tidak
+    // menetap selamanya di data/config/<guildId>.json. roles.unverified TETAP —
+    // itu role penanda untuk aturan universal role-pertama.
+    let didVerifyCleanup = false;
+    if (raw.roles && 'verified' in raw.roles) {
+        delete raw.roles.verified;
+        didVerifyCleanup = true;
+    }
+    if (raw.messages && ('verifyTitle' in raw.messages || 'verifyBody' in raw.messages)) {
+        delete raw.messages.verifyTitle;
+        delete raw.messages.verifyBody;
+        didVerifyCleanup = true;
+    }
+    if ('verifyButton' in raw) {
+        delete raw.verifyButton;
+        didVerifyCleanup = true;
+    }
+    if (didVerifyCleanup) {
+        console.log('🧹 [v3.22.0] Config verifikasi lama guild ini dihapus (verify kini panel self-role).');
+    }
+
     // === MERGE dengan DEFAULTS (deep untuk messages) ===
-    // v3.9.11: tambah merge untuk verifyButton & ticketCategories
+    // v3.22.0: merge verifyButton DIHAPUS (fitur dihapus); autorole ditambah.
     // v3.9.13: tambah merge untuk leveling & levelRoles
     // v3.9.17 FIX: preserve field custom (ticketCategoryKey, ticketCategoryNoKey,
     //   dan field non-standar lainnya). Sebelumnya, hanya keys di DEFAULTS yang
@@ -272,7 +296,7 @@ function getConfig(guildId) {
         channels: { ...DEFAULTS.channels, ...(raw.channels || {}) },
         messages: { ...DEFAULTS.messages, ...(raw.messages || {}) },
         colors: { ...DEFAULTS.colors, ...(raw.colors || {}) },
-        verifyButton: { ...DEFAULTS.verifyButton, ...(raw.verifyButton || {}) },
+        autorole: { ...DEFAULTS.autorole, ...(raw.autorole || {}) },
         ticketCategories:
             Array.isArray(raw.ticketCategories) && raw.ticketCategories.length > 0
                 ? raw.ticketCategories

@@ -34,20 +34,45 @@ function getCommands() {
 
         // === PANEL SETUP ===
         {
-            name: 'setup-verify',
-            description: 'Pasang panel verifikasi',
-            defaultMemberPermissions: PermissionFlagsBits.ManageGuild
-        },
-        {
             name: 'setup-ticket',
             description: 'Pasang panel tiket & price list',
             defaultMemberPermissions: PermissionFlagsBits.ManageGuild
         },
 
+        // === SET AUTOROLE (v3.22.0 — auto-role saat join, ala Dyno) ===
+        // Fitur verifikasi khusus DIHAPUS (v3.22.0): "verified" kini hanya
+        // role biasa di panel self-role, dan penanda Unverified hilang
+        // otomatis begitu member menerima role lain. Command ini mengelola
+        // role yang diberikan saat join.
+        {
+            name: 'set-autorole',
+            description: 'Kelola role yang diberikan otomatis saat member join (plus penanda Unverified)',
+            defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
+            options: [
+                {
+                    type: 3,
+                    name: 'action',
+                    description: 'Tambah / hapus role dari daftar join, atau lihat daftarnya',
+                    required: true,
+                    choices: [
+                        { name: 'Tambah role', value: 'add' },
+                        { name: 'Hapus role', value: 'remove' },
+                        { name: 'Lihat daftar', value: 'list' }
+                    ]
+                },
+                {
+                    type: 8,
+                    name: 'role',
+                    description: 'Role yang ditambah/dihapus (tidak perlu untuk Lihat daftar)',
+                    required: false
+                }
+            ]
+        },
+
         // === SET ROLE ===
         {
             name: 'set-role',
-            description: 'Atur role (verified / unverified / admin / midman / booster)',
+            description: 'Atur role (unverified / admin / midman / booster)',
             defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
             options: [
                 {
@@ -56,8 +81,10 @@ function getCommands() {
                     description: 'Pilih tipe role',
                     required: true,
                     choices: [
-                        { name: 'Verified', value: 'verified' },
-                        { name: 'Unverified', value: 'unverified' },
+                        // v3.22.0: 'verified' DIHAPUS — verifikasi kini panel
+                        // self-role; "Verified" hanya role biasa yang admin
+                        // tambahkan ke panel via /selfrole-add.
+                        { name: 'Unverified (hilang saat role pertama)', value: 'unverified' },
                         { name: 'Admin', value: 'admin' },
                         // v3.9.32: role midman/rekber — pegang deal escrow 3-pihak.
                         { name: 'Midman (Rekber)', value: 'midman' },
@@ -153,40 +180,8 @@ function getCommands() {
             ]
         },
 
-        // v3.9.11 Phase 1: verify button configurable
-        {
-            name: 'set-verify-button',
-            description: 'Kustomisasi tombol verifikasi (label, emoji, style)',
-            defaultMemberPermissions: PermissionFlagsBits.ManageGuild,
-            options: [
-                {
-                    type: 3,
-                    name: 'label',
-                    description: 'Teks tombol (maks 80 char)',
-                    required: true,
-                    min_length: 1,
-                    max_length: 80
-                },
-                {
-                    type: 3,
-                    name: 'emoji',
-                    description: 'Emoji tombol (unicode atau custom <:name:id>)',
-                    required: false
-                },
-                {
-                    type: 3,
-                    name: 'style',
-                    description: 'Warna tombol',
-                    required: false,
-                    choices: [
-                        { name: '🔵 Primary (Blurple)', value: 'Primary' },
-                        { name: '⚪ Secondary (Grey)', value: 'Secondary' },
-                        { name: '🟢 Success (Green)', value: 'Success' },
-                        { name: '🔴 Danger (Red)', value: 'Danger' }
-                    ]
-                }
-            ]
-        },
+        // v3.22.0: /set-verify-button DIHAPUS (fitur verifikasi khusus dihapus —
+        // "verified" kini panel self-role; lihat /setup-selfrole).
 
         // v3.9.11 Phase 2: ticket category management
         {

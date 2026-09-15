@@ -37,7 +37,7 @@
  *   POST   /guilds/:id/serverstats/refresh      → paksa refresh counter
  *   DELETE /guilds/:id/tempvoice                → lepas setup temp voice (config saja)
  *   POST   /guilds/:id/panels                   → pasang panel tiket ke channel (v3.21.0)
- *   POST   /guilds/:id/verify-panel             → pasang panel verifikasi (v3.21.0)
+ *   POST   /guilds/:id/verify-panel             → DIHAPUS v3.22.0 (verifikasi kini panel self-role)
  *
  * Actor audit: setiap operasi tulis menerima `actor: { id, tag }` (user
  * dashboard yang login) — dicatat ke console + audit log kalau memungkinkan,
@@ -134,20 +134,18 @@ const SECTION_VALIDATORS = {
         if (!Number.isInteger(n) || n < 0 || n > 0xffffff) return { ok: false, error: `colors.${key} harus integer 0-16777215` };
         return { ok: true, value: n };
     },
-    verifyButton: (key, value) => {
-        if (key === 'label') {
-            if (!isStr(value, 80)) return { ok: false, error: 'Label tombol 1-80 karakter' };
-            return { ok: true, value };
+    // v3.22.0: section verifyButton DIHAPUS — fitur verifikasi dihapus (kini
+    // panel self-role). Dashboard lama yang masih mengirim verifyButton.*
+    // dapat 422 "Unknown section" yang bersih.
+    // v3.22.0: autorole — daftar auto-role saat join (paritas web /set-autorole).
+    autorole: (key, value) => {
+        if (key !== '__array__') return { ok: false, error: 'autorole hanya bisa di-set sebagai array utuh (autorole.roleIds)' };
+        if (!Array.isArray(value)) return { ok: false, error: 'autorole harus array of role ID' };
+        if (value.length > 10) return { ok: false, error: 'autorole maksimal 10 role' };
+        for (const id of value) {
+            if (!isSnowflakeOrNull(id) || !id) return { ok: false, error: 'autorole harus berisi Discord role ID (tanpa null)' };
         }
-        if (key === 'emoji') {
-            if (!isStr(value, 64)) return { ok: false, error: 'Emoji tidak valid' };
-            return { ok: true, value };
-        }
-        if (key === 'style') {
-            if (!BUTTON_STYLES.includes(value)) return { ok: false, error: `Style harus salah satu: ${BUTTON_STYLES.join(', ')}` };
-            return { ok: true, value };
-        }
-        return { ok: false, error: `verifyButton.${key} tidak dikenal` };
+        return { ok: true, value: { roleIds: value } };
     },
     leveling: (key, value) => {
         switch (key) {
@@ -290,7 +288,7 @@ function validateUpdate(dotPath, value) {
     if (!validator) return { ok: false, error: `Section tidak dikenal: ${section}` };
 
     // Section array (levelRoles / ticketCategories / products) — selalu array utuh.
-    if (['levelRoles', 'ticketCategories', 'products'].includes(section)) {
+    if (['levelRoles', 'ticketCategories', 'products', 'autorole'].includes(section)) {
         if (parts.length !== 1) return { ok: false, error: `${section} hanya bisa di-set sebagai array utuh` };
         const r = validator('__array__', value);
         return r.ok ? { ok: true, section, key: null, value: r.value } : r;
@@ -1258,7 +1256,7 @@ function createDashHandler({ client, token, log = () => {} }) {
 
                 // ========================================================
                 // ==== v3.21.0: PANDUAN CEPAT (WEB)                    ====
-                // ==== Paritas /setup-ticket-panel & /setup-verify     ====
+                // ==== Paritas /setup-ticket-panel              ====
                 // ========================================================
 
                 // ---- Pasang panel tiket ke channel (paritas /setup-ticket-panel) ----
@@ -1340,55 +1338,11 @@ function createDashHandler({ client, token, log = () => {} }) {
                     return sendJson(res, 201, { ok: true, panel: saved, url: sent.url });
                 }
 
-                // ---- Pasang panel verifikasi ke channel (paritas /setup-verify) ----
-                // Render identik: embed verifyTitle/verifyBody + tombol dari
-                // config.verifyButton — sumber config sama, hasil sama persis.
-                if (method === 'POST' && rest[0] === 'verify-panel' && rest.length === 1) {
-                    if (!g) return sendJson(res, 404, { error: 'Bot tidak ada di server ini' });
-                    const body = await readBody(req);
-                    const config = getConfig(guildId);
-
-                    if (!config.roles.verified) {
-                        return sendJson(res, 422, { error: 'Role Terverifikasi belum di-set — isi dulu langkah 2 Panduan Cepat (Role Verified).' });
-                    }
-
-                    const channelId = String(body?.channelId || '');
-                    if (!SNOWFLAKE_RE.test(channelId)) return sendJson(res, 400, { error: 'channelId tidak valid' });
-                    const channel = await client.channels.fetch(channelId).catch(() => null);
-                    if (!channel || channel.type !== ChannelType.GuildText) {
-                        return sendJson(res, 400, { error: 'Channel harus berupa text channel' });
-                    }
-
-                    const embed = new EmbedBuilder()
-                        .setTitle(config.messages.verifyTitle)
-                        .setDescription(String(config.messages.verifyBody || '').replace(/\{server\}/g, g.name))
-                        .setColor(0x2ecc71)
-                        .setFooter({
-                            text: client.user?.username || 'Community Bot',
-                            iconURL: client.user?.displayAvatarURL({ dynamic: true })
-                        })
-                        .setTimestamp();
-                    const btnConfig = config.verifyButton || {};
-                    const styleMap = {
-                        Primary: ButtonStyle.Primary,
-                        Secondary: ButtonStyle.Secondary,
-                        Success: ButtonStyle.Success,
-                        Danger: ButtonStyle.Danger
-                    };
-                    const verifyBtn = new ButtonBuilder()
-                        .setCustomId('btn_verify')
-                        .setLabel(String(btnConfig.label || 'Verifikasi Saya').slice(0, 80))
-                        .setEmoji(btnConfig.emoji || '✅')
-                        .setStyle(styleMap[btnConfig.style] || ButtonStyle.Success);
-                    const row = new ActionRowBuilder().addComponents(verifyBtn);
-
-                    const sent = await channel.send({ embeds: [embed], components: [row] }).catch(() => null);
-                    if (!sent) {
-                        return sendJson(res, 502, { error: 'Gagal kirim panel — pastikan bot punya permission Send Messages + Embed Links di channel itu.' });
-                    }
-                    log(`[dash] panel verifikasi dipasang di ${channelId} (${guildId}) oleh ${body?.actor?.tag || 'unknown'}`);
-                    return sendJson(res, 201, { ok: true, messageId: sent.id, url: sent.url });
-                }
+                // ---- v3.22.0: POST /guilds/:id/verify-panel DIHAPUS ----
+                // Fitur verifikasi khusus dihapus — "verified" kini role di
+                // panel self-role (pasang lewat pola panel tiket atau
+                // /setup-selfrole). Dashboard lama yang masih memanggil endpoint
+                // ini mendapat 404 generik di bawah.
             }
 
             return sendJson(res, 404, { error: 'Endpoint tidak ditemukan' });

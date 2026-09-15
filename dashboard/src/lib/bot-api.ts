@@ -125,7 +125,9 @@ export type GuildConfig = {
   channels: Record<string, string | null>;
   messages: Record<string, string>;
   colors: Record<string, number>;
-  verifyButton: { label: string; emoji: string; style: string };
+  // v3.22.0: verifyButton DIHAPUS — verifikasi kini panel self-role.
+  // autorole = daftar auto-role saat join (paritas /set-autorole).
+  autorole: { roleIds: string[] };
   ticketCategories: TicketCategory[];
   leveling: {
     enabled: boolean;

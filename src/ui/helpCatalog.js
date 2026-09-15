@@ -82,20 +82,20 @@ const HELP_CATEGORIES = [
         short: 'Baru pakai bot? Urutan setup server dari nol',
         lines: [
             '**Baru pakai bot? Ikuti urutan ini:**',
-            '1️⃣ `/set-role verified @Verified` — role member terverifikasi',
+            '1️⃣ `/set-role unverified @Unverified` — role penanda member baru',
             '2️⃣ `/add-category` + `/add-product` — siapkan katalog',
             '3️⃣ `/setup-ticket-panel` — pasang panel tiket',
-            '4️⃣ `/setup-verify` — verifikasi member baru',
+            '4️⃣ `/setup-selfrole` + `/selfrole-add` — panel self-role (mis. panel Verifikasi)',
             '5️⃣ `/set-channel server-log #log` — aktifkan log',
             '💡 Lanjut eksplor kategori lain lewat dropdown 📂.'
         ],
         // v3.9.53: panduan lengkap mandiri (tampilan kategori = detail saja).
         detail: [
             '**Baru pakai bot ini? Setup server dengan urutan ini (sekali saja):**',
-            '1️⃣ `/set-role tipe:verified role:@Verified` — role yang didapat member setelah verifikasi',
+            '1️⃣ `/set-role tipe:unverified role:@Unverified` — role penanda yang diberikan saat join, hilang otomatis begitu member dapat role lain apa pun',
             '2️⃣ `/add-category` + `/add-product` — siapkan produk jualan (lihat kategori Produk)',
             '3️⃣ `/setup-ticket-panel` — pasang panel order yang diklik member untuk beli',
-            '4️⃣ `/setup-verify` — gerbang verifikasi: member baru klik tombol untuk dapat role verified',
+            '4️⃣ `/setup-selfrole` + `/selfrole-add` — pasang panel self-role (mis. Verifikasi: member klik untuk dapat role Verified)',
             '5️⃣ `/set-channel tipe:server-log channel:#log` — catat join/left, pesan dihapus, ban',
             '',
             '**Tambahan bagus setelah dasarnya jalan (semuanya opsional):**',
@@ -192,12 +192,11 @@ const HELP_CATEGORIES = [
     {
         id: 'panels',
         emoji: '🎫',
-        name: 'Panel Tiket & Verifikasi',
-        short: 'Pasang panel tiket & verifikasi member',
+        name: 'Panel Tiket',
+        short: 'Pasang panel tiket',
         lines: [
             '• `/setup-ticket-panel` — panel multi-kategori (`title` `body` `categories` `color` `image` `footer` `channel` `use_dropdown`)',
             '• `/list-panels` `/update-panel` `/refresh-panel` `/delete-panel` — kelola panel',
-            '• `/setup-verify` — verifikasi member baru · `/set-verify-button` — kustom tombol',
             '• `/setup-ticket` — panel legacy 1 kategori'
         ],
         // v3.9.53: panduan lengkap mandiri (tampilan kategori = detail saja).
@@ -208,9 +207,10 @@ const HELP_CATEGORIES = [
             '• `/refresh-panel id` — render ulang dengan kategori/produk TERBARU (jalankan ini setelah tambah produk — kalau tidak, embed masih memakai daftar lama).',
             '• `/delete-panel id` — hapus panel (pesan + config).',
             '',
-            '**Verifikasi member baru**',
-            '• `/setup-verify` — pasang panel verifikasi: member yang join klik tombol untuk dapat role verified (dan lepas role unverified).',
-            '• `/set-verify-button label emoji style` — kustom tampilan tombolnya.',
+            '**Verifikasi member (v3.22.0 — kini berbasis self-role)**',
+            '• `/setup-selfrole title:Verifikasi` + `/selfrole-add role:@Verified label:Verifikasi Saya` — panel self-role yang diklik member untuk dapat role Verified.',
+            '• `/set-role tipe:unverified role:@Unverified` — member baru otomatis dapat penanda ini; hilang begitu mereka menerima role lain apa pun.',
+            '• `/set-autorole action:add role:@Member` — role tambahan yang diberikan otomatis saat join.',
             '• `/setup-ticket` — panel legacy 1 kategori (dipertahankan untuk setup lama; utamakan `/setup-ticket-panel`).',
             '',
             '❓ **Panel masih menampilkan harga lama?** Jalankan `/refresh-panel id` — atau `/update-panel` untuk teksnya.',

@@ -17,6 +17,10 @@
 
 const { MessageFlags } = require('discord.js');
 const { getPanel, buildPanelComponents } = require('../commands/_shared');
+// v3.22.0: Role Engine — satu gerbang untuk semua grant/revoke role.
+// Panel self-role, verifikasi, auto-role join, pembelian VIP… semuanya lewat
+// sini supaya cek hierarki/managed/@everyone + log kegagalan identik di semua fitur.
+const { grantRoles, revokeRoles } = require('../services/roleEngine');
 
 module.exports = async function (interaction) {
     // ====================================================
@@ -81,41 +85,62 @@ async function handleSelfRoleButton(interaction) {
     const member = interaction.member;
     const hasRole = member.roles.cache.has(roleId);
 
-    try {
-        if (panel.exclusive && !hasRole) {
-            // Mode exclusive: hapus semua role panel lain dulu, lalu tambahkan yang ini
-            const toRemove = panel.roles
-                .map(r => r.roleId)
-                .filter(rid => rid !== roleId && member.roles.cache.has(rid));
-            if (toRemove.length > 0) {
-                await member.roles.remove(toRemove);
-            }
-            await member.roles.add(roleId);
-            const removedMentions = toRemove.map(rid => `<@&${rid}>`).join(', ');
+    // v3.22.0: semua grant/revoke lewat Role Engine — cek, log kegagalan, dan
+    // perilaku sama dengan semua fitur lain. Memberi role di sini JUGA
+    // menghapus penanda Unverified member secara otomatis (aturan universal
+    // di guildMemberUpdate) — tidak perlu penanganan khusus.
+    if (panel.exclusive && !hasRole) {
+        // Mode exclusive: hapus semua role panel lain dulu, lalu tambahkan yang ini
+        const toRemove = panel.roles
+            .map(r => r.roleId)
+            .filter(rid => rid !== roleId && member.roles.cache.has(rid));
+        const removeRes = toRemove.length > 0
+            ? await revokeRoles(member, toRemove, { reason: 'panel self-role (pindah exclusive)' })
+            : null;
+        const addRes = await grantRoles(member, [roleId], { reason: 'panel self-role' });
+        if (!addRes.ok || (removeRes && !removeRes.ok)) {
             return interaction.reply({
-                content: `✅ Role ${role} ditambahkan.${toRemove.length > 0 ? `\n↳ Role lain dihapus: ${removedMentions}` : ''}`,
+                content: `❌ Gagal mengubah role. Pastikan role bot ada di ATAS role ${role}.`,
                 flags: MessageFlags.Ephemeral
             });
-        } else if (panel.exclusive && hasRole) {
-            // Exclusive + sudah punya → lepas
-            await member.roles.remove(roleId);
-            return interaction.reply({ content: `✅ Role ${role} dilepas.`, flags: MessageFlags.Ephemeral });
-        } else if (!panel.exclusive && !hasRole) {
-            // Multi + belum punya → tambah
-            await member.roles.add(roleId);
-            return interaction.reply({ content: `✅ Role ${role} ditambahkan.`, flags: MessageFlags.Ephemeral });
-        } else {
-            // Multi + sudah punya → lepas (toggle)
-            await member.roles.remove(roleId);
-            return interaction.reply({ content: `✅ Role ${role} dilepas.`, flags: MessageFlags.Ephemeral });
         }
-    } catch (err) {
-        console.error('Self-role button error:', err.message);
+        const removedMentions = toRemove.map(rid => `<@&${rid}>`).join(', ');
         return interaction.reply({
-            content: `❌ Gagal mengubah role. Pastikan role bot ada di ATAS role ${role}.`,
+            content: `✅ Role ${role} ditambahkan.${toRemove.length > 0 ? `\n↳ Role lain dihapus: ${removedMentions}` : ''}`,
             flags: MessageFlags.Ephemeral
         });
     }
+    if (panel.exclusive && hasRole) {
+        // Exclusive + sudah punya → lepas
+        const res = await revokeRoles(member, [roleId], { reason: 'panel self-role (toggle mati)' });
+        if (!res.ok) {
+            return interaction.reply({
+                content: `❌ Gagal melepas role. Pastikan role bot ada di ATAS role ${role}.`,
+                flags: MessageFlags.Ephemeral
+            });
+        }
+        return interaction.reply({ content: `✅ Role ${role} dilepas.`, flags: MessageFlags.Ephemeral });
+    }
+    if (!panel.exclusive && !hasRole) {
+        // Multi + belum punya → tambah
+        const res = await grantRoles(member, [roleId], { reason: 'panel self-role' });
+        if (!res.ok) {
+            return interaction.reply({
+                content: `❌ Gagal memberikan role. Pastikan role bot ada di ATAS role ${role}.`,
+                flags: MessageFlags.Ephemeral
+            });
+        }
+        return interaction.reply({ content: `✅ Role ${role} ditambahkan.`, flags: MessageFlags.Ephemeral });
+    }
+    // Multi + sudah punya → lepas (toggle)
+    const res = await revokeRoles(member, [roleId], { reason: 'panel self-role (toggle mati)' });
+    if (!res.ok) {
+        return interaction.reply({
+            content: `❌ Gagal melepas role. Pastikan role bot ada di ATAS role ${role}.`,
+            flags: MessageFlags.Ephemeral
+        });
+    }
+    return interaction.reply({ content: `✅ Role ${role} dilepas.`, flags: MessageFlags.Ephemeral });
 }
 
 // ====================================================
@@ -151,11 +176,14 @@ async function handleSelfRoleSelect(interaction) {
         const toRemoveExclusive = panelRoleIds.filter(rid => rid !== targetRoleId && member.roles.cache.has(rid));
         const toAddExclusive = targetRoleId && !member.roles.cache.has(targetRoleId) ? [targetRoleId] : [];
 
-        try {
-            if (toRemoveExclusive.length > 0) await member.roles.remove(toRemoveExclusive);
-            if (toAddExclusive.length > 0) await member.roles.add(toAddExclusive);
-        } catch (err) {
-            console.error('Self-role select (exclusive) error:', err.message);
+        // v3.22.0: Role Engine (gerbang yang sama dengan semua fitur lain).
+        const removeRes = toRemoveExclusive.length > 0
+            ? await revokeRoles(member, toRemoveExclusive, { reason: 'self-role select (exclusive)' })
+            : null;
+        const addRes = toAddExclusive.length > 0
+            ? await grantRoles(member, toAddExclusive, { reason: 'self-role select (exclusive)' })
+            : null;
+        if ((removeRes && !removeRes.ok) || (addRes && !addRes.ok)) {
             return interaction.reply({
                 content: `❌ Gagal mengubah role. Pastikan role bot ada di ATAS role yang dipilih.`,
                 flags: MessageFlags.Ephemeral
@@ -200,11 +228,14 @@ async function handleSelfRoleSelect(interaction) {
     const toAdd = panelRoleIds.filter(rid => qualifiedSelectedIds.has(rid) && !member.roles.cache.has(rid));
     const toRemove = panelRoleIds.filter(rid => !qualifiedSelectedIds.has(rid) && member.roles.cache.has(rid));
 
-    try {
-        if (toRemove.length > 0) await member.roles.remove(toRemove);
-        if (toAdd.length > 0) await member.roles.add(toAdd);
-    } catch (err) {
-        console.error('Self-role select error:', err.message);
+    // v3.22.0: Role Engine (gerbang yang sama dengan semua fitur lain).
+    const removeRes = toRemove.length > 0
+        ? await revokeRoles(member, toRemove, { reason: 'self-role select' })
+        : null;
+    const addRes = toAdd.length > 0
+        ? await grantRoles(member, toAdd, { reason: 'self-role select' })
+        : null;
+    if ((removeRes && !removeRes.ok) || (addRes && !addRes.ok)) {
         return interaction.reply({
             content: `❌ Gagal mengubah role. Pastikan role bot ada di ATAS role yang dipilih.`,
             flags: MessageFlags.Ephemeral

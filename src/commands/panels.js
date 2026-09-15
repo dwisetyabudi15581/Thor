@@ -1,8 +1,8 @@
 /**
  * Domain: panels
- * Slash commands: /set-verify-button, /setup-ticket-panel
- *
- * v3.9.11 Phase 1: verify button customization
+ * Slash commands: /setup-ticket-panel
+ * v3.22.0: /set-verify-button DIHAPUS — fitur verifikasi khusus dihapus
+ *          (verified kini panel self-role).
  * v3.9.11 Phase 3: multi-panel ticket + transcript channel (command-nya sejak
  *          v3.9.30 digabung ke /set-channel tipe:transcript — domain config)
  * v3.9.14: persistent panel storage (panels.json) + full customization per panel
@@ -31,9 +31,8 @@ const { upsertPanel } = require('../data/panelManager');
 // v3.9.17: shared parseColor + parseColorOrError supaya konsisten di seluruh codebase.
 const { parseColorOrError } = require('../infra/colors');
 // v3.9.24: normalisasi \n literal → newline asli (input command di PC tidak bisa Enter).
-const { normalizeNewlines, isValidEmoji } = require('../infra/text');
+const { normalizeNewlines } = require('../infra/text');
 
-const VALID_STYLES = ['Primary', 'Secondary', 'Success', 'Danger'];
 const STYLE_MAP = {
     Primary: ButtonStyle.Primary,
     Secondary: ButtonStyle.Secondary,
@@ -318,67 +317,9 @@ function buildTicketPanel(panel, ctx) {
 }
 
 module.exports = async function (interaction) {
-    // v3.10.0 multi-guild: panel & verify button disimpan di config guild ini.
+    // v3.10.0 multi-guild: panel disimpan di config guild ini.
     const guildId = resolveGuildId(interaction);
     const config = getConfig(guildId);
-
-    // === SET VERIFY BUTTON ===
-    if (interaction.commandName === 'set-verify-button') {
-        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-
-        const label = interaction.options.getString('label');
-        const emoji = interaction.options.getString('emoji');
-        const style = interaction.options.getString('style');
-
-        // Validate style
-        if (style && !VALID_STYLES.includes(style)) {
-            return safeEditReply(interaction, {
-                content: '❌ `style` tidak valid. Pilih: Primary, Secondary, Success, Danger.'
-            });
-        }
-
-        // v3.9.26: validasi emoji SEBELUM save (anti poison config). Emoji string
-        // bebas yang tersimpan bikin setEmoji() throw di /setup-verify nanti —
-        // panel verifikasi mati sampai config diperbaiki manual.
-        if (emoji && !isValidEmoji(emoji)) {
-            return safeEditReply(interaction, {
-                content: '❌ `emoji` tidak valid. Pakai emoji unicode (mis. ✅) atau custom emoji format `<:nama:id>`.'
-            });
-        }
-
-        // Build new verifyButton config
-        const newVerifyBtn = {
-            ...(config.verifyButton || {}),
-            label: label.slice(0, 80)
-        };
-        if (emoji) newVerifyBtn.emoji = emoji;
-        if (style) newVerifyBtn.style = style;
-
-        config.verifyButton = newVerifyBtn;
-        saveConfig(guildId, config);
-
-        await logAudit(interaction.client, {
-            action: 'SET_VERIFY_BUTTON',
-            actorId: interaction.user.id,
-            actorTag: interaction.user.tag,
-            details: `Update verify button — label: "${newVerifyBtn.label}", emoji: ${newVerifyBtn.emoji}, style: ${newVerifyBtn.style}`,
-            guildId: interaction.guild.id
-        });
-
-        // Preview button
-        const previewBtn = new ButtonBuilder()
-            .setCustomId('btn_verify_preview')
-            .setLabel(newVerifyBtn.label)
-            .setEmoji(newVerifyBtn.emoji || '✅')
-            .setStyle(STYLE_MAP[newVerifyBtn.style] || ButtonStyle.Success)
-            .setDisabled(true);
-        const previewRow = new ActionRowBuilder().addComponents(previewBtn);
-
-        return safeEditReply(interaction, {
-            content: '✅ Verify button di-update!\n\n**Preview:**',
-            components: [previewRow]
-        });
-    }
 
     // === SETUP TICKET PANEL (multi-panel + full customization, v3.9.14) ===
     if (interaction.commandName === 'setup-ticket-panel') {

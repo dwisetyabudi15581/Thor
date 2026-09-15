@@ -418,18 +418,23 @@ async function hookLeveling(message) {
         // Cek role mana yang belum dimiliki user
         const toAdd = roleIds.filter(id => !message.member.roles.cache.has(id));
         if (toAdd.length > 0) {
-            try {
-                await message.member.roles.add(toAdd);
+            // v3.22.0: grant role level lewat Role Engine — gerbang yang sama
+            // dengan self-role/auto-role, dengan cek hierarki/managed dan log
+            // kegagalan yang bisa ditindaklanjuti. Memberi role level juga
+            // menghapus penanda Unverified member otomatis (aturan universal).
+            const { grantRoles } = require('../../services/roleEngine');
+            const res = await grantRoles(message.member, toAdd, {
+                reason: `naik level — cap level ${newLevel}`
+            });
+            if (res.granted.length > 0) {
                 console.log(
-                    `📊 Kasih ${toAdd.length} role ke ${message.author.tag} (level ${newLevel}): ${toAdd.join(', ')}`
+                    `📊 Kasih ${res.granted.length} role ke ${message.author.tag} (level ${newLevel}): ${res.granted.join(', ')}`
                 );
                 try {
                     await message.author.send(
                         `🎉 Kamu dapat role baru di **${message.guild.name}** karena cap Level ${newLevel}!`
                     );
                 } catch (_) {}
-            } catch (err) {
-                console.warn(`⚠️ Gagal kasih role level: ${err.message}`);
             }
         }
     }

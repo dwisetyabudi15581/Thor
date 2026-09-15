@@ -42,17 +42,59 @@ const TEMPLATE_VARS = (
 
 export function GeneralModule({ draft, meta, setConfig }: ModuleFormProps) {
   const c = draft.config;
+  // v3.22.0: state lokal picker untuk editor daftar auto-role.
+  const [autorolePick, setAutorolePick] = useState<string | null>(null);
+  const autoroleIds = c.autorole?.roleIds ?? [];
+
+  const addAutorole = () => {
+    if (!autorolePick || autoroleIds.includes(autorolePick)) return;
+    setConfig("autorole", [...autoroleIds, autorolePick]);
+    setAutorolePick(null);
+  };
+  const removeAutorole = (id: string) => {
+    setConfig("autorole", autoroleIds.filter((r) => r !== id));
+  };
+
   return (
     <div className="space-y-5">
-      <Section title="Role Penting" desc="Role yang dipakai sistem verifikasi dan akses admin bot. Pilih dari daftar role server.">
-        <Field label="Role Terverifikasi" hint="Diberikan otomatis setelah member klik tombol verifikasi.">
-          <RoleSelect value={c.roles.verified ?? null} onChange={(v) => setConfig("roles.verified", v)} roles={meta.roles} />
-        </Field>
-        <Field label="Role Belum Verifikasi" hint="Role awal member baru sebelum verifikasi (opsional).">
+      <Section title="Role Penting" desc="Penanda Unverified dan role admin bot. Pilih dari daftar role server.">
+        <Field label="Role Penanda Unverified" hint="Diberikan otomatis saat join; dihapus otomatis begitu member menerima role lain APA PUN (self-role, role level, pemberian admin…).">
           <RoleSelect value={c.roles.unverified ?? null} onChange={(v) => setConfig("roles.unverified", v)} roles={meta.roles} />
         </Field>
         <Field label="Role Admin Bot" hint="Pemegang role ini bisa memakai seluruh command admin di server.">
           <RoleSelect value={c.roles.admin ?? null} onChange={(v) => setConfig("roles.admin", v)} roles={meta.roles} />
+        </Field>
+      </Section>
+
+      <Section title="Auto-Role Saat Join" desc="Role yang diberikan otomatis ke setiap member baru (≙ /set-autorole, maks 10). Penanda Unverified di atas juga diberikan saat join kalau di-set — ia BUKAN bagian daftar ini.">
+        <div className="md:col-span-2">
+          <div className="flex flex-wrap gap-2">
+            {autoroleIds.length === 0 ? (
+              <span className="text-xs text-zinc-500">Belum ada role join — tambahkan satu di bawah (mis. @Member).</span>
+            ) : (
+              autoroleIds.map((id) => (
+                <span key={id} className="flex items-center gap-1 rounded-lg border border-zinc-700/70 bg-zinc-900/60 px-2.5 py-1 text-xs text-zinc-300">
+                  <span className="text-zinc-500">@</span>
+                  {meta.roles.find((r) => r.id === id)?.name ?? id}
+                  <button type="button" onClick={() => removeAutorole(id)} className="ml-1 text-zinc-500 hover:text-red-400" aria-label="Hapus role">×</button>
+                </span>
+              ))
+            )}
+          </div>
+        </div>
+        <Field label="Tambah role ke daftar join" hint={`${autoroleIds.length}/10 role` + (c.roles.unverified ? " — penanda Unverified diberikan otomatis di atas daftar ini." : "")}>
+          <div className="flex gap-2">
+            <RoleSelect value={autorolePick} onChange={setAutorolePick} roles={meta.roles} placeholder="— pilih role —" />
+            <Button
+              type="button"
+              onClick={addAutorole}
+              disabled={!autorolePick || autoroleIds.includes(autorolePick) || autoroleIds.length >= 10}
+              className="shrink-0 bg-amber-400 font-semibold text-zinc-950 hover:bg-amber-300"
+            >
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              Tambah
+            </Button>
+          </div>
         </Field>
       </Section>
 
@@ -80,7 +122,7 @@ export function GeneralModule({ draft, meta, setConfig }: ModuleFormProps) {
         </Field>
       </Section>
 
-      <Section title="Pesan Selamat Datang & Verifikasi" desc={TEMPLATE_VARS}>
+      <Section title="Pesan Welcome & Goodbye" desc={TEMPLATE_VARS}>
         <Field label="Judul Welcome">
           <TextInput value={c.messages.welcomeTitle} onChange={(v) => setConfig("messages.welcomeTitle", v)} placeholder="👋 SELAMAT DATANG!" />
         </Field>
@@ -97,32 +139,6 @@ export function GeneralModule({ draft, meta, setConfig }: ModuleFormProps) {
             <TextArea value={c.messages.goodbyeBody} onChange={(v) => setConfig("messages.goodbyeBody", v)} rows={4} />
           </Field>
         </div>
-        <Field label="Judul Embed Verifikasi">
-          <TextInput value={c.messages.verifyTitle} onChange={(v) => setConfig("messages.verifyTitle", v)} />
-        </Field>
-        <Field label="Label Tombol Verifikasi">
-          <TextInput value={c.verifyButton.label} onChange={(v) => setConfig("verifyButton.label", v)} />
-        </Field>
-        <div className="md:col-span-2">
-          <Field label="Isi Embed Verifikasi">
-            <TextArea value={c.messages.verifyBody} onChange={(v) => setConfig("messages.verifyBody", v)} rows={3} />
-          </Field>
-        </div>
-        <Field label="Emoji Tombol Verifikasi" hint="Contoh: ✅ atau :custom_emoji:">
-          <TextInput value={c.verifyButton.emoji} onChange={(v) => setConfig("verifyButton.emoji", v)} />
-        </Field>
-        <Field label="Warna Tombol Verifikasi">
-          <Select
-            value={c.verifyButton.style}
-            onChange={(v) => setConfig("verifyButton.style", v)}
-            options={[
-              { value: "Primary", label: "Biru (Primary)" },
-              { value: "Secondary", label: "Abu (Secondary)" },
-              { value: "Success", label: "Hijau (Success)" },
-              { value: "Danger", label: "Merah (Danger)" },
-            ]}
-          />
-        </Field>
       </Section>
 
       <Section title="Warna Embed Bot" desc="Warna tepi embed yang dipakai seluruh notifikasi bot di server ini.">

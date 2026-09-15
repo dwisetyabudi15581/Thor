@@ -1,6 +1,6 @@
 /**
  * Unit tests untuk Phase 1+2+3 features:
- * - config.verifyButton (custom label/emoji/style)
+ * - config.autorole (v3.22.0: daftar auto-role join — menggantikan verifyButton)
  * - config.ticketCategories (default + custom)
  * - config.messages.ticketPriceHeader
  * - ticketManager.createTicket with category & isHelp flag
@@ -15,14 +15,46 @@ const path = require('path');
 const DATA_DIR = path.join(__dirname, '..', '..', 'data');
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
-test('configManager: verifyButton defaults applied', () => {
-    const { getConfig, DEFAULTS } = require('../../src/data/configManager');
+test('configManager: v3.22.0 — verifyButton DIHAPUS + defaults autorole', () => {
+    const { getConfig } = require('../../src/data/configManager');
     const config = getConfig('g_phase_features');
-    assert.ok(config.verifyButton, 'verifyButton should exist');
-    assert.ok(typeof config.verifyButton === 'object');
-    assert.ok('label' in config.verifyButton);
-    assert.ok('emoji' in config.verifyButton);
-    assert.ok('style' in config.verifyButton);
+    // v3.22.0: fitur verifikasi khusus dihapus.
+    assert.strictEqual(config.verifyButton, undefined, 'verifyButton tidak boleh ada lagi');
+    assert.strictEqual(config.messages.verifyTitle, undefined, 'messages.verifyTitle tidak boleh ada lagi');
+    assert.strictEqual(config.messages.verifyBody, undefined, 'messages.verifyBody tidak boleh ada lagi');
+    // Daftar auto-role join menggantikannya.
+    assert.ok(config.autorole, 'autorole harus ada');
+    assert.ok(Array.isArray(config.autorole.roleIds), 'autorole.roleIds harus array');
+    assert.strictEqual(config.autorole.roleIds.length, 0, 'autorole.roleIds default kosong');
+});
+
+test('configManager: v3.22.0 — key verifikasi lama dibersihkan saat load', () => {
+    const { configPathFor } = require('../../src/data/configManager');
+    const fs = require('fs');
+    const guildId = 'g_legacy_verify';
+    const file = configPathFor(guildId);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    // Config lama dengan semua key yang dihapus.
+    fs.writeFileSync(
+        file,
+        JSON.stringify({
+            roles: { verified: '111', unverified: '222', admin: '333' },
+            messages: { verifyTitle: 'LAMA', verifyBody: 'ISI LAMA' },
+            verifyButton: { label: 'Lama', emoji: 'x', style: 'Success' }
+        })
+    );
+    const { getConfig } = require('../../src/data/configManager');
+    const config = getConfig(guildId);
+    assert.strictEqual(config.roles.verified, undefined, 'roles.verified dibersihkan');
+    assert.strictEqual(config.roles.unverified, '222', 'roles.unverified TETAP (role penanda)');
+    assert.strictEqual(config.roles.admin, '333', 'roles.admin tidak disentuh');
+    assert.strictEqual(config.messages.verifyTitle, undefined, 'messages.verifyTitle dibersihkan');
+    assert.strictEqual(config.messages.verifyBody, undefined, 'messages.verifyBody dibersihkan');
+    assert.strictEqual(config.verifyButton, undefined, 'verifyButton dibersihkan');
+    // Bersihkan file test.
+    try {
+        fs.unlinkSync(file);
+    } catch (_) {}
 });
 
 test('configManager: ticketCategories defaults applied', () => {

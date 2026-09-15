@@ -1,6 +1,6 @@
 /**
  * Domain: config
- * Slash commands: /setup-verify, /setup-ticket, /set-role, /set-channel,
+ * Slash commands: /set-autorole, /setup-ticket, /set-role, /set-channel,
  *                 /set-message, /remove-role, /remove-channel, /list-messages,
  *                 /reset-message, /reset-config, /config-show, /test-welcome
  *
@@ -52,59 +52,110 @@ module.exports = async function (interaction) {
     const guildId = resolveGuildId(interaction);
     const config = getConfig(guildId);
 
-    // === SETUP VERIFY ===
-    if (interaction.commandName === 'setup-verify') {
+    // === SET AUTOROLE (v3.22.0 — auto-role saat join, ala Dyno) ===
+    // Satu command, tiga aksi: add / remove / list. Daftar ini (plus role
+    // penanda Unverified) diberikan otomatis ke setiap member baru oleh
+    // memberHandler → Role Engine.
+    if (interaction.commandName === 'set-autorole') {
         await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
-        // Kalau role verified belum di-set, minta admin set dulu
-        if (!config.roles.verified) {
+        const action = interaction.options.getString('action'); // add | remove | list
+        const role = interaction.options.getRole('role');
+        const MAX_AUTOROLE = 10;
+
+        if (action !== 'list' && !role) {
             return safeEditReply(interaction, {
-                content: '❌ Role Verified belum di-set. Pakai `/set-role verified @role` dulu.'
+                content: '❌ `add` / `remove` butuh role. Pakai `/set-autorole action:list` untuk melihat daftarnya saja.'
             });
         }
 
-        const embed = new EmbedBuilder()
-            .setTitle(config.messages.verifyTitle)
-            .setDescription(config.messages.verifyBody.replace(/\{server\}/g, interaction.guild.name))
-            .setColor(0x2ecc71)
-            .setFooter({
-                text: interaction.client.user.username,
-                iconURL: interaction.client.user.displayAvatarURL({ dynamic: true })
-            })
-            .setTimestamp();
+        const current = Array.isArray(config.autorole?.roleIds) ? [...config.autorole.roleIds] : [];
 
-        // v3.9.11 Phase 1: verify button configurable (label/emoji/style dari config.verifyButton).
-        const btnConfig = config.verifyButton || {};
-        const styleMap = {
-            Primary: ButtonStyle.Primary,
-            Secondary: ButtonStyle.Secondary,
-            Success: ButtonStyle.Success,
-            Danger: ButtonStyle.Danger
-        };
-        const btnStyle = styleMap[btnConfig.style] || ButtonStyle.Success;
-        const btnEmoji = btnConfig.emoji || '✅';
-        const btnLabel = btnConfig.label || 'Verifikasi Saya';
-
-        const verifyBtn = new ButtonBuilder()
-            .setCustomId('btn_verify')
-            .setLabel(btnLabel.slice(0, 80))
-            .setEmoji(btnEmoji)
-            .setStyle(btnStyle);
-
-        // v3.9.11 Phase 1: emoji bisa berupa custom emoji ID (<:name:id>) atau unicode.
-        // Discord ButtonBuilder.setEmoji otomatis handle keduanya.
-        const row = new ActionRowBuilder().addComponents(verifyBtn);
-
-        // Kirim panel ke channel. Kalau gagal (biasanya permission), balas error jelas
-        // biar admin tau apa yang harus diperbaiki.
-        try {
-            await interaction.channel.send({ embeds: [embed], components: [row] });
-        } catch (sendErr) {
+        // ---- LIST ----
+        if (action === 'list') {
+            const list =
+                current.length > 0
+                    ? current.map(id => `• <@&${id}>`).join('\n')
+                    : '_kosong — belum ada auto-role saat join_';
+            const unverifiedNote = config.roles.unverified
+                ? `\n\n🎭 Penanda Unverified (juga diberikan saat join, dihapus otomatis begitu member dapat role lain): <@&${config.roles.unverified}>`
+                : '';
             return safeEditReply(interaction, {
-                content: `❌ Gagal kirim panel verifikasi: ${sendErr.message}\n\nPastikan bot punya permission **Send Messages** dan **Embed Links** di channel ini.`
+                content:
+                    `🎁 **AUTO-ROLE SAAT JOIN** (${current.length}/${MAX_AUTOROLE})\n${list}${unverifiedNote}\n\n` +
+                    `💡 \`/set-autorole action:add role:@role\` untuk menambah · \`/set-autorole action:remove role:@role\` untuk menghapus.`
             });
         }
-        return safeEditReply(interaction, { content: '✅ Panel verifikasi dipasang!' });
+
+        // ---- ADD / REMOVE berbagi validasi /set-role (v3.9.38) — @everyone,
+        // role integration-managed, dan role di atas bot harus ditolak lebih
+        // awal, kalau tidak grant saat join gagal senyap di setiap member baru.
+        if (role.id === interaction.guild.id) {
+            return safeEditReply(interaction, { content: '❌ @everyone tidak bisa dipakai. Pilih role biasa.' });
+        }
+        if (role.managed) {
+            return safeEditReply(interaction, {
+                content: '❌ Role ini dikelola integration/bot lain — tidak bisa diberikan oleh bot.'
+            });
+        }
+        const botHighestPos = interaction.guild.members.me?.roles?.highest?.position ?? 0;
+        if ((role.position ?? 0) >= botHighestPos) {
+            return safeEditReply(interaction, {
+                content:
+                    '❌ Role ini posisinya DI ATAS role tertinggi bot — bot tidak bisa memberikannya. ' +
+                    'Naikkan role bot di Server Settings → Roles, atau pilih role lain.'
+            });
+        }
+
+        // ---- ADD ----
+        if (action === 'add') {
+            if (current.includes(role.id)) {
+                return safeEditReply(interaction, { content: `ℹ️ ${role} sudah ada di daftar auto-role.` });
+            }
+            if (current.length >= MAX_AUTOROLE) {
+                return safeEditReply(interaction, {
+                    content: `❌ Daftar auto-role sudah penuh (${MAX_AUTOROLE} role). Hapus salah satu dulu dengan \`/set-autorole action:remove\`.`
+                });
+            }
+            current.push(role.id);
+            setField(guildId, 'autorole.roleIds', current);
+            await logAudit(interaction.client, {
+                action: 'SET_AUTOROLE',
+                actorId: interaction.user.id,
+                actorTag: interaction.user.tag,
+                details: `Auto-role saat join: tambah ${role.name} (\`${role.id}\`) — daftar jadi ${current.length} role`,
+                guildId: interaction.guild.id
+            });
+            return safeEditReply(interaction, {
+                content:
+                    `✅ ${role} ditambahkan ke daftar **auto-role saat join** (${current.length}/${MAX_AUTOROLE}).\n\n` +
+                    `Setiap member baru kini menerimanya otomatis. Daftar sekarang:\n${current
+                        .map(id => `• <@&${id}>`)
+                        .join('\n')}`
+            });
+        }
+
+        // ---- REMOVE ----
+        const idx = current.indexOf(role.id);
+        if (idx === -1) {
+            return safeEditReply(interaction, { content: `ℹ️ ${role} tidak ada di daftar auto-role.` });
+        }
+        current.splice(idx, 1);
+        setField(guildId, 'autorole.roleIds', current);
+        await logAudit(interaction.client, {
+            action: 'SET_AUTOROLE',
+            actorId: interaction.user.id,
+            actorTag: interaction.user.tag,
+            details: `Auto-role saat join: hapus ${role.name} (\`${role.id}\`) — daftar jadi ${current.length} role`,
+            guildId: interaction.guild.id
+        });
+        return safeEditReply(interaction, {
+            content:
+                `✅ ${role} dihapus dari daftar auto-role.\n\n` +
+                (current.length > 0
+                    ? `Daftar sekarang:\n${current.map(id => `• <@&${id}>`).join('\n')}`
+                    : 'Daftar kini kosong — member baru hanya menerima penanda Unverified (kalau di-set).')
+        });
     }
 
     // === SETUP TICKET ===
@@ -601,7 +652,6 @@ module.exports = async function (interaction) {
                     name: '🎭 Roles',
                     value: capFieldValue(
                         [
-                            `• Verified: ${fmt(config.roles.verified, '@&')}`,
                             `• Unverified: ${fmt(config.roles.unverified, '@&')}`,
                             `• Admin: ${fmt(config.roles.admin, '@&')}`,
                             `• Midman (Rekber): ${fmt(config.roles.midman, '@&')}`,
@@ -720,8 +770,6 @@ module.exports = async function (interaction) {
             welcomeBody: '👋 Welcome Body',
             goodbyeTitle: '👋 Goodbye Title',
             goodbyeBody: '👋 Goodbye Body',
-            verifyTitle: '✅ Verify Title',
-            verifyBody: '✅ Verify Body',
             ticketTitle: '🎫 Ticket Title',
             ticketBody: '🎫 Ticket Body',
             // v3.9.11 Phase 1: ticket price header configurable
