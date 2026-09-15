@@ -2,7 +2,7 @@
 
 Bot Discord serbaguna untuk komunitas apa pun — server jualan, gaming, content creator, hingga komunitas umum. Semua konfigurasi dapat diatur langsung dari Discord melalui slash command, tanpa mengedit file.
 
-> **v3.20.0** · 93 slash command (+ custom command tanpa batas dari web) · 693 unit test · discord.js v14 · Node.js 20+ · mode 1 server / publik (ala Dyno) · **100% GRATIS — semua fitur terbuka** · **+ dashboard web DI DALAM REPO INI**
+> **v3.23.1** · 93 slash command (+ custom command tanpa batas dari web) · 736 unit test · discord.js v14 · Node.js 20+ · mode 1 server / publik (ala Dyno) · **100% GRATIS — semua fitur terbuka** · **+ dashboard web DI DALAM REPO INI**
 >
 > 📖 **[Panduan Admin Lengkap](./docs/ADMIN_GUIDE.md)** — setup, operasional harian, troubleshooting
 > 📜 **[Changelog](./CHANGELOG.md)** — riwayat semua versi
@@ -101,7 +101,7 @@ Thor/
 │   └── infra/                    # safeWrite, safeReply, userLock, permissions, auditLog
 ├── data/                         # Runtime JSON files (gitignored)
 ├── docs/                         # ADMIN_GUIDE + index dokumen
-├── tests/unit/                   # 693 unit test (node:test)
+├── tests/unit/                   # 736 unit test (node:test)
 ├── dashboard/                    # 🌐 Dashboard web Next.js (v3.20.0 — satu repo)
 ├── setup.sh · start.sh · dev.sh  # Instalasi & menjalankan bot + web bersamaan
 ├── ecosystem.config.cjs          # pm2: thor-bot + thor-dash 24/7
@@ -176,7 +176,7 @@ Panduan lengkap termasuk contoh produk, kategori custom, dan operasional harian:
 | ------------------ | -------------------------------------------------- |
 | `npm start`        | Jalankan bot                                       |
 | `npm run dev`      | Jalankan dengan nodemon (auto-restart)             |
-| `npm test`         | Jalankan semua unit test (693 test)                |
+| `npm test`         | Jalankan semua unit test (736 test)                |
 | `npm run lint`     | ESLint check                                       |
 | `npm run format`   | Prettier format semua file                         |
 | `./setup.sh`       | Install bot + dashboard + siapkan kedua .env       |

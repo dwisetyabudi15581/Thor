@@ -5,6 +5,16 @@ Format mengikuti [Keep a Changelog](https://keepachangelog.com/id/1.1.0/).
 
 Legend: 🔴 critical · 🟠 high · 🟡 medium · 🟢 improvement
 
+## [3.23.1] — 2026-09-16
+
+### Fixed — 🔴 HALAMAN OVERVIEW & AUTOMOD DI WEB CRASH UNTUK SERVER YANG BELUM MENGATUR AUTOMOD
+
+Laporan pemilik: halaman **Ringkasan (Overview) dan AutoMod** di dashboard menampilkan *"This page couldn't load"* untuk server yang belum pernah menyentuh pengaturan AutoMod. Akar masalah: `automodManager.getGuildConfig()` mengembalikan **null** untuk guild tanpa config tersimpan, dan payload `GET /guilds/:id/dashboard` meneruskan `automod: null` apa adanya — halaman web lalu membaca `.enabled`/`.wordRules` dari null → exception di browser. Modul lain tidak tersentuh karena hanya Overview & AutoMod yang membaca `draft.automod`; mock API dev selalu mengirim objek penuh sehingga kasus ini tidak tertangkap test.
+
+- 🔴 **DASH API:** payload dashboard kini mengirim **fallback objek default** (enabled=false, wordRules/exemptWords array kosong, dst.) saat guild belum punya config automod — jujur terhadap perilaku nyata (guild baru: automod memang tidak aktif, bukan default enabled=true). Halaman Overview & AutoMod langsung bisa diakses.
+- 🟡 **Dashboard (pertahanan berlapis):** `GuildDashboard` menormalkan payload setelah fetch — `automod` null diisi default, `responders`/`selfroles`/`announces` bukan array dijadikan `[]` — sehingga dashboard tidak crash meskipun bot masih menjalankan versi lama.
+- 🟢 Test: **736** (dari 735) — test baru memastikan payload automod guild baru selalu objek (bukan null), enabled=false, array lengkap.
+
 ## [3.23.0] — 2026-09-15
 
 ### Changed — 🎭 AUTO-ROLE TERPADU: KONSEP ROLE UNVERIFIED DIHAPUS — TINGGAL DAFTAR JOIN + SATU TOGGLE

@@ -507,7 +507,15 @@ function createDashHandler({ client, token, log = () => {} }) {
         const config = getConfig(guildId);
         return {
             config,
-            automod: automodManager.getGuildConfig(guildId),
+            // v3.23.1: guild yang belum pernah mengatur AutoMod membuat
+            // getGuildConfig() mengembalikan null — payload null ini membuat
+            // halaman Overview & AutoMod di web crash (a.enabled pada null).
+            // Fallback: config default dengan enabled=false (jujur: untuk
+            // guild baru, messageCreate memang melewati automod karena cfg
+            // null, jadi tampilkan "mati", bukan default enabled=true).
+            automod:
+                automodManager.getGuildConfig(guildId) ||
+                { ...automodManager.getDefaultConfig(), enabled: false },
             responders: responderManager.getGuildResponders(guildId),
             selfroles: selfRoleManager.getPanelsByGuild(guildId),
             tempvoice: tempVoiceCfg

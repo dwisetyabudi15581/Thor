@@ -159,6 +159,30 @@ export function GuildDashboard({ guildId }: { guildId: string }) {
       return;
     }
     const data = (await res.json()) as DashboardPayload & { meta: GuildMeta };
+    // v3.23.1: normalisasi defensif — bot versi lama mengirim `automod: null`
+    // untuk guild yang belum pernah mengatur AutoMod, membuat halaman
+    // Overview & AutoMod crash di browser. Fallback ini menjamin payload
+    // selalu berbentuk objek lengkap meskipun bot belum diperbarui.
+    if (!data.automod) {
+      data.automod = {
+        enabled: false,
+        spamThreshold: 5,
+        spamWindowMs: 10000,
+        spamAction: "mute_10m",
+        blockLinks: false,
+        linkAllowedChannels: [],
+        linkAllowedRoles: [],
+        wordRules: [],
+        exemptWords: [],
+        wordMatchMode: "whole_word",
+        wordAction: "delete_only",
+        maxMentions: 5,
+        mentionAction: "warn",
+      };
+    }
+    if (!Array.isArray(data.responders)) data.responders = [];
+    if (!Array.isArray(data.selfroles)) data.selfroles = [];
+    if (!Array.isArray(data.announces)) data.announces = [];
     setPayload(data);
     setMeta(data.meta);
     // Draft = salinan dalam; dirty di-reset (draft baru selalu dari bot).

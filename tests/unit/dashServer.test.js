@@ -224,6 +224,26 @@ test('dash: GET /guilds/:id/dashboard — semua modul hadir', async () => {
     assert.strictEqual(typeof data.config.messages.welcomeTitle, 'string');
 });
 
+// v3.23.1: guild yang belum pernah mengatur AutoMod → getGuildConfig() null.
+// Dulu payload mengirim `automod: null` → halaman Overview & AutoMod di web
+// crash (membaca .enabled dari null). Sekarang HARUS fallback ke objek
+// default dengan enabled=false (guild baru: automod memang tidak aktif).
+test('dash: payload automod guild baru — fallback objek default, bukan null', async () => {
+    // automod.json masih '[]' (belum ada test yang menulis config) —
+    // kondisi sama dengan server nyata yang belum pernah membuka AutoMod.
+    const res = await api('GET', `/guilds/${GUILD_ID}/dashboard`);
+    assert.strictEqual(res.status, 200);
+    const data = await res.json();
+    assert.ok(data.automod, 'payload.automod tidak boleh null/undefined');
+    assert.strictEqual(typeof data.automod, 'object');
+    assert.strictEqual(data.automod.enabled, false, 'guild baru: tampilkan mati, bukan default enabled=true');
+    assert.ok(Array.isArray(data.automod.wordRules), 'wordRules harus array (dipakai .some/.map di web)');
+    assert.strictEqual(data.automod.wordRules.length, 0);
+    assert.ok(Array.isArray(data.automod.exemptWords));
+    assert.strictEqual(typeof data.automod.spamThreshold, 'number');
+    assert.strictEqual(typeof data.automod.maxMentions, 'number');
+});
+
 // ====================================================
 // === PUT config ===
 // ====================================================
